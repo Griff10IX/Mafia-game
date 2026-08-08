@@ -55,8 +55,8 @@ function sortAndDedupe(rows) {
     if (row?.id != null) byId.set(String(row.id), row);
   });
   return Array.from(byId.values()).sort((a, b) => {
-    const timeDiff = new Date(a.created_at || 0) - new Date(b.created_at || 0);
-    return timeDiff || String(a.id).localeCompare(String(b.id));
+    const timeDiff = new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    return timeDiff || String(b.id).localeCompare(String(a.id));
   });
 }
 
@@ -100,11 +100,18 @@ function normalizeResponse(data) {
   };
 }
 
+function messageMentionsUsername(message, username) {
+  if (!message || !username) return false;
+  const escaped = String(username).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`@${escaped}(?![\\w-])`, 'i').test(String(message));
+}
+
 export default function GameChat({
   currentUsername = '',
   censorProfanity = false,
   canClearChat = false,
   mobileBottomClearance = true,
+  onHide,
 }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -122,13 +129,22 @@ export default function GameChat({
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
   const [clearingChat, setClearingChat] = useState(false);
+  const [unreadByChannel, setUnreadByChannel] = useState({ global: false, family: false });
+  const [mentionByChannel, setMentionByChannel] = useState({ global: false, family: false });
   const [visible, setVisible] = useState(() => document.visibilityState === 'visible');
   const scrollRef = useRef(null);
   const inFlightRef = useRef(new Map());
   const initialLoadedRef = useRef({ global: false, family: false });
+  const latestMessageIdRef = useRef({ global: null, family: null });
+  const openRef = useRef(open);
+  const channelRef = useRef(channel);
   const scrollAfterLoadRef = useRef('none');
   const targetMessageRef = useRef(null);
   const messages = useMemo(() => messagesByChannel[channel] || [], [channel, messagesByChannel]);
+  const hasUnread = unreadByChannel.global || unreadByChannel.family;
+  const hasMention = mentionByChannel.global || mentionByChannel.family;
+  openRef.current = open;
+  channelRef.current = channel;
 
   const setChannelMessages = useCallback((targetChannel, updater) => {
     setMessagesByChannel((previous) => ({
@@ -175,6 +191,23 @@ export default function GameChat({
           params: { channel: targetChannel, limit: PAGE_SIZE, ...(beforeId ? { before_id: beforeId } : {}) },
         });
         const result = normalizeResponse(data);
+        if (!beforeId && result.messages.length > 0) {
+          const latestId = String(result.messages[0].id);
+          const previousLatestId = latestMessageIdRef.current[targetChannel];
+          if (previousLatestId && previousLatestId !== latestId) {
+            const previousIndex = result.messages.findIndex((row) => String(row.id) === previousLatestId);
+            const newRows = previousIndex >= 0 ? result.messages.slice(0, previousIndex) : result.messages;
+            const unreadRows = newRows.filter((row) => !row.is_own);
+            const isViewingChannel = openRef.current && channelRef.current === targetChannel;
+            if (unreadRows.length > 0 && !isViewingChannel) {
+              setUnreadByChannel((previous) => ({ ...previous, [targetChannel]: true }));
+              if (unreadRows.some((row) => messageMentionsUsername(row.message, currentUsername))) {
+                setMentionByChannel((previous) => ({ ...previous, [targetChannel]: true }));
+              }
+            }
+          }
+          latestMessageIdRef.current[targetChannel] = latestId;
+        }
         setChannelMessages(targetChannel, (previous) => (
           beforeId ? sortAndDedupe([...result.messages, ...previous]) : sortAndDedupe([...previous, ...result.messages])
         ));
@@ -198,7 +231,7 @@ export default function GameChat({
     } finally {
       inFlightRef.current.delete(key);
     }
-  }, [setChannelMessages]);
+  }, [currentUsername, setChannelMessages]);
 
   useEffect(() => {
     const onVisibilityChange = () => setVisible(document.visibilityState === 'visible');
@@ -223,15 +256,25 @@ export default function GameChat({
   }, [location.hash, location.pathname, location.search, location.state, navigate]);
 
   useEffect(() => {
-    if (!open || !visible) return undefined;
-    scrollAfterLoadRef.current = initialLoadedRef.current[channel] ? 'none' : 'bottom';
+    if (!visible) return undefined;
     fetchPrefs();
-    fetchMessages(channel, { force: true }).catch(() => {});
-    const interval = window.setInterval(() => {
-      fetchMessages(channel, { force: true }).catch(() => {});
-    }, POLL_INTERVAL_MS);
+    const poll = () => {
+      const channels = ['global', ...(prefs.in_family ? ['family'] : [])];
+      channels.forEach((targetChannel) => {
+        fetchMessages(targetChannel, { force: true }).catch(() => {});
+      });
+    };
+    if (open) scrollAfterLoadRef.current = initialLoadedRef.current[channel] ? 'none' : 'top';
+    poll();
+    const interval = window.setInterval(poll, POLL_INTERVAL_MS);
     return () => window.clearInterval(interval);
-  }, [channel, fetchMessages, fetchPrefs, open, visible]);
+  }, [channel, fetchMessages, fetchPrefs, open, prefs.in_family, visible]);
+
+  useEffect(() => {
+    if (!open) return;
+    setUnreadByChannel((previous) => ({ ...previous, [channel]: false }));
+    setMentionByChannel((previous) => ({ ...previous, [channel]: false }));
+  }, [channel, open]);
 
   useEffect(() => {
     if (!open || !scrollRef.current) return;
@@ -245,8 +288,8 @@ export default function GameChat({
         return;
       }
     }
-    if (scrollAfterLoadRef.current === 'bottom') {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (scrollAfterLoadRef.current === 'top') {
+      scrollRef.current.scrollTop = 0;
       scrollAfterLoadRef.current = 'none';
     }
   }, [messages, open]);
@@ -256,19 +299,14 @@ export default function GameChat({
     setSettingsOpen(false);
     setShowGifPicker(false);
     setShowEmojis(false);
-    scrollAfterLoadRef.current = 'bottom';
+    scrollAfterLoadRef.current = 'top';
   };
 
   const loadOlder = async () => {
-    const oldest = messages[0];
+    const oldest = messages[messages.length - 1];
     if (!oldest || loadingOlder) return;
-    const scroller = scrollRef.current;
-    const previousHeight = scroller?.scrollHeight || 0;
     try {
       await fetchMessages(channel, { beforeId: oldest.id });
-      requestAnimationFrame(() => {
-        if (scroller) scroller.scrollTop += scroller.scrollHeight - previousHeight;
-      });
     } catch (error) {
       toast.error(getApiErrorMessage(error));
     }
@@ -297,7 +335,7 @@ export default function GameChat({
     };
     setSending(true);
     setChannelMessages(channel, (previous) => sortAndDedupe([...previous, optimistic]));
-    scrollAfterLoadRef.current = 'bottom';
+    scrollAfterLoadRef.current = 'top';
     setInput('');
     setShowGifPicker(false);
 
@@ -383,12 +421,26 @@ export default function GameChat({
         .game-chat-root {
           position: fixed; z-index: 60; right: max(16px, env(safe-area-inset-right, 0px));
           bottom: max(16px, env(safe-area-inset-bottom, 0px)); font-family: inherit;
+          pointer-events: none;
         }
         .game-chat-launcher {
           min-width: 132px; min-height: 44px; padding: 0 14px; display: flex; align-items: center;
           justify-content: center; gap: 8px; border-radius: 999px; color: var(--noir-primary);
           background: var(--noir-content); border: 1px solid rgba(var(--noir-primary-rgb), .42);
           box-shadow: 0 12px 34px rgba(0,0,0,.55), 0 0 18px rgba(var(--noir-primary-rgb), .08);
+          pointer-events: auto; position: relative;
+        }
+        .game-chat-notification-dot {
+          position: absolute; width: 10px; height: 10px; border-radius: 999px;
+          background: #22d3ee; border: 2px solid var(--noir-content);
+          box-shadow: 0 0 9px rgba(34,211,238,.9);
+        }
+        .game-chat-notification-dot-mention {
+          animation: game-chat-dot-pulse 1.4s ease-in-out infinite;
+        }
+        @keyframes game-chat-dot-pulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 7px rgba(34,211,238,.7); }
+          50% { transform: scale(1.25); box-shadow: 0 0 13px rgba(34,211,238,1); }
         }
         .game-chat-window {
           width: min(390px, calc(100vw - 24px)); height: min(590px, calc(100dvh - 32px));
@@ -396,6 +448,7 @@ export default function GameChat({
           overflow: hidden; border-radius: 12px; color: var(--noir-foreground);
           background: var(--noir-content); border: 1px solid rgba(var(--noir-primary-rgb), .35);
           box-shadow: 0 20px 60px rgba(0,0,0,.72), 0 0 24px rgba(var(--noir-primary-rgb), .08);
+          pointer-events: auto;
         }
         .game-chat-message-content .inline-smiley {
           display: inline !important; width: ${FORUM_INLINE_SMILEY_PX}px !important;
@@ -417,7 +470,15 @@ export default function GameChat({
           100% { background: transparent; }
         }
         @media (max-width: 767px) {
-          .game-chat-root { left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom, 0px)); }
+          .game-chat-root {
+            left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom, 0px));
+            z-index: 48;
+          }
+          .game-chat-launcher {
+            width: 48px; min-width: 48px; height: 48px; min-height: 48px; padding: 0;
+            margin-left: auto; border-radius: 12px;
+          }
+          .game-chat-launcher-label { display: none; }
           .game-chat-root.game-chat-clear-mobile-nav {
             bottom: calc(68px + env(safe-area-inset-bottom, 0px));
           }
@@ -432,9 +493,10 @@ export default function GameChat({
       `}</style>
 
       {!open ? (
-        <button type="button" className="game-chat-launcher touch-manipulation" onClick={() => setOpen(true)} aria-label="Open game chat">
+        <button type="button" className="game-chat-launcher touch-manipulation" onClick={() => setOpen(true)} aria-label={hasMention ? 'Open game chat, unread mention' : hasUnread ? 'Open game chat, new messages' : 'Open game chat'}>
           <MessageSquare size={17} />
-          <span className="font-heading text-[10px] font-bold uppercase tracking-[.12em]">Game Chat</span>
+          <span className="game-chat-launcher-label font-heading text-[10px] font-bold uppercase tracking-[.12em]">Game Chat</span>
+          {hasUnread && <span className={`game-chat-notification-dot -right-0.5 -top-0.5 ${hasMention ? 'game-chat-notification-dot-mention' : ''}`} aria-hidden />}
         </button>
       ) : (
         <section className="game-chat-window" role="dialog" aria-label="Game chat">
@@ -462,7 +524,7 @@ export default function GameChat({
                     type="button"
                     disabled={disabled}
                     onClick={() => switchChannel(value)}
-                    className="min-h-[44px] rounded-t font-heading text-[10px] font-bold uppercase tracking-wider disabled:opacity-35"
+                    className="relative min-h-[44px] rounded-t font-heading text-[10px] font-bold uppercase tracking-wider disabled:opacity-35"
                     style={channel === value ? {
                       color: 'var(--noir-primary)',
                       background: 'rgba(var(--noir-primary-rgb), .12)',
@@ -471,6 +533,9 @@ export default function GameChat({
                     title={disabled ? 'Join a family to use family chat' : undefined}
                   >
                     {value}
+                    {unreadByChannel[value] && (
+                      <span className={`game-chat-notification-dot right-3 top-2 ${mentionByChannel[value] ? 'game-chat-notification-dot-mention' : ''}`} aria-hidden />
+                    )}
                   </button>
                 );
               })}
@@ -479,8 +544,20 @@ export default function GameChat({
 
           {settingsOpen && (
             <div className="shrink-0 border-b p-2 text-[10px] font-heading" style={{ borderColor: 'var(--noir-border-mid)', background: 'var(--noir-surface)' }}>
+              {onHide && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    onHide();
+                  }}
+                  className="w-full min-h-[44px] px-2 text-left rounded hover:bg-white/5"
+                >
+                  Hide Game Chat button
+                </button>
+              )}
               {canClearChat && (
-                <button type="button" onClick={clearChat} disabled={clearingChat} className="w-full min-h-[44px] px-2 text-left rounded text-red-400 hover:bg-red-500/10 disabled:opacity-50">
+                <button type="button" onClick={clearChat} disabled={clearingChat} className="w-full min-h-[44px] px-2 text-left rounded border-t text-red-400 hover:bg-red-500/10 disabled:opacity-50" style={{ borderColor: 'var(--noir-border)' }}>
                   {clearingChat ? 'Clearing…' : 'Clear all game chat'}
                 </button>
               )}
@@ -502,13 +579,6 @@ export default function GameChat({
           )}
 
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y" style={{ scrollbarColor: 'rgba(var(--noir-primary-rgb), .22) transparent' }}>
-            {hasMoreByChannel[channel] && (
-              <div className="flex justify-center p-2">
-                <button type="button" onClick={loadOlder} disabled={loadingOlder} className="min-h-[44px] px-4 font-heading text-[9px] uppercase tracking-wider rounded border disabled:opacity-50" style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-primary)' }}>
-                  {loadingOlder ? 'Loading…' : 'Load older'}
-                </button>
-              </div>
-            )}
             {prefs.muted && (
               <p className="px-3 py-2 text-[10px] font-heading text-amber-400">
                 You are muted{prefs.muted_until ? ` until ${formatChatTime(prefs.muted_until)}` : ''}.
@@ -534,7 +604,7 @@ export default function GameChat({
                   <Link
                     to={`/profile/${encodeURIComponent(row.username || '')}`}
                     className="shrink-0 font-heading text-[10px] font-bold hover:underline"
-                    style={{ color: row.is_own ? 'var(--noir-primary)' : 'rgba(var(--noir-primary-rgb), .78)' }}
+                    style={{ color: row.author_online_color || (row.is_own ? 'var(--noir-primary)' : 'rgba(var(--noir-primary-rgb), .78)') }}
                     onPointerDown={() => warmProfilePrefetchFromUsername(row.username)}
                     onPointerEnter={() => warmProfilePrefetchFromUsername(row.username)}
                   >
@@ -562,6 +632,13 @@ export default function GameChat({
                 )}
               </article>
             ))}
+            {hasMoreByChannel[channel] && (
+              <div className="flex justify-center p-2">
+                <button type="button" onClick={loadOlder} disabled={loadingOlder} className="min-h-[44px] px-4 font-heading text-[9px] uppercase tracking-wider rounded border disabled:opacity-50" style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-primary)' }}>
+                  {loadingOlder ? 'Loading…' : 'Load older'}
+                </button>
+              </div>
+            )}
           </div>
 
           {showGifPicker && (

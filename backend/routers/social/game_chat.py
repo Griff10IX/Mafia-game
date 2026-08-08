@@ -3,6 +3,7 @@ from datetime import datetime, timezone, timedelta
 import re
 import uuid
 import logging
+import time
 from typing import Optional, List, Literal
 
 from fastapi import Depends, HTTPException, Query
@@ -22,6 +23,11 @@ GAME_CHAT_MAX_LIMIT = 50
 GAME_CHAT_BLOCKED_MAX = 200
 GAME_CHAT_RATE_LIMIT_COUNT = 5
 GAME_CHAT_RATE_LIMIT_WINDOW_SEC = 30
+ADMIN_ONLINE_COLOR = "#a78bfa"
+MOD_ONLINE_COLOR = "#1e3a5f"
+HDO_ONLINE_COLOR = "#166534"
+ENTERTAINER_ONLINE_COLOR = "#7c3aed"
+_role_color_cache = {"expires_at": 0.0, "admin": ADMIN_ONLINE_COLOR, "mod": MOD_ONLINE_COLOR}
 
 
 # ----- Models -----
@@ -54,6 +60,68 @@ class SendMessageRequest(BaseModel):
 class GameChatPrefsRequest(BaseModel):
     family_only: Optional[bool] = None
     blocked_user_ids: Optional[List[str]] = None
+
+
+async def _role_default_colors() -> tuple[str, str]:
+    now = time.monotonic()
+    if now < _role_color_cache["expires_at"]:
+        return _role_color_cache["admin"], _role_color_cache["mod"]
+    docs = await db.game_settings.find(
+        {"key": {"$in": ["admin_online_color", "mod_default_online_color"]}},
+        {"_id": 0, "key": 1, "value": 1},
+    ).to_list(2)
+    values = {doc.get("key"): doc.get("value") for doc in docs}
+    admin = values.get("admin_online_color") or ADMIN_ONLINE_COLOR
+    mod = values.get("mod_default_online_color") or MOD_ONLINE_COLOR
+    _role_color_cache.update({
+        "expires_at": now + 60,
+        "admin": admin.strip() if isinstance(admin, str) and admin.strip() else ADMIN_ONLINE_COLOR,
+        "mod": mod.strip() if isinstance(mod, str) and mod.strip() else MOD_ONLINE_COLOR,
+    })
+    return _role_color_cache["admin"], _role_color_cache["mod"]
+
+
+def _author_online_color_from_defaults(user: dict, admin_default: str, mod_default: str) -> Optional[str]:
+    if _is_admin(user):
+        return admin_default
+    if _is_moderator(user):
+        custom = (user.get("mod_online_color") or "").strip()
+        return custom or mod_default
+    if user.get("is_entertainer"):
+        return (user.get("entertainer_online_color") or "").strip() or ENTERTAINER_ONLINE_COLOR
+    if user.get("is_help_desk_operator"):
+        return (user.get("hdo_online_color") or "").strip() or HDO_ONLINE_COLOR
+    return None
+
+
+async def _author_online_color(user: dict) -> Optional[str]:
+    """Match the role colour used by the Users Online roster."""
+    admin_default, mod_default = await _role_default_colors()
+    return _author_online_color_from_defaults(user, admin_default, mod_default)
+
+
+async def _backfill_author_colors(messages: list[dict]) -> None:
+    """Colour retained messages created before role colours were stored."""
+    missing_ids = {message.get("user_id") for message in messages if message.get("user_id") and not message.get("author_online_color")}
+    if not missing_ids:
+        return
+    users = await db.users.find(
+        {"id": {"$in": list(missing_ids)}},
+        {
+            "_id": 0, "id": 1, "email": 1, "is_moderator": 1,
+            "is_entertainer": 1, "is_help_desk_operator": 1,
+            "mod_online_color": 1, "entertainer_online_color": 1, "hdo_online_color": 1,
+        },
+    ).to_list(len(missing_ids))
+    admin_default, mod_default = await _role_default_colors()
+    colors = {
+        user["id"]: _author_online_color_from_defaults(user, admin_default, mod_default)
+        for user in users
+    }
+    for message in messages:
+        color = colors.get(message.get("user_id"))
+        if color:
+            message["author_online_color"] = color
 
 
 async def _get_staff_user_ids():
@@ -207,6 +275,8 @@ def _safe_message_payload(doc: dict, current_user_id: str) -> dict:
         "created_at": doc.get("created_at"),
         "is_own": bool(doc.get("user_id") and doc.get("user_id") == current_user_id),
     }
+    if doc.get("author_online_color"):
+        payload["author_online_color"] = doc["author_online_color"]
     if doc.get("gif_url"):
         payload["gif_url"] = doc["gif_url"]
     return payload
@@ -317,8 +387,8 @@ def register(router):
         has_more = len(messages) > limit
         if has_more:
             messages = messages[:limit]
+        await _backfill_author_colors(messages)
         messages = [_safe_message_payload(message, user_id) for message in messages]
-        messages.reverse()
         return {"messages": messages, "has_more": has_more}
 
     @router.post("/game-chat/send")
@@ -358,6 +428,7 @@ def register(router):
 
         display_message = (body.message or "").strip() or ("(GIF)" if body.gif_url else "")
         now = datetime.now(timezone.utc)
+        author_online_color = await _author_online_color(current_user)
         doc = {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
@@ -368,10 +439,11 @@ def register(router):
             "created_at": now.isoformat(),
             "expires_at": now + timedelta(days=GAME_CHAT_RETENTION_DAYS),
         }
+        if author_online_color:
+            doc["author_online_color"] = author_online_color
         if body.gif_url:
             doc["gif_url"] = body.gif_url.strip()
         await db.game_chat_messages.insert_one(doc)
-        await _notify_game_chat_mentions(doc, body.channel, family_id)
         return {"message": _safe_message_payload(doc, user_id)}
 
     @router.get("/game-chat/prefs", dependencies=_game_chat_rl_u)

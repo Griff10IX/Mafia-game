@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import api from '../utils/api';
 import { getThemeUiPlatform } from '../utils/themePlatform';
+import { GAME_CHAT_VISIBILITY_EVENT, getGameChatVisible, setGameChatVisible as persistGameChatVisible } from '../utils/gameChatVisibility';
 import {
   Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2,
   Type, Square, Sparkles, AlignLeft, Box, PanelLeft, PanelRight,
@@ -347,6 +348,7 @@ export default function ThemePicker({ open, onClose }) {
   const toastPosition = ls(KEYS.toastPosition, 'bottom-center');
   const toastCloseButton = ls(KEYS.toastCloseButton) !== 'false';
   const killToastStyle = ls(KEYS.killToastStyle, 'popup');
+  const [gameChatVisible, setGameChatVisible] = useState(getGameChatVisible);
 
   const loadChip = (k) => {
     if (typeof window === 'undefined') return 50;
@@ -361,6 +363,12 @@ export default function ThemePicker({ open, onClose }) {
     const onSaved = () => toast.success('Theme saved');
     window.addEventListener('theme-saved', onSaved);
     return () => window.removeEventListener('theme-saved', onSaved);
+  }, []);
+
+  useEffect(() => {
+    const onVisibilityChanged = () => setGameChatVisible(getGameChatVisible());
+    window.addEventListener(GAME_CHAT_VISIBILITY_EVENT, onVisibilityChanged);
+    return () => window.removeEventListener(GAME_CHAT_VISIBILITY_EVENT, onVisibilityChanged);
   }, []);
 
   const setChipWP = (v) => {
@@ -418,6 +426,10 @@ export default function ThemePicker({ open, onClose }) {
   const setBottomDividers = (v) => {
     lsSet(KEYS.bottomDividers, v ? 'true' : 'false', 'bottom-nav-dividers-changed');
     api.patch('/profile/theme', { bottom_nav_show_dividers: v, theme_platform: getThemeUiPlatform() }).catch(() => {});
+  };
+  const setGameChatVisibility = (visible) => {
+    persistGameChatVisible(visible);
+    api.patch('/profile/theme', { game_chat_visible: visible, theme_platform: getThemeUiPlatform() }).catch(() => {});
   };
 
   /* ── data ── */
@@ -1217,6 +1229,14 @@ export default function ThemePicker({ open, onClose }) {
                     { id: 'right_sidebar',label: 'Right panel', icon: PanelRight },
                   ]}
                   value={mobileStatsDisplay} onChange={setStatsDisplay}
+                />
+              </TabSection>
+
+              <TabSection title="Game Chat button" sub="Hide the floating chat launcher. Return here at any time to show it again.">
+                <Pills
+                  options={[{ id: 'show', label: 'Show' }, { id: 'hide', label: 'Hide' }]}
+                  value={gameChatVisible ? 'show' : 'hide'}
+                  onChange={v => setGameChatVisibility(v === 'show')}
                 />
               </TabSection>
 

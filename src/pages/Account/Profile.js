@@ -3016,7 +3016,6 @@ export default function Profile() {
                   { key: 'forum_topic_reply', label: 'Forum: replies to your topics' },
                   { key: 'forum_comment_reply', label: 'Forum: replies to your comments' },
                   { key: 'forum_mention', label: 'Forum: when someone @mentions you' },
-                  { key: 'game_chat_mention', label: 'Game chat: when someone @mentions you' },
                   { key: 'designer_comp', label: 'Designer competition (when a new comp starts)' },
                 ].map(({ key, label }) => (
                   <div key={key} className="flex items-center justify-between gap-3 py-1">

@@ -1100,6 +1100,7 @@ class ThemePreferencesRequest(BaseModel):
     sidebar_layout: Optional[str] = None
     mobile_nav_style: Optional[str] = None
     mobile_stats_display: Optional[str] = None
+    game_chat_visible: Optional[bool] = None
     button_shape_id: Optional[str] = None
     top_bar_gap: Optional[str] = None
     top_bar_size: Optional[str] = None

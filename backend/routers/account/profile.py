@@ -1531,6 +1531,7 @@ def register(router):
             "sidebar_layout": "sidebarLayout",
             "mobile_nav_style": "mobileNavStyle",
             "mobile_stats_display": "mobileStatsDisplay",
+            "game_chat_visible": "gameChatVisible",
             "button_shape_id": "buttonShapeId",
             "top_bar_gap": "topBarGap",
             "top_bar_size": "topBarSize",

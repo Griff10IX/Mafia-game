@@ -21,6 +21,7 @@ import {
 } from '../constants/themes';
 import api from '../utils/api';
 import { getThemeUiPlatform } from '../utils/themePlatform';
+import { GAME_CHAT_VISIBLE_KEY, GAME_CHAT_VISIBILITY_EVENT } from '../utils/gameChatVisibility';
 
 const STORAGE_KEY_COLOUR = 'app_theme_colour';
 const STORAGE_KEY_TEXTURE = 'app_theme_texture';
@@ -88,6 +89,10 @@ function applyLayoutPrefsFromServerToLS(prefs) {
       localStorage.setItem(LS_BOTTOM_NAV_DIVIDERS, prefs.bottomNavShowDividers ? 'true' : 'false');
       events.add('bottom-nav-dividers-changed');
     }
+    if (typeof prefs.gameChatVisible === 'boolean') {
+      localStorage.setItem(GAME_CHAT_VISIBLE_KEY, prefs.gameChatVisible ? 'true' : 'false');
+      events.add(GAME_CHAT_VISIBILITY_EVENT);
+    }
     if (prefs.sidebarDividerStyle === 'solid' || prefs.sidebarDividerStyle === 'dotted' || prefs.sidebarDividerStyle === 'dashed') {
       localStorage.setItem(LS_SIDEBAR_DIV_STYLE, prefs.sidebarDividerStyle);
       events.add('sidebar-layout-changed');
@@ -152,6 +157,9 @@ function readLayoutSnapshotForPatch() {
     const bd = localStorage.getItem(LS_BOTTOM_NAV_DIVIDERS);
     if (bd === 'true') o.bottom_nav_show_dividers = true;
     else if (bd === 'false') o.bottom_nav_show_dividers = false;
+    const gcv = localStorage.getItem(GAME_CHAT_VISIBLE_KEY);
+    if (gcv === 'true') o.game_chat_visible = true;
+    else if (gcv === 'false') o.game_chat_visible = false;
     const dstyle = localStorage.getItem(LS_SIDEBAR_DIV_STYLE);
     if (dstyle === 'solid' || dstyle === 'dotted' || dstyle === 'dashed') o.sidebar_divider_style = dstyle;
     const ssp = localStorage.getItem(LS_SIDEBAR_SPACING);

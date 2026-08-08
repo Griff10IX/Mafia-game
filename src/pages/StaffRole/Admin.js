@@ -1,5 +1,5 @@
 import { Fragment, useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Link, useLocation, Navigate, useParams } from 'react-router-dom';
+import { Link, useLocation, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, ShieldAlert, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Grid3x3, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Leaf, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords, TrendingUp, ClipboardList, CircleDot, BookOpen } from 'lucide-react';
 import api, { imageHostPublicUrl, refreshUser } from '../../utils/api';
 import { formatAdminDateTime, formatAdminDateOnly, formatAdminTimeOnly } from '../../utils/adminDateTime';
@@ -11,12 +11,8 @@ import {
 } from '../../utils/entertainerFundedGameDisplay';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
-import AttackLogsPanel from '../../components/staff/AttackLogsPanel';
 import { normalizeBodyguardSlotValue } from '../../utils/attackLogDisplay';
 import AdminSustainedRlEventsTable from './admin/AdminSustainedRlEventsTable';
-import AdminRacketProgress from './AdminRacketProgress';
-import AdminDistilleryProgress from './AdminDistilleryProgress';
-import AdminWeedSellAudit from './AdminWeedSellAudit';
 import styles from '../../styles/noir.module.css';
 import {
   ADMIN_CATEGORIES,
@@ -25,6 +21,8 @@ import {
   LEGACY_CATEGORY_MAP,
   LEGACY_CATEGORY_SECTION_ID,
   MOD_ONLY_CATEGORY_IDS,
+  SEARCHABLE_TOOLS,
+  hubAllowsSection,
 } from './adminToolMap';
 import { useStaffAccessVerify } from './staffAccessVerifyContext';
 
@@ -207,187 +205,6 @@ const FIRST_GAME_PASS_VIP_COMPLETION_CONFIRM = 'FIRST GAME PASS COMPLETE';
 const COMPLETE_REMAINING_VIP_CONFIRM = 'COMPLETE REMAINING VIP';
 const REVOKE_GP_STRAINS_CONFIRM = 'REVOKE GP STRAINS';
 const DISABLE_STATE_CONFIRM = 'DISABLE ATLANTIC CITY';
-
-// Searchable tools list - each item has: label (searchable), categoryId (scroll target), collapseKey (optional - to expand section)
-const SEARCHABLE_TOOLS = [
-  // Player Management
-  { label: 'Target Username', categoryId: 'admin-operations', scrollToId: 'admin-target-username', keywords: ['target', 'username', 'player', 'command'] },
-  { label: 'Search Users', categoryId: 'admin-players', scrollToId: 'admin-search-users', keywords: ['search', 'users', 'email', 'find'] },
-  { label: 'Change Rank', categoryId: 'admin-players', collapseKey: 'rank', keywords: ['rank', 'change', 'prestige', 'level'] },
-  { label: 'Add Points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'add', 'give'] },
-  { label: 'Remove points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'remove', 'deduct', 'take'] },
-  { label: 'Point sources audit', categoryId: 'admin-players', collapseKey: 'player', keywords: ['points', 'sources', 'audit', 'where', 'breakdown', 'ledger', 'stripe', 'transfers'] },
-  { label: 'Add respect points', categoryId: 'admin-players', collapseKey: 'player', keywords: ['respect', 'add', 'grant', 'give', 'points'] },
-  { label: 'Remove respect points', categoryId: 'admin-players', collapseKey: 'player', keywords: ['respect', 'remove', 'deduct', 'take'] },
-  { label: 'Points Provenance', categoryId: 'admin-donations', collapseKey: 'donationsProvenance', keywords: ['chargeback', 'provenance', 'payment session', 'points tree'], adminOnly: true },
-  { label: 'Add Tokens', categoryId: 'admin-players', collapseKey: 'tokens', keywords: ['tokens', 'crime', 'gta', 'melt', 'booze', 'travel', 'oc', 'racket', 'jailbust'] },
-  { label: 'Token Inspector', categoryId: 'admin-players', collapseKey: 'tokens', keywords: ['token', 'inspect', 'balance', 'boost', 'expiry', 'held', 'used', 'purchased', 'active'] },
-  { label: 'Clear pool cue upgrades', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['pool', '8-ball', '8 ball', 'cue', 'upgrades', 'reset', 'minigame'] },
-  { label: 'Reset kill inflation', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['kill', 'inflation', 'combat', 'attack', 'bullets', 'reset', 'zero', '0%'], adminOnly: true },
-  { label: 'Remove Bodyguard Find Clock', categoryId: 'admin-players', collapseKey: 'player', keywords: ['bodyguard', 'find', 'clock', 'find clock', 'perk', 'store', 'attack', 'search', 'remove'], adminOnly: true },
-  { label: 'Auto Rank email entitlement', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['auto rank', 'email', 'entitlement', 'stripe', 'permanent', '20'], adminOnly: true },
-  { label: 'New player tutorial', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-new-player-tutorial', keywords: ['tutorial', 'new player', 'onboarding', 'coach', 'reset tutorial', 'start tutorial'], adminOnly: true },
-  { label: 'Founding Member', categoryId: 'admin-players', collapseKey: 'founding', keywords: ['founding', 'member', 'badge', 'founder'] },
-  { label: 'Add Money', categoryId: 'admin-players', collapseKey: 'money', keywords: ['money', 'cash', 'add', 'give'] },
-  { label: 'Remove money (user)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['remove', 'money', 'cash', 'take', 'deduct', 'subtract', 'wallet'] },
-  { label: 'Log all users out', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['log all users', 'logout everyone', 'site wide', 'invalidate sessions', 'sessions', 'jwt', 'token'], adminOnly: true },
-  { label: 'Add Bullets', categoryId: 'admin-players', collapseKey: 'bullets', keywords: ['bullets', 'ammo', 'add'] },
-  { label: 'Give Car', categoryId: 'admin-players', collapseKey: 'cars', keywords: ['car', 'vehicle', 'give'] },
-  { label: 'Drop common/uncommon cars', categoryId: 'admin-players', collapseKey: 'cars', keywords: ['car', 'vehicle', 'drop', 'purge', 'common', 'uncommon', 'garage', 'dealership', 'stock'], adminOnly: true },
-  { label: 'Ghost Mode', categoryId: 'admin-players', collapseKey: 'ghost', keywords: ['ghost', 'invisible', 'hide'] },
-  { label: 'Lock Account', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['lock', 'ban', 'account'] },
-  { label: 'Kill Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['kill', 'death', 'player'] },
-  { label: 'Revive Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['revive', 'resurrect', 'alive'], adminOnly: true },
-  { label: 'User Details', categoryId: 'admin-players', collapseKey: 'userDetails', keywords: ['user', 'details', 'info', 'profile', 'jail', 'bust', 'reward'] },
-  { label: 'User give / take & leaderboards', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['leaderboard', 'adjust', 'strip', 'username', 'crimes', 'scores', 'gta', 'busts', 'kills', 'minigame', 'money', 'points', 'respect', 'bullets', 'weekly', 'alltime', 'preview', 'partial', 'bootleg', 'racing lifetime', 'lifetime earnings'] },
-  { label: 'Missions & tribute (user)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-missions-ladder', keywords: ['mission', 'tribute', 'ladder', 'progress', 'daily tribute', 'm_first', 'story'] },
-  { label: 'Referrals & prereg heal', categoryId: 'admin-players', collapseKey: 'referralsReport', keywords: ['referral', 'referrer', 'referee', 'invite', 'earnings', 'ref', 'heal', 'prereg', 'backfill', 'manual', 'assign', 'link', 'remove', 'unlink', 'clear'] },
-  { label: 'Respect points log', categoryId: 'admin-players', collapseKey: 'respectPointsLog', keywords: ['respect', 'points', 'log', 'earned', 'audit', 'player'] },
-  { label: 'Gambling Log', categoryId: 'admin-logs', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
-  { label: 'Casino seizures', categoryId: 'admin-logs', collapseKey: 'casinoSeizures', keywords: ['casino', 'seizure', 'won', 'ownership', 'transfer'] },
-  { label: 'Casino buy-back history', categoryId: 'admin-logs', collapseKey: 'casinoBuybackHistory', keywords: ['buyback', 'buy-back', 'casino', 'escrow', 'points', 'held', 'offer'] },
-  { label: 'Sports open stake cap', categoryId: 'admin-logs', collapseKey: 'sportsOpenStakeCap', keywords: ['sports', 'betting', 'underground', 'open stake', 'cap', 'max bet'] },
-  { label: 'Sports bets ledger', categoryId: 'admin-logs', collapseKey: 'sportsBetsLedger', keywords: ['sports', 'betting', 'bets', 'football', 'ledger'] },
-  { label: 'Activity Log', categoryId: 'admin-logs', collapseKey: 'activityLog', keywords: ['activity', 'log', 'history'] },
-  // Donations
-  { label: 'Donations Payments Log', categoryId: 'admin-donations', collapseKey: 'donationsPayments', keywords: ['donations', 'payments', 'stripe', 'credit'], adminOnly: true },
-  { label: 'Store Point Crediting', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['store', 'crediting', 'manual', 'eta', 'payments'], adminOnly: true },
-  { label: 'VIP Pass Car owners', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['vip', 'pass', 'car', 'limit', 'purchase', 'store', 'owners', 'remove', 'sold out'], adminOnly: true },
-  { label: 'Store item rollout', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['store', 'rollout', 'feature flag', 'coming soon', 'auto-collect', 'bailout', 'cooldown skip', 'profile glow', 'family crest', 'safe deposit', 'phase 1', 'enable', 'test'], adminOnly: true },
-  { label: 'Pre-order Settings', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['preorder', 'points', 'release', 'manual', 'store', 'credit'], adminOnly: true },
-  { label: 'Store cash purchase logs', categoryId: 'admin-donations', collapseKey: 'pointsCashLogs', keywords: ['points', 'cash', 'store', 'ip', 'email', 'monthly', 'quick trade', 'token', 'bundle'], adminOnly: true },
-  { label: 'Release Preorder Points', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['release', 'preorder', 'points', 'credit'], adminOnly: true },
-  { label: 'Quick Trade admin', categoryId: 'admin-economy-progression', collapseKey: 'quicktradeTool', keywords: ['quicktrade', 'trade', 'offers', 'escrow', 'cancel', 'listings', 'tokens', 'property'], adminOnly: true },
-  { label: 'Racket & Distillery progress', categoryId: 'admin-economy-progression', collapseKey: 'racketProgress', scrollToId: 'admin-racket-progress', keywords: ['racket', 'distillery', 'illegal business', 'progress', 'vault', 'guards', 'security', 'ladder', 'booze', 'ibm'], adminOnly: true },
-  { label: 'Distillery progress', categoryId: 'admin-economy-progression', collapseKey: 'distilleryProgress', scrollToId: 'admin-distillery-progress', keywords: ['distillery', 'still', 'booze', 'heat', 'equipment', 'special upgrades', 'add upgrades', 'unlock track'], adminOnly: true },
-  { label: 'Weed sell audit', categoryId: 'admin-economy-progression', collapseKey: 'weedSellAudit', scrollToId: 'admin-weed-sell-audit', keywords: ['weed', 'empire', 'sell', 'spam', 'stash', 'clawback', 'exploit', 'audit', 'heat', 'reset heat'], adminOnly: true },
-  // Game World
-  { label: 'Game Events', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable', 'random', 'bundle', 'daily', 'modifiers', 'roll'], adminOnly: true },
-  { label: 'World Cup 2026 (archive)', categoryId: 'admin-gameworld', collapseKey: 'worldCup', keywords: ['world cup', '2026', 'predictions', 'fifa', 'draft', 'fixtures', 'sync', 'archive', 'leaderboard', 'history'], adminOnly: true },
-  { label: 'Booze Run rotation & global discount', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices', 'discount', 'listed', 'nudge', 'global', 'jail', 'bust', 'prohibition'], adminOnly: true },
-  { label: 'Booze Run analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'boozeRunAnalytics', keywords: ['booze', 'analytics', 'economy', 'events', 'profit', 'revenue', 'jail', 'leaderboard'] },
-  { label: 'Coin Flip economy', categoryId: 'admin-analytics-monitoring', collapseKey: 'coinFlipEconomy', keywords: ['coin', 'flip', 'casino', 'economy', 'heads', 'tails', 'bets', 'winners', 'house'] },
-  { label: 'Global properties profit', categoryId: 'admin-analytics-monitoring', collapseKey: 'globalPropertiesEconomy', keywords: ['car', 'dealership', 'sports', 'betting', 'book', 'global', 'property', 'owner', 'profit', 'pending', 'house', 'percent', 'share'], adminOnly: true },
-  { label: 'Keno economy', categoryId: 'admin-analytics-monitoring', collapseKey: 'kenoEconomy', keywords: ['keno', 'casino', 'economy', 'payout', 'gambling', 'state', 'max bet', 'keno settings', 'top wins', 'player'] },
-  { label: 'Presence simulator', categoryId: 'admin-gameworld', collapseKey: 'presenceSimulator', keywords: ['presence', 'simulator', 'online', 'active', 'fake', 'last_seen'], adminOnly: true },
-  { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
-  { label: 'Lottery money trail', categoryId: 'admin-gameworld', collapseKey: 'lotteryMoneyTrail', keywords: ['lottery', 'money', 'payout', 'winner', 'pot', 'audit', 'trail', 'twice', 'wed', 'sun'], adminOnly: true },
-  { label: 'Bootleg Runs economy', categoryId: 'admin-gameworld', collapseKey: 'racingEconomy', keywords: ['racing', 'bootleg', 'crew', 'bank', 'adjust crew', 'crew bank', 'lifetime', 'earnings', 'payout', 'wallet', 'runs', 'audit'], adminOnly: true },
-  { label: 'Crack the Safe jackpot', categoryId: 'admin-gameworld', collapseKey: 'crackSafeJackpot', keywords: ['crack', 'safe', 'jackpot', 'pot', 'lower'] },
-  { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
-  { label: 'Game Pass season end', categoryId: 'admin-gameworld', collapseKey: 'gamePassSeason', keywords: ['game pass', 'season', 'end', 'countdown', 'date', 'time', 'global'], adminOnly: true },
-  { label: 'Reset Racket Cooldown', categoryId: 'admin-gameworld', collapseKey: 'racketReset', keywords: ['racket', 'cooldown', 'reset', 'family'], adminOnly: true },
-  { label: 'Casino limits (global caps)', categoryId: 'admin-gameworld', collapseKey: 'casinoLimits', keywords: ['casino', 'limits', 'caps', 'max bet', 'buyback', 'poker', 'blind'] },
-  { label: 'Claim costs (casino, airport, armoury)', categoryId: 'admin-gameworld', collapseKey: 'claimCosts', keywords: ['claim', 'cost', 'casino', 'airport', 'armoury', 'bullet', 'factory', 'dice', 'roulette'], adminOnly: true },
-  { label: 'Casino per-game max bets', categoryId: 'admin-gameworld', collapseKey: 'casinoMaxBets', keywords: ['casino', 'max bet', 'per game', 'slots', 'blackjack', 'roulette'] },
-  { label: 'Dead owner properties', categoryId: 'admin-gameworld', collapseKey: 'casinosDeadOwners', keywords: ['dead', 'casino', 'armoury', 'airport', 'ownership', 'stuck', 'invalid', 'takeover', 'killer'] },
-  { label: 'Admin display & signup', categoryId: 'admin-gameworld', collapseKey: 'adminDisplay', keywords: ['admin', 'display', 'colour', 'color', 'online', 'email', 'verification', 'vpn', 'proxy', 'user agent', 'signup'], adminOnly: true },
-  { label: 'Sustained page pacing (jail, forum, entertainer, kill)', categoryId: 'admin-gameworld', collapseKey: 'sustainedPageRl', keywords: ['sustained', 'pacing', 'rate', 'forum', 'entertainer', 'jail', 'kill', 'attack', '429', 'cooldown', 'bot', 'gap', 'sustain'], adminOnly: true },
-  { label: 'Swiss & interest bank limits', categoryId: 'admin-gameworld', collapseKey: 'bankEconomy', keywords: ['swiss', 'interest', 'bank', 'limit', 'deposit', 'maturity', 'principal'], adminOnly: true },
-  { label: 'Launch & login lock', categoryId: 'admin-gameworld', collapseKey: 'launchSettings', keywords: ['login', 'lock', 'launch', 'store', 'preorder', 'preregister', 'banner', 'landing'], adminOnly: true },
-  { label: 'Maintenance banner', categoryId: 'admin-gameworld', collapseKey: 'maintenanceBanner', keywords: ['maintenance', 'banner', 'downtime'] },
-  // Security
-  { label: 'Security Summary', categoryId: 'admin-security', collapseKey: 'security', keywords: ['security', 'summary', 'flags', 'rate', 'ban', 'ip', 'lockout', 'telegram'] },
-  { label: 'Session stats', categoryId: 'admin-security', collapseKey: 'sessionStats', keywords: ['session', 'sessions', 'active', 'log out', 'revoke', '24h'] },
-  { label: 'Log out all users', categoryId: 'admin-security', collapseKey: 'sessionStats', keywords: ['log all users', 'logout everyone', 'invalidate all', 'site wide sessions', 'jwt', 'token'], adminOnly: true },
-  { label: 'Staff tool denials (401/403)', categoryId: 'admin-security', collapseKey: 'staffAccessDenials', keywords: ['403', '401', 'denied', 'forbidden', 'staff', 'access', 'audit', 'login'], adminOnly: false },
-  { label: 'Staff tool access (history + live)', categoryId: 'admin-security', collapseKey: 'toolAccessAudit', keywords: ['staff', 'admin', 'tool', 'access', 'audit', 'history', 'presence', 'who', 'used', 'shell'], adminOnly: false },
-  { label: 'Sustained pacing 429 log', categoryId: 'admin-security', collapseKey: 'sustainedRl429Log', keywords: ['429', 'rate', 'limit', 'pacing', 'sustained', 'inbox', 'spam', 'throttle'], adminOnly: true },
-  { label: 'IP Bans', categoryId: 'admin-security', collapseKey: 'security', keywords: ['ip', 'ban', 'block', 'unban', 'restore'] },
-  { label: 'Rate Limits', categoryId: 'admin-security', collapseKey: 'security', keywords: ['rate', 'limit', 'throttle', 'violations', 'cooldown'] },
-  { label: 'Cloudflare Bot Block', categoryId: 'admin-security', collapseKey: 'cfBotBlock', keywords: ['cloudflare', 'bot', 'block', 'cf'] },
-  { label: 'Cloudflare auto block', categoryId: 'admin-security', collapseKey: 'cfAutoBlock', keywords: ['cloudflare', 'auto', 'block', 'cf'] },
-  { label: 'Security panel', categoryId: 'admin-security', collapseKey: 'security', keywords: ['security', 'flags', 'threat', 'monitor'] },
-  // Cheat Detection
-  { label: 'Cheat Detection', categoryId: 'admin-cheat', collapseKey: 'cheat', keywords: ['cheat', 'detection', 'suspicious'] },
-  { label: 'Bot / script investigation', categoryId: 'admin-cheat', collapseKey: 'botInvestigation', keywords: ['bot', 'script', 'automation', 'investigation', 'cheat', 'suspicious', 'ip', 'network', 'mobile', 'isp', 'vpn', 'attack', 'execute_token', 'spoof', 'ua', 'kill'] },
-  { label: 'Find Duplicates', categoryId: 'admin-cheat', collapseKey: 'duplicates', keywords: ['duplicate', 'multi', 'account'] },
-  { label: 'Proxy farm investigation', categoryId: 'admin-cheat', collapseKey: 'cheat', keywords: ['proxy', 'proxyroyal', 'iproyal', 'residential', 'vpn', 'multi', 'account', 'farm', 'rotator'] },
-  { label: 'Cheater kill impact', categoryId: 'admin-cheat', collapseKey: 'cheaterKillImpact', keywords: ['cheater', 'kill', 'impact', 'bodyguard', 'refund', 'hire'], adminOnly: true },
-  // Analytics
-  { label: 'Login page unique visitors', categoryId: 'admin-analytics', collapseKey: 'loginPageVisitors', keywords: ['login', 'visitors', 'unique', 'page', 'stats'] },
-  { label: 'Casino Ownership Profits', categoryId: 'admin-analytics', collapseKey: 'ownershipProfits', keywords: ['casino', 'ownership', 'profit', 'owner', 'earnings'] },
-  { label: 'Interest bank by player', categoryId: 'admin-analytics', collapseKey: 'interestBankPlayers', keywords: ['interest', 'bank', 'deposits', 'holders'] },
-  { label: 'Swiss Bank Overview', categoryId: 'admin-analytics', collapseKey: 'swissBank', keywords: ['swiss', 'bank', 'balance', 'hidden', 'money', 'wipe'] },
-  { label: 'Points purchases (store spends)', categoryId: 'admin-analytics', collapseKey: 'pointsStoreSpends', keywords: ['points', 'store', 'spend', 'bought', 'purchases', 'refund'] },
-  { label: 'Store points purchase log', categoryId: 'admin-analytics', collapseKey: 'storePointsPurchaseLogs', keywords: ['points', 'store', 'robot', 'auto-search', 'bodyguard', 'silencer', 'armour', 'token', 'purchase log'], adminOnly: true },
-  { label: 'Analytics V2 workspace', categoryId: 'admin-analytics-monitoring', collapseKey: 'analyticsWorkspaceV2', keywords: ['analytics', 'v2', 'workspace', 'rollup', 'rollups', 'stats', 'users', 'events'] },
-  { label: 'Economy overview', categoryId: 'admin-analytics-monitoring', collapseKey: 'economyOverview', keywords: ['economy', 'overview', 'gdp', 'money', 'circulation', 'cash', 'holders', 'wallet', 'distribution', 'drill', 'accounts'] },
-  { label: 'Cash gain threshold audit', categoryId: 'admin-analytics-monitoring', collapseKey: 'economySpikeAudit', keywords: ['spike', 'inflation', 'cash jump', 'cash increase', 'wallet', 'threshold', '50 million', 'points', 'audit', 'ledger', 'gambling', 'payout', 'suspicious', 'economy'] },
-  { label: 'Capital breakdown', categoryId: 'admin-analytics-monitoring', collapseKey: 'capitalBreakdown', keywords: ['capital', 'breakdown', 'wealth'] },
-  { label: 'Player activity', categoryId: 'admin-analytics-monitoring', collapseKey: 'playerActivity', keywords: ['player', 'activity', 'dau', 'mau'] },
-  { label: 'Attack analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'attackAnalytics', keywords: ['attack', 'analytics', 'pvp', 'kills'] },
-  { label: 'Crime analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'crimeAnalytics', keywords: ['crime', 'analytics'] },
-  { label: 'Casino analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'casinoAnalytics', keywords: ['casino', 'analytics', 'house'] },
-  { label: 'Trades analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'tradesAnalytics', keywords: ['trades', 'analytics', 'stock', 'market'] },
-  { label: 'Hitlist & bodyguards analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'hitlistBodyguardsAnalytics', keywords: ['hitlist', 'bodyguard', 'analytics'] },
-  { label: 'Economy analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'economyAnalytics', keywords: ['economy', 'analytics', 'sink', 'faucet'] },
-  { label: 'Loot box opens log', categoryId: 'admin-analytics-monitoring', collapseKey: 'lootBoxOpens', keywords: ['loot', 'box', 'opens', 'rewards', 'username'] },
-  { label: 'Player compare', categoryId: 'admin-analytics-monitoring', collapseKey: 'playerCompare', keywords: ['compare', 'players', 'side by side'], adminOnly: true },
-  // Logs
-  { label: 'Toast notifications', categoryId: 'admin-logs', collapseKey: 'toastNotifications', keywords: ['toast', 'notifications', 'popup', 'message', 'error', 'success'] },
-  { label: 'Wallet activity', categoryId: 'admin-logs', collapseKey: 'walletActivity', keywords: ['wallet', 'money', 'points', 'cash', 'transfer', 'mdg', 'bank', 'ledger'] },
-  { label: 'Live Activity Feed', categoryId: 'admin-logs', collapseKey: 'activityFeed', keywords: ['activity', 'feed', 'live', 'real-time', 'actions', 'gambling', 'bank', 'transfer'] },
-  { label: 'Minigame Payouts', categoryId: 'admin-logs', collapseKey: 'minigamePayouts', keywords: ['minigame', 'payout', 'reward', 'cash', 'mini', 'game'] },
-  { label: 'Weekly Leaderboard Payouts', categoryId: 'admin-logs', collapseKey: 'weeklyLeaderboardPayouts', keywords: ['leaderboard', 'weekly', 'payout', 'respect', 'points', 'top 10', 'fix', 'deduction', 'negative points'] },
-  { label: 'Attack Logs', categoryId: 'admin-logs', collapseKey: 'attackLogs', keywords: ['attack', 'log', 'kill'] },
-  { label: 'Hitman hire log', categoryId: 'admin-testing', collapseKey: 'hitman', keywords: ['hitman', 'hire', 'contract', 'log', 'bodyguard killed', 'who hired'] },
-  { label: 'Bodyguard audit', categoryId: 'admin-logs', collapseKey: 'bodyguardAudit', keywords: ['bodyguard', 'guard', 'hire', 'drop', 'inflation', 'robot hire history', 'last 100 robot', 'searching time', 'find time', 'overpay', 'stale inflation'] },
-  { label: 'Mod Action Logs', categoryId: 'admin-logs', collapseKey: 'modLogs', keywords: ['mod', 'action', 'log'] },
-  { label: 'Crime logs', categoryId: 'admin-logs', collapseKey: 'crimeLogs', keywords: ['crime', 'log', 'heist'] },
-  { label: 'GTA logs', categoryId: 'admin-logs', collapseKey: 'gtaLogs', keywords: ['gta', 'log', 'theft', 'car'] },
-  { label: 'Jail logs', categoryId: 'admin-logs', collapseKey: 'jailLogs', keywords: ['jail', 'log', 'sentence'] },
-  { label: 'Bank logs', categoryId: 'admin-logs', collapseKey: 'bankLogs', keywords: ['bank', 'log', 'transfer'] },
-  { label: 'Stock logs', categoryId: 'admin-logs', collapseKey: 'stockLogs', keywords: ['stock', 'log', 'shares'] },
-  // Testing Tools
-  { label: 'Search & Attack Tools', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['search', 'attack', 'time'] },
-  { label: 'Set Search Time', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['search', 'time', 'minutes'], adminOnly: true },
-  { label: 'Clear All Searches', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['clear', 'searches', 'delete'], adminOnly: true },
-  { label: 'Fix login fields (user)', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['login', 'fix', 'repair', 'sessions', 'ip', 'lockout'] },
-  { label: 'Clear OC invites (user)', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'invite', 'clear', 'user'] },
-  { label: 'Clear minigame records (user)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['minigame', 'records', 'clear', 'user', 'scores'], adminOnly: true },
-  { label: 'Minigame weekly leaderboard strip/add', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['minigame', 'leaderboard', 'weekly', 'strip', 'add', 'score', 'flappy', 'gauntlet'], adminOnly: true },
-  { label: 'Main leaderboards strip (respect melt stock booze)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['leaderboard', 'weekly', 'respect', 'melt', 'stock', 'booze', 'strip', 'top 10'], adminOnly: true },
-  { label: 'Reconcile Game Pass tiers', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['game pass', 'reconcile', 'tier', 'vip', 'rank xp', 'micro tier', 'force grant', 'rewards'], adminOnly: true },
-  { label: 'Game Pass inspector', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'inspector', 'vip', 'token', 'stripe', 'rank xp', 'micro tier', 'entitlement'], adminOnly: true },
-  { label: 'Game Pass points diagnostic', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'points', 'diagnostic', 'ledger', 'stripe', 'purchase source', 'catch up pending'], adminOnly: true },
-  { label: 'Game Pass stuck cursors', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'stuck', 'cursor', 'broken', 'fix', 'repair', 'rewards'], adminOnly: true },
-  { label: 'First Game Pass VIP completion', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-first-gp-vip-completion', keywords: ['game pass', 'first', 'vip', 'completion', 'bulk', 'tier', '100', 'bonus', 'one time'], adminOnly: true },
-  { label: 'Complete remaining VIP (season)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-complete-remaining-vip', keywords: ['game pass', 'vip', 'complete', 'remaining', 'season', 'bulk', 'tier', '100'], adminOnly: true },
-  { label: 'Disable Atlantic City', categoryId: 'admin-operations', collapseKey: 'stateHeads', scrollToId: 'admin-disable-state', keywords: ['atlantic city', 'disable state', 'remove city', 'migration', 'relinquish'], adminOnly: true },
-  { label: 'User inbox (live)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-inbox', keywords: ['inbox', 'notifications', 'dm', 'messages', 'mail', 'social'], adminOnly: true },
-  { label: 'Deleted messages', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-deleted-messages', keywords: ['deleted', 'messages', 'archive', 'forum', 'chat', 'dm', 'notification', 'history'], adminOnly: true },
-  { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
-  { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
-  { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate', 'sync', 'location', 'hacked', 'replace', 'hire inflation', 'clear inflation'] },
-  { label: 'Hitman Tools', categoryId: 'admin-testing', collapseKey: 'hitman', keywords: ['hitman', 'cooldown', 'protection', 'victim', 'reset', 'for hire', 'hire log', 'contracts', 'staff hire'] },
-  { label: 'Generate Bodyguards', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'generate', 'robot'] },
-  { label: 'Test Bodyguard Payout', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'payout', 'test'] },
-  { label: 'GTA exclusive pool & dealer', categoryId: 'admin-world-systems', collapseKey: 'gtaPool', keywords: ['gta', 'exclusive', 'loot exclusive', 'car intel', 'timeline', 'war lock', 'marketplace', 'pool', 'dealer', 'cars', 'values'], adminOnly: true },
-  { label: 'System health', categoryId: 'admin-operations', collapseKey: 'systemHealth', keywords: ['system', 'health', 'uptime', 'status', 'db'] },
-  { label: 'Moderation related accounts', categoryId: 'admin-operations', collapseKey: 'moderationRelated', keywords: ['moderation', 'related', 'linked', 'accounts'] },
-  { label: 'Page locks (admin)', categoryId: 'admin-world-systems', collapseKey: 'pageLocks', scrollToId: 'admin-page-locks', keywords: ['page', 'lock', 'route'] },
-  { label: 'Family war — force truce', categoryId: 'admin-operations', collapseKey: 'familyWarTruce', scrollToId: 'admin-family-war-truce', keywords: ['family', 'war', 'truce', 'crew', 'end war', 'peace'], adminOnly: true },
-  { label: 'Mod display', categoryId: 'admin-operations', collapseKey: 'modDisplay', keywords: ['mod', 'display', 'colour', 'color', 'badge'] },
-  { label: 'Cheat detection (mod)', categoryId: 'admin-operations', collapseKey: 'cheatDetectionMod', keywords: ['cheat', 'detection', 'mod', 'suspicious'] },
-  // Quick & Bulk
-  { label: 'Give All Points', categoryId: 'admin-quick', collapseKey: 'quick', keywords: ['give', 'all', 'points', 'bulk'] },
-  { label: 'Give All Money', categoryId: 'admin-quick', collapseKey: 'quick', keywords: ['give', 'all', 'money', 'bulk'] },
-  { label: 'Bulk User Action', categoryId: 'admin-quick', collapseKey: 'bulkAction', keywords: ['bulk', 'action', 'multiple', 'users'] },
-  { label: 'Redeem Codes', categoryId: 'admin-quick', collapseKey: 'redeemCodes', keywords: ['redeem', 'code', 'reward', 'cash', 'points', 'cars', 'bullets'] },
-  // Database (image host only; destructive DB tools removed from UI)
-  { label: 'Image host (user uploads)', categoryId: 'admin-database', collapseKey: 'imageHostAdmin', keywords: ['image', 'host', 'upload', 'picture', 'imgur', 'photo'], adminOnly: true },
-  // Staff Management
-  { label: 'Staff Management', categoryId: 'admin-staff', collapseKey: 'staff', keywords: ['staff', 'mod', 'helper', 'promote'] },
-  { label: 'Add Moderator', categoryId: 'admin-staff', collapseKey: 'staff', keywords: ['mod', 'moderator', 'add', 'promote'] },
-  { label: 'Add Helper', categoryId: 'admin-staff', collapseKey: 'staff', keywords: ['helper', 'help desk', 'add', 'promote'] },
-  // Mod Tools
-  { label: 'Mod Online Colour', categoryId: 'admin-mod-tools', collapseKey: 'modDisplay', keywords: ['mod', 'colour', 'color', 'online', 'palette'] },
-  { label: 'Dupe check', categoryId: 'admin-mod-tools', collapseKey: 'dupeCheckMod', keywords: ['dupe', 'duplicate', 'multi', 'account'] },
-  { label: 'Lock player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['lock', 'player', 'investigation'] },
-  { label: 'Modkill', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['modkill', 'kill', 'player'] },
-  { label: 'Lock page', categoryId: 'admin-world-systems', collapseKey: 'pageLocks', scrollToId: 'admin-page-locks', keywords: ['lock', 'page', 'maintenance'] },
-];
 
 /** Display names for /admin/casinos/analytics/summary game_type keys */
 const CASINO_ANALYTICS_GAME_LABELS = {
@@ -693,7 +510,13 @@ function SustainedRlScopeCard({ scope, enabled, saving, onToggle }) {
 
 export default function Admin() {
   const location = useLocation();
+  const navigate = useNavigate();
   const params = useParams();
+  const activeHubId = (params.section || 'players').toLowerCase();
+  const showHubSection = useCallback(
+    (sectionId) => hubAllowsSection(activeHubId, sectionId),
+    [activeHubId],
+  );
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   /** True when email is on ADMIN_EMAILS (includes admins using "act as normal"; is_admin from API is then false). */
@@ -811,6 +634,7 @@ export default function Admin() {
   const [toolSearchFocused, setToolSearchFocused] = useState(false);
   const searchInputRef = useRef(null);
 
+
   const [activeCategoryId, setActiveCategoryId] = useState('admin-operations');
   const [modVisibleCategoryIds, setModVisibleCategoryIds] = useState(() => [...MOD_ONLY_CATEGORY_IDS]);
   const [adminPreviewAsMod, setAdminPreviewAsMod] = useState(false);
@@ -833,6 +657,23 @@ export default function Admin() {
       return true;
     },
     [verifyStaffAccess],
+  );
+
+  const CATEGORY_DEFAULT_HUB = {
+    'admin-operations': 'players',
+    'admin-economy-progression': 'commerce',
+    'admin-world-systems': 'liveops',
+    'admin-analytics-monitoring': 'analytics',
+  };
+
+  const goCategoryHub = useCallback(
+    async (categoryId) => {
+      if (!(await verifyStaffAccess())) return;
+      const hub = CATEGORY_DEFAULT_HUB[categoryId] || 'players';
+      navigate(`/tjjeujr3wa/${hub}`);
+      setActiveCategoryId(categoryId);
+    },
+    [verifyStaffAccess, navigate],
   );
 
   useEffect(() => {
@@ -898,13 +739,42 @@ export default function Admin() {
   const handleToolSelect = async (tool) => {
     const normalizedCategoryId = normalizeCategoryId(tool.categoryId);
     if (!(await verifyStaffAccess())) return;
+    setToolSearch('');
+    setToolSearchFocused(false);
+    searchInputRef.current?.blur();
+
+    if (tool.routePath) {
+      navigate(tool.routePath);
+      return;
+    }
+
+    const scrollSection = tool.scrollToId || LEGACY_CATEGORY_SECTION_ID[tool.categoryId] || '';
+    let hubRoute = tool.hubRoute || null;
+    if (!hubRoute) {
+      if (scrollSection === 'admin-players' || scrollSection === 'admin-search-users' || scrollSection === 'admin-target-username') hubRoute = 'players';
+      else if (scrollSection === 'admin-moderation') hubRoute = 'moderation';
+      else if (scrollSection === 'admin-security' || scrollSection === 'admin-cheat') hubRoute = 'safety';
+      else if (scrollSection === 'admin-staff' || scrollSection === 'admin-mod-tools') hubRoute = 'staff';
+      else if (scrollSection === 'admin-donations' || scrollSection === 'admin-quick') hubRoute = 'commerce';
+      else if (scrollSection === 'admin-gameworld' || scrollSection === 'admin-page-locks') hubRoute = 'liveops';
+      else if (scrollSection === 'admin-testing' || scrollSection === 'admin-database') hubRoute = 'engineering';
+      else if (scrollSection === 'admin-analytics') hubRoute = 'analytics';
+      else if (scrollSection === 'admin-logs') hubRoute = 'logs';
+      else if (normalizedCategoryId === 'admin-operations') hubRoute = 'players';
+      else if (normalizedCategoryId === 'admin-economy-progression') hubRoute = 'commerce';
+      else if (normalizedCategoryId === 'admin-world-systems') hubRoute = 'liveops';
+      else if (normalizedCategoryId === 'admin-analytics-monitoring') hubRoute = 'logs';
+    }
+
+    const switchingHub = hubRoute && hubRoute !== activeHubId;
+    if (switchingHub) {
+      navigate(`/tjjeujr3wa/${hubRoute}`);
+    }
+
     setActiveCategoryId(normalizedCategoryId);
     if (tool.collapseKey) {
       setCollapsed((prev) => ({ ...prev, [tool.collapseKey]: false }));
     }
-    setToolSearch('');
-    setToolSearchFocused(false);
-    searchInputRef.current?.blur();
     if (typeof window !== 'undefined') window.location.hash = normalizedCategoryId;
 
     const runScroll = () => {
@@ -922,7 +792,7 @@ export default function Admin() {
       }
     };
     if (typeof window !== 'undefined') {
-      window.requestAnimationFrame(() => setTimeout(runScroll, 280));
+      window.requestAnimationFrame(() => setTimeout(runScroll, switchingHub ? 320 : 280));
     }
   };
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
@@ -1201,7 +1071,6 @@ export default function Admin() {
   const [loginPageVisitors, setLoginPageVisitors] = useState(null);
   const [loginPageViews, setLoginPageViews] = useState(null);
   const [loginPageVisitorsLoading, setLoginPageVisitorsLoading] = useState(false);
-  const [attackLogsEntryCount, setAttackLogsEntryCount] = useState(null);
   const [bodyguardAuditUsername, setBodyguardAuditUsername] = useState('');
   const [bodyguardAuditLimit, setBodyguardAuditLimit] = useState(500);
   const [bodyguardAuditData, setBodyguardAuditData] = useState(null);
@@ -7848,12 +7717,18 @@ export default function Admin() {
   };
 
   useEffect(() => {
-    if (!toastEventsLive) return undefined;
+    if (!toastEventsLive || activeHubId !== 'logs' || collapsed.toastNotifications) return undefined;
     fetchToastEvents(true);
     const t = setInterval(() => fetchToastEvents(true), 5000);
     return () => clearInterval(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toastEventsLive, toastEventsUsername, toastEventsType, toastEventsContains, toastEventsLimit, toastEventsSinceMinutes]);
+  }, [toastEventsLive, toastEventsUsername, toastEventsType, toastEventsContains, toastEventsLimit, toastEventsSinceMinutes, activeHubId, collapsed.toastNotifications]);
+
+  useEffect(() => {
+    if (activityFeedAutoRefresh && (activeHubId !== 'logs' || collapsed.activityFeed)) {
+      setActivityFeedAutoRefresh(false);
+    }
+  }, [activeHubId, collapsed.activityFeed, activityFeedAutoRefresh]);
 
   const fetchWalletActivity = async () => {
     const u = walletActivityUsername.trim();
@@ -8791,9 +8666,12 @@ export default function Admin() {
             ))}
             <button
               onClick={() =>
-                void activateCategory('admin-world-systems', () =>
-                  setCollapsed((prev) => ({ ...prev, stateHeads: false })),
-                )}
+                void (async () => {
+                  if (!(await verifyStaffAccess())) return;
+                  setCollapsed((prev) => ({ ...prev, stateHeads: false }));
+                  navigate('/tjjeujr3wa/liveops');
+                })()
+              }
               className="mt-2 text-[10px] font-heading font-bold text-red-400 underline hover:text-red-300"
             >
               → Go to State Heads section to fix
@@ -8867,7 +8745,7 @@ export default function Admin() {
               <button
                 key={id}
                 type="button"
-                onClick={() => void activateCategory(id)}
+                onClick={() => void goCategoryHub(id)}
                 className={`flex items-center gap-2 px-2.5 py-2 rounded-md text-[11px] font-heading font-bold uppercase tracking-wide border transition-colors text-left ${
                   activeCategoryId === id
                     ? 'border-primary bg-primary/20 text-primary'
@@ -9320,7 +9198,7 @@ export default function Admin() {
           </div>
         );
       })()}
-          {activeCategoryId === 'admin-operations' && (
+          {activeCategoryId === 'admin-operations' && showHubSection('admin-players') && (
           <>
       {/* Search users (username or email) */}
       <div id="admin-search-users" data-admin-tool="searchUsers" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
@@ -12375,7 +12253,7 @@ export default function Admin() {
           </>
           )}
 
-      {activeCategoryId === 'admin-operations' && (isFullAdminUi || isModerator) && (
+      {activeCategoryId === 'admin-operations' && showHubSection('admin-moderation') && (isFullAdminUi || isModerator) && (
       <section id="admin-moderation" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Lock size={12} />
@@ -12574,7 +12452,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-economy-progression' && isModerator && !isFullAdminUi && (
+      {activeCategoryId === 'admin-economy-progression' && showHubSection('admin-donations') && isModerator && !isFullAdminUi && (
       <section className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Coins size={12} />
@@ -12596,81 +12474,32 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-economy-progression' && isAdmin && (
-      <section id="admin-racket-progress" className="admin-category-nav space-y-4 mb-4">
+      {activeCategoryId === 'admin-economy-progression' && showHubSection('admin-economy-links') && isAdmin && (
+      <section id="admin-economy-links" className="admin-category-nav space-y-4 mb-4">
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-violet-500/35 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-violet-500/50 to-transparent" />
-          <SectionHeader
-            icon={Building2}
-            title="Racket & Distillery Progress"
-            color="text-violet-300"
-            toolAnchor="racketProgress"
-            isCollapsed={collapsed.racketProgress}
-            onToggle={() => toggleSection('racketProgress')}
-          />
-          {!collapsed.racketProgress && (
-            <div className="p-3">
-              <AdminRacketProgress embedded initialUsername={(formData.targetUsername || '').trim()} />
-            </div>
-          )}
+          <div className="px-3 py-2.5 bg-violet-500/10 border-b border-violet-500/25">
+            <span className="text-[10px] font-heading font-bold text-violet-300 uppercase tracking-[0.15em]">Standalone economy tools</span>
+          </div>
+          <div className="p-3 flex flex-wrap gap-2">
+            <Link to="/tjjeujr3wa/racket-progress" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-violet-500/40 bg-violet-500/10 text-[10px] font-heading font-bold uppercase tracking-wide text-violet-200 hover:bg-violet-500/20">
+              <Building2 size={12} /> Racket progress →
+            </Link>
+            <Link to="/tjjeujr3wa/distillery-progress" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-violet-500/40 bg-violet-500/10 text-[10px] font-heading font-bold uppercase tracking-wide text-violet-200 hover:bg-violet-500/20">
+              <Wine size={12} /> Distillery progress →
+            </Link>
+            <Link to="/tjjeujr3wa/weed-sell-audit" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-emerald-500/40 bg-emerald-500/10 text-[10px] font-heading font-bold uppercase tracking-wide text-emerald-200 hover:bg-emerald-500/20">
+              <Leaf size={12} /> Weed sell audit →
+            </Link>
+            <Link to="/tjjeujr3wa/vip-cars" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-cyan-500/40 bg-cyan-500/10 text-[10px] font-heading font-bold uppercase tracking-wide text-cyan-200 hover:bg-cyan-500/20">
+              <Car size={12} /> VIP Pass cars →
+            </Link>
+          </div>
         </div>
       </section>
       )}
 
-      {activeCategoryId === 'admin-economy-progression' && isAdmin && (
-      <section id="admin-distillery-progress" className="admin-category-nav space-y-4 mb-4">
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-violet-500/35 mobile-panel`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-violet-500/50 to-transparent" />
-          <SectionHeader
-            icon={Wine}
-            title="Distillery Progress"
-            color="text-violet-300"
-            toolAnchor="distilleryProgress"
-            isCollapsed={collapsed.distilleryProgress}
-            onToggle={() => toggleSection('distilleryProgress')}
-          />
-          {!collapsed.distilleryProgress && (
-            <div className="p-3">
-              <AdminDistilleryProgress embedded initialUsername={(formData.targetUsername || '').trim()} />
-            </div>
-          )}
-        </div>
-      </section>
-      )}
-
-      {activeCategoryId === 'admin-economy-progression' && isAdmin && (
-      <section id="admin-weed-sell-audit" className="admin-category-nav space-y-4 mb-4">
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-emerald-500/35 mobile-panel`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
-          <SectionHeader
-            icon={Leaf}
-            title="Weed Sell Audit"
-            color="text-emerald-300"
-            toolAnchor="weedSellAudit"
-            isCollapsed={collapsed.weedSellAudit}
-            onToggle={() => toggleSection('weedSellAudit')}
-          />
-          {!collapsed.weedSellAudit && (
-            <div className="p-3 space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  to="/tjjeujr3wa/weed-sell-audit"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-emerald-500/40 bg-emerald-500/10 text-[10px] font-heading font-bold uppercase tracking-wide text-emerald-200 hover:bg-emerald-500/20"
-                >
-                  <Leaf size={12} /> Open full Weed sell audit
-                </Link>
-                <span className="text-[9px] text-mutedForeground font-heading">
-                  Or use below — flag sell-spam farms and claw back cash / XP / equipment.
-                </span>
-              </div>
-              <AdminWeedSellAudit />
-            </div>
-          )}
-        </div>
-      </section>
-      )}
-
-      {activeCategoryId === 'admin-economy-progression' && isAdmin && (
+      {activeCategoryId === 'admin-economy-progression' && showHubSection('admin-donations') && isAdmin && (
       <section id="admin-donations" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <HandCoins size={12} />
@@ -12880,9 +12709,10 @@ export default function Admin() {
               <div className="h-px bg-zinc-700/30" />
 
               <div className="space-y-3">
-                <p className="text-[10px] font-heading font-bold text-cyan-400 uppercase tracking-wider">VIP Pass Car stock & owners</p>
+                <p className="text-[10px] font-heading font-bold text-cyan-400 uppercase tracking-wider">VIP Pass Car stock</p>
                 <p className="text-[10px] text-mutedForeground">
                   Max store / paid VIP Pass Cars game-wide. Game Pass free grants do not consume this stock. Default 5. Range 1–50.
+                  Manage owners on the dedicated VIP Pass cars page.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
@@ -12901,120 +12731,13 @@ export default function Admin() {
                   >
                     {vipPassCarLimitSaving ? 'Saving...' : 'Save limit'}
                   </button>
-                  <button
-                    type="button"
-                    onClick={fetchVipPassCarStats}
-                    disabled={vipPassCarStatsLoading}
-                    className="px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-zinc-700/30 text-zinc-300 border border-zinc-600/60 hover:bg-zinc-700/50 disabled:opacity-50"
+                  <Link
+                    to="/tjjeujr3wa/vip-cars"
+                    className="inline-flex items-center justify-center px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-cyan-500/10 text-cyan-200 border border-cyan-500/40 hover:bg-cyan-500/20"
                   >
-                    {vipPassCarStatsLoading ? 'Loading...' : 'Refresh owners'}
-                  </button>
+                    Open VIP cars →
+                  </Link>
                 </div>
-                {vipPassCarStats && (
-                  <div className="rounded border border-cyan-500/25 bg-cyan-500/5 px-2.5 py-2 space-y-2">
-                    <p className="text-[10px] font-heading text-cyan-300">
-                      Store stock: <span className="font-bold text-foreground">{Number(vipPassCarStats.store_limited_in_game ?? 0).toLocaleString()}</span>
-                      /{Number(vipPassCarStats.purchase_limit || vipPassCarPurchaseLimit || 5).toLocaleString()}
-                      {' · '}Total in game:{' '}
-                      <span className="font-bold text-foreground">{Number(vipPassCarStats.cars_in_game || 0).toLocaleString()}</span>
-                      {' '}({Number(vipPassCarStats.game_pass_cars_in_game || 0).toLocaleString()} Game Pass free)
-                    </p>
-                    <p className="text-[10px] font-heading text-zinc-300">
-                      Game Pass free grants claimed: <span className="font-bold text-foreground">{Number(vipPassCarStats.game_pass_granted_accounts || 0).toLocaleString()}</span>
-                      {' '}accounts
-                    </p>
-                    <p className="text-[10px] font-heading text-zinc-300">
-                      Grant events — Store: <span className="font-bold text-foreground">{Number(vipPassCarStats.store_purchase_grants || 0).toLocaleString()}</span>
-                      {' · '}Game Pass: <span className="font-bold text-foreground">{Number(vipPassCarStats.game_pass_tier_100_grants || 0).toLocaleString()}</span>
-                      {Number(vipPassCarStats.other_grants || 0) > 0 && (
-                        <>
-                          {' · '}Other: <span className="font-bold text-foreground">{Number(vipPassCarStats.other_grants || 0).toLocaleString()}</span>
-                        </>
-                      )}
-                    </p>
-                    <label className="flex items-center gap-2 text-[10px] font-heading text-zinc-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={vipPassCarClearGrant}
-                        onChange={(e) => setVipPassCarClearGrant(e.target.checked)}
-                        className="rounded border-zinc-600"
-                      />
-                      Also clear Game Pass free-grant flag on remove (lets them earn the free car again)
-                    </label>
-                    <div className="overflow-x-auto rounded border border-cyan-500/20">
-                      <table className="w-full text-left text-[10px] font-heading">
-                        <thead className="bg-zinc-900/60 text-cyan-300 uppercase tracking-wider">
-                          <tr>
-                            <th className="px-2 py-1.5 font-bold">Player</th>
-                            <th className="px-2 py-1.5 font-bold">Source</th>
-                            <th className="px-2 py-1.5 font-bold">Acquired</th>
-                            <th className="px-2 py-1.5 font-bold">Flags</th>
-                            <th className="px-2 py-1.5 font-bold text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(Array.isArray(vipPassCarStats.owners) ? vipPassCarStats.owners : []).length === 0 ? (
-                            <tr>
-                              <td colSpan={5} className="px-2 py-3 text-zinc-500">No VIP Pass Cars in any garage.</td>
-                            </tr>
-                          ) : (
-                            (vipPassCarStats.owners || []).map((o) => {
-                              const busy = vipPassCarRemovingId === o.user_car_id || vipPassCarRemovingId === `user:${o.username}`;
-                              const acquired = o.acquired_at
-                                ? (() => {
-                                    try {
-                                      return new Date(o.acquired_at).toLocaleString();
-                                    } catch {
-                                      return String(o.acquired_at);
-                                    }
-                                  })()
-                                : '—';
-                              const sourceLabel = o.grant_source === 'game_pass_tier_100'
-                                ? 'Game Pass free'
-                                : o.counts_toward_limit === false
-                                  ? 'Game Pass free'
-                                  : 'Store / limited';
-                              const flags = [
-                                o.is_dead ? 'dead' : null,
-                                o.listed_for_sale ? 'listed' : null,
-                                o.has_custom_image ? 'custom img' : null,
-                              ].filter(Boolean);
-                              return (
-                                <tr key={o.user_car_id || `${o.user_id}-${o.acquired_at}`} className="border-t border-zinc-800/60 text-zinc-200">
-                                  <td className="px-2 py-1.5">
-                                    <span className="font-bold text-foreground">{o.username || '?'}</span>
-                                  </td>
-                                  <td className="px-2 py-1.5 text-zinc-300">{sourceLabel}</td>
-                                  <td className="px-2 py-1.5 text-zinc-400 whitespace-nowrap">{acquired}</td>
-                                  <td className="px-2 py-1.5 text-zinc-400">{flags.length ? flags.join(' · ') : '—'}</td>
-                                  <td className="px-2 py-1.5 text-right whitespace-nowrap">
-                                    <button
-                                      type="button"
-                                      disabled={!!vipPassCarRemovingId || busy}
-                                      onClick={() => handleRemoveVipPassCar(o)}
-                                      className="px-2 py-1 text-[9px] font-heading font-bold uppercase rounded bg-red-500/15 text-red-300 border border-red-500/35 hover:bg-red-500/25 disabled:opacity-50"
-                                    >
-                                      {busy ? '…' : 'Remove'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={!!vipPassCarRemovingId || busy}
-                                      onClick={() => handleRemoveAllVipPassCarsForUser(o.username)}
-                                      className="ml-1 px-2 py-1 text-[9px] font-heading font-bold uppercase rounded bg-zinc-700/40 text-zinc-300 border border-zinc-600/50 hover:bg-zinc-700/60 disabled:opacity-50"
-                                      title="Remove every VIP Pass Car this account owns"
-                                    >
-                                      Remove all
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div className="h-px bg-zinc-700/30" />
@@ -13451,7 +13174,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-economy-progression' && isAdmin && (
+      {activeCategoryId === 'admin-economy-progression' && showHubSection('admin-quicktrade') && isAdmin && (
       <section id="admin-quicktrade" className="admin-category-nav space-y-4 scroll-mt-24">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <ArrowLeftRight size={12} />
@@ -13779,7 +13502,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-world-systems' && staffCanAccessWorldSystems && (
+      {activeCategoryId === 'admin-world-systems' && showHubSection('admin-gameworld') && staffCanAccessWorldSystems && (
       <section id="admin-gameworld" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <LayoutGrid size={12} />
@@ -16709,7 +16432,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-operations' && (isAdmin || isModerator) && (
+      {activeCategoryId === 'admin-operations' && showHubSection('admin-security') && (isAdmin || isModerator) && (
       <section id="admin-security" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Globe size={12} />
@@ -17524,7 +17247,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-operations' && (
+      {activeCategoryId === 'admin-operations' && showHubSection('admin-cheat') && (
       <section id="admin-cheat" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <AlertTriangle size={12} />
@@ -19143,7 +18866,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-analytics-monitoring' && isAdmin && (
+      {activeCategoryId === 'admin-analytics-monitoring' && showHubSection('admin-analytics') && isAdmin && (
       <section id="admin-analytics" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <BarChart3 size={12} />
@@ -21921,7 +21644,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-analytics-monitoring' && (
+      {activeCategoryId === 'admin-analytics-monitoring' && showHubSection('admin-logs') && (
       <section id="admin-logs" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <ScrollText size={12} />
@@ -22958,22 +22681,18 @@ export default function Admin() {
           )}
         </div>
 
-        {/* Attack logs (post data) — admin and mod */}
+        {/* Attack logs — standalone page only */}
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={Crosshair}
-            title="Attack logs (post data)"
-            badge={attackLogsEntryCount != null ? <span className="text-[10px] font-heading text-primary">{attackLogsEntryCount} entries</span> : null}
-            toolAnchor="attackLogs"
-            isCollapsed={collapsed.attackLogs}
-            onToggle={() => toggleSection('attackLogs')}
-          />
-          {!collapsed.attackLogs && (
-            <div className="p-3">
-              <AttackLogsPanel onCountChange={setAttackLogsEntryCount} />
-            </div>
-          )}
+          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Attack logs</span>
+            <Link
+              to="/tjjeujr3wa/attack-logs"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-primary/40 bg-primary/10 text-[10px] font-heading font-bold uppercase tracking-wide text-primary hover:bg-primary/20"
+            >
+              <Crosshair size={12} /> Open attack logs →
+            </Link>
+          </div>
         </div>
 
         {/* Bodyguard full audit — admin and mod */}
@@ -24636,7 +24355,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-world-systems' && staffCanAccessWorldSystems && (
+      {activeCategoryId === 'admin-world-systems' && showHubSection('admin-testing') && staffCanAccessWorldSystems && (
       <section id="admin-testing" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Wrench size={12} />
@@ -24718,12 +24437,15 @@ export default function Admin() {
                 type="button"
                 className="text-primary hover:underline font-bold"
                 onClick={() =>
-                  void activateCategory('admin-players', () => {
+                  void (async () => {
+                    if (!(await verifyStaffAccess())) return;
                     setCollapsed((prev) => ({ ...prev, userAdjustHub: false }));
-                    if (typeof window !== 'undefined') {
+                    navigate('/tjjeujr3wa/players');
+                    window.setTimeout(() => {
                       document.getElementById('admin-user-adjust-hub')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
-                  })}
+                    }, 280);
+                  })()
+                }
               >
                 Player Management → User give / take & leaderboards
               </button>
@@ -25054,7 +24776,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-economy-progression' && isAdmin && (
+      {activeCategoryId === 'admin-economy-progression' && showHubSection('admin-quick') && isAdmin && (
       <section id="admin-quick" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Gift size={12} />
@@ -25285,7 +25007,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-world-systems' && isAdmin && (
+      {activeCategoryId === 'admin-world-systems' && showHubSection('admin-database') && isAdmin && (
       <section id="admin-database" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Image size={12} />
@@ -25389,7 +25111,7 @@ export default function Admin() {
       )}
 
 
-      {activeCategoryId === 'admin-operations' && (isFullAdminUi || isModerator) && (
+      {activeCategoryId === 'admin-operations' && showHubSection('admin-staff') && (isFullAdminUi || isModerator) && (
       <section id="admin-staff" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Shield size={12} />
@@ -25980,7 +25702,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-operations' && isModerator && (
+      {activeCategoryId === 'admin-operations' && showHubSection('admin-mod-tools') && isModerator && (
       <section id="admin-mod-tools" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Palette size={12} />
@@ -26096,7 +25818,11 @@ export default function Admin() {
             <div className="p-3 space-y-2">
               <p className="text-[10px] text-mutedForeground font-heading">Same-IP report, same-device report, login attempts, duplicate suspects.</p>
               <BtnPrimary
-                onClick={() => void activateCategory('admin-operations', () => setCollapsed((prev) => ({ ...prev, cheat: false })))}
+                onClick={() => void (async () => {
+                  if (!(await verifyStaffAccess())) return;
+                  setCollapsed((prev) => ({ ...prev, cheat: false }));
+                  navigate('/tjjeujr3wa/safety');
+                })()}
               >
                 Open Cheat Detection
               </BtnPrimary>
@@ -26246,7 +25972,7 @@ export default function Admin() {
                 <button
                   key={id}
                   type="button"
-                  onClick={() => void activateCategory(id)}
+                  onClick={() => void goCategoryHub(id)}
                   className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 min-h-[48px] rounded-lg border px-0.5 py-1 text-[10px] font-heading font-bold uppercase tracking-wide transition-colors touch-manipulation ${
                     active
                       ? 'border-primary/70 bg-primary/25 text-primary'

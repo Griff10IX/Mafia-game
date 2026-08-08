@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Search, User, ChevronDown, Users, Lock, ShieldAlert } from 'lucide-react';
+import { Search, User, ChevronDown, ChevronRight, Users, Lock, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { STAFF_ADMIN_API_FORBIDDEN_EVENT } from '../../utils/api';
 import { getAdminPresenceTabId } from '../../utils/adminPresence';
@@ -10,55 +10,70 @@ import {
   isStaffPortalTokenValid,
   setStaffPortalToken,
 } from '../../utils/staffPortalSession';
-import Admin from './Admin';
-import AdminUsersOnline from './AdminUsersOnline';
-import AdminAttackLogs from './AdminAttackLogs';
-import AdminIpHistory from './AdminIpHistory';
-import AdminDeadAliveLog from './AdminDeadAliveLog';
-import AdminAccountCompare from './AdminAccountCompare';
-import AdminExclusiveCars from './AdminExclusiveCars';
-import AdminVipCars from './AdminVipCars';
-import AdminMolotovs from './AdminMolotovs';
-import AdminEntGames from './AdminEntGames';
-import AdminCrewRecovery from './AdminCrewRecovery';
-import AdminRacketProgress from './AdminRacketProgress';
-import AdminDistilleryProgress from './AdminDistilleryProgress';
-import AdminWeedSellAudit from './AdminWeedSellAudit';
-import AdminPropertyTransfer from './AdminPropertyTransfer';
-import AdminWitnessStatements from './AdminWitnessStatements';
-import AdminLocked from './AdminLocked';
 import {
+  ADMIN_CATEGORIES,
   ADMIN_ROUTE_GROUP_MAP,
   ADMIN_ROUTE_GROUPS,
   ADMIN_ROUTE_GROUP_MOBILE_SHORT,
+  ADMIN_CATEGORY_MOBILE_SHORT,
+  HUB_ADMIN_SECTIONS,
   MOD_STAFF_ROUTE_IDS,
+  STANDALONE_ADMIN_SECTIONS,
   modStaffRouteGroups,
+  routesByCategory,
 } from './adminToolMap';
 import { StaffAccessVerifyContext } from './staffAccessVerifyContext';
+
+const Admin = lazy(() => import('./Admin'));
+const AdminOverview = lazy(() => import('./AdminOverview'));
+const AdminUsersOnline = lazy(() => import('./AdminUsersOnline'));
+const AdminAttackLogs = lazy(() => import('./AdminAttackLogs'));
+const AdminIpHistory = lazy(() => import('./AdminIpHistory'));
+const AdminDeadAliveLog = lazy(() => import('./AdminDeadAliveLog'));
+const AdminAccountCompare = lazy(() => import('./AdminAccountCompare'));
+const AdminExclusiveCars = lazy(() => import('./AdminExclusiveCars'));
+const AdminVipCars = lazy(() => import('./AdminVipCars'));
+const AdminMolotovs = lazy(() => import('./AdminMolotovs'));
+const AdminEntGames = lazy(() => import('./AdminEntGames'));
+const AdminCrewRecovery = lazy(() => import('./AdminCrewRecovery'));
+const AdminRacketProgress = lazy(() => import('./AdminRacketProgress'));
+const AdminDistilleryProgress = lazy(() => import('./AdminDistilleryProgress'));
+const AdminWeedSellAudit = lazy(() => import('./AdminWeedSellAudit'));
+const AdminPropertyTransfer = lazy(() => import('./AdminPropertyTransfer'));
+const AdminWitnessStatements = lazy(() => import('./AdminWitnessStatements'));
+const AdminLocked = lazy(() => import('./AdminLocked'));
 
 function routeFor(groupId) {
   return `/tjjeujr3wa/${groupId}`;
 }
 
-/** Sections that render dedicated tools instead of the monolithic Admin page. */
-const STANDALONE_ADMIN_SECTIONS = new Set([
-  'users-online',
-  'attack-logs',
-  'ip-history',
-  'dead-alive-log',
-  'account-compare',
-  'exclusive-cars',
-  'vip-cars',
-  'molotovs',
-  'ent-games',
-  'crew-recovery',
-  'racket-progress',
-  'distillery-progress',
-  'weed-sell-audit',
-  'property-transfer',
-  'witness-statements',
-  'locked',
-]);
+function AdminLazyFallback() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[30vh] gap-2 py-8">
+      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden />
+      <span className="text-[10px] font-heading uppercase tracking-[0.2em] text-mutedForeground">Loading tool…</span>
+    </div>
+  );
+}
+
+const STANDALONE_PAGE = {
+  'users-online': AdminUsersOnline,
+  'attack-logs': AdminAttackLogs,
+  'ip-history': AdminIpHistory,
+  'dead-alive-log': AdminDeadAliveLog,
+  'account-compare': AdminAccountCompare,
+  'exclusive-cars': AdminExclusiveCars,
+  'vip-cars': AdminVipCars,
+  molotovs: AdminMolotovs,
+  'ent-games': AdminEntGames,
+  'crew-recovery': AdminCrewRecovery,
+  'racket-progress': AdminRacketProgress,
+  'distillery-progress': AdminDistilleryProgress,
+  'weed-sell-audit': AdminWeedSellAudit,
+  'property-transfer': AdminPropertyTransfer,
+  'witness-statements': AdminWitnessStatements,
+  locked: AdminLocked,
+};
 
 /** Relative time from ISO last_seen_at (re-renders periodically while the panel is open). */
 function formatSeenAgo(iso, refreshKey = 0) {
@@ -426,6 +441,36 @@ export default function AdminShell() {
     return ADMIN_ROUTE_GROUP_MAP[hubSection] || ADMIN_ROUTE_GROUP_MAP.overview;
   }, [hubSection]);
 
+  const groupedRoutes = useMemo(() => routesByCategory(visibleRouteGroups), [visibleRouteGroups]);
+
+  const [openNavCategories, setOpenNavCategories] = useState(() => new Set(ADMIN_CATEGORIES.map((c) => c.id)));
+  const [mobileNavCategory, setMobileNavCategory] = useState('admin-operations');
+
+  useEffect(() => {
+    if (routeGroup?.categoryId) {
+      setMobileNavCategory(routeGroup.categoryId);
+      setOpenNavCategories((prev) => {
+        if (prev.has(routeGroup.categoryId)) return prev;
+        const next = new Set(prev);
+        next.add(routeGroup.categoryId);
+        return next;
+      });
+    }
+  }, [routeGroup?.categoryId]);
+
+  const toggleNavCategory = (id) => {
+    setOpenNavCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const navigateVerified = async (path) => {
+    if (!(await verifyStaffAccess())) return;
+    navigate(path);
+  };
   const nonStaffPresenceAccounts = useMemo(
     () => presenceUniqueAccounts.filter((acc) => acc?.is_non_staff),
     [presenceUniqueAccounts]
@@ -453,7 +498,8 @@ export default function AdminShell() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (STANDALONE_ADMIN_SECTIONS.has(hubSection)) return;
+    if (STANDALONE_ADMIN_SECTIONS.has(hubSection) || hubSection === 'overview') return;
+    if (!HUB_ADMIN_SECTIONS.has(hubSection)) return;
     const targetHash = routeGroup?.categoryId || 'admin-operations';
     if (window.location.hash !== `#${targetHash}`) {
       window.location.hash = targetHash;
@@ -470,6 +516,13 @@ export default function AdminShell() {
 
   const scrollToTargetUsernameField = () => {
     if (typeof window === 'undefined') return;
+    if (hubSection !== 'players') {
+      navigate(`${routeFor('players')}${location.search || ''}`);
+      window.setTimeout(() => {
+        document.getElementById('admin-target-username')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 280);
+      return;
+    }
     window.location.hash = 'admin-operations';
     window.setTimeout(() => {
       document.getElementById('admin-target-username')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -948,12 +1001,29 @@ export default function AdminShell() {
             </div>
           </div>
 
-          <nav
-            className="sticky top-2 z-20 rounded-lg border border-primary/20 bg-zinc-950/90 backdrop-blur px-1.5 py-2 md:px-2"
-            aria-label="Admin areas"
-          >
-            <div className="flex md:hidden gap-1.5 overflow-x-auto pb-0.5 snap-x snap-mandatory touch-pan-x [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {visibleRouteGroups.map((group) => {
+          <div className="md:hidden rounded-lg border border-primary/20 bg-zinc-950/90 p-2 space-y-2" aria-label="Admin categories">
+            <div className="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {ADMIN_CATEGORIES.filter((c) => (groupedRoutes[c.id] || []).length > 0).map((cat) => {
+                const active = mobileNavCategory === cat.id;
+                const Icon = cat.icon;
+                const short = ADMIN_CATEGORY_MOBILE_SHORT[cat.id] || cat.label;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setMobileNavCategory(cat.id)}
+                    className={`snap-start shrink-0 flex items-center gap-1 min-h-[40px] px-2.5 rounded-lg border text-[10px] font-heading font-bold uppercase ${
+                      active ? 'border-primary/70 bg-primary/25 text-primary' : 'border-zinc-700/70 bg-zinc-900/55 text-mutedForeground'
+                    }`}
+                  >
+                    {Icon ? <Icon size={14} /> : null}
+                    {short}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+              {(groupedRoutes[mobileNavCategory] || []).map((group) => {
                 const active = group.id === routeGroup?.id;
                 const Icon = group.icon;
                 const short = ADMIN_ROUTE_GROUP_MOBILE_SHORT[group.id] || group.label;
@@ -964,76 +1034,90 @@ export default function AdminShell() {
                     onClick={(e) => {
                       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
                       e.preventDefault();
-                      void (async () => {
-                        if (!(await verifyStaffAccess())) return;
-                        navigate(routeFor(group.id));
-                      })();
+                      void navigateVerified(routeFor(group.id));
                     }}
-                    className={`snap-start shrink-0 flex flex-col items-center justify-center gap-0.5 min-w-[4.5rem] max-w-[5.5rem] min-h-[48px] px-1.5 py-1 rounded-lg border text-center transition ${
+                    className={`snap-start shrink-0 flex flex-col items-center justify-center gap-0.5 min-w-[4.25rem] max-w-[5.25rem] min-h-[48px] px-1.5 py-1 rounded-lg border text-center ${
                       active
-                        ? 'border-primary/70 bg-primary/25 text-primary shadow-[0_0_12px_rgba(var(--noir-primary-rgb),0.12)]'
-                        : 'border-zinc-700/70 bg-zinc-900/55 text-mutedForeground hover:text-foreground hover:border-primary/40'
+                        ? 'border-primary/70 bg-primary/25 text-primary'
+                        : 'border-zinc-700/70 bg-zinc-900/55 text-mutedForeground'
                     }`}
                     title={group.description}
                   >
-                    {Icon && <Icon size={18} className="shrink-0 opacity-95" strokeWidth={2} />}
-                    <span className="text-[9px] font-heading font-bold uppercase tracking-wide leading-tight line-clamp-2">
-                      {short}
-                    </span>
+                    {Icon ? <Icon size={16} className="shrink-0" /> : null}
+                    <span className="text-[9px] font-heading font-bold uppercase leading-tight line-clamp-2">{short}</span>
                   </Link>
                 );
               })}
             </div>
-            <div className="hidden md:grid md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-1.5">
-              {visibleRouteGroups.map((group) => {
-                const active = group.id === routeGroup?.id;
-                const Icon = group.icon;
-                return (
-                  <Link
-                    key={group.id}
-                    to={routeFor(group.id)}
-                    onClick={(e) => {
-                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                      e.preventDefault();
-                      void (async () => {
-                        if (!(await verifyStaffAccess())) return;
-                        navigate(routeFor(group.id));
-                      })();
-                    }}
-                    className={`rounded-md border px-2 py-1.5 text-[11px] font-heading transition flex items-center gap-1.5 min-w-0 ${
-                      active
-                        ? 'border-primary/60 bg-primary/20 text-primary'
-                        : 'border-zinc-700/70 bg-zinc-900/55 text-mutedForeground hover:text-foreground hover:border-primary/40'
-                    }`}
-                    title={group.description}
-                  >
-                    {Icon && <Icon size={14} className="shrink-0 opacity-90" />}
-                    <span className="truncate">{group.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </nav>
+          </div>
         </div>
       </section>
 
-      {hubSection === 'users-online' && <AdminUsersOnline />}
-      {hubSection === 'attack-logs' && <AdminAttackLogs />}
-      {hubSection === 'ip-history' && <AdminIpHistory />}
-      {hubSection === 'dead-alive-log' && <AdminDeadAliveLog />}
-      {hubSection === 'account-compare' && <AdminAccountCompare />}
-      {hubSection === 'exclusive-cars' && <AdminExclusiveCars />}
-      {hubSection === 'vip-cars' && <AdminVipCars />}
-      {hubSection === 'molotovs' && <AdminMolotovs />}
-      {hubSection === 'ent-games' && <AdminEntGames />}
-      {hubSection === 'crew-recovery' && <AdminCrewRecovery />}
-      {hubSection === 'racket-progress' && <AdminRacketProgress />}
-      {hubSection === 'distillery-progress' && <AdminDistilleryProgress />}
-      {hubSection === 'weed-sell-audit' && <AdminWeedSellAudit />}
-      {hubSection === 'property-transfer' && <AdminPropertyTransfer />}
-      {hubSection === 'witness-statements' && <AdminWitnessStatements />}
-      {hubSection === 'locked' && <AdminLocked />}
-      {!STANDALONE_ADMIN_SECTIONS.has(hubSection) && <Admin />}
+      <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-start">
+        <aside className="hidden md:flex w-[240px] shrink-0 flex-col gap-1.5 sticky top-2 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-xl border border-primary/20 bg-zinc-950/85 p-2" aria-label="Admin tool groups">
+          {ADMIN_CATEGORIES.map((cat) => {
+            const tools = groupedRoutes[cat.id] || [];
+            if (!tools.length) return null;
+            const open = openNavCategories.has(cat.id);
+            const CatIcon = cat.icon;
+            const catActive = tools.some((g) => g.id === routeGroup?.id);
+            return (
+              <div key={cat.id} className="rounded-lg border border-zinc-800/80 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleNavCategory(cat.id)}
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 text-left text-[10px] font-heading font-bold uppercase tracking-wide ${
+                    catActive ? 'bg-primary/15 text-primary' : 'bg-zinc-900/50 text-mutedForeground hover:text-foreground'
+                  }`}
+                >
+                  {CatIcon ? <CatIcon size={13} className="shrink-0" /> : null}
+                  <span className="flex-1 truncate">{cat.label}</span>
+                  <ChevronRight size={12} className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
+                </button>
+                {open && (
+                  <div className="flex flex-col gap-0.5 p-1 border-t border-zinc-800/80">
+                    {tools.map((group) => {
+                      const active = group.id === routeGroup?.id;
+                      const Icon = group.icon;
+                      return (
+                        <Link
+                          key={group.id}
+                          to={routeFor(group.id)}
+                          onClick={(e) => {
+                            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                            e.preventDefault();
+                            void navigateVerified(routeFor(group.id));
+                          }}
+                          title={group.description}
+                          className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-heading ${
+                            active
+                              ? 'bg-primary/20 text-primary border border-primary/40'
+                              : 'text-mutedForeground hover:text-foreground hover:bg-zinc-800/60 border border-transparent'
+                          }`}
+                        >
+                          {Icon ? <Icon size={12} className="shrink-0 opacity-90" /> : null}
+                          <span className="truncate">{group.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </aside>
+
+        <div className="flex-1 min-w-0 w-full">
+          <Suspense fallback={<AdminLazyFallback />}>
+            {hubSection === 'overview' && <AdminOverview isFullAdmin={!!isFullAdminShell} />}
+            {STANDALONE_ADMIN_SECTIONS.has(hubSection) && (() => {
+              const Page = STANDALONE_PAGE[hubSection];
+              return Page ? <Page /> : null;
+            })()}
+            {HUB_ADMIN_SECTIONS.has(hubSection) && <Admin />}
+          </Suspense>
+        </div>
+      </div>
       </div>
     </StaffAccessVerifyContext.Provider>
   );

@@ -16,7 +16,7 @@ import { clearStaffPortalSession, isStaffPortalTokenValid } from '../utils/staff
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readDashboardSessionCache, writeDashboardSessionUserProgress } from '../utils/dashboardSessionCache';
 import { SLOTS_FEATURE_ENABLED } from '../config/gameFeatures';
-import { MOD_STAFF_ROUTE_IDS, ADMIN_ROUTE_GROUP_MAP } from '../pages/StaffRole/adminToolMap';
+import { buildLayoutStaffNavItems } from '../pages/StaffRole/adminToolMap';
 import { preloadRoute, preloadRouteHandlers } from '../utils/routePreload';
 import { prefetchTravelPageData } from '../utils/travelPageWarm';
 import { prefetchStatsAndObjectivesData } from '../utils/statsObjectivesWarm';
@@ -25,6 +25,7 @@ import { scheduleMobileLightPrewarm } from '../utils/mobileLightPrewarm';
 import { AuthContext } from '../context/AuthContext';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
 import { setCrimesPrefetch, getCrimesPrefetch, clearProfileSessionLastMeUsername, setProfileSessionLastMeUsername } from '../utils/prefetchCache';
+import { GAME_CHAT_VISIBILITY_EVENT, getGameChatVisible, setGameChatVisible } from '../utils/gameChatVisibility';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useTheme } from '../context/ThemeContext';
@@ -52,16 +53,7 @@ function readLayoutBootFromDashboardCache() {
 
 /** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
 function buildModStaffNavItems() {
-  return MOD_STAFF_ROUTE_IDS.map((id) => {
-    const group = ADMIN_ROUTE_GROUP_MAP[id];
-    const Icon = id === 'overview' ? Shield : (group?.icon || Shield);
-    const label = id === 'overview'
-      ? 'Moderator tools'
-      : id === 'users-online'
-        ? 'Online dupe screen'
-        : (group?.label || id);
-    return { path: `/tjjeujr3wa/${id}`, icon: Icon, label };
-  });
+  return buildLayoutStaffNavItems({ isAdmin: false, isModerator: true });
 }
 
 function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator, staffToolsNavVisible, hitmanForHireVisible, weedEmpireNavVisible) {
@@ -432,6 +424,7 @@ export default function Layout({ children }) {
   const [sidebarSpacing, setSidebarSpacing] = useState(loadSidebarSpacing);
   const [sidebarLayout, setSidebarLayout] = useState(loadSidebarLayout);
   const [showBottomNavDividers, setShowBottomNavDividers] = useState(loadBottomNavShowDividers);
+  const [gameChatVisible, setGameChatVisibleState] = useState(getGameChatVisible);
   const [draggingStatId, setDraggingStatId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navSectionKey = (key) => `nav-${key}-open`;
@@ -501,6 +494,13 @@ export default function Layout({ children }) {
   notificationPanelOpenRef.current = notificationPanelOpen;
   const fetchDataRef = useRef(async () => {});
   const mobileBottomNavRef = useRef(null);
+  const setGameChatVisiblePersist = useCallback((visible) => {
+    setGameChatVisible(visible);
+    api.patch('/profile/theme', {
+      game_chat_visible: visible,
+      theme_platform: getThemeUiPlatform(),
+    }).catch(() => {});
+  }, []);
   const mainContentRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -741,11 +741,13 @@ export default function Layout({ children }) {
       setSidebarLayout(loadSidebarLayout());
     };
     const onBottomNavDividers = () => setShowBottomNavDividers(loadBottomNavShowDividers());
+    const onGameChatVisibility = () => setGameChatVisibleState(getGameChatVisible());
     window.addEventListener('topbar-prefs-changed', onTopBarPrefs);
     window.addEventListener('mobile-stats-display-changed', onMobileStatsDisplay);
     window.addEventListener('sidebar-dividers-changed', onSidebarDividers);
     window.addEventListener('sidebar-layout-changed', onSidebarLayout);
     window.addEventListener('bottom-nav-dividers-changed', onBottomNavDividers);
+    window.addEventListener(GAME_CHAT_VISIBILITY_EVENT, onGameChatVisibility);
     const onStatOrderSync = () => setStatOrder(loadStatOrder());
     const onNotificationBallSync = () => {
       const saved = loadNotificationBallPosition();
@@ -764,6 +766,7 @@ export default function Layout({ children }) {
       window.removeEventListener('sidebar-dividers-changed', onSidebarDividers);
       window.removeEventListener('sidebar-layout-changed', onSidebarLayout);
       window.removeEventListener('bottom-nav-dividers-changed', onBottomNavDividers);
+      window.removeEventListener(GAME_CHAT_VISIBILITY_EVENT, onGameChatVisibility);
       window.removeEventListener('topbar-stat-order-changed', onStatOrderSync);
       window.removeEventListener('notification-ball-changed', onNotificationBallSync);
     };
@@ -1709,22 +1712,9 @@ export default function Layout({ children }) {
     { path: '/account/autorank', icon: Bot, label: 'Auto Rank' },
   ];
 
-  const adminNavItems = isAdmin && staffToolsNavVisible ? [
-    { path: '/tjjeujr3wa/overview', icon: Settings, label: 'Admin Tools' },
-    { path: '/tjjeujr3wa/locked', icon: Lock, label: 'Locked accounts' },
-    { path: '/tjjeujr3wa/users-online', icon: Users, label: 'Online dupe screen' },
-    { path: '/tjjeujr3wa/witness-statements', icon: FileText, label: 'Witness statements' },
-    { path: '/tjjeujr3wa/attack-logs', icon: Crosshair, label: 'Attack logs' },
-    { path: '/tjjeujr3wa/ip-history', icon: Globe, label: 'Account access' },
-    { path: '/tjjeujr3wa/dead-alive-log', icon: Skull, label: 'Dead > Alive log' },
-    { path: '/tjjeujr3wa/account-compare', icon: ArrowLeftRight, label: 'Account compare' },
-    { path: '/tjjeujr3wa/exclusive-cars', icon: Car, label: 'Exclusive cars' },
-    { path: '/tjjeujr3wa/vip-cars', icon: Car, label: 'VIP Pass cars' },
-    { path: '/tjjeujr3wa/molotovs', icon: Flame, label: 'Ammo' },
-    { path: '/tjjeujr3wa/ent-games', icon: Dice5, label: 'E-Games audit' },
-    { path: '/tjjeujr3wa/crew-recovery', icon: Building2, label: 'Crew recovery' },
-    { path: '/tjjeujr3wa/property-transfer', icon: Landmark, label: 'Armoury / airport' },
-  ] : [];
+  const adminNavItems = isAdmin && staffToolsNavVisible
+    ? buildLayoutStaffNavItems({ isAdmin: true, isModerator: false })
+    : [];
   const moderatorNavItems = isModerator && !isAdmin && staffToolsNavVisible ? buildModStaffNavItems() : [];
   const staffTopBarEntry = isAdmin && staffToolsNavVisible ? adminNavItems[0] : (isModerator && staffToolsNavVisible ? moderatorNavItems[0] : null);
   const StaffTopBarIcon = staffTopBarEntry?.icon;
@@ -2587,7 +2577,6 @@ export default function Layout({ children }) {
               window.dispatchEvent(new Event('topbar-prefs-changed'));
               api.patch('/profile/theme', { top_bar_chip_height_scale: n, theme_platform: getThemeUiPlatform() }).catch(() => {});
             };
-
             const topBarGapClass = topBarGap === 'compact' ? 'gap-1 md:gap-2' : topBarGap === 'spread' ? 'gap-2 md:gap-4' : 'gap-1 md:gap-2';
             const topBarIconSize = topBarSize === 'small' ? 12 : topBarSize === 'large' ? 20 : 16;
             const chipWidthScale = topBarChipWidthScale / 100;
@@ -2699,6 +2688,21 @@ export default function Layout({ children }) {
                         <button type="button" onClick={() => setTopBarCustomizeOpen(false)} className="p-2 rounded-lg font-heading text-xs border transition-colors" style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}>Done</button>
                       </div>
                       <div className="p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
+                          <div>
+                            <p className="font-heading text-sm" style={{ color: 'var(--noir-foreground)' }}>Game Chat button</p>
+                            <p className="font-heading text-[9px] mt-0.5" style={{ color: 'var(--noir-muted)' }}>Show or hide the floating chat launcher</p>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={gameChatVisible}
+                            onClick={() => setGameChatVisiblePersist(!gameChatVisible)}
+                            className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 transition-colors touch-manipulation ${gameChatVisible ? 'bg-primary border-primary/50' : 'bg-zinc-800 border-zinc-600'}`}
+                          >
+                            <span className={`pointer-events-none inline-block h-6 w-6 rounded-full bg-background shadow transition-transform ${gameChatVisible ? 'translate-x-5' : 'translate-x-0'}`} />
+                          </button>
+                        </div>
                         <div>
                           <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Order</p>
                           <ul className="space-y-1">
@@ -3431,13 +3435,14 @@ export default function Layout({ children }) {
         </div>
       )}
 
-      {user && !String(location.pathname || '').startsWith('/tjjeujr3wa') && (
+      {user && gameChatVisible && !String(location.pathname || '').startsWith('/tjjeujr3wa') && (
         <Suspense fallback={null}>
           <LazyGameChat
             currentUsername={user.username}
             censorProfanity={user.censor_profanity === true}
             canClearChat={isAdmin || isModerator}
             mobileBottomClearance={mobileNavStyle === 'bottom'}
+            onHide={() => setGameChatVisiblePersist(false)}
           />
         </Suspense>
       )}
