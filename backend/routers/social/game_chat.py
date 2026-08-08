@@ -35,6 +35,7 @@ class SendMessageRequest(BaseModel):
     message: Optional[str] = ""
     gif_url: Optional[str] = None
     channel: Literal["global", "family"] = "global"
+    reply_to_message_id: Optional[str] = None
 
     @field_validator("message")
     @classmethod
@@ -55,6 +56,16 @@ class SendMessageRequest(BaseModel):
         if len(s) > 500:
             raise ValueError("GIF URL too long")
         return s
+
+    @field_validator("reply_to_message_id")
+    @classmethod
+    def validate_reply_to_message_id(cls, v):
+        if v is None or not str(v).strip():
+            return None
+        value = str(v).strip()
+        if len(value) > 100:
+            raise ValueError("Reply message ID is invalid")
+        return value
 
 
 class GameChatPrefsRequest(BaseModel):
@@ -304,6 +315,14 @@ def _safe_message_payload(doc: dict, current_user_id: str) -> dict:
     }
     if doc.get("author_online_color"):
         payload["author_online_color"] = doc["author_online_color"]
+    reply_to = doc.get("reply_to")
+    if isinstance(reply_to, dict) and reply_to.get("id"):
+        payload["reply_to"] = {
+            "id": reply_to.get("id"),
+            "username": reply_to.get("username") or "Unknown",
+            "message": reply_to.get("message") or "",
+            "has_gif": reply_to.get("has_gif") is True,
+        }
     if doc.get("gif_url"):
         payload["gif_url"] = doc["gif_url"]
     return payload
@@ -463,6 +482,24 @@ def register(router):
         display_message = (body.message or "").strip() or ("(GIF)" if body.gif_url else "")
         now = datetime.now(timezone.utc)
         author_online_color = await _author_online_color(current_user)
+        reply_to = None
+        if body.reply_to_message_id:
+            reply_channel_query = _channel_message_query(
+                body.channel,
+                family_id=family_id,
+            )
+            original = await db.game_chat_messages.find_one(
+                {"$and": [{"id": body.reply_to_message_id}, reply_channel_query]},
+                {"_id": 0, "id": 1, "username": 1, "message": 1, "gif_url": 1},
+            )
+            if not original:
+                raise HTTPException(status_code=404, detail="The message you replied to is no longer available")
+            reply_to = {
+                "id": original["id"],
+                "username": original.get("username") or "Unknown",
+                "message": (original.get("message") or "")[:180],
+                "has_gif": bool(original.get("gif_url")),
+            }
         doc = {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
@@ -474,6 +511,8 @@ def register(router):
             "expires_at": now + timedelta(days=GAME_CHAT_RETENTION_DAYS),
             "sender_is_staff": _is_game_chat_staff(current_user),
         }
+        if reply_to:
+            doc["reply_to"] = reply_to
         if author_online_color:
             doc["author_online_color"] = author_online_color
         if body.gif_url:

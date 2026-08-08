@@ -6,13 +6,16 @@
 
 [hr]
 
-[size=1.5][b][color=#2ECC71]2026-08-08 20:50 UTC[/color][/b] — [b]Game Chat returns[/b][/size]
+[size=1.5][b][color=#2ECC71]2026-08-08 21:31 UTC[/color][/b] — [b]Game Chat returns[/b][/size]
 [quote]
 [list]
 [*][color=#888888][b]New:[/b] [b]Game Chat[/b] is back as a lightweight floating chat with [b]Global[/b] and family-only [b]Family[/b] channels.[/color]
 [*][color=#888888][b]New:[/b] Use [b]@username[/b] to mention another player. New messages show a cyan unread dot on Game Chat and its channel; mentions pulse for attention without filling your inbox.[/color]
+[*][color=#888888][b]New:[/b] Reply directly to a chat message with a quoted preview. Replies alert the recipient through the pulsing chat dot, and selecting a quote jumps to the original message when it is loaded.[/color]
 [*][color=#888888][b]Improved:[/b] Newest messages appear first, staff names use their Users Online colours, and chat is optimized for mobile with compact controls and hidden emoji/GIF pickers.[/color]
+[*][color=#888888][b]Moderation:[/b] Admins, moderators, and Help Desk Operators cannot be hidden with the player block feature.[/color]
 [*][color=#888888][b]New:[/b] Hide Game Chat from its settings and restore it from [b]Customize Bar[/b] or [b]Theme Settings → Mobile[/b].[/color]
+[*][color=#888888][b]Improved:[/b] Game Chat can also be shown or hidden from [b]Misc[/b] on mobile and from the right sidebar on desktop.[/color]
 [/list]
 [/quote]
 

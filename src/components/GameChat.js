@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { EyeOff, Image, MessageSquare, Settings, Send, Smile, UserX, X } from 'lucide-react';
+import { EyeOff, Image, MessageSquare, Reply, Settings, Send, Smile, UserX, X } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getApiErrorMessage } from '../utils/api';
 import { parseForumContent, FORUM_INLINE_SMILEY_PX } from '../utils/forumContent';
@@ -139,6 +139,7 @@ export default function GameChat({
   const [loading, setLoading] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [input, setInput] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null);
   const [sending, setSending] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
@@ -148,6 +149,7 @@ export default function GameChat({
   const [mentionByChannel, setMentionByChannel] = useState({ global: false, family: false });
   const [visible, setVisible] = useState(() => document.visibilityState === 'visible');
   const scrollRef = useRef(null);
+  const inputRef = useRef(null);
   const inFlightRef = useRef(new Map());
   const initialLoadedRef = useRef({ global: false, family: false });
   const seenMessageIdRef = useRef({
@@ -224,7 +226,10 @@ export default function GameChat({
             const unreadRows = newRows.filter((row) => !row.is_own);
             if (unreadRows.length > 0 && !isViewingChannel) {
               setUnreadByChannel((previous) => ({ ...previous, [targetChannel]: true }));
-              if (unreadRows.some((row) => messageMentionsUsername(row.message, currentUsername))) {
+              if (unreadRows.some((row) => (
+                messageMentionsUsername(row.message, currentUsername)
+                || String(row.reply_to?.username || '').toLowerCase() === String(currentUsername || '').toLowerCase()
+              ))) {
                 setMentionByChannel((previous) => ({ ...previous, [targetChannel]: true }));
               }
             }
@@ -323,6 +328,7 @@ export default function GameChat({
 
   const switchChannel = (nextChannel) => {
     setChannel(nextChannel);
+    setReplyingTo(null);
     setSettingsOpen(false);
     setShowGifPicker(false);
     setShowEmojis(false);
@@ -348,6 +354,7 @@ export default function GameChat({
       return;
     }
 
+    const replyTarget = replyingTo;
     const tempId = `optimistic-${Date.now()}`;
     const optimistic = {
       id: tempId,
@@ -359,17 +366,25 @@ export default function GameChat({
       is_own: true,
       created_at: new Date().toISOString(),
       pending: true,
+      reply_to: replyTarget ? {
+        id: replyTarget.id,
+        username: replyTarget.username,
+        message: replyTarget.message,
+        has_gif: replyTarget.has_gif,
+      } : null,
     };
     setSending(true);
     setChannelMessages(channel, (previous) => sortAndDedupe([...previous, optimistic]));
     scrollAfterLoadRef.current = 'top';
     setInput('');
+    setReplyingTo(null);
     setShowGifPicker(false);
 
     try {
       const { data } = await api.post('/game-chat/send', {
         message: text,
         ...(gifUrl ? { gif_url: gifUrl } : {}),
+        ...(replyTarget?.id ? { reply_to_message_id: replyTarget.id } : {}),
         channel,
       });
       const sent = data?.message && typeof data.message === 'object' ? data.message : data;
@@ -390,6 +405,28 @@ export default function GameChat({
   const handleSend = (event) => {
     event.preventDefault();
     sendMessage({ message: input });
+  };
+
+  const beginReply = (row) => {
+    setReplyingTo({
+      id: row.id,
+      username: row.username || 'Unknown',
+      message: row.message || '',
+      has_gif: !!row.gif_url,
+    });
+    setShowEmojis(false);
+    setShowGifPicker(false);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const scrollToRepliedMessage = (messageId) => {
+    const target = scrollRef.current?.querySelector(`[data-message-id="${CSS.escape(String(messageId))}"]`);
+    if (!target) {
+      toast.info('Original message is outside the loaded chat history');
+      return;
+    }
+    target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target.classList.add('game-chat-linked-message');
   };
 
   const blockUser = async (senderId, username) => {
@@ -630,7 +667,7 @@ export default function GameChat({
                   opacity: row.pending ? .62 : 1,
                 }}
               >
-                <div className="flex items-baseline gap-2 pr-9">
+                <div className={`flex items-baseline gap-2 ${!row.is_own && !row.sender_is_staff && row.sender_id != null ? 'pr-[88px]' : 'pr-11'}`}>
                   <Link
                     to={`/profile/${encodeURIComponent(row.username || '')}`}
                     className="shrink-0 font-heading text-[10px] font-bold hover:underline"
@@ -643,23 +680,50 @@ export default function GameChat({
                   <time className="text-[8px] font-heading" style={{ color: 'var(--noir-muted)' }}>{formatChatTime(row.created_at)}</time>
                   {row.pending && <span className="text-[8px] font-heading" style={{ color: 'var(--noir-muted)' }}>Sending…</span>}
                 </div>
+                {row.reply_to && (
+                  <button
+                    type="button"
+                    onClick={() => scrollToRepliedMessage(row.reply_to.id)}
+                    className="mt-1 w-full rounded border-l-2 px-2 py-1 text-left hover:bg-white/5"
+                    style={{ borderColor: 'var(--noir-primary)', background: 'rgba(var(--noir-primary-rgb), .06)' }}
+                    title="Go to original message"
+                  >
+                    <span className="block truncate text-[9px] font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
+                      Replying to {row.reply_to.username}
+                    </span>
+                    <span className="block truncate text-[10px]" style={{ color: 'var(--noir-muted)' }}>
+                      {row.reply_to.message || (row.reply_to.has_gif ? 'GIF' : 'Message')}
+                    </span>
+                  </button>
+                )}
                 {row.hasText && (
                   <div className="game-chat-message-content mt-1 text-[12px] leading-relaxed break-words" style={{ color: 'var(--noir-foreground)' }} dangerouslySetInnerHTML={{ __html: row.renderedHtml }} />
                 )}
                 {row.gif_url && (
                   <img src={row.gif_url} alt="Chat GIF" loading="lazy" decoding="async" className="mt-1 rounded max-h-44 max-w-full object-contain" style={{ border: '1px solid rgba(var(--noir-primary-rgb), .18)' }} />
                 )}
-                {!row.is_own && !row.sender_is_staff && row.sender_id != null && (
+                <div className="absolute right-1 top-1 flex items-center">
                   <button
                     type="button"
-                    onClick={() => blockUser(row.sender_id, row.username)}
-                    className="absolute right-1 top-1 min-w-[44px] min-h-[44px] flex items-center justify-center rounded opacity-70 sm:opacity-0 sm:group-hover:opacity-80 hover:text-red-400"
-                    title={`Block ${row.username || 'user'}`}
-                    aria-label={`Block ${row.username || 'user'}`}
+                    onClick={() => beginReply(row)}
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded opacity-70 sm:opacity-0 sm:group-hover:opacity-80 hover:text-primary"
+                    title={`Reply to ${row.username || 'user'}`}
+                    aria-label={`Reply to ${row.username || 'user'}`}
                   >
-                    <UserX size={14} />
+                    <Reply size={14} />
                   </button>
-                )}
+                  {!row.is_own && !row.sender_is_staff && row.sender_id != null && (
+                    <button
+                      type="button"
+                      onClick={() => blockUser(row.sender_id, row.username)}
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded opacity-70 sm:opacity-0 sm:group-hover:opacity-80 hover:text-red-400"
+                      title={`Block ${row.username || 'user'}`}
+                      aria-label={`Block ${row.username || 'user'}`}
+                    >
+                      <UserX size={14} />
+                    </button>
+                  )}
+                </div>
               </article>
             ))}
             {hasMoreByChannel[channel] && (
@@ -691,10 +755,23 @@ export default function GameChat({
           )}
 
           <div className="shrink-0 border-t p-2" style={{ borderColor: 'rgba(var(--noir-primary-rgb), .18)', background: 'var(--noir-content)', paddingBottom: 'max(8px, env(safe-area-inset-bottom, 0px))' }}>
+            {replyingTo && (
+              <div className="mb-1.5 flex items-center gap-2 rounded border-l-2 px-2 py-1.5" style={{ borderColor: 'var(--noir-primary)', background: 'rgba(var(--noir-primary-rgb), .07)' }}>
+                <Reply size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[9px] font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>Replying to {replyingTo.username}</p>
+                  <p className="truncate text-[10px]" style={{ color: 'var(--noir-muted)' }}>{replyingTo.message || (replyingTo.has_gif ? 'GIF' : 'Message')}</p>
+                </div>
+                <button type="button" onClick={() => setReplyingTo(null)} className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded hover:bg-white/5" aria-label="Cancel reply">
+                  <X size={14} />
+                </button>
+              </div>
+            )}
             <form onSubmit={handleSend} className="flex items-end gap-1.5">
               <div className="flex-1 min-w-0">
                 <label htmlFor="game-chat-input" className="sr-only">Chat message</label>
                 <textarea
+                  ref={inputRef}
                   id="game-chat-input"
                   rows={1}
                   value={input}
