@@ -106,6 +106,21 @@ function messageMentionsUsername(message, username) {
   return new RegExp(`@${escaped}(?![\\w-])`, 'i').test(String(message));
 }
 
+function getSeenMessageId(username, channel) {
+  try {
+    return localStorage.getItem(`game_chat_seen:${String(username || '').toLowerCase()}:${channel}`);
+  } catch {
+    return null;
+  }
+}
+
+function storeSeenMessageId(username, channel, messageId) {
+  if (messageId == null) return;
+  try {
+    localStorage.setItem(`game_chat_seen:${String(username || '').toLowerCase()}:${channel}`, String(messageId));
+  } catch (_) {}
+}
+
 export default function GameChat({
   currentUsername = '',
   censorProfanity = false,
@@ -135,7 +150,10 @@ export default function GameChat({
   const scrollRef = useRef(null);
   const inFlightRef = useRef(new Map());
   const initialLoadedRef = useRef({ global: false, family: false });
-  const latestMessageIdRef = useRef({ global: null, family: null });
+  const seenMessageIdRef = useRef({
+    global: getSeenMessageId(currentUsername, 'global'),
+    family: getSeenMessageId(currentUsername, 'family'),
+  });
   const openRef = useRef(open);
   const channelRef = useRef(channel);
   const scrollAfterLoadRef = useRef('none');
@@ -193,12 +211,17 @@ export default function GameChat({
         const result = normalizeResponse(data);
         if (!beforeId && result.messages.length > 0) {
           const latestId = String(result.messages[0].id);
-          const previousLatestId = latestMessageIdRef.current[targetChannel];
-          if (previousLatestId && previousLatestId !== latestId) {
-            const previousIndex = result.messages.findIndex((row) => String(row.id) === previousLatestId);
-            const newRows = previousIndex >= 0 ? result.messages.slice(0, previousIndex) : result.messages;
+          const seenMessageId = seenMessageIdRef.current[targetChannel];
+          const isViewingChannel = openRef.current && channelRef.current === targetChannel;
+          if (isViewingChannel) {
+            seenMessageIdRef.current[targetChannel] = latestId;
+            storeSeenMessageId(currentUsername, targetChannel, latestId);
+            setUnreadByChannel((previous) => ({ ...previous, [targetChannel]: false }));
+            setMentionByChannel((previous) => ({ ...previous, [targetChannel]: false }));
+          } else if (seenMessageId !== latestId) {
+            const seenIndex = result.messages.findIndex((row) => String(row.id) === seenMessageId);
+            const newRows = seenIndex >= 0 ? result.messages.slice(0, seenIndex) : result.messages;
             const unreadRows = newRows.filter((row) => !row.is_own);
-            const isViewingChannel = openRef.current && channelRef.current === targetChannel;
             if (unreadRows.length > 0 && !isViewingChannel) {
               setUnreadByChannel((previous) => ({ ...previous, [targetChannel]: true }));
               if (unreadRows.some((row) => messageMentionsUsername(row.message, currentUsername))) {
@@ -206,7 +229,6 @@ export default function GameChat({
               }
             }
           }
-          latestMessageIdRef.current[targetChannel] = latestId;
         }
         setChannelMessages(targetChannel, (previous) => (
           beforeId ? sortAndDedupe([...result.messages, ...previous]) : sortAndDedupe([...previous, ...result.messages])
@@ -272,9 +294,14 @@ export default function GameChat({
 
   useEffect(() => {
     if (!open) return;
+    const latestId = messagesByChannel[channel]?.[0]?.id;
+    if (latestId != null) {
+      seenMessageIdRef.current[channel] = String(latestId);
+      storeSeenMessageId(currentUsername, channel, latestId);
+    }
     setUnreadByChannel((previous) => ({ ...previous, [channel]: false }));
     setMentionByChannel((previous) => ({ ...previous, [channel]: false }));
-  }, [channel, open]);
+  }, [channel, currentUsername, messagesByChannel, open]);
 
   useEffect(() => {
     if (!open || !scrollRef.current) return;

@@ -3001,6 +3001,12 @@ export default function Layout({ children }) {
                 <span className="flex items-center gap-1.5"><Palette size={12} /> Theme</span>
                 <span>Change</span>
               </button>
+              <button type="button" onClick={() => setGameChatVisiblePersist(!gameChatVisible)}
+                className="w-full flex justify-between items-center gap-1 text-[10px] font-heading py-1 px-1 rounded-sm"
+                style={{ color: gameChatVisible ? 'var(--noir-muted)' : '#22d3ee' }}>
+                <span className="flex items-center gap-1.5"><MessageSquare size={12} /> Game Chat</span>
+                <span>{gameChatVisible ? 'Hide' : 'Show'}</span>
+              </button>
 
               {/* Family command center — vault, rackets, war at a glance */}
               <FamilyCommandCenter onCloseSidebar={() => isMobileViewport && setRightSidebarOpen(false)} hasFamily={!!user?.family_id} />
