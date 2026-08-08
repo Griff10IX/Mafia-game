@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Image, MessageSquare, Settings, Send, Smile, UserX, X } from 'lucide-react';
+import { EyeOff, Image, MessageSquare, Settings, Send, Smile, UserX, X } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getApiErrorMessage } from '../utils/api';
 import { parseForumContent, FORUM_INLINE_SMILEY_PX } from '../utils/forumContent';
@@ -415,7 +415,6 @@ export default function GameChat({
   return (
     <div
       className={`game-chat-root ${mobileBottomClearance ? 'game-chat-clear-mobile-nav' : ''}`}
-      data-chat-surface="game"
     >
       <style>{`
         .game-chat-root {
@@ -499,7 +498,7 @@ export default function GameChat({
           {hasUnread && <span className={`game-chat-notification-dot -right-0.5 -top-0.5 ${hasMention ? 'game-chat-notification-dot-mention' : ''}`} aria-hidden />}
         </button>
       ) : (
-        <section className="game-chat-window" role="dialog" aria-label="Game chat">
+        <section className="game-chat-window" data-chat-surface="game" role="dialog" aria-label="Game chat">
           <header className="shrink-0 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb), .18)' }}>
             <div className="flex items-center justify-between min-h-[48px] px-3">
               <div className="flex items-center gap-2">
@@ -507,9 +506,25 @@ export default function GameChat({
                 <h2 className="font-heading text-[11px] font-bold uppercase tracking-[.14em]" style={{ color: 'var(--noir-primary)' }}>Game Chat</h2>
               </div>
               <div className="flex items-center">
-                <button type="button" className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-white/5" onClick={() => setSettingsOpen((value) => !value)} aria-label="Chat settings">
-                  <Settings size={16} />
-                </button>
+                {onHide && (
+                  <button
+                    type="button"
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-white/5"
+                    onClick={() => {
+                      setOpen(false);
+                      onHide();
+                    }}
+                    title="Hide Game Chat"
+                    aria-label="Hide Game Chat"
+                  >
+                    <EyeOff size={16} />
+                  </button>
+                )}
+                {(canClearChat || prefs.blocked_user_ids.length > 0) && (
+                  <button type="button" className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-white/5" onClick={() => setSettingsOpen((value) => !value)} aria-label="Chat settings">
+                    <Settings size={16} />
+                  </button>
+                )}
                 <button type="button" className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-white/5" onClick={() => setOpen(false)} aria-label="Close game chat">
                   <X size={18} />
                 </button>
@@ -542,22 +557,10 @@ export default function GameChat({
             </div>
           </header>
 
-          {settingsOpen && (
+          {settingsOpen && (canClearChat || prefs.blocked_user_ids.length > 0) && (
             <div className="shrink-0 border-b p-2 text-[10px] font-heading" style={{ borderColor: 'var(--noir-border-mid)', background: 'var(--noir-surface)' }}>
-              {onHide && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    onHide();
-                  }}
-                  className="w-full min-h-[44px] px-2 text-left rounded hover:bg-white/5"
-                >
-                  Hide Game Chat button
-                </button>
-              )}
               {canClearChat && (
-                <button type="button" onClick={clearChat} disabled={clearingChat} className="w-full min-h-[44px] px-2 text-left rounded border-t text-red-400 hover:bg-red-500/10 disabled:opacity-50" style={{ borderColor: 'var(--noir-border)' }}>
+                <button type="button" onClick={clearChat} disabled={clearingChat} className="w-full min-h-[44px] px-2 text-left rounded text-red-400 hover:bg-red-500/10 disabled:opacity-50">
                   {clearingChat ? 'Clearing…' : 'Clear all game chat'}
                 </button>
               )}
@@ -619,7 +622,7 @@ export default function GameChat({
                 {row.gif_url && (
                   <img src={row.gif_url} alt="Chat GIF" loading="lazy" decoding="async" className="mt-1 rounded max-h-44 max-w-full object-contain" style={{ border: '1px solid rgba(var(--noir-primary-rgb), .18)' }} />
                 )}
-                {!row.is_own && row.sender_id != null && (
+                {!row.is_own && !row.sender_is_staff && row.sender_id != null && (
                   <button
                     type="button"
                     onClick={() => blockUser(row.sender_id, row.username)}

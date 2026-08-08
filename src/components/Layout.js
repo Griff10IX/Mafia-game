@@ -660,7 +660,7 @@ export default function Layout({ children }) {
     }
     return items.map((i) => {
       if (i.type === 'group' && i.id === 'misc') {
-        return { ...i, items: i.items.map((sub) => {
+        return { ...i, items: [...i.items.map((sub) => {
           if (sub.path === '/game/help-desk') return { ...sub, badge: helpDeskOpenCount };
           if (sub.path === '/social/inbox') return { ...sub, badge: unreadCount };
           if (sub.path === '/social/forum' && !sub.search && updateLogUnread > 0) {
@@ -668,7 +668,7 @@ export default function Layout({ children }) {
           }
           if (sub.path === '/game/users-online') return { ...sub, onlineCountBadge: usersOnlineCount };
           return sub;
-        }) };
+        }), { action: 'toggleGameChat', label: gameChatVisible ? 'Hide Game Chat' : 'Show Game Chat' }] };
       }
       if (i.type === 'group' && i.id === 'rank') {
         return {
@@ -721,7 +721,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, weedEmpireReadyCount, storePointsEventActive, hitmanForHireVisible, weedEmpireNavVisible, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
+  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, weedEmpireReadyCount, storePointsEventActive, hitmanForHireVisible, weedEmpireNavVisible, gameChatVisible, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -3080,6 +3080,15 @@ export default function Layout({ children }) {
                 {/* 3-col grid */}
                 <div className="p-2 grid grid-cols-3 gap-1.5">
                   {group.items.map((sub, idx) => {
+                    if (sub.action === 'toggleGameChat') {
+                      return (
+                        <button key="toggleGameChat" type="button" onClick={() => { setGameChatVisiblePersist(!gameChatVisible); setMobileBottomMenuOpen(null); }} role="menuitem"
+                          className="tap-feedback flex items-center justify-center px-2 py-3 min-h-[44px] rounded-md border font-heading text-[10px] uppercase tracking-wider transition-colors"
+                          style={{ borderColor: 'rgba(34,211,238,0.35)', backgroundColor: 'rgba(34,211,238,0.08)', color: '#22d3ee' }}>
+                          {sub.label}
+                        </button>
+                      );
+                    }
                     if (sub.action === 'theme') {
                       return (
                         <button key="theme" type="button" onClick={() => { setThemePickerOpen(true); setMobileBottomMenuOpen(null); }} role="menuitem"

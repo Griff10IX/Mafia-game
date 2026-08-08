@@ -62,6 +62,24 @@ class GameChatPrefsRequest(BaseModel):
     blocked_user_ids: Optional[List[str]] = None
 
 
+def _is_game_chat_staff(user: dict) -> bool:
+    email = str(user.get("email") or "").strip().lower()
+    listed_staff = email in (ADMIN_EMAILS or []) or email in (MOD_EMAILS or [])
+    return bool(listed_staff or _is_admin(user) or _is_moderator(user) or user.get("is_help_desk_operator"))
+
+
+async def _filter_blockable_user_ids(user_ids) -> list[str]:
+    ordered = list(dict.fromkeys(str(user_id).strip() for user_id in (user_ids or []) if str(user_id).strip()))
+    if not ordered:
+        return []
+    users = await db.users.find(
+        {"id": {"$in": ordered}},
+        {"_id": 0, "id": 1, "email": 1, "is_moderator": 1, "is_help_desk_operator": 1},
+    ).to_list(len(ordered))
+    blockable = {user["id"] for user in users if user.get("id") and not _is_game_chat_staff(user)}
+    return [user_id for user_id in ordered if user_id in blockable]
+
+
 async def _role_default_colors() -> tuple[str, str]:
     now = time.monotonic()
     if now < _role_color_cache["expires_at"]:
@@ -102,7 +120,12 @@ async def _author_online_color(user: dict) -> Optional[str]:
 
 async def _backfill_author_colors(messages: list[dict]) -> None:
     """Colour retained messages created before role colours were stored."""
-    missing_ids = {message.get("user_id") for message in messages if message.get("user_id") and not message.get("author_online_color")}
+    missing_ids = {
+        message.get("user_id")
+        for message in messages
+        if message.get("user_id")
+        and (not message.get("author_online_color") or "sender_is_staff" not in message)
+    }
     if not missing_ids:
         return
     users = await db.users.find(
@@ -118,10 +141,13 @@ async def _backfill_author_colors(messages: list[dict]) -> None:
         user["id"]: _author_online_color_from_defaults(user, admin_default, mod_default)
         for user in users
     }
+    staff_flags = {user["id"]: _is_game_chat_staff(user) for user in users}
     for message in messages:
         color = colors.get(message.get("user_id"))
         if color:
             message["author_online_color"] = color
+        if message.get("user_id") in staff_flags:
+            message["sender_is_staff"] = staff_flags[message["user_id"]]
 
 
 async def _get_staff_user_ids():
@@ -274,6 +300,7 @@ def _safe_message_payload(doc: dict, current_user_id: str) -> dict:
         "channel": doc.get("channel") if doc.get("channel") in ("global", "family") else "global",
         "created_at": doc.get("created_at"),
         "is_own": bool(doc.get("user_id") and doc.get("user_id") == current_user_id),
+        "sender_is_staff": doc.get("sender_is_staff") is True,
     }
     if doc.get("author_online_color"):
         payload["author_online_color"] = doc["author_online_color"]
@@ -353,7 +380,14 @@ def register(router):
     ):
         """List recent messages in one explicit channel, excluding blocked senders."""
         user_id = current_user["id"]
-        blocked = set(current_user.get("game_chat_blocked_user_ids") or [])
+        stored_blocked = current_user.get("game_chat_blocked_user_ids") or []
+        blockable_ids = await _filter_blockable_user_ids(stored_blocked)
+        blocked = set(blockable_ids)
+        if blockable_ids != stored_blocked:
+            await db.users.update_one(
+                {"id": user_id},
+                {"$set": {"game_chat_blocked_user_ids": blockable_ids}},
+            )
         my_family = None
         if channel == "family":
             my_family = await _active_family_id_for_chat(current_user)
@@ -438,6 +472,7 @@ def register(router):
             "channel": body.channel,
             "created_at": now.isoformat(),
             "expires_at": now + timedelta(days=GAME_CHAT_RETENTION_DAYS),
+            "sender_is_staff": _is_game_chat_staff(current_user),
         }
         if author_online_color:
             doc["author_online_color"] = author_online_color
@@ -450,7 +485,13 @@ def register(router):
     async def get_game_chat_prefs(current_user: dict = Depends(get_current_user)):
         """Get current user's game chat preferences (family_only, blocked_user_ids)."""
         active_family_id = await _active_family_id_for_chat(current_user)
-        blocked_ids = current_user.get("game_chat_blocked_user_ids") or []
+        stored_blocked_ids = current_user.get("game_chat_blocked_user_ids") or []
+        blocked_ids = await _filter_blockable_user_ids(stored_blocked_ids)
+        if blocked_ids != stored_blocked_ids:
+            await db.users.update_one(
+                {"id": current_user["id"]},
+                {"$set": {"game_chat_blocked_user_ids": blocked_ids}},
+            )
         block_list_with_names = []
         if blocked_ids:
             users = await db.users.find(
@@ -480,7 +521,7 @@ def register(router):
         if body.blocked_user_ids is not None:
             blocked = [str(x).strip() for x in body.blocked_user_ids if x and str(x).strip()]
             blocked = list(dict.fromkeys(blocked))[:GAME_CHAT_BLOCKED_MAX]
-            updates["game_chat_blocked_user_ids"] = blocked
+            updates["game_chat_blocked_user_ids"] = await _filter_blockable_user_ids(blocked)
         if not updates:
             return {"message": "No preferences to update", "family_only": current_user.get("game_chat_family_only"), "blocked_user_ids": current_user.get("game_chat_blocked_user_ids") or []}
         await db.users.update_one({"id": current_user["id"]}, {"$set": updates})
@@ -499,6 +540,14 @@ def register(router):
         target = (target_user_id or "").strip()
         if not target or target == current_user["id"]:
             raise HTTPException(status_code=400, detail="Invalid user to block")
+        target_user = await db.users.find_one(
+            {"id": target},
+            {"_id": 0, "id": 1, "email": 1, "is_moderator": 1, "is_help_desk_operator": 1},
+        )
+        if not target_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if _is_game_chat_staff(target_user):
+            raise HTTPException(status_code=403, detail="Staff cannot be blocked in game chat")
         blocked = list(current_user.get("game_chat_blocked_user_ids") or [])
         if target in blocked:
             return {"message": "Already blocked", "blocked_user_ids": blocked}
