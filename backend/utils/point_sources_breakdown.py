@@ -79,6 +79,7 @@ _EVENT_LABELS: Dict[str, str] = {
     "kill_loot": "Kill loot",
     "dead_alive_retrieve": "Dead Alive Retrieve",
     "spend_store": "Store spend",
+    "prestige_level_points": "Prestige level reward",
 }
 
 
@@ -286,6 +287,25 @@ def build_audit_narrative(event: Dict[str, Any], enrichment: Optional[Dict[str, 
         elif delta > 0:
             pieces.append(f"payout {abs(delta):,} points")
         return "; ".join(pieces) + f"; {_balance_words(before, after)}."
+
+    if event_type == "prestige_level_points":
+        levels_from = _int_or_none(_context_value(event, "levels_from", "from_paid_through"))
+        levels_to = _int_or_none(_context_value(event, "levels_to", "to_level"))
+        # from_paid_through is exclusive; levels_from is inclusive when present.
+        if levels_from is not None and _context_value(event, "levels_from") is None:
+            levels_from = levels_from + 1
+        reason = str(_context_value(event, "reason") or "").strip()
+        if levels_from is not None and levels_to is not None:
+            tier = f"P{levels_from}" if levels_from == levels_to else f"P{levels_from}–P{levels_to}"
+        elif levels_to is not None:
+            tier = f"up to P{levels_to}"
+        else:
+            tier = "prestige levels"
+        reason_words = f" ({reason})" if reason else ""
+        return (
+            f"Prestige level reward: credited {abs(delta):,} points for {tier}{reason_words}; "
+            f"{_balance_words(before, after)}."
+        )
 
     label = label_for_event_type(event_type)
     direction = "credited" if delta > 0 else "debited"

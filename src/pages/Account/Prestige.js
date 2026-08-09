@@ -54,6 +54,7 @@ function benefitDefault(key) {
 
 function LevelStatLines({ row, isUnlocked, color }) {
   const lines = [
+    ['Points', `+${Number(row.points_reward ?? 0).toLocaleString()}`],
     ['Crime', `+${Math.round(((row.crime_mult ?? 1) - 1) * 100)}%`],
     ['OC', `+${Math.round(((row.oc_mult ?? 1) - 1) * 100)}%`],
     ['GTA', `+${row.gta_rare_boost ?? 0}×`],
@@ -117,6 +118,9 @@ function LevelCard({ row, isCurrent, isUnlocked }) {
       {/* Req */}
       <div className="text-[8px] font-heading text-zinc-600 tabular-nums">
         {(row.godfather_req || 0).toLocaleString()} RP
+        {(row.points_reward || 0) > 0 ? (
+          <span className="text-zinc-500"> · +{Number(row.points_reward).toLocaleString()} pts</span>
+        ) : null}
       </div>
 
       <LevelStatLines row={row} isUnlocked={isUnlocked} color={color} />
@@ -561,6 +565,7 @@ export default function Prestige() {
                 <th className="text-left px-4 py-2 text-zinc-600 font-bold uppercase tracking-widest">Level</th>
                 <th className="text-left px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest">Title</th>
                 <th className="text-center px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest" title="Effective RP to prestige into this tier (not per street rank)">Prestige RP</th>
+                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest" title="Store points awarded when you reach this prestige">Points</th>
                 <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">Crime</th>
                 <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">OC</th>
                 <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">GTA</th>
@@ -596,6 +601,7 @@ export default function Prestige() {
                     </td>
                     <td className="px-3 py-2.5" style={{ color: isUnlocked ? rowColor : '#52525b' }}>{row.name}</td>
                     <td className="px-3 py-2.5 text-center text-zinc-500 tabular-nums">{(row.godfather_req ?? 0).toLocaleString()}</td>
+                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{(row.points_reward ?? 0).toLocaleString()}</td>
                     <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.crime_mult ?? 1) - 1) * 100)}%</td>
                     <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.oc_mult ?? 1) - 1) * 100)}%</td>
                     <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{row.gta_rare_boost ?? 0}×</td>

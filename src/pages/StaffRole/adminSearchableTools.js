@@ -32,6 +32,7 @@ export const SEARCHABLE_TOOLS = [
   { label: "Missions & tribute (user)", categoryId: "admin-players", collapseKey: "userAdjustHub", scrollToId: "admin-missions-ladder", keywords: ["mission","tribute","ladder","progress","daily tribute","m_first","story"] },
   { label: "Referrals & prereg heal", categoryId: "admin-players", collapseKey: "referralsReport", keywords: ["referral","referrer","referee","invite","earnings","ref","heal","prereg","backfill","manual","assign","link","remove","unlink","clear"] },
   { label: "Respect points log", categoryId: "admin-players", collapseKey: "respectPointsLog", keywords: ["respect","points","log","earned","audit","player"] },
+  { label: "Prestige points rewards", categoryId: "admin-players", collapseKey: "prestigePointsRewards", scrollToId: "admin-prestige-points-rewards", keywords: ["prestige","points","reward","grant","p1","p2","store points","backfill"] },
   { label: "Gambling Log", categoryId: "admin-logs", collapseKey: "gamblingLog", keywords: ["gambling","log","casino","bet"] },
   { label: "Casino seizures", categoryId: "admin-logs", collapseKey: "casinoSeizures", keywords: ["casino","seizure","won","ownership","transfer"] },
   { label: "Casino buy-back history", categoryId: "admin-logs", collapseKey: "casinoBuybackHistory", keywords: ["buyback","buy-back","casino","escrow","points","held","offer"] },

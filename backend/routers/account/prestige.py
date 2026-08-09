@@ -78,17 +78,21 @@ def register(router):
 
         current_benefits = get_prestige_bonus(current_user)
 
+        from utils.prestige_points_rewards import points_reward_for_prestige_level
+
         all_levels = []
         for lvl, cfg in PRESTIGE_CONFIGS.items():
             if lvl == 1:
                 level_req = srv.get_prestige_requirement(0)
             else:
                 level_req = srv.get_prestige_requirement(lvl - 1)
+
             all_levels.append(
                 {
                     "level": lvl,
                     "name": cfg.get("name", ""),
                     "godfather_req": level_req,
+                    "points_reward": points_reward_for_prestige_level(lvl),
                     "crime_mult": cfg.get("crime_mult", 1.0),
                     "oc_mult": cfg.get("oc_mult", 1.0),
                     "gta_rare_boost": cfg.get("gta_rare_boost", 0),
@@ -166,6 +170,24 @@ def register(router):
             {"$set": prestige_set},
         )
 
+        points_reward = 0
+        try:
+            from utils.prestige_points_rewards import (
+                grant_pending_prestige_points_rewards,
+                points_reward_for_prestige_level,
+            )
+
+            points_reward = points_reward_for_prestige_level(new_level)
+            grant_out = await grant_pending_prestige_points_rewards(
+                db,
+                {"id": current_user["id"], "prestige_level": new_level, "is_dead": False},
+                reason="prestige",
+            )
+            if int(grant_out.get("points") or 0) > 0:
+                points_reward = int(grant_out["points"])
+        except Exception:
+            points_reward = 0
+
         try:
             from routers.game.leaderboard import invalidate_leaderboard_cache
 
@@ -174,18 +196,32 @@ def register(router):
             pass
 
         benefits_line = _format_prestige_unlock_benefits(new_cfg, new_level)
+        points_line = (
+            f"\n\nReward: +{points_reward:,} points."
+            if points_reward > 0
+            else ""
+        )
         await srv.send_notification(
             current_user["id"],
             f"Prestige {new_level} — {new_cfg['name']}!",
             f"You have prestiged to level {new_level} ({new_cfg['name']}). Your rank has reset to Rat.\n\n"
-            f"Benefits at this level: {benefits_line}.",
+            f"Benefits at this level: {benefits_line}.{points_line}",
             "system",
             category="system",
         )
 
-        await srv.log_activity(current_user["id"], current_user.get("username", "?"), "account_prestige", {"new_level": new_level, "name": new_cfg["name"]})
+        await srv.log_activity(
+            current_user["id"],
+            current_user.get("username", "?"),
+            "account_prestige",
+            {"new_level": new_level, "name": new_cfg["name"], "points_reward": points_reward},
+        )
+        msg = f"Prestiged to level {new_level} — {new_cfg['name']}!"
+        if points_reward > 0:
+            msg += f" (+{points_reward:,} points)"
         return {
-            "message": f"Prestiged to level {new_level} — {new_cfg['name']}!",
+            "message": msg,
             "prestige_level": new_level,
             "prestige_name": new_cfg["name"],
+            "points_reward": points_reward,
         }

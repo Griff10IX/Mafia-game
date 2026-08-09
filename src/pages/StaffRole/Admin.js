@@ -1475,6 +1475,10 @@ export default function Admin() {
   const [respectLogLimit, setRespectLogLimit] = useState(200);
   const [respectLogData, setRespectLogData] = useState(null);
   const [respectLogLoading, setRespectLogLoading] = useState(false);
+  const [prestigeRewardsQuery, setPrestigeRewardsQuery] = useState('');
+  const [prestigeRewardsLimit, setPrestigeRewardsLimit] = useState(100);
+  const [prestigeRewardsData, setPrestigeRewardsData] = useState(null);
+  const [prestigeRewardsLoading, setPrestigeRewardsLoading] = useState(false);
   const [currencySpendAuditData, setCurrencySpendAuditData] = useState(null);
   const [currencySpendAuditLoading, setCurrencySpendAuditLoading] = useState(false);
   const [clearGamblingDays, setClearGamblingDays] = useState(30);
@@ -8477,6 +8481,45 @@ export default function Admin() {
       .finally(() => setRespectLogLoading(false));
   };
 
+  const fetchPrestigePointsRewards = async (overrideQuery) => {
+    const q = String(overrideQuery != null ? overrideQuery : prestigeRewardsQuery).trim();
+    const lim = Math.max(1, Math.min(500, parseInt(String(prestigeRewardsLimit), 10) || 100));
+    const params = { limit: lim };
+    if (q) {
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q)) {
+        params.user_id = q;
+      } else {
+        params.username = q;
+      }
+    }
+    setPrestigeRewardsLoading(true);
+    try {
+      const res = await api.get('/admin/prestige-points-rewards', { params });
+      setPrestigeRewardsData(res.data);
+      toast.success(q ? 'Prestige rewards loaded for user' : 'Recent prestige rewards loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load prestige rewards');
+      setPrestigeRewardsData(null);
+    } finally {
+      setPrestigeRewardsLoading(false);
+    }
+  };
+
+  const jumpToPrestigePointsRewards = async (userIdOrUsername) => {
+    const q = String(userIdOrUsername || '').trim();
+    if (!q) return;
+    if (!(await verifyStaffAccess())) return;
+    setUserDetailData(null);
+    setPrestigeRewardsQuery(q);
+    setActiveCategoryId('admin-operations');
+    setCollapsed((prev) => ({ ...prev, prestigePointsRewards: false }));
+    if (typeof window !== 'undefined') {
+      window.location.hash = 'admin-operations';
+      setTimeout(() => document.getElementById('admin-prestige-points-rewards')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+    }
+    await fetchPrestigePointsRewards(q);
+  };
+
   const handleClearGamblingLog = async () => {
     if (!window.confirm(`Delete gambling log entries older than ${clearGamblingDays} days?`)) return;
     setClearGamblingLoading(true);
@@ -9291,7 +9334,26 @@ export default function Admin() {
                     <Row label="Money" value={fmtNum(u.money)} />
                     <Row label="Points" value={fmtNum(u.points)} />
                     <Row label="Rank points" value={fmtNum(u.rank_points)} />
-                    <Row label="Prestige" value={u.prestige_level != null ? `P${u.prestige_level}` : '—'} />
+                    <Row
+                      label="Prestige"
+                      value={
+                        <span className="inline-flex items-center gap-2 flex-wrap">
+                          {u.prestige_level != null ? `P${u.prestige_level}` : '—'}
+                          <span className="text-mutedForeground text-[9px]">
+                            pts paid thru P{Number(u.prestige_points_reward_paid_through || 0)}
+                          </span>
+                          {u.id || u.username ? (
+                            <button
+                              type="button"
+                              onClick={() => jumpToPrestigePointsRewards(u.id || u.username)}
+                              className="px-2 py-0.5 text-[10px] font-heading uppercase border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 rounded"
+                            >
+                              Prestige pts log
+                            </button>
+                          ) : null}
+                        </span>
+                      }
+                    />
                     <Row label="Bullets" value={fmtNum(u.bullets)} />
                     <Row label="Health" value={fmtNum(u.health)} />
                     <Row label="Armour level" value={fmtNum(u.armour_level)} />
@@ -9764,6 +9826,138 @@ export default function Admin() {
             )}
             {!respectLogData && !respectLogLoading && (
               <p className="text-[10px] text-mutedForeground font-heading">Load to see earned-respect entries for that user.</p>
+            )}
+          </div>
+        )}
+        <div className="admin-art-line text-primary mx-3" />
+      </div>
+      )}
+
+      {(isFullAdminUi || isModerator) && (
+      <div id="admin-prestige-points-rewards" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Trophy}
+          title="Prestige points rewards"
+          badge={
+            prestigeRewardsData?.summary ? (
+              <span className="text-[10px] font-heading text-mutedForeground">
+                {prestigeRewardsData.summary.events_in_view} grants · {Number(prestigeRewardsData.summary.total_points_in_view || 0).toLocaleString()} pts (view)
+              </span>
+            ) : null
+          }
+          toolAnchor="prestigePointsRewards"
+          isCollapsed={collapsed.prestigePointsRewards}
+          onToggle={() => toggleSection('prestigePointsRewards')}
+        />
+        {!collapsed.prestigePointsRewards && (
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground font-heading">
+              Account prestige store-point grants (P1 2k · P2 4k · P3 6k · P4 8k · P5 10k). Leave blank to load recent grants across all players, or enter a username / user ID. Also visible under Point sources as <span className="text-foreground">Prestige level reward</span>.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={prestigeRewardsQuery}
+                onChange={(e) => setPrestigeRewardsQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && fetchPrestigePointsRewards()}
+                placeholder="Username or user ID (optional)"
+                className="flex-1 min-w-[160px] bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-xs font-mono text-foreground focus:border-primary/50 focus:outline-none"
+              />
+              <span className="text-[10px] text-mutedForeground font-heading shrink-0">Limit</span>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={prestigeRewardsLimit}
+                onChange={(e) => setPrestigeRewardsLimit(Math.max(1, Math.min(500, parseInt(e.target.value, 10) || 100)))}
+                className="w-20 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-2 text-xs font-mono text-foreground focus:border-primary/50 focus:outline-none"
+              />
+              <BtnPrimary onClick={() => fetchPrestigePointsRewards()} disabled={prestigeRewardsLoading}>
+                {prestigeRewardsLoading ? '...' : 'Load'}
+              </BtnPrimary>
+            </div>
+            {prestigeRewardsData?.reward_table?.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {prestigeRewardsData.reward_table.map((row) => (
+                  <span key={row.level} className="px-2 py-0.5 rounded border border-zinc-700/50 bg-zinc-900/50 text-[9px] font-heading text-foreground">
+                    P{row.level}: {Number(row.points || 0).toLocaleString()} pts
+                  </span>
+                ))}
+              </div>
+            )}
+            {prestigeRewardsData?.user && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  ['Username', prestigeRewardsData.user.username ?? '—'],
+                  ['Prestige', `P${prestigeRewardsData.user.prestige_level ?? 0}`],
+                  ['Paid through', `P${prestigeRewardsData.user.paid_through ?? 0}`],
+                  ['Outstanding', Number(prestigeRewardsData.user.points_outstanding ?? 0).toLocaleString()],
+                  ['Earned (paid levels)', Number(prestigeRewardsData.user.points_earned_for_paid_levels ?? 0).toLocaleString()],
+                  ['Store points bal', Number(prestigeRewardsData.user.points ?? 0).toLocaleString()],
+                  ['Dead', prestigeRewardsData.user.is_dead ? 'Yes' : 'No'],
+                ].map(([k, v]) => (
+                  <div key={k} className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                    <div className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider">{k}</div>
+                    <div className="text-[11px] font-heading font-bold text-primary truncate" title={String(v)}>{v}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {prestigeRewardsData && (
+              <div>
+                <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider mb-1">Grant events</div>
+                <div className="max-h-72 overflow-y-auto rounded border border-zinc-700/50">
+                  <table className="w-full text-[10px] font-heading">
+                    <thead className="bg-zinc-800/50 sticky top-0">
+                      <tr>
+                        <th className="text-left p-2 text-mutedForeground uppercase">Time</th>
+                        <th className="text-left p-2 text-mutedForeground uppercase">User</th>
+                        <th className="text-left p-2 text-mutedForeground uppercase">Levels</th>
+                        <th className="text-left p-2 text-mutedForeground uppercase">Reason</th>
+                        <th className="text-right p-2 text-mutedForeground uppercase">Points</th>
+                        <th className="text-right p-2 text-mutedForeground uppercase">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(prestigeRewardsData.events || []).map((ev, idx) => {
+                        const from = ev.levels_from;
+                        const to = ev.levels_to;
+                        const levels =
+                          from != null && to != null
+                            ? (from === to ? `P${from}` : `P${from}–P${to}`)
+                            : to != null
+                              ? `→ P${to}`
+                              : '—';
+                        const bal =
+                          ev.wallet_points_before != null && ev.wallet_points_after != null
+                            ? `${Number(ev.wallet_points_before).toLocaleString()} → ${Number(ev.wallet_points_after).toLocaleString()}`
+                            : '—';
+                        return (
+                          <tr key={`${ev.origin_ref || ev.at}-${idx}`} className="border-t border-zinc-700/30">
+                            <td className="p-2 text-mutedForeground whitespace-nowrap">{ev.at ? formatAdminDateTime(ev.at) : '—'}</td>
+                            <td className="p-2 text-foreground">
+                              {ev.username ? (
+                                <Link to={`/profile/${encodeURIComponent(ev.username)}`} className="text-primary hover:underline">{ev.username}</Link>
+                              ) : (ev.user_id || '—')}
+                            </td>
+                            <td className="p-2 text-amber-300/90 whitespace-nowrap">{levels}</td>
+                            <td className="p-2 text-mutedForeground font-mono text-[9px]">{ev.reason || '—'}</td>
+                            <td className="p-2 text-right text-emerald-400 font-bold">+{Number(ev.points || 0).toLocaleString()}</td>
+                            <td className="p-2 text-right text-mutedForeground font-mono text-[9px] whitespace-nowrap">{bal}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {(prestigeRewardsData.events || []).length === 0 && (
+                  <p className="text-[10px] text-mutedForeground font-heading py-2">No prestige point grant events in this view.</p>
+                )}
+              </div>
+            )}
+            {!prestigeRewardsData && !prestigeRewardsLoading && (
+              <p className="text-[10px] text-mutedForeground font-heading">Load recent grants, or look up a player&apos;s prestige reward status.</p>
             )}
           </div>
         )}
@@ -10952,7 +11146,7 @@ export default function Admin() {
             <ActionRow
               icon={BarChart3}
               label="Point sources (full audit)"
-              description="Uses target username above. Summarizes store points: provenance lots, ledger, Stripe purchases, player transfers, and key profile counters."
+              description="Uses target username above. Summarizes store points: provenance lots, ledger, Stripe purchases, player transfers, and key profile counters. Prestige grants appear as Prestige level reward."
             >
               <BtnSecondary type="button" onClick={handleLoadPointsSources} disabled={pointsSourcesLoading}>
                 {pointsSourcesLoading ? 'Loading…' : 'Load breakdown'}

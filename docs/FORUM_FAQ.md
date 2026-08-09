@@ -927,6 +927,7 @@ After reaching [b]Godfather[/b], you can prestige up to [b]5 times[/b]. Each lev
 [*][color=#888888]Exclusive Prestige Crimes unlocked at higher prestige levels[/color]
 [*][color=#888888]Stacking bonuses to crimes, OC, NPC rewards, illegal business, and GTA rare drops (per level)[/color]
 [*][color=#888888]Mission redo reward multiplier changes as you prestige (see in-game)[/color]
+[*][color=#888888]Store points on each prestige: [b]P1 2,000[/b] · [b]P2 4,000[/b] · [b]P3 6,000[/b] · [b]P4 8,000[/b] · [b]P5 10,000[/b][/color]
 [*][color=#888888]Prestige badge / bragging rights[/color]
 [/list]
 
@@ -1455,7 +1456,7 @@ If someone used your card without permission:
 [color=#AAAAAA]A: [b]Dead > Alive[/b] moves ~99.95% of a dead account’s cash/points (at death) to a new account with the dead password; [b]Revive[/b] costs 50k pts and restores the same email’s dead character — including properties, illegal business, and cars lost to your killer when a death snapshot exists (see [b]COMBAT → What Happens When You Die[/b]). Open the Dead > Alive / Revive pages in-game.[/color]
 
 [color=#3498DB][b]Q: What is Prestige?[/b][/color]
-[color=#AAAAAA]A: After reaching Godfather (top of the 13-rank ladder), you can Prestige up to 5 times for permanent bonuses — stronger crime/OC/NPC/illegal-business payouts, GTA rare-car luck, mission redo scaling, and exclusive Prestige Crimes. See the Prestige screen for exact numbers.[/color]
+[color=#AAAAAA]A: After reaching Godfather (top of the 13-rank ladder), you can Prestige up to 5 times for permanent bonuses — stronger crime/OC/NPC/illegal-business payouts, GTA rare-car luck, mission redo scaling, exclusive Prestige Crimes, and store points (2k / 4k / 6k / 8k / 10k for P1–P5). See the Prestige screen for exact numbers.[/color]
 
 [color=#3498DB][b]Q: What are Daily Rewards?[/b][/color]
 [color=#AAAAAA]A: [b]Rock Paper Scissors[/b] and [b]Noughts & Crosses[/b] vs the house. You get [b]up to 3 plays per rolling 6-hour window[/b] (shared across both games). Wins pay cash and sometimes cars (see the Daily Rewards screen).[/color]

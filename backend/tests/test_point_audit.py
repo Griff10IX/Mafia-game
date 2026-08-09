@@ -207,6 +207,31 @@ class TestDetailedPointAuditPresentation(unittest.TestCase):
         self.assertIn("Alice sent 25 points to Bob", narrative)
         self.assertIn("100 → 125", narrative)
 
+    def test_prestige_level_points_narrative(self):
+        from utils.point_sources_breakdown import label_for_event_type
+
+        self.assertEqual(label_for_event_type("prestige_level_points"), "Prestige level reward")
+        narrative = build_audit_narrative(
+            {
+                "username": "Venus",
+                "source": "prestige",
+                "event_type": "prestige_level_points",
+                "delta": 6000,
+                "wallet_points_before": 1000,
+                "wallet_points_after": 7000,
+                "context": {
+                    "levels_from": 1,
+                    "levels_to": 2,
+                    "reason": "backfill",
+                },
+            }
+        )
+        self.assertIn("Prestige level reward", narrative)
+        self.assertIn("6,000 points", narrative)
+        self.assertIn("P1–P2", narrative)
+        self.assertIn("backfill", narrative)
+        self.assertIn("1,000 → 7,000", narrative)
+
     def test_quicktrade_and_mdg_narratives_label_unknowns(self):
         quicktrade = build_audit_narrative(
             {

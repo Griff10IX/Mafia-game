@@ -12397,6 +12397,173 @@ def register(router):
             "pending_buy_back_offers": pending,
         }
 
+    @router.get("/admin/prestige-points-rewards")
+    async def admin_prestige_points_rewards(
+        user_id: Optional[str] = Query(None, min_length=1),
+        username: Optional[str] = Query(None, min_length=1, max_length=64),
+        limit: int = Query(100, ge=1, le=500),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Store-point rewards for account prestige levels (P1–P5). Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        from utils.point_provenance import POINT_AUDIT_COLLECTION
+        from utils.prestige_points_rewards import (
+            PRESTIGE_POINTS_PAID_THROUGH_FIELD,
+            PRESTIGE_POINTS_REWARDS,
+            total_prestige_points_for_levels,
+        )
+
+        cap = min(int(limit), 500)
+        target = None
+        uid = (user_id or "").strip()
+        uname = (username or "").strip()
+        if uid or uname:
+            if uid:
+                target = await db.users.find_one(
+                    {"id": uid},
+                    {
+                        "_id": 0,
+                        "id": 1,
+                        "username": 1,
+                        "points": 1,
+                        "is_dead": 1,
+                        "prestige_level": 1,
+                        PRESTIGE_POINTS_PAID_THROUGH_FIELD: 1,
+                    },
+                )
+            if not target and uname:
+                target = await db.users.find_one(
+                    {"username": _username_pattern(uname)},
+                    {
+                        "_id": 0,
+                        "id": 1,
+                        "username": 1,
+                        "points": 1,
+                        "is_dead": 1,
+                        "prestige_level": 1,
+                        PRESTIGE_POINTS_PAID_THROUGH_FIELD: 1,
+                    },
+                )
+            if not target:
+                raise HTTPException(status_code=404, detail="User not found")
+            uid = target["id"]
+
+        audit_q: Dict[str, Any] = {"event_type": "prestige_level_points"}
+        ledger_q: Dict[str, Any] = {"event_type": "prestige_level_points"}
+        if uid:
+            audit_q["user_id"] = uid
+            ledger_q["user_id"] = uid
+
+        audit_coll = getattr(db, POINT_AUDIT_COLLECTION)
+        audit_rows = (
+            await audit_coll.find(audit_q, {"_id": 0})
+            .sort("created_at", -1)
+            .limit(cap)
+            .to_list(cap)
+        )
+        ledger_rows = (
+            await db.point_ledger_events.find(ledger_q, {"_id": 0})
+            .sort("created_at", -1)
+            .limit(cap)
+            .to_list(cap)
+        )
+
+        # Prefer audit rows (wallet before/after); fall back to ledger if audit missing.
+        seen_refs = set()
+        events: List[Dict[str, Any]] = []
+        for row in audit_rows:
+            ref = str(row.get("origin_ref") or row.get("correlation_id") or row.get("id") or "")
+            if ref:
+                seen_refs.add(ref)
+            ctx = row.get("context") if isinstance(row.get("context"), dict) else {}
+            meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
+            levels_from = ctx.get("levels_from") if ctx.get("levels_from") is not None else meta.get("levels_from")
+            levels_to = ctx.get("levels_to") if ctx.get("levels_to") is not None else meta.get("to_level")
+            reason = ctx.get("reason") or meta.get("reason") or ""
+            events.append(
+                {
+                    "at": row.get("created_at"),
+                    "user_id": row.get("user_id"),
+                    "username": row.get("username"),
+                    "points": int(row.get("delta") or 0),
+                    "levels_from": levels_from,
+                    "levels_to": levels_to,
+                    "reason": reason,
+                    "wallet_points_before": row.get("wallet_points_before"),
+                    "wallet_points_after": row.get("wallet_points_after"),
+                    "origin_ref": row.get("origin_ref"),
+                    "source": "point_audit_events",
+                }
+            )
+        for row in ledger_rows:
+            ref = str(row.get("origin_ref") or row.get("id") or "")
+            if ref and ref in seen_refs:
+                continue
+            meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
+            events.append(
+                {
+                    "at": row.get("created_at"),
+                    "user_id": row.get("user_id"),
+                    "username": None,
+                    "points": int(row.get("points") or 0),
+                    "levels_from": meta.get("levels_from"),
+                    "levels_to": meta.get("to_level") or meta.get("levels_to"),
+                    "reason": meta.get("reason") or "",
+                    "wallet_points_before": row.get("wallet_points_before"),
+                    "wallet_points_after": row.get("wallet_points_after"),
+                    "origin_ref": row.get("origin_ref"),
+                    "source": "point_ledger_events",
+                }
+            )
+
+        def _event_ts(ev: Dict[str, Any]) -> str:
+            return str(ev.get("at") or "")
+
+        events.sort(key=_event_ts, reverse=True)
+        events = events[:cap]
+
+        # Fill missing usernames for ledger-only rows.
+        missing_ids = sorted({str(e["user_id"]) for e in events if e.get("user_id") and not e.get("username")})
+        if missing_ids:
+            name_map = {}
+            async for u in db.users.find({"id": {"$in": missing_ids}}, {"_id": 0, "id": 1, "username": 1}):
+                name_map[u["id"]] = u.get("username")
+            for e in events:
+                if not e.get("username") and e.get("user_id") in name_map:
+                    e["username"] = name_map[e["user_id"]]
+
+        total_points = sum(int(e.get("points") or 0) for e in events)
+        user_payload = None
+        if target:
+            level = min(5, max(0, int(target.get("prestige_level") or 0)))
+            paid = max(0, int(target.get(PRESTIGE_POINTS_PAID_THROUGH_FIELD) or 0))
+            earned = total_prestige_points_for_levels(from_level_exclusive=0, to_level_inclusive=min(level, paid))
+            outstanding = total_prestige_points_for_levels(from_level_exclusive=paid, to_level_inclusive=level)
+            user_payload = {
+                "id": target.get("id"),
+                "username": target.get("username"),
+                "is_dead": bool(target.get("is_dead")),
+                "points": int(target.get("points") or 0),
+                "prestige_level": level,
+                "paid_through": paid,
+                "points_earned_for_paid_levels": earned,
+                "points_outstanding": outstanding,
+            }
+
+        return {
+            "reward_table": [
+                {"level": lvl, "points": pts} for lvl, pts in sorted(PRESTIGE_POINTS_REWARDS.items())
+            ],
+            "user": user_payload,
+            "summary": {
+                "events_in_view": len(events),
+                "total_points_in_view": total_points,
+            },
+            "events": events,
+        }
+
     @router.get("/admin/respect-points-log")
     async def admin_respect_points_log(
         user_id: str = Query(..., min_length=1),

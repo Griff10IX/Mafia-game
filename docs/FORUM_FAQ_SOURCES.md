@@ -15,6 +15,7 @@ Use this when updating [FORUM_FAQ.md](FORUM_FAQ.md) so numbers stay aligned with
 |--------|----------------------|
 | Rank names & RP thresholds | `backend/server.py` → `RANKS` |
 | Prestige titles & multipliers | `backend/server.py` → `PRESTIGE_CONFIGS`, `get_prestige_bonus` |
+| Prestige store-point rewards (P1–P5) | `backend/utils/prestige_points_rewards.py` → `PRESTIGE_POINTS_REWARDS` |
 | Cities / travel destinations | `backend/server.py` → `STATES` |
 | Car travel times | `backend/server.py` → `TRAVEL_TIMES`; car catalog `CARS` |
 | Melt-for-bullets yield | `backend/server.py` → `MELT_VALUE_PER_BULLET`, `CARS[].value`; `backend/routers/cars/gta.py` → `_melt_cars_impl` |

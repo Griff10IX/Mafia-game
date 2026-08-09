@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-09 14:00 UTC[/color][/b] — [b]Prestige level point rewards[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] Reaching each account prestige now grants store points: [b]P1 2,000[/b] · [b]P2 4,000[/b] · [b]P3 6,000[/b] · [b]P4 8,000[/b] · [b]P5 10,000[/b].[/color]
+[*][color=#888888][b]Granted:[/b] Living players who already prestiged receive any unpaid rewards for the levels they have reached (dead accounts excluded).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-09 13:20 UTC[/color][/b] — [b]Kill bullet costs trimmed ~10%[/b][/size]
 [quote]
 [list]

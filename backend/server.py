@@ -3850,6 +3850,27 @@ async def startup_db():
 
     asyncio.create_task(run_family_daily_tasks_worker(db))
     try:
+        async def _prestige_points_backfill_once():
+            try:
+                from utils.prestige_points_rewards import backfill_alive_prestige_points_rewards
+
+                result = await backfill_alive_prestige_points_rewards(
+                    db, send_notification=send_notification
+                )
+                if int(result.get("granted_users") or 0) > 0:
+                    logging.info(
+                        "Prestige points backfill: granted_users=%s total_points=%s candidates=%s",
+                        result.get("granted_users"),
+                        result.get("total_points"),
+                        result.get("candidates"),
+                    )
+            except Exception:
+                logging.exception("Prestige points backfill failed")
+
+        asyncio.create_task(_prestige_points_backfill_once())
+    except Exception as e:
+        logging.warning("Prestige points backfill schedule failed: %s", e)
+    try:
         from utils.tutorial import ensure_tutorial_indexes, TUTORIAL_STATUS_SKIPPED
 
         await ensure_tutorial_indexes(db)
