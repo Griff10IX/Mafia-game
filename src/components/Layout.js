@@ -442,7 +442,12 @@ export default function Layout({ children }) {
   const [categoryOpen, setCategoryOpen] = useState(() => ({ information: true, travel: true, messaging: true, money: true, other: true }));
   const [mobileBottomMenuOpen, setMobileBottomMenuOpen] = useState(null);
   const [pocketMenuOpen, setPocketMenuOpen] = useState(false);
+  const [pocketActionsOpen, setPocketActionsOpen] = useState(false);
+  const [pocketCombatOpen, setPocketCombatOpen] = useState(false);
+  const [pocketMoneyOpen, setPocketMoneyOpen] = useState(false);
   const [pocketStatsOpen, setPocketStatsOpen] = useState(false);
+  const [pocketMenuTab, setPocketMenuTab] = useState('you');
+  const [pocketMoneyTab, setPocketMoneyTab] = useState('cash');
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
@@ -814,8 +819,77 @@ export default function Layout({ children }) {
   useEffect(() => {
     setMobileBottomMenuOpen(null);
     setPocketMenuOpen(false);
+    setPocketActionsOpen(false);
+    setPocketCombatOpen(false);
+    setPocketMoneyOpen(false);
     setPocketStatsOpen(false);
   }, [location.pathname]);
+
+  const closeAllPocketSheets = useCallback(() => {
+    setPocketMenuOpen(false);
+    setPocketActionsOpen(false);
+    setPocketCombatOpen(false);
+    setPocketMoneyOpen(false);
+    setPocketStatsOpen(false);
+  }, []);
+
+  const renderPocketTile = useCallback((item, onClose) => {
+    const Icon = item.Icon || item.icon;
+    const isActive = item.path
+      && (location.pathname === item.path || (item.path !== '/account/dashboard' && location.pathname.startsWith(item.path + '/')));
+    const className = 'tap-feedback flex items-center gap-2 px-2.5 py-3 min-h-[48px] rounded-md border text-[11px] font-heading font-bold uppercase tracking-wider touch-manipulation';
+    const style = isActive
+      ? { borderColor: 'rgba(var(--noir-primary-rgb), 0.55)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.16)', color: 'var(--noir-primary)' }
+      : { borderColor: 'rgba(var(--noir-primary-rgb), 0.14)', backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' };
+    const badgeEl = item.badge > 0 ? (
+      <span
+        className={`shrink-0 min-w-[18px] h-[18px] rounded-full text-[9px] font-bold flex items-center justify-center px-0.5 ${
+          item.badgeTone === 'red'
+            ? 'bg-red-600 text-white'
+            : 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/40'
+        }`}
+      >
+        {item.badge > 99 ? '99+' : item.badge}
+      </span>
+    ) : null;
+    if (item.action === 'theme') {
+      return (
+        <button key="theme" type="button" onClick={() => { setThemePickerOpen(true); onClose(); }} className={className} style={style}>
+          <Palette size={16} className="shrink-0" /><span className="truncate flex-1">Theme</span>
+        </button>
+      );
+    }
+    if (item.action === 'tutorial') {
+      return (
+        <button key="tutorial" type="button" onClick={() => { onClose(); replayTutorial(); }} className={className} style={style}>
+          <Lightbulb size={16} className="shrink-0" /><span className="truncate flex-1">Tutorial</span>
+        </button>
+      );
+    }
+    if (item.action === 'logout') {
+      return (
+        <button key="logout" type="button" onClick={() => { handleLogout(); onClose(); }} className={className} style={{ ...style, color: '#f87171', borderColor: 'rgba(248,113,113,0.35)' }}>
+          <LogOut size={16} className="shrink-0" /><span className="truncate flex-1">Logout</span>
+        </button>
+      );
+    }
+    return (
+      <SameRouteAwareLink
+        key={item.path}
+        to={item.path}
+        onClick={onClose}
+        data-testid={item.testId}
+        className={className}
+        style={style}
+        title={item.title}
+      >
+        {Icon && <Icon size={16} className="shrink-0" />}
+        <span className="truncate flex-1">{item.label}</span>
+        {item.exclusive && <span className="text-violet-400 text-[10px] font-bold shrink-0" aria-hidden>★</span>}
+        {badgeEl}
+      </SameRouteAwareLink>
+    );
+  }, [location.pathname, replayTutorial]);
 
   // Priority: load the current page's JS chunk before background polls compete for connections.
   useEffect(() => {
@@ -3064,7 +3138,7 @@ export default function Layout({ children }) {
             <button
               type="button"
               data-testid="pocket-hud"
-              onClick={() => { setPocketStatsOpen(true); setPocketMenuOpen(false); }}
+              onClick={() => { closeAllPocketSheets(); setPocketStatsOpen(true); }}
               className="w-full flex items-stretch gap-1 rounded-md border touch-manipulation active:scale-[0.99] transition-transform overflow-hidden"
               style={{
                 backgroundColor: 'var(--noir-content)',
@@ -3096,11 +3170,11 @@ export default function Layout({ children }) {
             </button>
           </div>
 
-          {(pocketMenuOpen || pocketStatsOpen) && (
+          {(pocketMenuOpen || pocketStatsOpen || pocketActionsOpen || pocketCombatOpen || pocketMoneyOpen) && (
             <div
               role="presentation"
               className="md:hidden fixed inset-0 z-[54] bg-black/55 touch-manipulation"
-              onClick={() => { setPocketMenuOpen(false); setPocketStatsOpen(false); }}
+              onClick={closeAllPocketSheets}
             />
           )}
 
@@ -3143,104 +3217,333 @@ export default function Layout({ children }) {
             </div>
           )}
 
-          {pocketMenuOpen && (
+          {pocketActionsOpen && (
             <div
-              data-layout="pocket-menu-sheet"
-              className="md:hidden fixed inset-x-0 bottom-0 z-[55] max-h-[80vh] overflow-y-auto rounded-t-xl border-t shadow-2xl safe-area-pb"
+              data-layout="pocket-actions-sheet"
+              className="md:hidden fixed inset-x-0 bottom-0 z-[55] max-h-[70vh] overflow-y-auto rounded-t-xl border-t shadow-2xl safe-area-pb"
               style={{ backgroundColor: 'var(--noir-content)', borderColor: 'rgba(var(--noir-primary-rgb), 0.3)' }}
               role="dialog"
-              aria-label="Game menu"
+              aria-label="Actions"
             >
               <div className="flex items-center justify-between px-3 py-2 border-b sticky top-0 z-10" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.15)', backgroundColor: 'var(--noir-content)' }}>
-                <span className="text-[11px] font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Menu</span>
-                <button type="button" onClick={() => setPocketMenuOpen(false)} className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md" style={{ color: 'var(--noir-muted)' }} aria-label="Close menu">
+                <span className="text-[11px] font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Actions</span>
+                <button type="button" onClick={() => setPocketActionsOpen(false)} className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md" style={{ color: 'var(--noir-muted)' }} aria-label="Close actions">
                   <X size={18} />
                 </button>
               </div>
-              <div className="px-2 py-2 space-y-3">
-                {SIDEBAR_CATEGORIES.map((cat) => {
-                  const items = navItems.filter((i) => (PATH_TO_CATEGORY[i.path] || 'other') === cat.id && !String(i.path).startsWith('__'));
-                  if (!items.length) return null;
-                  return (
-                    <div key={cat.id}>
-                      <div className="px-2 py-1.5 mb-1 rounded-sm text-[9px] font-heading font-bold uppercase tracking-widest" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.12)', color: 'var(--noir-primary)' }}>
-                        {cat.label}
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {items.map((item) => {
-                          const Icon = item.icon;
-                          const isActive = location.pathname === item.path || (item.path !== '/account/dashboard' && location.pathname.startsWith(item.path + '/'));
-                          return (
-                            <SameRouteAwareLink
-                              key={item.path}
-                              to={item.path}
-                              onClick={() => setPocketMenuOpen(false)}
-                              className="tap-feedback flex items-center gap-2 px-2 py-2.5 min-h-[44px] rounded-md border text-[10px] font-heading uppercase tracking-wider touch-manipulation"
-                              style={isActive
-                                ? { borderColor: 'rgba(var(--noir-primary-rgb), 0.5)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.14)', color: 'var(--noir-primary)' }
-                                : { borderColor: 'rgba(var(--noir-primary-rgb), 0.12)', backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' }}
-                            >
-                              {Icon && <Icon size={14} className="shrink-0" />}
-                              <span className="truncate">{item.label}</span>
-                            </SameRouteAwareLink>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-                <div className="grid grid-cols-2 gap-1.5 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => { setThemePickerOpen(true); setPocketMenuOpen(false); }}
-                    className="flex items-center justify-center gap-1.5 px-2 py-2.5 min-h-[44px] rounded-md border font-heading text-[10px] uppercase tracking-wider"
-                    style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.3)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.1)', color: 'var(--noir-primary)' }}
-                  >
-                    <Palette size={14} /> Theme
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { handleLogout(); setPocketMenuOpen(false); }}
-                    className="flex items-center justify-center gap-1.5 px-2 py-2.5 min-h-[44px] rounded-md border font-heading text-[10px] uppercase tracking-wider text-red-400"
-                    style={{ borderColor: 'rgba(248,113,113,0.35)', backgroundColor: 'rgba(248,113,113,0.08)' }}
-                  >
-                    <LogOut size={14} /> Logout
-                  </button>
-                </div>
+              <div className="p-2 grid grid-cols-2 gap-1.5">
+                {[
+                  { path: '/crime/crimes', label: 'Crimes', Icon: ListChecks, badge: rankingCounts.crimes, testId: 'pocket-action-crimes' },
+                  { path: '/crime/gta', label: 'GTA', Icon: Car, badge: rankingCounts.gta, exclusive: gtaExclusiveInPool, title: gtaExclusiveInPool ? 'Exclusive car in GTA pool!' : undefined, testId: 'pocket-action-gta' },
+                  { path: '/crime/jail', label: 'Jail Bust', Icon: Lock, badge: rankingCounts.jail, badgeTone: 'red', testId: 'pocket-action-jail-bust' },
+                  { path: '/organised-crime', label: 'OC', Icon: Users, testId: 'pocket-action-oc' },
+                  { path: '/game/ranking/badges', label: 'Badges', Icon: Award, testId: 'pocket-action-badges' },
+                  { path: '/account/prestige', label: 'Prestige', Icon: Trophy, testId: 'pocket-action-prestige' },
+                ].map((item) => renderPocketTile(item, () => setPocketActionsOpen(false)))}
               </div>
             </div>
           )}
 
+          {pocketCombatOpen && (
+            <div
+              data-layout="pocket-combat-sheet"
+              className="md:hidden fixed inset-x-0 bottom-0 z-[55] max-h-[70vh] overflow-y-auto rounded-t-xl border-t shadow-2xl safe-area-pb"
+              style={{ backgroundColor: 'var(--noir-content)', borderColor: 'rgba(var(--noir-primary-rgb), 0.3)' }}
+              role="dialog"
+              aria-label="Combat"
+            >
+              <div className="flex items-center justify-between px-3 py-2 border-b sticky top-0 z-10" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.15)', backgroundColor: 'var(--noir-content)' }}>
+                <span className="text-[11px] font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Combat</span>
+                <button type="button" onClick={() => setPocketCombatOpen(false)} className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md" style={{ color: 'var(--noir-muted)' }} aria-label="Close combat">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="p-2 grid grid-cols-2 gap-1.5">
+                {[
+                  { path: '/kill/attack', label: 'Attack', Icon: Sword },
+                  { path: '/kill/witness-statements', label: 'Witness', Icon: FileText },
+                  { path: '/kill/attempts', label: 'Attempts', Icon: Crosshair },
+                  { path: '/kill/hitlist', label: 'Hitlist', Icon: Target },
+                  ...(hitmanForHireVisible ? [{ path: '/kill/hitman', label: 'Hitman', Icon: Crosshair }] : []),
+                  { path: '/kill/bodyguards', label: 'Bodyguards', Icon: Shield },
+                  { path: '/kill/armour-weapons', label: 'Armoury', Icon: Package },
+                  { path: '/kill/combat-timeline', label: 'Timeline', Icon: Activity },
+                ].map((item) => renderPocketTile(item, () => setPocketCombatOpen(false)))}
+              </div>
+            </div>
+          )}
+
+          {pocketMoneyOpen && (() => {
+            const moneyTabs = [
+              { id: 'cash', label: 'Cash' },
+              { id: 'empire', label: 'Empire' },
+              { id: 'cars', label: 'Cars' },
+            ];
+            const moneyItems = {
+              cash: [
+                { path: '/money/bank', label: 'Bank', Icon: Landmark },
+                { path: '/money/stocks', label: 'Stocks', Icon: TrendingUp },
+                { path: '/money/quick-trade', label: 'Quick Trade', Icon: ArrowLeftRight },
+                { path: '/game/store', label: 'Store', Icon: ShoppingBag, badge: storePointsEventActive ? 1 : 0 },
+                { path: '/game-pass', label: 'Game Pass', Icon: Package },
+                { path: '/game/daily-rewards', label: 'Daily Rewards', Icon: Gift },
+                { path: '/money/lottery', label: 'Lottery', Icon: Ticket },
+                { path: '/money/loot-box', label: 'Loot Box', Icon: Gift },
+              ],
+              empire: [
+                { path: '/money/booze-run', label: 'Booze Run', Icon: Wine },
+                { path: '/money/distillery', label: 'Distillery', Icon: Wine },
+                { path: '/money/racket', label: 'Racket', Icon: Building2 },
+                ...((weedEmpireVisible || isAdmin || isModerator || hasAdminEmail)
+                  ? [{ path: '/money/weed-empire', label: 'Weed Empire', Icon: Leaf, badge: weedEmpireReadyCount }]
+                  : []),
+                { path: '/money/property', label: 'Properties', Icon: Building },
+                { path: '/my-properties', label: 'My Properties', Icon: Building2 },
+                { path: '/money/crack-safe', label: 'Crack Safe', Icon: Lock },
+                { path: '/money/grave-robber', label: 'Grave Robber', Icon: Skull },
+              ],
+              cars: [
+                { path: '/cars/garage', label: 'Garage', Icon: Car },
+                { path: '/cars/buy', label: 'Buy Cars', Icon: ShoppingBag },
+                { path: '/cars/sell', label: 'Sell Cars', Icon: DollarSign },
+              ],
+            };
+            return (
+              <div
+                data-layout="pocket-money-sheet"
+                className="md:hidden fixed inset-x-0 bottom-0 z-[55] max-h-[70vh] overflow-y-auto rounded-t-xl border-t shadow-2xl safe-area-pb"
+                style={{ backgroundColor: 'var(--noir-content)', borderColor: 'rgba(var(--noir-primary-rgb), 0.3)' }}
+                role="dialog"
+                aria-label="Money"
+              >
+                <div className="sticky top-0 z-10 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.15)', backgroundColor: 'var(--noir-content)' }}>
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-[11px] font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Money</span>
+                    <button type="button" onClick={() => setPocketMoneyOpen(false)} className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md" style={{ color: 'var(--noir-muted)' }} aria-label="Close money">
+                      <X size={18} />
+                    </button>
+                  </div>
+                  <div className="flex gap-1 px-2 pb-2 overflow-x-auto scrollbar-hide">
+                    {moneyTabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setPocketMoneyTab(tab.id)}
+                        className="shrink-0 px-3 py-1.5 rounded-md border text-[10px] font-heading font-bold uppercase tracking-wider touch-manipulation"
+                        style={pocketMoneyTab === tab.id
+                          ? { borderColor: 'rgba(var(--noir-primary-rgb), 0.55)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.16)', color: 'var(--noir-primary)' }
+                          : { borderColor: 'rgba(var(--noir-primary-rgb), 0.12)', backgroundColor: 'var(--noir-surface)', color: 'var(--noir-muted)' }}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="p-2 grid grid-cols-2 gap-1.5">
+                  {(moneyItems[pocketMoneyTab] || moneyItems.cash).map((item) => renderPocketTile(item, () => setPocketMoneyOpen(false)))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {pocketMenuOpen && (() => {
+            const menuTabs = [
+              { id: 'you', label: 'You' },
+              { id: 'travel', label: 'Travel' },
+              { id: 'play', label: 'Play' },
+              { id: 'social', label: 'Social' },
+              { id: 'more', label: 'More' },
+            ];
+            const menuItems = {
+              you: [
+                { path: '/account/dashboard', label: 'Dashboard', Icon: Home },
+                { path: '/account/objectives', label: 'Objectives', Icon: ListChecks },
+                { path: '/account/missions', label: 'Missions', Icon: Map },
+                { path: '/account/inventory', label: 'Inventory', Icon: Package },
+                { path: '/account/profile', label: 'Profile', Icon: User },
+                { path: '/game/stats', label: 'Stats', Icon: TrendingUp },
+                { path: '/account/stats', label: 'My Stats', Icon: BarChart3 },
+                { path: '/account/game-events', label: 'Events', Icon: Zap },
+                { path: '/game/daily-rewards', label: 'Daily Rewards', Icon: Gift },
+                { path: '/game/users-online', label: 'Online', Icon: Users, badge: typeof usersOnlineCount === 'number' ? Math.min(usersOnlineCount, 99) : 0 },
+                { path: '/game/leaderboard', label: 'Leaderboard', Icon: Trophy },
+                { path: '/game/help-desk', label: 'Help Desk', Icon: HelpCircle, badge: helpDeskOpenCount },
+                { path: '/account/autorank', label: 'Auto Rank', Icon: Bot },
+                ...(needsEmailVerification ? [{ path: '/verify-email', label: 'Verify email', Icon: Mail }] : []),
+              ],
+              travel: [
+                { path: '/game/travel', label: 'Travel', Icon: Plane },
+                { path: '/game/states', label: 'States', Icon: MapPin },
+                { path: '/my-properties', label: 'My Properties', Icon: Building2 },
+                { path: '/money/booze-run', label: 'Booze Run', Icon: Wine },
+                { path: '/money/distillery', label: 'Distillery', Icon: Wine },
+                { path: '/money/racket', label: 'Racket', Icon: Building2 },
+                ...((weedEmpireVisible || isAdmin || isModerator || hasAdminEmail)
+                  ? [{ path: '/money/weed-empire', label: 'Weed Empire', Icon: Leaf, badge: weedEmpireReadyCount }]
+                  : []),
+              ],
+              play: [
+                { path: '/casino', label: 'Casino', Icon: Dice5 },
+                { path: '/casino/dice', label: 'Dice', Icon: Dice5 },
+                { path: '/casino/rlt', label: 'Roulette', Icon: CircleDot },
+                { path: '/casino/blackjack', label: 'Blackjack', Icon: Spade },
+                ...(SLOTS_FEATURE_ENABLED ? [{ path: '/casino/slots', label: 'Slots', Icon: SquareStack }] : []),
+                { path: '/sports-betting', label: 'Sports', Icon: LineChart },
+                { path: '/mini-games', label: 'Mini Games', Icon: Gamepad2 },
+                ...(user?.is_entertainer ? [{ path: '/game/entertainer', label: 'Entertainer', Icon: Mic2 }] : []),
+              ],
+              social: [
+                { path: '/social/forum', label: 'Forum', Icon: MessageSquare },
+                { path: '/social/inbox', label: 'Inbox', Icon: Mail, badge: unreadCount, badgeTone: 'red' },
+                { path: '/social/image-host', label: 'Image Host', Icon: Image },
+                { path: '/game/family/list', label: 'Families', Icon: Building2 },
+                { path: '/game/dead-alive', label: 'Dead > Alive', Icon: Skull },
+                { path: '/account/referral', label: 'Referral', Icon: UserPlus },
+              ],
+              more: [
+                { path: '/account/settings', label: 'IP & Devices', Icon: Globe },
+                { path: '/game/store', label: 'Store', Icon: ShoppingBag },
+                { path: '/game-pass', label: 'Game Pass', Icon: Package },
+                ...(staffTopBarEntry ? [{ path: staffTopBarEntry.path, label: isAdmin ? 'Admin' : 'Staff', Icon: staffTopBarEntry.icon || Shield }] : []),
+                { action: 'tutorial', label: 'Tutorial' },
+                { action: 'theme', label: 'Theme' },
+                { action: 'logout', label: 'Logout' },
+              ],
+            };
+            return (
+              <div
+                data-layout="pocket-menu-sheet"
+                className="md:hidden fixed inset-x-0 bottom-0 z-[55] max-h-[70vh] overflow-y-auto rounded-t-xl border-t shadow-2xl safe-area-pb"
+                style={{ backgroundColor: 'var(--noir-content)', borderColor: 'rgba(var(--noir-primary-rgb), 0.3)' }}
+                role="dialog"
+                aria-label="Game menu"
+              >
+                <div className="sticky top-0 z-10 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.15)', backgroundColor: 'var(--noir-content)' }}>
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-[11px] font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Menu</span>
+                    <button type="button" onClick={() => setPocketMenuOpen(false)} className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md" style={{ color: 'var(--noir-muted)' }} aria-label="Close menu">
+                      <X size={18} />
+                    </button>
+                  </div>
+                  <div className="flex gap-1 px-2 pb-2 overflow-x-auto scrollbar-hide">
+                    {menuTabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setPocketMenuTab(tab.id)}
+                        className="shrink-0 px-3 py-1.5 rounded-md border text-[10px] font-heading font-bold uppercase tracking-wider touch-manipulation"
+                        style={pocketMenuTab === tab.id
+                          ? { borderColor: 'rgba(var(--noir-primary-rgb), 0.55)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.16)', color: 'var(--noir-primary)' }
+                          : { borderColor: 'rgba(var(--noir-primary-rgb), 0.12)', backgroundColor: 'var(--noir-surface)', color: 'var(--noir-muted)' }}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="p-2 grid grid-cols-2 gap-1.5">
+                  {(menuItems[pocketMenuTab] || menuItems.you).map((item) => renderPocketTile(item, () => setPocketMenuOpen(false)))}
+                </div>
+              </div>
+            );
+          })()}
+
           <div data-layout="pocket-dock" className="md:hidden fixed bottom-0 left-0 right-0 z-[51] safe-area-pb" style={{ backgroundColor: 'var(--noir-content)', borderTop: '1px solid rgba(var(--noir-primary-rgb), 0.28)' }}>
             <nav className="flex items-stretch gap-1 px-1 py-1" aria-label="Pocket Deck navigation">
-              {[
-                { id: 'home', label: 'Home', path: '/account/dashboard', Icon: Home },
-                { id: 'crime', label: 'Crime', path: '/crime/crimes', Icon: ListChecks },
-                { id: 'combat', label: 'Combat', path: '/kill/attack', Icon: Sword },
-                { id: 'money', label: 'Money', path: '/money/bank', Icon: Landmark },
-              ].map((slot) => {
-                const active = location.pathname === slot.path || (slot.path !== '/account/dashboard' && location.pathname.startsWith(slot.path.split('/').slice(0, 2).join('/') + '/'));
-                const Icon = slot.Icon;
+              <SameRouteAwareLink
+                to="/account/dashboard"
+                onClick={closeAllPocketSheets}
+                data-testid="pocket-dock-home"
+                className="tap-feedback flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[52px] rounded-md border touch-manipulation active:scale-[0.97]"
+                style={location.pathname === '/account/dashboard' || location.pathname.startsWith('/account/dashboard/')
+                  ? { borderColor: 'rgba(var(--noir-primary-rgb), 0.55)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.16)', color: 'var(--noir-primary)' }
+                  : { borderColor: 'transparent', backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' }}
+              >
+                <Home size={16} strokeWidth={2.2} />
+                <span className="text-[8px] font-heading uppercase tracking-wider">Home</span>
+              </SameRouteAwareLink>
+              {(() => {
+                const actionsActive = pocketActionsOpen
+                  || location.pathname.startsWith('/crime/')
+                  || location.pathname === '/organised-crime'
+                  || location.pathname.startsWith('/game/ranking')
+                  || location.pathname === '/account/prestige';
+                const combatActive = pocketCombatOpen || location.pathname.startsWith('/kill/');
+                const moneyActive = pocketMoneyOpen
+                  || location.pathname.startsWith('/money/')
+                  || location.pathname.startsWith('/cars/')
+                  || location.pathname === '/game/store'
+                  || location.pathname === '/game-pass'
+                  || location.pathname === '/game/daily-rewards'
+                  || location.pathname === '/my-properties';
+                const dockBtn = (active) => (active
+                  ? { borderColor: 'rgba(var(--noir-primary-rgb), 0.55)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.16)', color: 'var(--noir-primary)' }
+                  : { borderColor: 'transparent', backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' });
                 return (
-                  <SameRouteAwareLink
-                    key={slot.id}
-                    to={slot.path}
-                    onClick={() => { setPocketMenuOpen(false); setPocketStatsOpen(false); }}
-                    data-testid={`pocket-dock-${slot.id}`}
-                    className="tap-feedback flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[52px] rounded-md border touch-manipulation active:scale-[0.97]"
-                    style={active
-                      ? { borderColor: 'rgba(var(--noir-primary-rgb), 0.55)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.16)', color: 'var(--noir-primary)' }
-                      : { borderColor: 'transparent', backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' }}
-                  >
-                    <Icon size={16} strokeWidth={2.2} />
-                    <span className="text-[8px] font-heading uppercase tracking-wider">{slot.label}</span>
-                  </SameRouteAwareLink>
+                  <>
+                    <button
+                      type="button"
+                      data-testid="pocket-dock-actions"
+                      onClick={() => {
+                        const next = !pocketActionsOpen;
+                        closeAllPocketSheets();
+                        setPocketActionsOpen(next);
+                      }}
+                      className="tap-feedback flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[52px] rounded-md border touch-manipulation active:scale-[0.97]"
+                      style={dockBtn(actionsActive)}
+                      aria-expanded={pocketActionsOpen}
+                    >
+                      <span className="relative inline-flex leading-none">
+                        <ListChecks size={16} strokeWidth={2.2} />
+                        {(rankingCounts.crimes + rankingCounts.gta + rankingCounts.jail) > 0 && (
+                          <span className="absolute -top-1 -right-2 min-w-[10px] h-[10px] rounded-full bg-emerald-500" aria-hidden />
+                        )}
+                      </span>
+                      <span className="text-[8px] font-heading uppercase tracking-wider">Actions</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="pocket-dock-combat"
+                      onClick={() => {
+                        const next = !pocketCombatOpen;
+                        closeAllPocketSheets();
+                        setPocketCombatOpen(next);
+                      }}
+                      className="tap-feedback flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[52px] rounded-md border touch-manipulation active:scale-[0.97]"
+                      style={dockBtn(combatActive)}
+                      aria-expanded={pocketCombatOpen}
+                    >
+                      <Sword size={16} strokeWidth={2.2} />
+                      <span className="text-[8px] font-heading uppercase tracking-wider">Combat</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="pocket-dock-money"
+                      onClick={() => {
+                        const next = !pocketMoneyOpen;
+                        closeAllPocketSheets();
+                        setPocketMoneyOpen(next);
+                        if (next) setPocketMoneyTab('cash');
+                      }}
+                      className="tap-feedback flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[52px] rounded-md border touch-manipulation active:scale-[0.97]"
+                      style={dockBtn(moneyActive)}
+                      aria-expanded={pocketMoneyOpen}
+                    >
+                      <Landmark size={16} strokeWidth={2.2} />
+                      <span className="text-[8px] font-heading uppercase tracking-wider">Money</span>
+                    </button>
+                  </>
                 );
-              })}
+              })()}
               <button
                 type="button"
                 data-testid="pocket-dock-menu"
-                onClick={() => { setPocketMenuOpen((v) => !v); setPocketStatsOpen(false); }}
+                onClick={() => {
+                  const next = !pocketMenuOpen;
+                  closeAllPocketSheets();
+                  setPocketMenuOpen(next);
+                  if (next) setPocketMenuTab('you');
+                }}
                 className="tap-feedback flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[52px] rounded-md border touch-manipulation active:scale-[0.97]"
                 style={pocketMenuOpen
                   ? { borderColor: 'rgba(var(--noir-primary-rgb), 0.55)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.16)', color: 'var(--noir-primary)' }

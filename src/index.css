@@ -185,7 +185,8 @@ body[data-theme-variant="modern"]::-webkit-scrollbar-thumb:hover {
 @media (max-width: 767px) {
   body[data-mobile-layout="pocket_deck"] {
     --pocket-hud-top: 2.75rem;
-    --pocket-dock-clearance: 4.25rem;
+    /* Must clear fixed dock + home indicator; was 4.25rem and clipped page bottoms */
+    --pocket-dock-clearance: 8.5rem;
   }
   body[data-mobile-layout="pocket_deck"] [data-layout="pocket-hud"] {
     top: var(--pocket-hud-top);
@@ -198,6 +199,9 @@ body[data-theme-variant="modern"]::-webkit-scrollbar-thumb:hover {
   }
   body[data-mobile-layout="pocket_deck"] [data-chat-surface] {
     bottom: calc(var(--pocket-dock-clearance) + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  body[data-mobile-layout="pocket_deck"] .app-toaster {
+    bottom: calc(var(--pocket-dock-clearance) + 0.5rem + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
 
