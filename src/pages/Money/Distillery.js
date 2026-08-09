@@ -188,35 +188,42 @@ function SectionHead({ icon: Icon, title, children }) {
 }
 
 // ── Primary / secondary actions (IllegalBusiness.js parity) ─────────────────
-function GoldBtn({ children, onClick, disabled, small }) {
+function GoldBtn({ children, onClick, disabled, small, className = '', type = 'button' }) {
   return (
     <button
-      type="button"
+      type={type}
       onClick={onClick}
       disabled={disabled}
       className={`tap-feedback inline-flex items-center justify-center rounded border border-primary/40 bg-primary/20 font-heading font-bold uppercase text-primary transition-all hover:bg-primary/30 active:scale-[0.97] touch-manipulation disabled:cursor-not-allowed disabled:opacity-40 ${
         small ? 'min-h-9 px-2.5 py-1.5 text-[8px] tracking-wider' : 'min-h-[44px] px-4 py-2 text-[10px] tracking-wider'
-      }`}
+      } ${className}`}
     >
       {children}
     </button>
   );
 }
 
-function GhostBtn({ children, onClick, disabled, small }) {
+function GhostBtn({ children, onClick, disabled, small, className = '', type = 'button' }) {
   return (
     <button
-      type="button"
+      type={type}
       onClick={onClick}
       disabled={disabled}
       className={`tap-feedback inline-flex items-center justify-center rounded border border-primary/30 bg-primary/10 font-heading font-bold uppercase text-primary transition-all hover:bg-primary/20 active:scale-[0.97] touch-manipulation disabled:cursor-not-allowed disabled:opacity-40 ${
         small ? 'min-h-9 px-2 py-1 text-[8px] tracking-wider' : 'min-h-[44px] px-3 py-2 text-[10px] tracking-wider'
-      }`}
+      } ${className}`}
     >
       {children}
     </button>
   );
 }
+
+const DIST_SEGMENTS = [
+  { id: 'ops', label: 'Ops' },
+  { id: 'upgrades', label: 'Upgrades' },
+  { id: 'cellar', label: 'Cellar' },
+  { id: 'auto', label: 'Auto' },
+];
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Distillery() {
@@ -241,6 +248,8 @@ export default function Distillery() {
   });
   const [agingTier, setAgingTier] = useState('standard');
   const [agingQty, setAgingQty] = useState(50);
+  const [activeSegment, setActiveSegment] = useState('ops');
+  const [passiveBoozePaused, setPassiveBoozePaused] = useState(false);
 
   const applyPagePayload = useCallback((payload) => {
     const biz = payload?.business || null;
@@ -249,6 +258,7 @@ export default function Distillery() {
     const next = payload?.distillery_state || null;
     setState(next);
     setCatalog(payload?.catalog || { tracks: {} });
+    setPassiveBoozePaused(payload?.passive_booze_paused === true);
     setLoadError(false);
     if (!biz) return;
     const w = next?.distillery?.workers || {};
@@ -591,6 +601,14 @@ export default function Distillery() {
         .dist-hero-status-cell { background: var(--bg2); padding: 10px 16px; }
         .dist-hero-status-l { font-size: 8px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px; }
         .dist-hero-status-v { font-size: 12px; color: var(--text); }
+        @media (max-width: 640px) {
+          .dist-hero { padding: 14px 14px 0; }
+          .dist-hero-title { font-size: 22px; letter-spacing: 2px; }
+          .dist-hero-tagline { font-size: 12px; margin-bottom: 10px; }
+          .dist-hero-status-strip { grid-template-columns: 1fr; margin: 0 -14px; }
+          .dist-hero-status-cell { padding: 8px 14px; }
+          .dist-hero-bg-text { font-size: 64px; }
+        }
 
         /* Steam wisps */
         .dist-steam-container { position: absolute; bottom: 0; left: 0; right: 0; height: 60px; pointer-events: none; overflow: hidden; }
@@ -638,15 +656,98 @@ export default function Distillery() {
         .dist-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
         @media (max-width: 640px) { .dist-two-col { grid-template-columns: 1fr; } .dist-stat-strip { grid-template-columns: 1fr 1fr; } }
 
+        /* Sticky ops + segments */
+        .dist-sticky-chrome {
+          position: sticky;
+          top: 0;
+          z-index: 25;
+          background: color-mix(in srgb, var(--noir-content) 92%, transparent);
+          backdrop-filter: blur(8px);
+          border-bottom: 1px solid var(--border);
+        }
+        body[data-mobile-layout="pocket_deck"] .dist-sticky-chrome {
+          top: var(--pocket-hud-top, 2.75rem);
+        }
+        .dist-ops-bar {
+          display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+          padding: 8px 14px; border-bottom: 1px solid var(--border-dim);
+        }
+        .dist-ops-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; flex: 1; min-width: 0; }
+        .dist-ops-meta-item { font-size: 10px; color: var(--text-dim); }
+        #dist-seg-ops, #dist-seg-upgrades, #dist-seg-cellar, #dist-seg-auto {
+          scroll-margin-top: 9.5rem;
+        }
+        body[data-mobile-layout="pocket_deck"] #dist-seg-ops,
+        body[data-mobile-layout="pocket_deck"] #dist-seg-upgrades,
+        body[data-mobile-layout="pocket_deck"] #dist-seg-cellar,
+        body[data-mobile-layout="pocket_deck"] #dist-seg-auto {
+          scroll-margin-top: 12rem;
+        }
+        .dist-ops-meta-item strong { color: var(--gold); font-weight: 700; }
+        .dist-ops-collect-hint { font-size: 8px; color: var(--text-faint); width: 100%; margin: -2px 0 0; }
+        .dist-seg-nav {
+          display: flex; gap: 4px; overflow-x: auto; padding: 6px 10px;
+          -webkit-overflow-scrolling: touch; scrollbar-width: none;
+        }
+        .dist-seg-nav::-webkit-scrollbar { display: none; }
+        .dist-seg-btn {
+          flex: 1 1 0; min-width: 4.5rem; min-height: 44px;
+          border: 1px solid transparent; border-radius: 6px;
+          background: transparent; color: var(--text-dim);
+          font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+          touch-action: manipulation;
+        }
+        .dist-seg-btn.is-active {
+          border-color: rgba(var(--noir-primary-rgb), 0.45);
+          background: rgba(var(--noir-primary-rgb), 0.15);
+          color: var(--gold);
+        }
+        .dist-seg-panel { display: none; flex-direction: column; gap: 14px; }
+        .dist-seg-panel.is-active { display: flex; }
+        @media (min-width: 640px) {
+          .dist-seg-panel { display: flex !important; }
+          .dist-seg-btn { min-height: 36px; }
+        }
+        .dist-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+        .dist-chip {
+          min-height: 36px; padding: 6px 10px; border-radius: 6px;
+          border: 1px solid rgba(var(--noir-primary-rgb), 0.3);
+          background: rgba(var(--noir-primary-rgb), 0.08);
+          color: var(--gold); font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+          touch-action: manipulation;
+        }
+        .dist-chip:hover { background: rgba(var(--noir-primary-rgb), 0.16); }
+        .dist-level-bar { display: block; height: 6px; background: var(--bg4); border: 1px solid var(--border-dim); margin-bottom: 6px; border-radius: 2px; overflow: hidden; }
+        .dist-level-bar-fill { height: 100%; background: var(--amber); transition: width 0.4s; }
+        @media (min-width: 640px) { .dist-level-bar { display: none; } }
+        .dist-heat-help summary {
+          cursor: pointer; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+          color: var(--gold); padding: 8px 0; list-style: none; touch-action: manipulation;
+        }
+        .dist-heat-help summary::-webkit-details-marker { display: none; }
+        .dist-heat-help[open] summary { margin-bottom: 6px; }
+        .dist-status-line {
+          font-size: 11px; color: var(--text-dim); padding: 8px 10px; margin-bottom: 10px;
+          border: 1px solid var(--border-dim); background: var(--bg); border-radius: 6px;
+        }
+        .dist-status-line strong { color: var(--gold); }
+        .dist-paused-banner {
+          font-size: 11px; color: var(--amber); padding: 10px 12px; margin-bottom: 4px;
+          border: 1px solid rgba(var(--noir-primary-rgb), 0.35); background: rgba(var(--noir-primary-rgb), 0.08);
+          border-radius: 6px; line-height: 1.45;
+        }
+
         /* Equipment */
         .dist-equip-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
-        @media (max-width: 500px) { .dist-equip-grid { grid-template-columns: 1fr 1fr; } }
-        .dist-equip-card { background: var(--bg); padding: 12px; min-height: 44px; cursor: pointer; transition: border-color 0.2s, background 0.2s, transform 0.12s; position: relative; overflow: hidden; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-        .dist-equip-card::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, rgba(var(--noir-primary-rgb), 0.45), transparent); opacity: 0; transition: opacity 0.2s; }
-        .dist-equip-card:hover:not(:disabled)::after { opacity: 1; }
-        .dist-equip-card:active:not(:disabled) { transform: scale(0.97); }
-        .dist-equip-card:disabled { opacity: 0.5; cursor: not-allowed; }
-        .dist-root { padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px)); }
+        @media (max-width: 500px) { .dist-equip-grid { grid-template-columns: 1fr; } }
+        .dist-equip-card { background: var(--bg); padding: 12px; min-height: 44px; transition: border-color 0.2s, background 0.2s; position: relative; overflow: hidden; touch-action: manipulation; -webkit-tap-highlight-color: transparent; text-align: left; width: 100%; }
+        .dist-equip-card.is-maxed { opacity: 0.72; }
+        .dist-equip-card.is-unaffordable { opacity: 0.85; }
+        .dist-root { padding-bottom: max(7rem, calc(5.5rem + env(safe-area-inset-bottom, 0px))); }
+        @media (min-width: 768px) { .dist-root { padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px)); } }
+        body[data-mobile-layout="pocket_deck"] .dist-root {
+          padding-bottom: calc(var(--pocket-dock-clearance, 8.5rem) + env(safe-area-inset-bottom, 0px));
+        }
         .dist-equip-icon { font-size: 18px; margin-bottom: 6px; }
         .dist-equip-name { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px; }
         .dist-equip-desc { font-size: 8px; color: var(--cyan, #67e8f9); margin-bottom: 4px; letter-spacing: 0.3px; }
@@ -654,7 +755,8 @@ export default function Distillery() {
         .dist-equip-maxed { font-size: 10px; color: var(--green); margin-top: 5px; }
 
         /* Pip row */
-        .dist-pip-row { display: flex; gap: 2px; flex-wrap: wrap; margin-bottom: 3px; }
+        .dist-pip-row { display: none; gap: 2px; flex-wrap: wrap; margin-bottom: 3px; }
+        @media (min-width: 640px) { .dist-pip-row { display: flex; } }
         .dist-pip { width: 5px; height: 5px; }
         .dist-pip-filled { background: var(--amber); }
         .dist-pip-empty { background: var(--bg4); }
@@ -698,6 +800,8 @@ export default function Distillery() {
         .dist-track-scroll { display: flex; gap: 0; overflow-x: auto; background: rgba(var(--noir-primary-rgb), 0.06); border-bottom: 1px solid rgba(var(--noir-primary-rgb), 0.18); margin: 0 -18px; padding: 0; }
         .dist-track-scroll::-webkit-scrollbar { height: 2px; }
         .dist-track-scroll::-webkit-scrollbar-thumb { background: var(--border); }
+        .dist-track-tab { min-height: 44px !important; padding-left: 14px !important; padding-right: 14px !important; font-size: 9px !important; }
+        @media (min-width: 640px) { .dist-track-tab { min-height: 36px !important; } }
         .dist-track-flavor { font-style: italic; font-size: 13px; color: var(--text-dim); margin: 12px 0 14px; }
         .dist-track-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
         .dist-track-nav-meta { font-size: 9px; color: var(--text-faint); }
@@ -763,24 +867,12 @@ export default function Distillery() {
               <h1 className="dist-hero-title">{business?.name || 'The Still'}</h1>
               <p className="dist-hero-tagline">Long grind. Massive upside. Risk is real.</p>
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <GoldBtn
-                small
-                disabled={saving}
-                onClick={() => run(async () => {
-                  const res = await api.post('/illegal-business/distillery/collect');
-                  toast.success(res.data?.message || 'Distillery collected.');
-                })}
-              >
-                Collect now {pendingTake > 0 ? `(${money(pendingTake)})` : ''}
-              </GoldBtn>
-              <Link
-                to="/money/racket"
-                className="rounded border border-zinc-700/50 px-2.5 py-1 text-[9px] font-heading text-mutedForeground transition-all hover:border-primary/30 hover:text-foreground"
-              >
-                ← Back
-              </Link>
-            </div>
+            <Link
+              to="/money/racket"
+              className="inline-flex min-h-10 items-center rounded border border-zinc-700/50 px-3 py-1.5 text-[9px] font-heading text-mutedForeground transition-all hover:border-primary/30 hover:text-foreground touch-manipulation"
+            >
+              ← Racket
+            </Link>
           </div>
           <div className="dist-hero-status-strip">
             <div className="dist-hero-status-cell">
@@ -798,8 +890,50 @@ export default function Distillery() {
           </div>
         </div>
 
+        {/* ── Sticky ops + segment nav ─────────────────────────────────────── */}
+        <div className="dist-sticky-chrome">
+          <div className="dist-ops-bar">
+            <GoldBtn
+              small
+              disabled={saving}
+              onClick={() => run(async () => {
+                const res = await api.post('/illegal-business/distillery/collect');
+                toast.success(res.data?.message || 'Distillery collected.');
+              })}
+            >
+              Collect {pendingTake > 0 ? money(pendingTake) : 'now'}
+            </GoldBtn>
+            <div className="dist-ops-meta">
+              <span className="dist-ops-meta-item"><strong>{heatInfo.label}</strong> · {heat.toFixed(0)}°</span>
+              <span className="dist-ops-meta-item">Vault <strong>{money(vaultBalance)}</strong></span>
+              <span className="dist-ops-meta-item">Booze <strong>{boozeUnitsCarrying}</strong></span>
+              <span className="dist-ops-meta-item">Maint <strong style={{ color: maintenancePct < 35 ? 'var(--danger)' : undefined }}>{maintenancePct.toFixed(0)}%</strong></span>
+            </div>
+            <p className="dist-ops-collect-hint">Same as Racket Collect the Take — banks till to vault.</p>
+          </div>
+          <div className="dist-seg-nav" role="tablist" aria-label="Distillery sections">
+            {DIST_SEGMENTS.map((seg) => (
+              <button
+                key={seg.id}
+                type="button"
+                role="tab"
+                aria-selected={activeSegment === seg.id}
+                className={`dist-seg-btn ${activeSegment === seg.id ? 'is-active' : ''}`}
+                onClick={() => {
+                  setActiveSegment(seg.id);
+                  if (typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches) {
+                    document.getElementById(`dist-seg-${seg.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }}
+              >
+                {seg.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* ── Stat strip ───────────────────────────────────────────────────── */}
-        <div className="dist-stat-strip">
+        <div className="dist-stat-strip hidden sm:grid">
           <StatCard label="Vault" value={money(vaultBalance)} accent />
           <StatCard label="Progress" value={`${progression.total_steps || 0}/${progression.max_steps || 0}`} sub={`${progression.progress_pct || 0}% unlocked`} />
           <StatCard label="Projected 12d" value={money(projected12dCash)} sub={`Target ${money(roi.target_12d_top_end)}`} />
@@ -807,6 +941,15 @@ export default function Distillery() {
         </div>
 
         <div className="dist-body">
+
+          {/* ══ OPS ═══════════════════════════════════════════════════════════ */}
+          <div id="dist-seg-ops" className={`dist-seg-panel ${activeSegment === 'ops' ? 'is-active' : ''}`}>
+
+          {passiveBoozePaused && (
+            <div className="dist-paused-banner">
+              Booze intake is paused (Auto Rank). Distillery will not add booze to inventory until you unblock intake on Account → Auto Rank.
+            </div>
+          )}
 
           {/* ── Failures banner ─────────────────────────────────────────────── */}
           {showFailuresBanner && (
@@ -852,15 +995,6 @@ export default function Distillery() {
                 </div>
               </div>
               <div className="dist-heat-flavor">{heatInfo.flavor}</div>
-              <p style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 10, lineHeight: 1.5, borderTop: '1px solid var(--border-dim)', paddingTop: 8 }}>
-                <strong style={{ color: 'var(--text-muted)' }}>Passive heat:</strong> drops slowly with <strong style={{ color: 'var(--text-muted)' }}>real time</strong> whenever data is refreshed (this page about every {REFRESH_MS / 1000}s). Baseline cooling is only ~1–2° per hour (faster with security workers, heat-control specials, and <strong style={{ color: 'var(--text-muted)' }}>during enforcement shutdown</strong>), so a HOT reading can sit for a while. That is normal — it is not stuck.
-              </p>
-              <p style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 8, lineHeight: 1.5 }}>
-                <strong style={{ color: 'var(--text-muted)' }}>Vault note:</strong> at <strong style={{ color: 'var(--text-muted)' }}>critical</strong> heat and above, each collect can randomly trigger enforcement: short shutdown plus a vault seizure scaled to heat (typically about 5–22% of vault plus till from that collect). Heat rises each collect from production time (capped per collect) and auto-sell; security workers, tunnels, bribe office, and specials slow the climb.
-              </p>
-              <p style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.5 }}>
-                <strong style={{ color: 'var(--amber)' }}>Cool Off / Bribe</strong> pay once from the vault to <strong style={{ color: 'var(--text-muted)' }}>clear all heat to 0</strong> and <strong style={{ color: 'var(--text-muted)' }}>lift an active enforcement shutdown</strong> (4h cooldown between uses).
-              </p>
               {dist?.shutdown_until && (
                 <div className="dist-heat-shutdown">
                   <ShieldAlert size={13} />
@@ -869,15 +1003,15 @@ export default function Distillery() {
               )}
               {riskCooldownActive && (
                 <div className="dist-heat-cooldown">
-                  ⏱ Cooldown active: {riskCooldownMinutes >= 120
+                  Cooldown: {riskCooldownMinutes >= 120
                     ? `${Math.ceil(riskCooldownMinutes / 60)}h`
                     : `${riskCooldownMinutes} min`}{' '}
-                  remaining — Cool Off / Bribe stay locked for {riskCooldownHoursLabel}h after a risk action. Passive heat decay still applies.
+                  left — Cool Off / Bribe locked for {riskCooldownHoursLabel}h after a risk action.
                 </div>
               )}
               {!allowVaultForHeat && (
                 <div className="dist-heat-cooldown" style={{ color: 'var(--text-dim)', borderColor: 'var(--border-dim)' }}>
-                  Vault heat spend is <strong style={{ color: 'var(--amber)' }}>off</strong>: enforcement will not take vault cash on collect, and Cool Off / Bribe are disabled. Passive decay still runs.
+                  Vault heat spend is <strong style={{ color: 'var(--amber)' }}>off</strong>: no vault seizure on collect; Cool Off / Bribe disabled.
                 </div>
               )}
               <div className="dist-btn-row">
@@ -894,6 +1028,9 @@ export default function Distillery() {
                   Bribe {riskActionCosts.bribe_crackdown ? `(${money(riskActionCosts.bribe_crackdown)})` : ''}
                 </GhostBtn>
               </div>
+              <p style={{ fontSize: 9, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.4 }}>
+                Cool Off ({money(riskActionCosts.cool_off || 900000)}) clears heat cheaper. Bribe ({money(riskActionCosts.bribe_crackdown || 3500000)}) also clears heat and lifts shutdown — same cooldown.
+              </p>
               <div style={{ marginTop: 10 }}>
                 <GhostBtn
                   disabled={saving}
@@ -905,10 +1042,19 @@ export default function Distillery() {
                 >
                   {allowVaultForHeat ? 'Turn off vault paying for heat' : 'Turn vault paying for heat back on'}
                 </GhostBtn>
-                <p style={{ fontSize: 9, color: 'var(--text-faint)', marginTop: 6, lineHeight: 1.45, maxWidth: 420 }}>
-                  When off: critical heat enforcement can still shut the still down, but it will not remove vault money. Cool Off and Bribe (vault fees) stay disabled until you re-enable.
-                </p>
               </div>
+              <details className="dist-heat-help" style={{ marginTop: 10, borderTop: '1px solid var(--border-dim)', paddingTop: 4 }}>
+                <summary>How heat works</summary>
+                <p style={{ fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                  <strong style={{ color: 'var(--text-muted)' }}>Passive heat:</strong> drops slowly with real time (page refreshes about every {REFRESH_MS / 1000}s). Baseline cooling is only ~1–2° per hour (faster with security, stealth specials, and during shutdown), so HOT can sit for a while — that is normal.
+                </p>
+                <p style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 8, lineHeight: 1.5 }}>
+                  <strong style={{ color: 'var(--text-muted)' }}>Collect risk:</strong> at critical heat and above, a collect can trigger enforcement: short shutdown plus a vault seizure (about 5–22% of vault + that collect). Heat rises each collect from production and auto-sell.
+                </p>
+                <p style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.5 }}>
+                  When vault heat spend is off, enforcement can still shut the still down but will not remove vault money. Cool Off / Bribe stay disabled until you re-enable.
+                </p>
+              </details>
             </div>
 
             <div className="dist-panel">
@@ -935,74 +1081,187 @@ export default function Distillery() {
             </div>
           </div>
 
-          {/* ── Equipment ───────────────────────────────────────────────────── */}
+          {/* Crew + Maintenance (Ops) */}
           <div className="dist-panel">
-            <SectionHead icon={Zap} title="Equipment Progression · 180 Levels" />
+            <SectionHead icon={Users} title="Crew Roster" />
+            <div className="dist-worker-cap">{workerTotal} / {workerCap} workers assigned</div>
+            <div className="text-[10px] text-mutedForeground font-heading mb-2">
+              Increase worker cap by upgrading <strong className="text-foreground">Bribe Office</strong> (+2 capacity per level).
+            </div>
+            <div className="dist-worker-grid">
+              {['production', 'quality', 'security', 'sales'].map((role) => {
+                const current = Number(workers[role] || 0);
+                const cap = workerCap > 0 ? current / workerCap : 0;
+                return (
+                  <div key={role} className="dist-worker-card">
+                    <div className="dist-worker-role">{prettyKey(role)}</div>
+                    <div className="dist-worker-num">{workerDraft[role] === '' ? '—' : workerDraft[role]}</div>
+                    <div className="dist-worker-bar">
+                      <div className="dist-worker-fill" style={{ width: `${Math.min(100, cap * 100)}%` }} />
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      inputMode="numeric"
+                      value={workerDraft[role] === '' ? '' : workerDraft[role]}
+                      onChange={onDigitsOnlyOptionalIntChange((v) => setWorkerDraft((p) => ({ ...p, [role]: v })))}
+                      onBlur={() => setWorkerDraft((p) => ({ ...p, [role]: Math.max(0, intOr(p[role] === '' ? NaN : p[role], 0)) }))}
+                      className="dist-worker-input"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <GoldBtn
+              disabled={saving}
+              onClick={() => run(async () => {
+                const payload = {
+                  production: Math.max(0, intOr(workerDraft.production, 0)),
+                  quality: Math.max(0, intOr(workerDraft.quality, 0)),
+                  security: Math.max(0, intOr(workerDraft.security, 0)),
+                  sales: Math.max(0, intOr(workerDraft.sales, 0)),
+                };
+                const res = await api.post('/illegal-business/distillery/assign-workers', payload);
+                toast.success(res.data?.message || 'Workers assigned.');
+              })}
+            >
+              Save Worker Plan
+            </GoldBtn>
+            <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text-faint)' }}>
+              {hiresNeeded > 0 ? `Hiring ${hiresNeeded} new · ${money(workerPlanCost)}` : 'No hire cost — reassign only.'}
+            </div>
+            {workerMaxHiresPerAction > 0 && (
+              <div style={{ marginTop: 4, fontSize: 10, color: 'var(--text-faint)' }}>
+                Max new hires per action: {workerMaxHiresPerAction}
+              </div>
+            )}
+
+            <div className="dist-maint-bar-wrap">
+              <SectionHead icon={Wrench} title="Maintenance" />
+              <div className="dist-maint-label-row">
+                <span className="dist-maint-key">Current upkeep</span>
+                <span className="dist-maint-val" style={{ color: maintenancePct < 35 ? 'var(--danger)' : maintenancePct < 60 ? 'var(--amber)' : 'var(--green)' }}>
+                  {maintenancePct.toFixed(1)}%
+                </span>
+              </div>
+              <div className="dist-maint-track">
+                <div
+                  className="dist-maint-fill"
+                  style={{
+                    width: `${maintenancePct}%`,
+                    background: maintenancePct < 35 ? 'var(--red)' : maintenancePct < 60 ? 'var(--amber)' : 'var(--green)',
+                  }}
+                />
+              </div>
+              {maintenanceWarn && (
+                <div className="dist-maint-warn">
+                  Critical — upgrades may degrade and need repurchasing.
+                </div>
+              )}
+              <div className="dist-maint-input-row">
+                <input
+                  type="number"
+                  min="1"
+                  inputMode="numeric"
+                  value={maintenancePoints === '' ? '' : maintenancePoints}
+                  onChange={onDigitsOnlyOptionalIntChange(setMaintenancePoints)}
+                  onBlur={() =>
+                    setMaintenancePoints((q) => Math.max(1, intOr(q === '' ? NaN : q, 1)))
+                  }
+                  className="dist-maint-input"
+                />
+                <GhostBtn
+                  disabled={saving}
+                  onClick={() => run(async () => {
+                    const recover_points = Math.max(1, intOr(maintenancePoints, 1));
+                    const res = await api.post('/illegal-business/distillery/maintenance', { recover_points });
+                    toast.success(res.data?.message || 'Maintenance done.');
+                  })}
+                >
+                  Repair
+                </GhostBtn>
+                <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{money(maintenanceCost)}</span>
+              </div>
+            </div>
+          </div>
+          </div>{/* end ops segment */}
+
+          {/* ══ UPGRADES ══════════════════════════════════════════════════════ */}
+          <div id="dist-seg-upgrades" className={`dist-seg-panel ${activeSegment === 'upgrades' ? 'is-active' : ''}`}>
+          <div className="dist-panel">
+            <SectionHead icon={Zap} title="Equipment · 9 lanes × 20" />
             <div className="dist-equip-grid">
               {EQUIPMENT_ORDER.map((lane) => {
                 const lv = Number(equipment[lane] || 0);
                 const cost = equipmentCosts[lane];
+                const maxed = cost == null;
+                const canAfford = maxed || vaultBalance >= Number(cost || 0);
                 return (
-                  <button
+                  <div
                     key={lane}
-                    type="button"
-                    disabled={saving}
-                    onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/upgrade-equipment', { lane }); toast.success(res.data?.message || 'Upgraded.'); })}
-                    className="dist-equip-card rounded-md border border-primary/25 transition-all hover:border-primary/40 hover:bg-primary/5"
+                    className={`dist-equip-card rounded-md border border-primary/25 ${maxed ? 'is-maxed' : ''} ${!maxed && !canAfford ? 'is-unaffordable' : ''}`}
                   >
                     <div className="dist-equip-icon">{EQUIPMENT_ICONS[lane] || '⚙'}</div>
                     <div className="dist-equip-name">{prettyKey(lane)}</div>
                     {EQUIPMENT_DESC[lane] && <div className="dist-equip-desc">{EQUIPMENT_DESC[lane]}</div>}
+                    <div className="dist-level-bar sm:hidden" aria-hidden>
+                      <div className="dist-level-bar-fill" style={{ width: `${Math.min(100, (lv / 20) * 100)}%` }} />
+                    </div>
                     <LevelPips level={lv} max={20} />
-                    <div style={{ fontSize: 8, color: 'var(--text-faint)', marginBottom: 3 }}>Lv {lv} / 20</div>
-                    {cost == null
-                      ? <div className="dist-equip-maxed">✓ Maxed</div>
-                      : <div className="dist-equip-cost">↑ {money(cost)}</div>
-                    }
-                  </button>
+                    <div style={{ fontSize: 8, color: 'var(--text-faint)', marginBottom: 6 }}>Lv {lv} / 20</div>
+                    {maxed ? (
+                      <div className="dist-equip-maxed">Maxed</div>
+                    ) : (
+                      <GoldBtn
+                        small
+                        className="w-full"
+                        disabled={saving || !canAfford}
+                        onClick={() => run(async () => {
+                          const res = await api.post('/illegal-business/distillery/upgrade-equipment', { lane });
+                          toast.success(res.data?.message || 'Upgraded.');
+                        })}
+                      >
+                        Upgrade {money(cost)}
+                      </GoldBtn>
+                    )}
+                  </div>
                 );
               })}
             </div>
           </div>
 
-          {/* ── Best next upgrades ──────────────────────────────────────────── */}
-          <div className="dist-panel">
-            <SectionHead icon={TrendingUp} title="Best Next Upgrades" />
-            {bestNextUpgrades.length === 0
-              ? <div className="dist-no-upgrade">No track upgrades available right now.</div>
-              : bestNextUpgrades.map((u) => (
-                <div key={u.id} className="dist-best-row">
-                  <div>
-                    <div className="dist-best-name">{u.name}</div>
-                    <div className="dist-best-meta">{prettyKey(u.track)} · Tier {u.tier}</div>
-                    {TRACK_EFFECTS[u.track] && (
-                      <div className="dist-upgrade-effects">
-                        {TRACK_EFFECTS[u.track].map((e) => <span key={e}>{e}</span>)}
-                      </div>
-                    )}
-                  </div>
-                  <GoldBtn
-                    small
-                    disabled={saving || !u.available}
-                    onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/buy-special-upgrade', { upgrade_id: u.id }); toast.success(res.data?.message || 'Upgrade bought.'); })}
-                  >
-                    Buy {money(u.cost)}
-                  </GoldBtn>
+          <div className="dist-panel" id="dist-tracks">
+            <SectionHead icon={Layers} title="Special Tracks · 180 Perks" />
+            {bestNextUpgrades.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div className="dist-input-label" style={{ marginBottom: 6 }}>Recommended next</div>
+                <div className="dist-chip-row">
+                  {bestNextUpgrades.map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      className="dist-chip"
+                      onClick={() => {
+                        setActiveTrack(u.track);
+                        setActiveSegment('upgrades');
+                        if (typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches) {
+                          document.getElementById('dist-tracks')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }
+                      }}
+                    >
+                      {prettyKey(u.track)} · T{u.tier} · {money(u.cost)}
+                    </button>
+                  ))}
                 </div>
-              ))
-            }
-          </div>
-
-          {/* ── Special upgrade tracks ──────────────────────────────────────── */}
-          <div className="dist-panel">
-            <SectionHead icon={Layers} title="Special Upgrade Tracks · 180 Perks" />
+              </div>
+            )}
             <div className="dist-track-scroll">
               {TRACKS.map((track) => (
                 <button
                   key={track}
                   type="button"
                   onClick={() => setActiveTrack(track)}
-                  className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 font-heading text-[8px] font-bold uppercase tracking-wider transition-all ${
+                  className={`dist-track-tab shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 font-heading text-[8px] font-bold uppercase tracking-wider transition-all touch-manipulation ${
                     activeTrack === track
                       ? 'border-primary bg-primary/15 text-primary'
                       : 'border-transparent bg-transparent text-mutedForeground hover:border-primary/30 hover:bg-primary/5 hover:text-foreground'
@@ -1038,15 +1297,23 @@ export default function Distillery() {
                     </div>
                   )}
                   {activeSpecial.purchased
-                    ? <div className="dist-upgrade-status-owned">✓ Owned</div>
+                    ? <div className="dist-upgrade-status-owned">Owned</div>
                     : activeSpecial.available
                       ? <div className="dist-upgrade-status-avail">Available to purchase</div>
                       : <div className="dist-upgrade-status-locked">Locked — complete earlier tiers first</div>
                   }
                 </div>
                 <GoldBtn
-                  disabled={saving || !activeSpecial.available || activeSpecial.purchased}
-                  onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/buy-special-upgrade', { upgrade_id: activeSpecial.id }); toast.success(res.data?.message || 'Upgrade bought.'); })}
+                  disabled={
+                    saving
+                    || !activeSpecial.available
+                    || activeSpecial.purchased
+                    || vaultBalance < Number(activeSpecial.cost || 0)
+                  }
+                  onClick={() => run(async () => {
+                    const res = await api.post('/illegal-business/distillery/buy-special-upgrade', { upgrade_id: activeSpecial.id });
+                    toast.success(res.data?.message || 'Upgrade bought.');
+                  })}
                 >
                   {activeSpecial.purchased ? 'Owned' : `Buy ${money(activeSpecial.cost)}`}
                 </GoldBtn>
@@ -1055,426 +1322,321 @@ export default function Distillery() {
               <div className="dist-no-upgrade">No upgrades visible in this track yet.</div>
             )}
           </div>
+          </div>{/* end upgrades */}
 
-          {/* ── Workers & Maintenance | ROI ─────────────────────────────────── */}
-          <div className="dist-two-col">
-            <div className="dist-panel">
-              <SectionHead icon={Users} title="Crew Roster" />
-              <div className="dist-worker-cap">{workerTotal} / {workerCap} workers assigned</div>
-              <div className="text-[10px] text-mutedForeground font-heading mb-2">
-                Increase worker cap by upgrading <strong className="text-foreground">Bribe Office</strong> (+2 capacity per level).
-              </div>
-              <div className="dist-worker-grid">
-                {['production', 'quality', 'security', 'sales'].map((role) => {
-                  const current = Number(workers[role] || 0);
-                  const cap = workerCap > 0 ? current / workerCap : 0;
+          {/* ══ CELLAR ════════════════════════════════════════════════════════ */}
+          <div id="dist-seg-cellar" className={`dist-seg-panel ${activeSegment === 'cellar' ? 'is-active' : ''}`}>
+          <div className="dist-panel">
+            <SectionHead icon={Clock3} title="Aging Cellar" />
+            <p className="mb-2 text-[10px] leading-snug text-mutedForeground">
+              Start and claim batches here. Hands-off rules live under <strong className="text-foreground/90">Auto</strong>.
+            </p>
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 text-[11px] font-heading text-mutedForeground">
+              <span>
+                On hand:{' '}
+                <span className="font-bold tabular-nums text-primary">{boozeUnitsCarrying}</span>
+                {' '}booze
+              </span>
+              {boozeUnitsCarrying > 0 && (
+                <button
+                  type="button"
+                  className="shrink-0 min-h-9 rounded border border-primary/30 bg-primary/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-primary transition-all hover:bg-primary/20 disabled:opacity-40 touch-manipulation"
+                  disabled={saving}
+                  onClick={() => setAgingQty(Math.max(1, boozeUnitsCarrying))}
+                >
+                  Set qty to max
+                </button>
+              )}
+            </div>
+            <div className="mb-3.5 flex gap-1">
+              {['quick', 'standard', 'reserve', 'premium'].map((tier) => (
+                <button
+                  key={tier}
+                  type="button"
+                  onClick={() => setAgingTier(tier)}
+                  className={`flex-1 min-h-10 rounded border py-2 px-1 text-center font-heading text-[9px] font-bold uppercase tracking-wider transition-all touch-manipulation ${
+                    agingTier === tier
+                      ? 'border-primary/50 bg-primary/15 text-primary'
+                      : 'border-zinc-700/50 bg-primary/5 text-mutedForeground hover:border-primary/30 hover:text-foreground'
+                  }`}
+                >
+                  {tier}
+                </button>
+              ))}
+            </div>
+
+            <div className="dist-barrel-row">
+              {queue.length === 0 && (
+                <div style={{ fontStyle: 'italic', fontSize: 12, color: 'var(--text-faint)' }}>No active batches.</div>
+              )}
+              {queue.slice(0, 8).map((b) => {
+                const ready = new Date(b.ready_at) <= new Date();
+                const hoursLeft = Math.max(0, (new Date(b.ready_at) - new Date()) / 3600000);
+                return (
+                  <Barrel
+                    key={b.id}
+                    ready={ready}
+                    label={ready ? 'READY' : `${hoursLeft.toFixed(0)}h`}
+                  />
+                );
+              })}
+            </div>
+
+            <div className="dist-aging-start-row">
+              <input
+                type="number"
+                min="1"
+                inputMode="numeric"
+                value={agingQty === '' ? '' : agingQty}
+                onChange={onDigitsOnlyOptionalIntChange(setAgingQty)}
+                onBlur={() => setAgingQty((q) => Math.max(1, intOr(q === '' ? NaN : q, 1)))}
+                className="dist-aging-qty-input"
+              />
+              <GoldBtn
+                disabled={saving}
+                onClick={() => run(async () => {
+                  const quantity = Math.max(1, intOr(agingQty === '' ? NaN : agingQty, 1));
+                  const res = await api.post('/illegal-business/distillery/start-aging-batch', { tier: agingTier, quantity });
+                  toast.success(res.data?.message || 'Batch started.');
+                })}
+              >
+                Start Batch
+              </GoldBtn>
+            </div>
+
+            {queue.length > 0 && (
+              <div className="dist-queue-list">
+                {queue.map((b) => {
+                  const ready = new Date(b.ready_at) <= new Date();
                   return (
-                    <div key={role} className="dist-worker-card">
-                      <div className="dist-worker-role">{prettyKey(role)}</div>
-                      <div className="dist-worker-num">{workerDraft[role]}</div>
-                      <div className="dist-worker-bar">
-                        <div className="dist-worker-fill" style={{ width: `${Math.min(100, cap * 100)}%` }} />
+                    <div key={b.id} className="dist-queue-item">
+                      <div>
+                        <div className="dist-queue-tier">{prettyKey(b.tier)} · {b.quantity} units</div>
+                        <div className="dist-queue-time">Ready {new Date(b.ready_at).toLocaleString()}</div>
                       </div>
-                      <input
-                        type="number"
-                        min="0"
-                        value={workerDraft[role]}
-                        onChange={(e) => setWorkerDraft((p) => ({ ...p, [role]: Number(e.target.value || 0) }))}
-                        className="dist-worker-input"
-                      />
+                      <GhostBtn
+                        small
+                        disabled={saving || !ready}
+                        onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/claim-aged-batch', { batch_id: b.id }); toast.success(res.data?.message || 'Batch claimed.'); })}
+                      >
+                        Claim
+                      </GhostBtn>
                     </div>
                   );
                 })}
               </div>
-              <GoldBtn
-                disabled={saving}
-                onClick={() => run(async () => {
-                  const payload = {
-                    production: Math.max(0, intOr(workerDraft.production, 0)),
-                    quality: Math.max(0, intOr(workerDraft.quality, 0)),
-                    security: Math.max(0, intOr(workerDraft.security, 0)),
-                    sales: Math.max(0, intOr(workerDraft.sales, 0)),
-                  };
-                  const res = await api.post('/illegal-business/distillery/assign-workers', payload);
-                  toast.success(res.data?.message || 'Workers assigned.');
-                })}
-              >
-                Save Worker Plan
-              </GoldBtn>
-              <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text-faint)' }}>
-                {hiresNeeded > 0 ? `Hiring ${hiresNeeded} new · ${money(workerPlanCost)}` : 'No hire cost — reassign only.'}
-              </div>
-              {workerMaxHiresPerAction > 0 && (
-                <div style={{ marginTop: 4, fontSize: 10, color: 'var(--text-faint)' }}>
-                  Max new hires per action: {workerMaxHiresPerAction}
-                </div>
-              )}
+            )}
+          </div>
+          </div>{/* end cellar */}
 
-              {/* Maintenance */}
-              <div className="dist-maint-bar-wrap">
-                <SectionHead icon={Wrench} title="Maintenance" />
-                <div className="dist-maint-label-row">
-                  <span className="dist-maint-key">Current upkeep</span>
-                  <span className="dist-maint-val" style={{ color: maintenancePct < 35 ? 'var(--danger)' : maintenancePct < 60 ? 'var(--amber)' : 'var(--green)' }}>
-                    {maintenancePct.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="dist-maint-track">
-                  <div
-                    className="dist-maint-fill"
-                    style={{
-                      width: `${maintenancePct}%`,
-                      background: maintenancePct < 35 ? 'var(--red)' : maintenancePct < 60 ? 'var(--amber)' : 'var(--green)',
-                    }}
-                  />
-                </div>
-                {maintenanceWarn && (
-                  <div className="dist-maint-warn">
-                    ⚠ Critical — upgrades may degrade and need repurchasing.
-                  </div>
-                )}
-                <div className="dist-maint-input-row">
-                  <input
-                    type="number"
-                    min="1"
-                    inputMode="numeric"
-                    value={maintenancePoints === '' ? '' : maintenancePoints}
-                    onChange={onDigitsOnlyOptionalIntChange(setMaintenancePoints)}
-                    onBlur={() =>
-                      setMaintenancePoints((q) => Math.max(1, intOr(q === '' ? NaN : q, 1)))
-                    }
-                    className="dist-maint-input"
-                  />
-                  <GhostBtn
-                    disabled={saving}
-                    onClick={() => run(async () => {
-                      const recover_points = Math.max(1, intOr(maintenancePoints, 1));
-                      const res = await api.post('/illegal-business/distillery/maintenance', { recover_points });
-                      toast.success(res.data?.message || 'Maintenance done.');
-                    })}
-                  >
-                    Repair
-                  </GhostBtn>
-                  <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{money(maintenanceCost)}</span>
-                </div>
+          {/* ══ AUTO ══════════════════════════════════════════════════════════ */}
+          <div id="dist-seg-auto" className={`dist-seg-panel ${activeSegment === 'auto' ? 'is-active' : ''}`}>
+          {passiveBoozePaused && (
+            <div className="dist-paused-banner">
+              Booze intake is paused — auto-aging cannot stock new booze until Auto Rank unblocks intake.
+            </div>
+          )}
+          <div className="dist-panel">
+            <SectionHead icon={Zap} title="Auto-Aging" />
+            <div className="dist-status-line">
+              <strong>{autoAging.enabled ? 'ON' : 'OFF'}</strong>
+              {' · '}{autoAging.tier}
+              {' · '}reserve {intOr(autoAging.reserve_units, 0)}
+              {' · '}{autoAging.auto_collect_booze ? 'auto-collect on' : 'auto-collect off'}
+            </div>
+            <details className="dist-heat-help" style={{ marginBottom: 10 }}>
+              <summary>How auto-aging works</summary>
+              <p className="mb-2 text-[10px] leading-snug text-mutedForeground">
+                Claims ready batches, starts new ones when spare booze stays above your reserve (≥25 spare), and can run throttled racket Collect. Turn off for full manual cellar control.
+              </p>
+              <p className="text-[9px] leading-snug text-mutedForeground">
+                To block <strong className="text-foreground/85">all</strong> booze intake, use Account → Auto Rank → Block all booze intake.
+              </p>
+            </details>
+            <div className="dist-autosell-row">
+              <input
+                type="checkbox"
+                checked={!!autoAging.enabled}
+                onChange={(e) => setAutoAging((p) => ({ ...p, enabled: e.target.checked }))}
+                className="dist-autosell-check"
+                id="autoaging-toggle"
+              />
+              <label htmlFor="autoaging-toggle" className="dist-autosell-label">Enable auto-aging</label>
+            </div>
+            <div className="mb-2 text-[9px] font-heading uppercase tracking-wide text-mutedForeground">Auto tier</div>
+            <div className="mb-3 flex gap-1">
+              {['quick', 'standard', 'reserve', 'premium'].map((tier) => (
+                <button
+                  key={`auto-${tier}`}
+                  type="button"
+                  onClick={() => setAutoAging((p) => ({ ...p, tier }))}
+                  className={`flex-1 min-h-10 rounded border py-1.5 px-0.5 text-center font-heading text-[8px] font-bold uppercase tracking-wider transition-all touch-manipulation ${
+                    autoAging.tier === tier
+                      ? 'border-primary/50 bg-primary/15 text-primary'
+                      : 'border-zinc-700/50 bg-primary/5 text-mutedForeground hover:border-primary/30 hover:text-foreground'
+                  }`}
+                >
+                  {tier}
+                </button>
+              ))}
+            </div>
+            <div className="dist-autosell-inputs">
+              <div>
+                <div className="dist-input-label">Reserve (min on hand)</div>
+                <input
+                  type="number"
+                  min="0"
+                  inputMode="numeric"
+                  value={autoAging.reserve_units === '' ? '' : autoAging.reserve_units}
+                  onChange={onDigitsOnlyOptionalIntChange((v) => setAutoAging((p) => ({ ...p, reserve_units: v })))}
+                  onBlur={() => setAutoAging((p) => ({ ...p, reserve_units: Math.max(0, intOr(p.reserve_units === '' ? NaN : p.reserve_units, 0)) }))}
+                  className="dist-input"
+                />
               </div>
             </div>
+            <div className="dist-autosell-row mt-2">
+              <input
+                type="checkbox"
+                checked={!!autoAging.auto_collect_booze}
+                onChange={(e) => setAutoAging((p) => ({ ...p, auto_collect_booze: e.target.checked }))}
+                className="dist-autosell-check"
+                id="autoaging-collect"
+              />
+              <label htmlFor="autoaging-collect" className="dist-autosell-label">Auto-collect racket (throttled)</label>
+            </div>
+            <GhostBtn
+              className="mt-3 w-full sm:w-auto"
+              disabled={saving}
+              onClick={() => run(async () => {
+                const res = await api.post('/illegal-business/distillery/set-auto-aging-rules', {
+                  enabled: !!autoAging.enabled,
+                  tier: autoAging.tier,
+                  reserve_units: Math.max(0, intOr(autoAging.reserve_units, 0)),
+                  auto_collect_booze: !!autoAging.auto_collect_booze,
+                });
+                toast.success(res.data?.message || 'Auto-aging saved.');
+              })}
+            >
+              Save Auto-Aging
+            </GhostBtn>
+          </div>
 
-            {/* Auto-sell & Aging */}
-            <div className="dist-panel">
-              <SectionHead icon={Clock3} title="Aging Cellar" />
-              <p className="mb-2 text-[10px] leading-snug text-mutedForeground">
-                Manual start/claim below. For hands-off aging (claim when ready, start batches, optional racket collect), use{' '}
-                <strong className="text-foreground/90">Auto-aging</strong> and <strong className="text-foreground/90">Save Auto-aging</strong> (defaults are on — turn off here if you prefer only manual cellar).
-              </p>
-              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 text-[11px] font-heading text-mutedForeground">
-                <span>
-                  On hand:{' '}
-                  <span className="font-bold tabular-nums text-primary">{boozeUnitsCarrying}</span>
-                  {' '}booze — used when you start a batch
-                </span>
-                {boozeUnitsCarrying > 0 && (
-                  <button
-                    type="button"
-                    className="shrink-0 rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary transition-all hover:bg-primary/20 disabled:opacity-40"
-                    disabled={saving}
-                    onClick={() => setAgingQty(Math.max(1, boozeUnitsCarrying))}
-                  >
-                    Set qty to max
-                  </button>
-                )}
+          <div className="dist-panel">
+            <SectionHead icon={TrendingUp} title="Auto-Sell Rules">
+              <TooltipProvider>
+                <Tooltip delayDuration={200}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex min-h-9 min-w-9 items-center justify-center rounded border border-primary/30 p-1 text-primary/75 transition-colors hover:border-primary/50 hover:bg-primary/10 hover:text-primary touch-manipulation"
+                      aria-label="How auto-sell works"
+                    >
+                      <CircleHelp size={14} aria-hidden />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left" className="max-w-[min(320px,calc(100vw-2rem))] space-y-2 p-3 text-left text-[11px] leading-snug text-primary-foreground">
+                    <p className="font-heading text-[10px] font-bold uppercase tracking-wide text-primary-foreground">How auto-sell works</p>
+                    <ul className="list-disc space-y-1.5 pl-3.5 normal-case">
+                      <li>Runs when you <strong className="font-semibold">Collect</strong> (or auto-collect).</li>
+                      <li>Needs <strong className="font-semibold">Sales</strong> workers.</li>
+                      <li><strong className="font-semibold">Min inventory</strong> is kept; <strong className="font-semibold">Batch size</strong> caps per worker per collect.</li>
+                      <li><strong className="font-semibold">Crew</strong> = vault margin. <strong className="font-semibold">Booze run</strong> = street prices + jail risk.</li>
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </SectionHead>
+            <div className="dist-status-line">
+              <strong>{autoSell.enabled ? 'ON' : 'OFF'}</strong>
+              {' · '}{autoSell.mode === 'booze_run' ? 'booze run' : 'crew'}
+              {' · '}min {intOr(autoSell.min_inventory, 0)}
+              {' · '}batch {intOr(autoSell.batch_size, 1)}
+            </div>
+            <div className="mb-3 rounded border border-zinc-700/45 bg-primary/[0.06] px-3 py-2.5 text-[10px] leading-snug text-mutedForeground">
+              <div className="mb-1.5 font-heading text-[9px] font-bold uppercase tracking-wide text-primary/85">Lifetime totals</div>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 tabular-nums">
+                <span>Vault <span className="font-bold text-foreground">{money(autoSellVaultCombined)}</span></span>
+                <span>Units <span className="font-bold text-foreground">{autoSellUnitsLifetime.toLocaleString()}</span></span>
               </div>
-              <div className="mb-3.5 flex gap-1">
-                {['quick', 'standard', 'reserve', 'premium'].map((tier) => (
-                  <button
-                    key={tier}
-                    type="button"
-                    onClick={() => setAgingTier(tier)}
-                    className={`flex-1 rounded border py-2 px-1 text-center font-heading text-[9px] font-bold uppercase tracking-wider transition-all ${
-                      agingTier === tier
-                        ? 'border-primary/50 bg-primary/15 text-primary'
-                        : 'border-zinc-700/50 bg-primary/5 text-mutedForeground hover:border-primary/30 hover:text-foreground'
-                    }`}
-                  >
-                    {tier}
-                  </button>
-                ))}
+              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 border-t border-border-dim/60 pt-1.5 text-[9px] tabular-nums">
+                <span>Crew <span className="font-semibold text-foreground/90">{money(autoSellCrewVaultLifetime)}</span></span>
+                <span>Booze run <span className="font-semibold text-foreground/90">{money(autoSellBoozeRunVaultLifetime)}</span></span>
               </div>
-
-              {/* Barrel visuals */}
-              <div className="dist-barrel-row">
-                {queue.length === 0 && (
-                  <div style={{ fontStyle: 'italic', fontSize: 12, color: 'var(--text-faint)' }}>No active batches.</div>
-                )}
-                {queue.slice(0, 8).map((b) => {
-                  const ready = new Date(b.ready_at) <= new Date();
-                  const hoursLeft = Math.max(0, (new Date(b.ready_at) - new Date()) / 3600000);
-                  return (
-                    <Barrel
-                      key={b.id}
-                      ready={ready}
-                      label={ready ? 'READY' : `${hoursLeft.toFixed(0)}h`}
-                    />
-                  );
-                })}
+            </div>
+            <div className="dist-autosell-row">
+              <input
+                type="checkbox"
+                checked={!!autoSell.enabled}
+                onChange={(e) => setAutoSell((p) => ({ ...p, enabled: e.target.checked }))}
+                className="dist-autosell-check"
+                id="autosell-toggle"
+              />
+              <label htmlFor="autosell-toggle" className="dist-autosell-label">Enable auto-sell</label>
+            </div>
+            <div className="mb-2 flex flex-wrap gap-2 text-[10px] font-heading text-mutedForeground">
+              <label className="flex min-h-10 cursor-pointer items-center gap-1.5 rounded border border-zinc-700/50 px-2.5 py-1 has-[:checked]:border-primary/40 has-[:checked]:bg-primary/10 touch-manipulation">
+                <input
+                  type="radio"
+                  name="autosell-mode"
+                  checked={autoSell.mode !== 'booze_run'}
+                  onChange={() => setAutoSell((p) => ({ ...p, mode: 'crew' }))}
+                />
+                Crew (vault)
+              </label>
+              <label className="flex min-h-10 cursor-pointer items-center gap-1.5 rounded border border-zinc-700/50 px-2.5 py-1 has-[:checked]:border-primary/40 has-[:checked]:bg-primary/10 touch-manipulation">
+                <input
+                  type="radio"
+                  name="autosell-mode"
+                  checked={autoSell.mode === 'booze_run'}
+                  onChange={() => setAutoSell((p) => ({ ...p, mode: 'booze_run' }))}
+                />
+                Booze run
+              </label>
+            </div>
+            <div className="dist-autosell-inputs">
+              <div>
+                <div className="dist-input-label">Min inventory</div>
+                <input
+                  type="number"
+                  min="0"
+                  inputMode="numeric"
+                  value={autoSell.min_inventory === '' ? '' : autoSell.min_inventory}
+                  onChange={onDigitsOnlyOptionalIntChange((v) => setAutoSell((p) => ({ ...p, min_inventory: v })))}
+                  onBlur={() => setAutoSell((p) => ({ ...p, min_inventory: Math.max(0, intOr(p.min_inventory === '' ? NaN : p.min_inventory, 0)) }))}
+                  className="dist-input"
+                />
               </div>
-
-              <div className="dist-aging-start-row">
+              <div>
+                <div className="dist-input-label">Batch size</div>
                 <input
                   type="number"
                   min="1"
                   inputMode="numeric"
-                  value={agingQty === '' ? '' : agingQty}
-                  onChange={onDigitsOnlyOptionalIntChange(setAgingQty)}
-                  onBlur={() => setAgingQty((q) => Math.max(1, intOr(q === '' ? NaN : q, 1)))}
-                  className="dist-aging-qty-input"
+                  value={autoSell.batch_size === '' ? '' : autoSell.batch_size}
+                  onChange={onDigitsOnlyOptionalIntChange((v) => setAutoSell((p) => ({ ...p, batch_size: v })))}
+                  onBlur={() => setAutoSell((p) => ({ ...p, batch_size: Math.max(1, intOr(p.batch_size === '' ? NaN : p.batch_size, 1)) }))}
+                  className="dist-input"
                 />
-                <GoldBtn
-                  disabled={saving}
-                  onClick={() => run(async () => {
-                    const quantity = Math.max(1, intOr(agingQty === '' ? NaN : agingQty, 1));
-                    const res = await api.post('/illegal-business/distillery/start-aging-batch', { tier: agingTier, quantity });
-                    toast.success(res.data?.message || 'Batch started.');
-                  })}
-                >
-                  Start Batch
-                </GoldBtn>
-              </div>
-
-              {queue.length > 0 && (
-                <div className="dist-queue-list">
-                  {queue.map((b) => {
-                    const ready = new Date(b.ready_at) <= new Date();
-                    return (
-                      <div key={b.id} className="dist-queue-item">
-                        <div>
-                          <div className="dist-queue-tier">{prettyKey(b.tier)} · {b.quantity} units</div>
-                          <div className="dist-queue-time">Ready {new Date(b.ready_at).toLocaleString()}</div>
-                        </div>
-                        <GhostBtn
-                          small
-                          disabled={saving || !ready}
-                          onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/claim-aged-batch', { batch_id: b.id }); toast.success(res.data?.message || 'Batch claimed.'); })}
-                        >
-                          Claim
-                        </GhostBtn>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Auto-aging */}
-              <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-dim)' }}>
-                <SectionHead icon={Zap} title="Auto-Aging" />
-                <p className="mb-2 text-[10px] leading-snug text-mutedForeground">
-                  On by default: the server claims ready batches, starts new ones when spare booze stays above your reserve, and can run throttled racket collects so income keeps moving without this page open. Each collect (manual or auto) applies the same rules as the main racket: till goes to the vault, distillery heat rises from production and auto-sell, and heat slowly decays over real time between updates. Turn auto-aging off if you want full manual control of the cellar queue only.
-                </p>
-                <p className="mb-2 rounded border border-zinc-700/50 bg-zinc-900/40 px-2 py-1.5 text-[9px] leading-snug text-mutedForeground">
-                  To stop <strong className="text-foreground/85">all</strong> booze entering your inventory (distillery, crimes, booze runs, etc.), use <strong className="text-foreground/85">Block all booze intake</strong> on <strong className="text-foreground/85">Account → Auto Rank</strong>.
-                </p>
-                <div className="dist-autosell-row">
-                  <input
-                    type="checkbox"
-                    checked={!!autoAging.enabled}
-                    onChange={(e) => setAutoAging((p) => ({ ...p, enabled: e.target.checked }))}
-                    className="dist-autosell-check"
-                    id="autoaging-toggle"
-                  />
-                  <label htmlFor="autoaging-toggle" className="dist-autosell-label">Enable auto-aging</label>
-                </div>
-                <div className="mb-2 text-[9px] font-heading uppercase tracking-wide text-mutedForeground">Auto tier</div>
-                <div className="mb-3 flex gap-1">
-                  {['quick', 'standard', 'reserve', 'premium'].map((tier) => (
-                    <button
-                      key={`auto-${tier}`}
-                      type="button"
-                      onClick={() => setAutoAging((p) => ({ ...p, tier }))}
-                      className={`flex-1 rounded border py-1.5 px-0.5 text-center font-heading text-[8px] font-bold uppercase tracking-wider transition-all ${
-                        autoAging.tier === tier
-                          ? 'border-primary/50 bg-primary/15 text-primary'
-                          : 'border-zinc-700/50 bg-primary/5 text-mutedForeground hover:border-primary/30 hover:text-foreground'
-                      }`}
-                    >
-                      {tier}
-                    </button>
-                  ))}
-                </div>
-                <div className="dist-autosell-inputs">
-                  <div>
-                    <div className="dist-input-label">Reserve (min on hand)</div>
-                    <input
-                      type="number"
-                      min="0"
-                      value={autoAging.reserve_units}
-                      onChange={(e) => setAutoAging((p) => ({ ...p, reserve_units: Number(e.target.value || 0) }))}
-                      className="dist-input"
-                    />
-                    <p className="mt-1 text-[9px] leading-snug text-mutedForeground">
-                      Auto-aging only starts when spare booze (carrying minus reserve) is at least <strong className="text-foreground/85">25</strong> units.
-                      If reserve is almost your full stash, each collect can leave only 1 spare unit — that used to create many tiny &quot;1 unit&quot; batches.
-                    </p>
-                  </div>
-                </div>
-                <div className="dist-autosell-row mt-2">
-                  <input
-                    type="checkbox"
-                    checked={!!autoAging.auto_collect_booze}
-                    onChange={(e) => setAutoAging((p) => ({ ...p, auto_collect_booze: e.target.checked }))}
-                    className="dist-autosell-check"
-                    id="autoaging-collect"
-                  />
-                  <label htmlFor="autoaging-collect" className="dist-autosell-label">Auto-collect racket (throttled)</label>
-                </div>
-                <p className="mt-1.5 text-[9px] leading-snug text-mutedForeground">
-                  When checked, the server periodically runs the same <strong className="text-foreground/85">Collect the Take</strong> action as on the racket page: till clears into the vault, heat can climb, and at <strong className="text-foreground/85">critical heat (75+)</strong> a collect can still roll enforcement (shutdown + a random cut of vault, often about 5–22% including that collect&apos;s cash). Uncheck to avoid background collects — you only bank when you press Collect on the racket.
-                </p>
-                <GhostBtn
-                  className="mt-2"
-                  disabled={saving}
-                  onClick={() => run(async () => {
-                    const res = await api.post('/illegal-business/distillery/set-auto-aging-rules', {
-                      enabled: !!autoAging.enabled,
-                      tier: autoAging.tier,
-                      reserve_units: Math.max(0, intOr(autoAging.reserve_units, 0)),
-                      auto_collect_booze: !!autoAging.auto_collect_booze,
-                    });
-                    toast.success(res.data?.message || 'Auto-aging saved.');
-                  })}
-                >
-                  Save Auto-Aging
-                </GhostBtn>
-              </div>
-
-              {/* Auto-sell */}
-              <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-dim)' }}>
-                <SectionHead icon={TrendingUp} title="Auto-Sell Rules">
-                  <TooltipProvider>
-                    <Tooltip delayDuration={200}>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          className="inline-flex rounded border border-primary/30 p-1 text-primary/75 transition-colors hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
-                          aria-label="How auto-sell works"
-                        >
-                          <CircleHelp size={14} aria-hidden />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left" className="max-w-[min(320px,calc(100vw-2rem))] space-y-2 p-3 text-left text-[11px] leading-snug text-primary-foreground">
-                        <p className="font-heading text-[10px] font-bold uppercase tracking-wide text-primary-foreground">How auto-sell works</p>
-                        <ul className="list-disc space-y-1.5 pl-3.5 normal-case">
-                          <li>It runs when you <strong className="font-semibold">Collect</strong> from the racket (or from auto-collect when auto-aging is on).</li>
-                          <li>You need <strong className="font-semibold">Sales</strong> workers hired. More sales workers move more bottles per collect.</li>
-                          <li><strong className="font-semibold">Min inventory</strong> is the stash you try to keep; auto-sell avoids selling below that (using what you already have plus this collect).</li>
-                          <li><strong className="font-semibold">Batch size</strong> is the max each sales worker can move in one collect (still capped by units earned that collect).</li>
-                          <li>
-                            <strong className="font-semibold">Crew</strong> mode: margin sales credit your <strong className="font-semibold">vault</strong> on collect.
-                          </li>
-                          <li>
-                            <strong className="font-semibold">Booze run</strong> mode: sells at rotation street prices; proceeds go to your <strong className="font-semibold">racket vault</strong> (same place as crew auto-sell) and still carries <strong className="font-semibold">jail risk</strong> like a real run.
-                          </li>
-                          <li>Heat and raids can still hurt outcomes.</li>
-                          <li>
-                            <strong className="font-semibold">Totals</strong> below are lifetime: units moved and dollars credited to your racket vault (crew vs booze-run paths).
-                          </li>
-                        </ul>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </SectionHead>
-                <div className="mb-3 rounded border border-zinc-700/45 bg-primary/[0.06] px-3 py-2.5 text-[10px] leading-snug text-mutedForeground">
-                  <div className="mb-1.5 font-heading text-[9px] font-bold uppercase tracking-wide text-primary/85">Auto-sell totals (lifetime)</div>
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 tabular-nums">
-                    <span>
-                      To racket vault (combined){' '}
-                      <span className="font-bold text-foreground">{money(autoSellVaultCombined)}</span>
-                    </span>
-                    <span>
-                      Units moved{' '}
-                      <span className="font-bold text-foreground">{autoSellUnitsLifetime.toLocaleString()}</span>
-                    </span>
-                  </div>
-                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 border-t border-border-dim/60 pt-1.5 text-[9px] tabular-nums">
-                    <span>
-                      Crew (margin){' '}
-                      <span className="font-semibold text-foreground/90">{money(autoSellCrewVaultLifetime)}</span>
-                    </span>
-                    <span>
-                      Booze run (street){' '}
-                      <span className="font-semibold text-foreground/90">{money(autoSellBoozeRunVaultLifetime)}</span>
-                    </span>
-                  </div>
-                </div>
-                <div className="dist-autosell-row">
-                  <input
-                    type="checkbox"
-                    checked={!!autoSell.enabled}
-                    onChange={(e) => setAutoSell((p) => ({ ...p, enabled: e.target.checked }))}
-                    className="dist-autosell-check"
-                    id="autosell-toggle"
-                  />
-                  <label htmlFor="autosell-toggle" className="dist-autosell-label">Enable auto-sell</label>
-                </div>
-                <div className="mb-2 flex flex-wrap gap-2 text-[10px] font-heading text-mutedForeground">
-                  <label className="flex cursor-pointer items-center gap-1.5 rounded border border-zinc-700/50 px-2 py-1 has-[:checked]:border-primary/40 has-[:checked]:bg-primary/10">
-                    <input
-                      type="radio"
-                      name="autosell-mode"
-                      checked={autoSell.mode !== 'booze_run'}
-                      onChange={() => setAutoSell((p) => ({ ...p, mode: 'crew' }))}
-                    />
-                    Crew (vault)
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-1.5 rounded border border-zinc-700/50 px-2 py-1 has-[:checked]:border-primary/40 has-[:checked]:bg-primary/10">
-                    <input
-                      type="radio"
-                      name="autosell-mode"
-                      checked={autoSell.mode === 'booze_run'}
-                      onChange={() => setAutoSell((p) => ({ ...p, mode: 'booze_run' }))}
-                    />
-                    Booze run (racket vault)
-                  </label>
-                </div>
-                <div className="dist-autosell-inputs">
-                  <div>
-                    <div className="dist-input-label">Min inventory</div>
-                    <input
-                      type="number"
-                      min="0"
-                      value={autoSell.min_inventory}
-                      onChange={(e) => setAutoSell((p) => ({ ...p, min_inventory: Number(e.target.value || 0) }))}
-                      className="dist-input"
-                    />
-                  </div>
-                  <div>
-                    <div className="dist-input-label">Batch size</div>
-                    <input
-                      type="number"
-                      min="1"
-                      value={autoSell.batch_size}
-                      onChange={(e) => setAutoSell((p) => ({ ...p, batch_size: Number(e.target.value || 1) }))}
-                      className="dist-input"
-                    />
-                  </div>
-                </div>
-                <GhostBtn
-                  disabled={saving}
-                  onClick={() => run(async () => {
-                    const payload = {
-                      enabled: !!autoSell.enabled,
-                      mode: autoSell.mode === 'booze_run' ? 'booze_run' : 'crew',
-                      min_inventory: Math.max(0, intOr(autoSell.min_inventory, 0)),
-                      batch_size: Math.max(1, intOr(autoSell.batch_size, 1)),
-                    };
-                    const res = await api.post('/illegal-business/distillery/set-auto-sell-rules', payload);
-                    toast.success(res.data?.message || 'Auto-sell rules saved.');
-                  })}
-                >
-                  Save Auto-Sell
-                </GhostBtn>
               </div>
             </div>
+            <GhostBtn
+              className="mt-3 w-full sm:w-auto"
+              disabled={saving}
+              onClick={() => run(async () => {
+                const payload = {
+                  enabled: !!autoSell.enabled,
+                  mode: autoSell.mode === 'booze_run' ? 'booze_run' : 'crew',
+                  min_inventory: Math.max(0, intOr(autoSell.min_inventory, 0)),
+                  batch_size: Math.max(1, intOr(autoSell.batch_size, 1)),
+                };
+                const res = await api.post('/illegal-business/distillery/set-auto-sell-rules', payload);
+                toast.success(res.data?.message || 'Auto-sell rules saved.');
+              })}
+            >
+              Save Auto-Sell
+            </GhostBtn>
           </div>
+          </div>{/* end auto */}
 
         </div>
       </div>

@@ -1803,23 +1803,24 @@ export default function Layout({ children }) {
   const isOldSchool = themeVariant === 'old_school';
   const isPocketDeck = isMobileViewport && mobileLayoutId === 'pocket_deck';
   const sidebarBgStyle = isOldSchool
-    ? { backgroundColor: '#3d3d3d', borderColor: '#9a9a9a' }
+    ? { backgroundColor: 'rgba(58,58,58,0.96)', borderColor: '#c8c8c8' }
     : { backgroundColor: 'var(--noir-content)' };
   const sidebarActiveStyle = isOldSchool
-    ? { background: '#0a1a4a', backgroundImage: 'none', borderLeft: 'none', color: '#ffffff', borderRadius: 0 }
+    ? { background: '#2a3a55', backgroundImage: 'none', borderLeft: 'none', color: '#ffffff', borderRadius: 0 }
     : { background: 'var(--noir-raised)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
   const sidebarActiveGroupStyle = isOldSchool
-    ? { background: '#0c2048', backgroundImage: 'none', borderLeft: 'none', color: '#ffffff', borderRadius: 0 }
+    ? { background: '#334866', backgroundImage: 'none', borderLeft: 'none', color: '#ffffff', borderRadius: 0 }
     : { background: 'var(--noir-surface)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
   const dividerMarginClass = sidebarSpacing === 'compact' ? 'my-0.5' : sidebarSpacing === 'relaxed' ? 'my-1.5' : 'my-1';
   const dividerStyle = sidebarDividerStyle === 'solid'
     ? { height: '1px', backgroundColor: isOldSchool ? '#6a6a6a' : 'rgba(var(--noir-primary-rgb), 0.35)' }
     : { height: 0, borderTop: `1px ${sidebarDividerStyle} ${isOldSchool ? '#6a6a6a' : 'rgba(var(--noir-primary-rgb), 0.35)'}` };
   const categoryHeaderStyle = isOldSchool
-    ? { backgroundColor: '#0a1a4a', color: '#ffffff', borderRadius: 0 }
+    ? { background: 'linear-gradient(180deg, #5e5e5e 0%, #3a3a3a 55%, #2e2e2e 100%)', color: '#f2f2f2', borderRadius: 0, border: '1px solid #c8c8c8', boxShadow: 'inset 1px 1px 0 #ebebeb' }
     : { backgroundColor: 'rgba(var(--noir-primary-rgb), 0.12)', color: 'var(--noir-primary)' };
+  /* Classic blue underlined category labels (img-1 Main Menu sections) */
   const osSectionBtnStyle = isOldSchool
-    ? { padding: '4px 8px', marginTop: 2, background: '#0a1a4a', borderRadius: 0 }
+    ? { padding: '3px 6px 2px', marginTop: 4, background: 'transparent', borderRadius: 0, borderBottom: '1px solid rgba(91,155,213,0.55)' }
     : { padding: '5px 8px 3px 10px', marginTop: 3 };
   const osSectionLineStyle = isOldSchool
     ? { display: 'none' }
@@ -1829,12 +1830,12 @@ export default function Layout({ children }) {
     fontSize: 8,
     letterSpacing: '0.14em',
     textTransform: 'uppercase',
-    color: isOldSchool ? '#ffffff' : (active ? 'var(--noir-primary)' : 'var(--noir-muted)'),
+    color: isOldSchool ? '#5b9bd5' : (active ? 'var(--noir-primary)' : 'var(--noir-muted)'),
     whiteSpace: 'nowrap',
-    ...(isOldSchool ? { flex: 1, textAlign: 'left' } : {}),
+    ...(isOldSchool ? { flex: 1, textAlign: 'left', textDecoration: 'underline', textUnderlineOffset: '2px' } : {}),
   });
   const osSectionChevronStyle = isOldSchool
-    ? { color: '#ffffff', opacity: 0.75 }
+    ? { color: '#5b9bd5', opacity: 0.85 }
     : { color: 'var(--noir-primary)', opacity: 0.5 };
   const navDividerEl = (key) => showSidebarDividers ? <div key={key} className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" /> : null;
 
@@ -2433,10 +2434,17 @@ export default function Layout({ children }) {
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className={`h-12 flex items-center px-2.5 border-b ${styles.borderGoldLight} shrink-0`} style={isOldSchool ? { background: '#0a1a4a', borderColor: '#9a9a9a' } : undefined}>
+          <div
+            className={`h-12 flex items-center px-2.5 border-b ${styles.borderGoldLight} shrink-0`}
+            style={isOldSchool ? {
+              background: 'linear-gradient(180deg, #5e5e5e 0%, #3a3a3a 55%, #2e2e2e 100%)',
+              borderColor: '#c8c8c8',
+              boxShadow: 'inset 1px 1px 0 #ebebeb',
+            } : undefined}
+          >
             <div className="flex items-center gap-1.5 w-full">
-              <div className="w-4 h-px shrink-0" style={{ backgroundColor: isOldSchool ? '#9a9a9a' : 'var(--noir-accent-line)', opacity: 0.5 }} />
-              <h1 className={`text-base font-heading font-bold tracking-widest truncate ${styles.sidebarHeaderTitle}`} data-testid="app-logo" style={isOldSchool ? { color: '#ffffff' } : undefined}>MAFIA WARS</h1>
+              <div className="w-4 h-px shrink-0" style={{ backgroundColor: isOldSchool ? '#c8c8c8' : 'var(--noir-accent-line)', opacity: 0.5 }} />
+              <h1 className={`text-base font-heading font-bold tracking-widest truncate ${styles.sidebarHeaderTitle}`} data-testid="app-logo" style={isOldSchool ? { color: '#f2f2f2', fontSize: 11, letterSpacing: '0.12em' } : undefined}>{isOldSchool ? 'MAIN MENU' : 'MAFIA WARS'}</h1>
               {autoRankPrefs.auto_rank_enabled && (
                 <TooltipProvider>
                   <Tooltip>
@@ -2940,19 +2948,30 @@ export default function Layout({ children }) {
           <div data-layout="right-sidebar" className={`fixed right-0 w-52 flex flex-col z-40 overflow-y-auto border-l ${styles.sidebar} transition-transform duration-300 ${isMobileViewport ? (rightSidebarOpen ? 'translate-x-0 pointer-events-auto' : 'translate-x-full pointer-events-none') : 'translate-x-0'} ${isMobileViewport ? 'top-0 h-full' : 'md:top-0 md:h-full'}`} style={sidebarBgStyle}>
 
             {/* IMPROVEMENT 4: username + rank in header; page + user for logs */}
-            <div className={`flex flex-col px-2.5 py-1.5 border-b ${styles.borderGoldLight} shrink-0 gap-0.5`} style={isOldSchool ? { background: '#0a1a4a', borderColor: '#9a9a9a' } : undefined}>
+            <div
+              className={`flex flex-col px-2.5 py-1.5 border-b ${styles.borderGoldLight} shrink-0 gap-0.5`}
+              style={isOldSchool ? {
+                background: 'linear-gradient(180deg, #5e5e5e 0%, #3a3a3a 55%, #2e2e2e 100%)',
+                borderColor: '#c8c8c8',
+                boxShadow: 'inset 1px 1px 0 #ebebeb',
+              } : undefined}
+            >
               <div className="flex items-center justify-between gap-2 min-h-[28px]">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <User size={13} style={{ color: isOldSchool ? '#ffffff' : 'var(--noir-primary)', flexShrink: 0 }} />
-                  <span className="text-[11px] font-heading font-bold truncate" style={{ color: isOldSchool ? '#ffffff' : 'var(--noir-primary)' }}>{user.username || 'Profile'}</span>
+                  <User size={13} style={{ color: isOldSchool ? '#f2f2f2' : 'var(--noir-primary)', flexShrink: 0 }} />
+                  <span className="text-[11px] font-heading font-bold truncate" style={{ color: isOldSchool ? '#f2f2f2' : 'var(--noir-primary)' }}>
+                    {isOldSchool ? 'PLAYERSTATS' : (user.username || 'Profile')}
+                  </span>
                 </div>
-                <span className="text-[9px] font-heading uppercase tracking-wider shrink-0" style={{ color: isOldSchool ? '#d0d0d0' : 'var(--noir-muted)' }}>{user.rank_name || rankProgress?.current_rank_name || ''}</span>
+                <span className="text-[9px] font-heading uppercase tracking-wider shrink-0" style={{ color: isOldSchool ? '#c8c8c8' : 'var(--noir-muted)' }}>
+                  {isOldSchool ? (user.username || 'Profile') : (user.rank_name || rankProgress?.current_rank_name || '')}
+                </span>
                 {isMobileViewport && (
                   <button type="button" onClick={closeRightSidebar}
                     onPointerUp={(e) => { e.preventDefault(); closeRightSidebar(); }}
                     onTouchEnd={(e) => { e.preventDefault(); closeRightSidebar(); }}
                     className="min-w-[44px] min-h-[44px] -m-1 flex items-center justify-center rounded touch-manipulation active:scale-95 transition-transform"
-                    style={{ color: 'var(--noir-primary)' }} aria-label="Close stats panel"><X size={22} /></button>
+                    style={{ color: isOldSchool ? '#c8c8c8' : 'var(--noir-primary)' }} aria-label="Close stats panel"><X size={22} /></button>
                 )}
               </div>
             </div>

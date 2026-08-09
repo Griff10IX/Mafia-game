@@ -1085,28 +1085,34 @@ body[data-theme-variant="dark_mafia"] [data-page="store"] .store-art-line {
    square edges, thin light borders, compact type.
    ═══════════════════════════════════════════════════════════ */
 body[data-theme-variant="old_school"] {
-  --noir-bg: #0a1628;
-  --noir-background: #0a1628;
+  --noir-bg: #0b1424;
+  --noir-background: #0b1424;
   --noir-panel: #3a3a3a;
-  --noir-content: #3d3d3d;
+  --noir-content: #3a3a3a;
   --noir-surface: #454545;
-  --noir-raised: #525252;
-  --noir-border: #8a8a8a;
-  --noir-border-light: #9a9a9a;
-  --noir-border-mid: #7a7a7a;
-  --os-navy: #0a1a4a;
-  --os-navy-bar: #0c2048;
-  --os-panel: #3d3d3d;
+  --noir-raised: #555555;
+  --noir-border: #b8b8b8;
+  --noir-border-light: #d0d0d0;
+  --noir-border-mid: #8a8a8a;
+  --os-navy: #1a2a4a;
+  --os-navy-bar: #243556;
+  --os-panel: #3a3a3a;
   --os-panel-inner: #454545;
-  --os-border: #9a9a9a;
+  --os-border: #c8c8c8;
   --os-border-dim: #6a6a6a;
-  --gm-bg: #0a1628;
-  --gm-sidebar: #3d3d3d;
-  --gm-content: #3d3d3d;
+  --os-chrome: #c8c8c8;
+  --os-chrome-bright: #ebebeb;
+  --os-chrome-dark: #5a5a5a;
+  --os-bevel: inset 1px 1px 0 var(--os-chrome-bright), inset -1px -1px 0 var(--os-chrome-dark);
+  --os-cat-blue: #5b9bd5;
+  --os-metal-face: linear-gradient(180deg, #5e5e5e 0%, #3a3a3a 55%, #2e2e2e 100%);
+  --gm-bg: #0b1424;
+  --gm-sidebar: #3a3a3a;
+  --gm-content: #3a3a3a;
   --gm-card: #454545;
-  --gm-card-hover: #525252;
-  --gm-border: #9a9a9a;
-  --gm-text: #f0f0f0;
+  --gm-card-hover: #555555;
+  --gm-border: #c8c8c8;
+  --gm-text: #f2f2f2;
   --gm-muted: #c8c8c8;
   --gm-gold: var(--noir-primary);
 }
@@ -1115,7 +1121,6 @@ body[data-theme-variant="old_school"] .themeGangsterModern,
 body[data-theme-variant="old_school"] .themeGangsterModern.page,
 body[data-theme-variant="old_school"] .themeGangsterModern .pageContent {
   letter-spacing: 0;
-  /* Navy canvas shows through; gray is reserved for boxed chrome */
   background-color: transparent !important;
   background: transparent !important;
 }
@@ -1125,29 +1130,29 @@ body[data-theme-variant="old_school"] .themeGangsterModern .sidebar {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   background: var(--os-panel) !important;
-  border-color: var(--os-border);
-  box-shadow: none !important;
+  border-color: var(--os-chrome);
+  box-shadow: var(--os-bevel) !important;
   border-radius: 0 !important;
 }
 
 body[data-theme-variant="old_school"] .themeGangsterModern .topBar {
-  border-bottom: 1px solid var(--os-border);
-  background: var(--os-panel) !important;
+  border-bottom: 1px solid var(--os-chrome);
+  background: var(--os-metal-face) !important;
 }
 
 body[data-theme-variant="old_school"] .themeGangsterModern .sidebar {
   background: var(--os-panel) !important;
-  border-right: 1px solid var(--os-border);
+  border-right: 1px solid var(--os-chrome);
 }
 
 body[data-theme-variant="old_school"] .themeGangsterModern .panel,
 body[data-theme-variant="old_school"] .themeGangsterModern .surface,
 body[data-theme-variant="old_school"] .themeGangsterModern .surfaceMuted {
   position: relative;
-  background: var(--os-panel) !important;
-  border: 1px solid var(--os-border) !important;
+  background: rgba(58, 58, 58, 0.94) !important;
+  border: 1px solid var(--os-chrome) !important;
   border-radius: 0 !important;
-  box-shadow: none !important;
+  box-shadow: var(--os-bevel) !important;
 }
 
 body[data-theme-variant="old_school"] .themeGangsterModern .panel::before,
@@ -1158,44 +1163,53 @@ body[data-theme-variant="old_school"] .themeGangsterModern .surface::after {
   content: none !important;
 }
 
+/* Metal tab header (classic Main Menu / Playerstats plate) */
 body[data-theme-variant="old_school"] .themeGangsterModern .panelHeader {
-  padding-top: 0.35rem;
-  padding-bottom: 0.35rem;
-  padding-left: 0.5rem;
-  border-bottom: 1px solid var(--os-border-dim);
-  background: var(--os-navy-bar) !important;
+  display: inline-block;
+  width: auto;
+  max-width: calc(100% - 8px);
+  margin: 0 0 0.45rem 0;
+  padding: 3px 12px 2px;
+  border: 1px solid var(--os-chrome);
+  border-bottom-color: #3a3a3a;
+  background: var(--os-metal-face) !important;
   border-radius: 0 !important;
-  color: #f0f0f0;
+  color: #f2f2f2;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  box-shadow: inset 1px 1px 0 var(--os-chrome-bright);
 }
 
 body[data-theme-variant="old_school"] .themeGangsterModern .input {
-  background: #2e2e2e !important;
-  border: 1px solid var(--os-border) !important;
+  background: #2a2a2a !important;
+  border: 1px solid var(--os-chrome) !important;
   border-radius: 0 !important;
-  color: #f0f0f0;
-  box-shadow: none !important;
+  color: #f2f2f2;
+  box-shadow: inset 1px 1px 0 #1a1a1a, inset -1px -1px 0 #555 !important;
   font-size: 11px;
 }
 
 body[data-theme-variant="old_school"] .themeGangsterModern .input:focus {
-  border-color: #b0b0b0 !important;
-  box-shadow: none !important;
+  border-color: var(--os-chrome-bright) !important;
+  box-shadow: inset 1px 1px 0 #1a1a1a !important;
 }
 
 body[data-theme-variant="old_school"] .themeGangsterModern .btnGoldDarkText,
 body[data-theme-variant="old_school"] .themeGangsterModern .btnPrimary {
   border-radius: 0 !important;
-  box-shadow: none !important;
-  background: var(--os-navy-bar) !important;
-  border: 1px solid var(--os-border) !important;
-  color: #f0f0f0 !important;
+  box-shadow: var(--os-bevel) !important;
+  background: var(--os-metal-face) !important;
+  border: 1px solid var(--os-chrome) !important;
+  color: #f2f2f2 !important;
 }
 
 body[data-theme-variant="old_school"] .themeGangsterModern .sidebar .navItemActive,
 body[data-theme-variant="old_school"] .themeGangsterModern .navItemActive,
 body[data-theme-variant="old_school"] .themeGangsterModern .sidebar .navItemActivePage,
 body[data-theme-variant="old_school"] .themeGangsterModern .navItemActivePage {
-  background: var(--os-navy) !important;
+  background: #2a3a55 !important;
   background-image: none !important;
   color: #ffffff !important;
   border-left: none !important;
@@ -1204,7 +1218,7 @@ body[data-theme-variant="old_school"] .themeGangsterModern .navItemActivePage {
 
 body[data-theme-variant="old_school"] .themeGangsterModern .sidebar .navItemActivePage:hover,
 body[data-theme-variant="old_school"] .themeGangsterModern .navItemActivePage:hover {
-  background: var(--os-navy-bar) !important;
+  background: #334866 !important;
   background-image: none !important;
 }
 
@@ -1220,9 +1234,9 @@ body[data-theme-variant="old_school"] .themeGangsterModern .raisedHover:hover {
 
 body[data-theme-variant="old_school"] [data-layout="sidebar"] {
   width: 12rem !important;
-  background: var(--os-panel) !important;
-  border-right: 1px solid var(--os-border) !important;
-  box-shadow: none !important;
+  background: rgba(58, 58, 58, 0.96) !important;
+  border-right: 1px solid var(--os-chrome) !important;
+  box-shadow: var(--os-bevel) !important;
 }
 
 body[data-theme-variant="old_school"] [data-layout="topbar"] {
@@ -1232,9 +1246,9 @@ body[data-theme-variant="old_school"] [data-layout="topbar"] {
   padding-top: 0.2rem !important;
   padding-bottom: 0.2rem !important;
   gap: 0.35rem !important;
-  background: var(--os-panel) !important;
-  border-bottom: 1px solid var(--os-border) !important;
-  box-shadow: none !important;
+  background: var(--os-metal-face) !important;
+  border-bottom: 1px solid var(--os-chrome) !important;
+  box-shadow: inset 0 1px 0 var(--os-chrome-bright) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
@@ -1247,9 +1261,22 @@ body[data-theme-variant="old_school"] [data-layout="main"] {
 
 body[data-theme-variant="old_school"] [data-layout="right-sidebar"] {
   width: 13rem !important;
-  border-left: 1px solid var(--os-border) !important;
-  background: var(--os-panel) !important;
-  box-shadow: none !important;
+  border-left: 1px solid var(--os-chrome) !important;
+  background: rgba(58, 58, 58, 0.96) !important;
+  box-shadow: var(--os-bevel) !important;
+}
+
+/* Chrome boxes across main content (Tailwind panels) */
+body[data-theme-variant="old_school"] [data-layout="main"] .border,
+body[data-theme-variant="old_school"] [data-layout="main"] .mobile-panel {
+  border-color: var(--os-chrome) !important;
+  box-shadow: var(--os-bevel);
+}
+
+body[data-theme-variant="old_school"] [data-layout="main"] .bg-primary\/8,
+body[data-theme-variant="old_school"] [data-layout="main"] .bg-primary\/10 {
+  background: var(--os-metal-face) !important;
+  color: #f2f2f2;
 }
 
 body[data-theme-variant="old_school"] [data-layout="sidebar"] .sidebarNavLink {
@@ -1291,15 +1318,15 @@ body[data-theme-variant="old_school"] [data-layout="sidebar"] .sidebarNavLink {
 }
 
 body[data-theme-variant="old_school"] [data-chat-surface] {
-  border: 1px solid var(--os-border) !important;
+  border: 1px solid var(--os-chrome) !important;
   background: var(--os-panel) !important;
   border-radius: 0 !important;
-  box-shadow: none !important;
+  box-shadow: var(--os-bevel) !important;
 }
 
 body[data-theme-variant="old_school"] [data-chat-part="header"] {
-  background: var(--os-navy-bar) !important;
-  border-bottom-color: var(--os-border) !important;
+  background: var(--os-metal-face) !important;
+  border-bottom-color: var(--os-chrome) !important;
   border-radius: 0 !important;
 }
 
@@ -1330,41 +1357,50 @@ body[data-theme-variant="old_school"] [data-chat-part="input"] {
 
 body[data-theme-variant="old_school"] [data-chat-part="send"],
 body[data-theme-variant="old_school"] [data-chat-part="aux-btn"] {
-  background: var(--os-navy-bar) !important;
-  border-color: var(--os-border) !important;
+  background: var(--os-metal-face) !important;
+  border-color: var(--os-chrome) !important;
   border-radius: 0 !important;
+  box-shadow: var(--os-bevel) !important;
 }
 
 body[data-theme-variant="old_school"] [data-layout="bottom-nav"] nav {
   background: var(--os-panel) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  border-top: 1px solid var(--os-border) !important;
-  box-shadow: none !important;
+  border-top: 1px solid var(--os-chrome) !important;
+  box-shadow: inset 0 1px 0 var(--os-chrome-bright) !important;
   border-radius: 0 !important;
 }
 
 body[data-theme-variant="old_school"] [data-layout="bottom-nav-submenu"] {
   background: var(--os-panel) !important;
-  border: 1px solid var(--os-border) !important;
+  border: 1px solid var(--os-chrome) !important;
   border-radius: 0 !important;
-  box-shadow: none !important;
+  box-shadow: var(--os-bevel) !important;
 }
 
 body[data-theme-variant="old_school"] [data-layout="touch-ball"] button {
   background: var(--os-panel) !important;
-  border: 1px solid var(--os-border) !important;
+  border: 1px solid var(--os-chrome) !important;
   border-radius: 0 !important;
-  box-shadow: none !important;
+  box-shadow: var(--os-bevel) !important;
   backdrop-filter: none !important;
 }
 
 body[data-theme-variant="old_school"] [data-layout="touch-ball-panel"] {
   background: var(--os-panel) !important;
-  border: 1px solid var(--os-border) !important;
+  border: 1px solid var(--os-chrome) !important;
   border-radius: 0 !important;
-  box-shadow: none !important;
+  box-shadow: var(--os-bevel) !important;
   backdrop-filter: none !important;
+}
+
+/* Pocket Deck chrome */
+body[data-theme-variant="old_school"] [data-layout="pocket-dock"],
+body[data-theme-variant="old_school"] [data-layout="pocket-hud"] {
+  background: var(--os-metal-face) !important;
+  border-color: var(--os-chrome) !important;
+  box-shadow: var(--os-bevel) !important;
 }
 
 body[data-theme-variant="old_school"] [data-page="store"] .store-art-line {
