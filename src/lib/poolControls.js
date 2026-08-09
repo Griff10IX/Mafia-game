@@ -3,6 +3,9 @@
  */
 
 export const POOL_CONTROL_STORAGE_KEY = 'pool_8ball_control_preset';
+export const POOL_DRAG_PULL_STORAGE_KEY = 'pool_8ball_drag_pull';
+/** Logical canvas width used for pull thresholds (matches EightBallPool canvas). */
+export const POOL_LOGICAL_W = 900;
 
 export const CONTROL_PRESETS = {
   gentle: {
@@ -16,6 +19,7 @@ export const CONTROL_PRESETS = {
     fineAimDeg: 0.2,
     coarseAimDeg: 1,
     pullEnterPx: 14,
+    pullExitPx: 6,
   },
   normal: {
     id: 'normal',
@@ -28,6 +32,7 @@ export const CONTROL_PRESETS = {
     fineAimDeg: 0.25,
     coarseAimDeg: 1,
     pullEnterPx: 12,
+    pullExitPx: 5,
   },
   firm: {
     id: 'firm',
@@ -40,6 +45,7 @@ export const CONTROL_PRESETS = {
     fineAimDeg: 0.35,
     coarseAimDeg: 1.5,
     pullEnterPx: 10,
+    pullExitPx: 4,
   },
 };
 
@@ -60,8 +66,42 @@ export function saveControlPresetId(id) {
   }
 }
 
+export function loadDragPullEnabled() {
+  try {
+    const v = localStorage.getItem(POOL_DRAG_PULL_STORAGE_KEY);
+    if (v === null || v === undefined) return false; // mobile-friendly default: aim-only on table
+    return v === '1' || v === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function saveDragPullEnabled(on) {
+  try {
+    localStorage.setItem(POOL_DRAG_PULL_STORAGE_KEY, on ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
+}
+
 export function getPreset(id) {
   return CONTROL_PRESETS[id] || CONTROL_PRESETS.gentle;
+}
+
+/**
+ * Scale pull thresholds from logical canvas px into current CSS display px.
+ * @param {object} preset
+ * @param {number} cssWidth - canvas getBoundingClientRect().width
+ */
+export function scalePresetForDisplay(preset, cssWidth) {
+  const p = preset || CONTROL_PRESETS.gentle;
+  const scale = Math.max(0.35, Math.min(2.5, (Number(cssWidth) || POOL_LOGICAL_W) / POOL_LOGICAL_W));
+  return {
+    ...p,
+    maxPullPx: p.maxPullPx * scale,
+    pullEnterPx: Math.max(18, p.pullEnterPx * scale * 1.35),
+    pullExitPx: Math.max(8, (p.pullExitPx || p.pullEnterPx * 0.45) * scale),
+  };
 }
 
 /** Aim angle (degrees) from cue ball toward pointer on table. */
@@ -73,16 +113,18 @@ export function aimAngleFromPointer(cueCanvasX, cueCanvasY, pointerX, pointerY) 
   return Number(((Math.atan2(dy, dx) * 180) / Math.PI).toFixed(2));
 }
 
+function pullBehindDist(cueCanvasX, cueCanvasY, pointerX, pointerY, angleDeg) {
+  const a = (Number(angleDeg) * Math.PI) / 180;
+  return -((pointerX - cueCanvasX) * Math.cos(a) + (pointerY - cueCanvasY) * Math.sin(a));
+}
+
 /**
  * Power 0–1 from pull-back distance along shot line (Temple Run / 8BP style).
  * Pointer behind cue along aim direction = higher power.
  */
 export function powerFromPullBack(cueCanvasX, cueCanvasY, pointerX, pointerY, angleDeg, preset) {
   const p = preset || CONTROL_PRESETS.gentle;
-  const a = (Number(angleDeg) * Math.PI) / 180;
-  const behindX = pointerX - cueCanvasX;
-  const behindY = pointerY - cueCanvasY;
-  const pullDist = -(behindX * Math.cos(a) + behindY * Math.sin(a));
+  const pullDist = pullBehindDist(cueCanvasX, cueCanvasY, pointerX, pointerY, angleDeg);
   if (pullDist <= 0) return p.minPower;
   const normalized = Math.max(0, Math.min(1, pullDist / p.maxPullPx));
   const curved = Math.pow(normalized, p.pullExponent);
@@ -92,9 +134,14 @@ export function powerFromPullBack(cueCanvasX, cueCanvasY, pointerX, pointerY, an
 /** Whether pointer is far enough behind cue to enter pull mode. */
 export function shouldEnterPullMode(cueCanvasX, cueCanvasY, pointerX, pointerY, angleDeg, preset) {
   const p = preset || CONTROL_PRESETS.gentle;
-  const a = (Number(angleDeg) * Math.PI) / 180;
-  const behind = -((pointerX - cueCanvasX) * Math.cos(a) + (pointerY - cueCanvasY) * Math.sin(a));
-  return behind > p.pullEnterPx;
+  return pullBehindDist(cueCanvasX, cueCanvasY, pointerX, pointerY, angleDeg) > p.pullEnterPx;
+}
+
+/** Hysteresis: leave pull only when forward of a smaller exit threshold. */
+export function shouldExitPullMode(cueCanvasX, cueCanvasY, pointerX, pointerY, angleDeg, preset) {
+  const p = preset || CONTROL_PRESETS.gentle;
+  const exitPx = p.pullExitPx != null ? p.pullExitPx : p.pullEnterPx * 0.45;
+  return pullBehindDist(cueCanvasX, cueCanvasY, pointerX, pointerY, angleDeg) < exitPx;
 }
 
 export function clampPower(v, preset) {

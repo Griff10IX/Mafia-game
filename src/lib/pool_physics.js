@@ -4,8 +4,8 @@
 export const TABLE_W = 2.2;
 export const TABLE_H = 1.1;
 export const BALL_R = 0.028;
-export const POCKET_R = 0.058;
-export const CORNER_POCKET_R = 0.066;
+export const POCKET_R = 0.065;
+export const CORNER_POCKET_R = 0.075;
 const RESTITUTION = 0.985;
 const FRICTION = 0.994;
 const STOP_SPEED = 0.012;
@@ -18,6 +18,10 @@ const SPIN_CARRY = 0.03;
 const RAIL_SPIN_THROW = 0.085;
 const SLEEP_EPS = 0.006;
 const POS_EPS = 1e-5;
+const POCKET_CAPTURE_EXTRA = BALL_R * 1.05;
+const POCKET_JAW_EXTRA = BALL_R * 1.05;
+const POCKET_GRAVITY = 0.0042;
+const POCKET_GRAVITY_RANGE = 2.1;
 
 export function pockets() {
   return [
@@ -32,6 +36,13 @@ export function pockets() {
 
 function hypot(a, b) {
   return Math.sqrt(a * a + b * b);
+}
+
+function inPocketJaw(x, y) {
+  for (const pk of pockets()) {
+    if (hypot(x - pk.x, y - pk.y) <= pk.r + POCKET_JAW_EXTRA) return true;
+  }
+  return false;
 }
 
 function segCircleIntersect(x0, y0, x1, y1, cx, cy, r) {
@@ -61,11 +72,14 @@ function tryPocketBalls(balls, pocketedNumbers, events, tMs) {
     for (const pk of pks) {
       const prevX = b._px !== undefined ? b._px : b.x;
       const prevY = b._py !== undefined ? b._py : b.y;
-      const t = segCircleIntersect(prevX, prevY, b.x, b.y, pk.x, pk.y, pk.r);
+      const captureR = pk.r + POCKET_CAPTURE_EXTRA;
+      const t = segCircleIntersect(prevX, prevY, b.x, b.y, pk.x, pk.y, captureR);
       if (t >= 0) {
         b.pocketed = true;
         b.vx = 0;
         b.vy = 0;
+        b.x = pk.x;
+        b.y = pk.y;
         pocketedNumbers.push(b.number);
         events.push({ type: 'pocket', t_ms: tMs, number: b.number, x: pk.x, y: pk.y });
         break;
@@ -82,9 +96,9 @@ function applyPocketGravity(balls) {
       const dx = pk.x - b.x;
       const dy = pk.y - b.y;
       const dist = hypot(dx, dy);
-      const threshold = pk.r * 1.75;
+      const threshold = pk.r * POCKET_GRAVITY_RANGE;
       if (dist < threshold && dist > 0.001) {
-        const strength = 0.00135 * (1 - dist / threshold);
+        const strength = POCKET_GRAVITY * (1 - dist / threshold);
         b.vx += (dx / dist) * strength;
         b.vy += (dy / dist) * strength;
       }
@@ -175,25 +189,35 @@ export function simulatePreview(balls, angle, power, spinX = 0, spinY = 0) {
     applyPocketGravity(activeBalls(out));
 
     for (const b of activeBalls(out)) {
+      const inJaw = inPocketJaw(b.x, b.y);
       if (b.x <= BALL_R) {
-        b.x = BALL_R;
-        b.vx = Math.abs(b.vx) * RESTITUTION;
-        if (b.number === 0) b.vy += cueSpinX * RAIL_SPIN_THROW;
+        if (!inJaw) {
+          b.x = BALL_R;
+          b.vx = Math.abs(b.vx) * RESTITUTION;
+          if (b.number === 0) b.vy += cueSpinX * RAIL_SPIN_THROW;
+        }
       } else if (b.x >= TABLE_W - BALL_R) {
-        b.x = TABLE_W - BALL_R;
-        b.vx = -Math.abs(b.vx) * RESTITUTION;
-        if (b.number === 0) b.vy -= cueSpinX * RAIL_SPIN_THROW;
+        if (!inJaw) {
+          b.x = TABLE_W - BALL_R;
+          b.vx = -Math.abs(b.vx) * RESTITUTION;
+          if (b.number === 0) b.vy -= cueSpinX * RAIL_SPIN_THROW;
+        }
       }
       if (b.y <= BALL_R) {
-        b.y = BALL_R;
-        b.vy = Math.abs(b.vy) * RESTITUTION;
-        if (b.number === 0) b.vx -= cueSpinX * RAIL_SPIN_THROW;
+        if (!inJaw) {
+          b.y = BALL_R;
+          b.vy = Math.abs(b.vy) * RESTITUTION;
+          if (b.number === 0) b.vx -= cueSpinX * RAIL_SPIN_THROW;
+        }
       } else if (b.y >= TABLE_H - BALL_R) {
-        b.y = TABLE_H - BALL_R;
-        b.vy = -Math.abs(b.vy) * RESTITUTION;
-        if (b.number === 0) b.vx += cueSpinX * RAIL_SPIN_THROW;
+        if (!inJaw) {
+          b.y = TABLE_H - BALL_R;
+          b.vy = -Math.abs(b.vy) * RESTITUTION;
+          if (b.number === 0) b.vx += cueSpinX * RAIL_SPIN_THROW;
+        }
       }
     }
+    tryPocketBalls(out, pocketedNumbers, events, tMs);
 
     const minDist = BALL_R * 2;
     for (let pass = 0; pass < COLLISION_PASSES; pass++) {

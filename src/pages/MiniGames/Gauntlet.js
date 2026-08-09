@@ -16,6 +16,31 @@ const BIRD_SIZE = 36;
 const VIEW_W = 420;
 const VIEW_H = 580;
 
+/** Mulberry32 — must match backend/utils/gauntlet_sim.py */
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function next() {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let x = t;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seedToU32(seed) {
+  const s = String(seed || "").trim().toLowerCase();
+  if (!s) return 1;
+  const hex = parseInt(s.slice(0, 8), 16);
+  if (Number.isFinite(hex) && hex > 0) return hex >>> 0;
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) || 1;
+}
+
 /** Score gates required for unlocks (themes, characters, insane mode) — tuned ~10× vs original easy curve */
 const GATE = (n) => n * 10;
 
@@ -1017,6 +1042,9 @@ export default function Gauntlet() {
   const accumRef = useRef(0);
   const animTickRef = useRef(null);
   const gauntletSessionIdRef = useRef(null);
+  const runSeedRef = useRef(null);
+  const rngRef = useRef(null);
+  const flapsRef = useRef([]);
 
   stateRef.current = gameState;
   birdYRef.current = birdY;
@@ -1085,17 +1113,27 @@ export default function Gauntlet() {
       });
       return;
     }
+    const flaps = Array.isArray(flapsRef.current) ? flapsRef.current.slice() : [];
     setClaimStatus({ state: "claiming", cash: 0, respect: 0, message: "" });
     try {
       const res = await api.post("/gauntlet/claim", {
         score: Number(finalScore || 0),
         session_id: runSessionId,
+        flaps,
         theme: themeId,
         speed: speedId,
         difficulty: difficultyId,
       });
-      if (gauntletSessionIdRef.current === runSessionId) gauntletSessionIdRef.current = null;
+      if (gauntletSessionIdRef.current === runSessionId) {
+        gauntletSessionIdRef.current = null;
+        runSeedRef.current = null;
+        rngRef.current = null;
+        flapsRef.current = [];
+      }
       const authScore = Number(res.data?.score ?? finalScore ?? 0);
+      if (Number.isFinite(authScore) && authScore !== Number(finalScore || 0)) {
+        setGameFrame(prev => ({ ...prev, score: Math.max(0, Math.floor(authScore)) }));
+      }
       const cash = res.data?.cash != null ? Number(res.data.cash) : getReward(authScore).cash;
       const respect = res.data?.respect != null ? Number(res.data.respect) : getReward(authScore).respect;
       if (res.data?.best_score != null && Number.isFinite(Number(res.data.best_score))) {
@@ -1111,8 +1149,15 @@ export default function Gauntlet() {
       setClaimStatus({ state: "claimed", cash, respect, message: (parts.length ? `Claimed ${parts.join(" & ")}` : "No reward") + playsMsg });
       loadLeaderboard(lbPeriod);
     } catch (e) {
-      if (gauntletSessionIdRef.current === runSessionId) gauntletSessionIdRef.current = null;
-      setClaimStatus({ state: "error", cash: 0, respect: 0, message: getApiErrorMessage(e) });
+      if (gauntletSessionIdRef.current === runSessionId) {
+        gauntletSessionIdRef.current = null;
+        runSeedRef.current = null;
+        rngRef.current = null;
+        flapsRef.current = [];
+      }
+      const msg = getApiErrorMessage(e);
+      toast.error(msg);
+      setClaimStatus({ state: "error", cash: 0, respect: 0, message: msg });
       refreshPlays();
     }
   }, [claimStatus.state, lbPeriod, loadLeaderboard, themeId, speedId, difficultyId, refreshPlays, applyPlaysLeftPayload]);
@@ -1149,20 +1194,28 @@ export default function Gauntlet() {
             ...(captchaToken ? { captcha_token: captchaToken } : {}),
           });
           const sid = r.data?.session_id;
-          if (!sid) {
+          const seed = r.data?.seed;
+          if (!sid || !seed) {
             toast.error("Could not start run. Try again.");
             return;
           }
           updateFromStart(r.data);
           gauntletSessionIdRef.current = sid;
+          runSeedRef.current = seed;
+          rngRef.current = mulberry32(seedToU32(seed));
+          flapsRef.current = [];
+          const topHeight = 100 + rngRef.current() * 200;
           setClaimStatus({ state: "idle", cash: 0, message: "" });
           setGameState("playing");
+          birdVelRef.current = JUMP_FORCE;
+          birdYRef.current = VIEW_H / 2;
+          scoreRef.current = 0;
           setGameFrame(prev => ({
-            ...prev, birdVel: JUMP_FORCE,
+            ...prev, birdY: VIEW_H / 2, birdVel: JUMP_FORCE,
             pipes: [{
               id: `pipe-${pipeIdRef.current++}`,
               x: VIEW_W + 80,
-              topHeight: 100 + Math.random() * 200,
+              topHeight,
               scored: false
             }],
             score: 0, bgOffset: 0,
@@ -1175,6 +1228,12 @@ export default function Gauntlet() {
       return;
     }
     if (stateRef.current === "playing") {
+      const nextTick = tickRef.current + 1;
+      const flaps = flapsRef.current;
+      if (!flaps.length || flaps[flaps.length - 1] !== nextTick) {
+        flaps.push(nextTick);
+      }
+      birdVelRef.current = JUMP_FORCE;
       setGameFrame(prev => ({ ...prev, birdVel: JUMP_FORCE }));
     }
     if (stateRef.current === "dead") {
@@ -1226,16 +1285,29 @@ export default function Gauntlet() {
 
         try {
           tickRef.current++;
+          const tick = tickRef.current;
+          const flaps = flapsRef.current;
+          if (flaps.length && flaps[flaps.length - 1] >= tick) {
+            // O(1) check via last few; flaps are sorted unique
+            for (let i = flaps.length - 1; i >= 0; i--) {
+              if (flaps[i] === tick) {
+                birdVelRef.current = JUMP_FORCE;
+                break;
+              }
+              if (flaps[i] < tick) break;
+            }
+          }
           const newVel = Math.min(TERMINAL_VEL, birdVelRef.current + GRAVITY);
           const newY = birdYRef.current + newVel;
           const nextBgOffset = (bgOffsetRef.current + 1) % 60;
 
           let newPipes = pipesRef.current.map(p => ({ ...p, x: p.x - pipeSpeed }));
           if (tickRef.current % spawnInterval === 0) {
+            const rng = rngRef.current;
             newPipes.push({
               id: `pipe-${pipeIdRef.current++}`,
               x: VIEW_W + 20,
-              topHeight: 80 + Math.random() * 240,
+              topHeight: 80 + (rng ? rng() : Math.random()) * 240,
               scored: false
             });
           }

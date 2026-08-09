@@ -29,8 +29,8 @@ MP_8BALL_TABLE_H = 1.1
 MP_8BALL_BALL_R = 0.028
 # Head string at W/4 from the breaking end (left); kitchen is behind it toward the head cushion.
 MP_8BALL_HEAD_STRING_X = MP_8BALL_TABLE_W * 0.25
-MP_8BALL_POCKET_R = 0.058
-MP_8BALL_CORNER_POCKET_R = 0.066
+MP_8BALL_POCKET_R = 0.065
+MP_8BALL_CORNER_POCKET_R = 0.075
 MP_8BALL_RESTITUTION = 0.985
 MP_8BALL_FRICTION = 0.994
 MP_8BALL_STOP_SPEED = 0.012
@@ -45,6 +45,11 @@ MP_8BALL_COLLISION_PASSES = 4
 MP_8BALL_SPIN_SWERVE = 0.045
 MP_8BALL_SPIN_DECAY = 0.988
 MP_8BALL_RAIL_SPIN_THROW = 0.085
+# Pocket mouth: capture / jaw share size so rail-skipped balls still drop.
+MP_8BALL_POCKET_CAPTURE_EXTRA = MP_8BALL_BALL_R * 1.05
+MP_8BALL_POCKET_JAW_EXTRA = MP_8BALL_BALL_R * 1.05
+MP_8BALL_POCKET_GRAVITY = 0.0042
+MP_8BALL_POCKET_GRAVITY_RANGE = 2.1
 # Winnings credited to `users.pool_cash` (pool-only wallet; separate from main `money`).
 MP_8BALL_VS_AI_WIN_POOL_CASH = 10_000
 MP_8BALL_PVP_WIN_POOL_CASH = 10_000
@@ -204,6 +209,15 @@ def _pockets() -> List[Tuple[float, float, float]]:
     ]
 
 
+def _in_pocket_jaw(x: float, y: float) -> bool:
+    """True when ball center is in a pocket mouth (skip cushion bounce here)."""
+    for px, py, pr in _pockets():
+        jaw = pr + MP_8BALL_POCKET_JAW_EXTRA
+        if math.hypot(x - px, y - py) <= jaw:
+            return True
+    return False
+
+
 def _seg_circle_intersect(x0: float, y0: float, x1: float, y1: float, cx: float, cy: float, r: float) -> float:
     """Swept segment vs circle. Returns parametric t in [0,1] of first intersection, or -1."""
     dx = x1 - x0
@@ -243,11 +257,15 @@ def _try_pocket_balls(
         prev_x = b.get("_px", b["x"])
         prev_y = b.get("_py", b["y"])
         for px, py, pr in _pockets():
-            t = _seg_circle_intersect(prev_x, prev_y, b["x"], b["y"], px, py, pr)
+            capture_r = pr + MP_8BALL_POCKET_CAPTURE_EXTRA
+            t = _seg_circle_intersect(prev_x, prev_y, b["x"], b["y"], px, py, capture_r)
             if t >= 0:
                 b["pocketed"] = True
                 b["vx"] = 0.0
                 b["vy"] = 0.0
+                # Snap toward pocket center for cleaner replay drop.
+                b["x"] = float(px)
+                b["y"] = float(py)
                 if b.get("number") is not None:
                     pocketed_numbers.append(int(b["number"]))
                     replay_events.append(
@@ -263,7 +281,7 @@ def _try_pocket_balls(
 
 
 def _apply_pocket_gravity(out: List[dict]) -> None:
-    """Subtle attraction when a ball is near a pocket lip — simulates jaw funnelling."""
+    """Attraction near pocket lips — jaw funnelling so near-misses drop instead of rail-bounce."""
     for b in out:
         if b.get("pocketed"):
             continue
@@ -271,9 +289,9 @@ def _apply_pocket_gravity(out: List[dict]) -> None:
             dx = px - b["x"]
             dy = py - b["y"]
             dist = math.hypot(dx, dy)
-            threshold = pr * 1.75
+            threshold = pr * MP_8BALL_POCKET_GRAVITY_RANGE
             if dist < threshold and dist > 0.001:
-                strength = 0.00135 * (1.0 - dist / threshold)
+                strength = MP_8BALL_POCKET_GRAVITY * (1.0 - dist / threshold)
                 b["vx"] += (dx / dist) * strength
                 b["vy"] += (dy / dist) * strength
 
@@ -359,67 +377,83 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
 
         active = _active_balls(out)
         for b in active:
-            # Cushion bounce (axis-aligned rails; reflect normal velocity with restitution).
+            # Cushion bounce — skip when ball is in a pocket mouth so shots can drop.
+            in_jaw = _in_pocket_jaw(b["x"], b["y"])
             if b["x"] <= MP_8BALL_BALL_R:
-                b["x"] = MP_8BALL_BALL_R
-                pre = abs(b["vx"])
-                b["vx"] = abs(b["vx"]) * MP_8BALL_RESTITUTION
-                if b.get("number") == 0:
-                    b["vy"] += cue_spin_x * MP_8BALL_RAIL_SPIN_THROW
-                if pre > 0.15:
-                    replay_events.append({
-                        "type": "rail",
-                        "axis": "x",
-                        "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
-                        "x": float(b["x"]),
-                        "y": float(b["y"]),
-                        "strength": float(pre),
-                    })
+                if in_jaw:
+                    pass
+                else:
+                    b["x"] = MP_8BALL_BALL_R
+                    pre = abs(b["vx"])
+                    b["vx"] = abs(b["vx"]) * MP_8BALL_RESTITUTION
+                    if b.get("number") == 0:
+                        b["vy"] += cue_spin_x * MP_8BALL_RAIL_SPIN_THROW
+                    if pre > 0.15:
+                        replay_events.append({
+                            "type": "rail",
+                            "axis": "x",
+                            "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
+                            "x": float(b["x"]),
+                            "y": float(b["y"]),
+                            "strength": float(pre),
+                        })
             elif b["x"] >= MP_8BALL_TABLE_W - MP_8BALL_BALL_R:
-                b["x"] = MP_8BALL_TABLE_W - MP_8BALL_BALL_R
-                pre = abs(b["vx"])
-                b["vx"] = -abs(b["vx"]) * MP_8BALL_RESTITUTION
-                if b.get("number") == 0:
-                    b["vy"] -= cue_spin_x * MP_8BALL_RAIL_SPIN_THROW
-                if pre > 0.15:
-                    replay_events.append({
-                        "type": "rail",
-                        "axis": "x",
-                        "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
-                        "x": float(b["x"]),
-                        "y": float(b["y"]),
-                        "strength": float(pre),
-                    })
+                if in_jaw:
+                    pass
+                else:
+                    b["x"] = MP_8BALL_TABLE_W - MP_8BALL_BALL_R
+                    pre = abs(b["vx"])
+                    b["vx"] = -abs(b["vx"]) * MP_8BALL_RESTITUTION
+                    if b.get("number") == 0:
+                        b["vy"] -= cue_spin_x * MP_8BALL_RAIL_SPIN_THROW
+                    if pre > 0.15:
+                        replay_events.append({
+                            "type": "rail",
+                            "axis": "x",
+                            "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
+                            "x": float(b["x"]),
+                            "y": float(b["y"]),
+                            "strength": float(pre),
+                        })
             if b["y"] <= MP_8BALL_BALL_R:
-                b["y"] = MP_8BALL_BALL_R
-                pre = abs(b["vy"])
-                b["vy"] = abs(b["vy"]) * MP_8BALL_RESTITUTION
-                if b.get("number") == 0:
-                    b["vx"] -= cue_spin_x * MP_8BALL_RAIL_SPIN_THROW
-                if pre > 0.15:
-                    replay_events.append({
-                        "type": "rail",
-                        "axis": "y",
-                        "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
-                        "x": float(b["x"]),
-                        "y": float(b["y"]),
-                        "strength": float(pre),
-                    })
+                if in_jaw:
+                    pass
+                else:
+                    b["y"] = MP_8BALL_BALL_R
+                    pre = abs(b["vy"])
+                    b["vy"] = abs(b["vy"]) * MP_8BALL_RESTITUTION
+                    if b.get("number") == 0:
+                        b["vx"] -= cue_spin_x * MP_8BALL_RAIL_SPIN_THROW
+                    if pre > 0.15:
+                        replay_events.append({
+                            "type": "rail",
+                            "axis": "y",
+                            "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
+                            "x": float(b["x"]),
+                            "y": float(b["y"]),
+                            "strength": float(pre),
+                        })
             elif b["y"] >= MP_8BALL_TABLE_H - MP_8BALL_BALL_R:
-                b["y"] = MP_8BALL_TABLE_H - MP_8BALL_BALL_R
-                pre = abs(b["vy"])
-                b["vy"] = -abs(b["vy"]) * MP_8BALL_RESTITUTION
-                if b.get("number") == 0:
-                    b["vx"] += cue_spin_x * MP_8BALL_RAIL_SPIN_THROW
-                if pre > 0.15:
-                    replay_events.append({
-                        "type": "rail",
-                        "axis": "y",
-                        "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
-                        "x": float(b["x"]),
-                        "y": float(b["y"]),
-                        "strength": float(pre),
-                    })
+                if in_jaw:
+                    pass
+                else:
+                    b["y"] = MP_8BALL_TABLE_H - MP_8BALL_BALL_R
+                    pre = abs(b["vy"])
+                    b["vy"] = -abs(b["vy"]) * MP_8BALL_RESTITUTION
+                    if b.get("number") == 0:
+                        b["vx"] += cue_spin_x * MP_8BALL_RAIL_SPIN_THROW
+                    if pre > 0.15:
+                        replay_events.append({
+                            "type": "rail",
+                            "axis": "y",
+                            "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
+                            "x": float(b["x"]),
+                            "y": float(b["y"]),
+                            "strength": float(pre),
+                        })
+
+        # Re-check pockets after rail step so jaw-skipped balls can drop this frame.
+        _try_pocket_balls(out, pocketed_numbers, replay_events, sim_elapsed_ms)
 
         # Ball–ball: separate overlaps for all pairs (fixes rack penetration), then elastic
         # impulse on pass 0 only (equal mass, 1D along contact normal). Friction runs after.

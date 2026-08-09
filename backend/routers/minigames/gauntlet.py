@@ -1,13 +1,15 @@
 # Flappy Gangster (Flappy-style) — cash and respect rewards by score. Infinite levels; caps per run.
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
+import secrets
 import uuid
 
 from fastapi import Depends, HTTPException, Query, Request
-from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from pydantic import BaseModel, ConfigDict, Field
+from typing import List, Optional
 
 from server import db, get_current_user, log_activity, log_minigame_payout, log_respect_earned, _get_staff_user_ids, _is_admin
 from utils.game_timezone import game_week_range_utc
+from utils.gauntlet_sim import normalize_flaps, simulate_gauntlet
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
@@ -90,8 +92,10 @@ class GauntletStartRequest(BaseModel):
 class GauntletClaimRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    score: int
+    # Client score is display-only; rewards/leaderboard use server re-sim from flaps.
+    score: Optional[int] = 0
     session_id: Optional[str] = None
+    flaps: List[int] = Field(default_factory=list)
     theme: Optional[str] = None
     speed: Optional[str] = None
     difficulty: Optional[str] = None
@@ -172,21 +176,19 @@ def register(router):
             meta["speed"] = (body.speed or "")[:32]
         if body.difficulty:
             meta["difficulty"] = (body.difficulty or "")[:32]
-        return await start_minigame_run(
+        seed = secrets.token_hex(16)
+        meta["seed"] = seed
+        resp = await start_minigame_run(
             db,
             user_id=current_user["id"],
             game=GAUNTLET_GAME_SLUG,
-            meta=meta or None,
+            meta=meta,
         )
+        resp["seed"] = seed
+        return resp
 
     @router.post("/gauntlet/claim")
     async def gauntlet_claim(payload: GauntletClaimRequest, current_user: dict = Depends(get_current_user)):
-        raw_score = int(payload.score or 0)
-        if raw_score < 0:
-            raise HTTPException(status_code=400, detail="Invalid score.")
-        if raw_score > MAX_SCORE_SANITY:
-            raise HTTPException(status_code=400, detail="Score outside allowed range.")
-
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
         now_iso = now_dt.isoformat().replace("+00:00", "Z")
         hour_start, reset_dt = utc_rate_limit_window(now_dt)
@@ -197,6 +199,11 @@ def register(router):
         session_id = (payload.session_id or "").strip()
         if not session_id:
             raise HTTPException(status_code=400, detail="Start a run before claiming (missing session).")
+
+        try:
+            flaps = normalize_flaps(payload.flaps or [])
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e) or "Invalid flaps.") from e
 
         plays_gate = await get_plays_left(db, user_id=uid, game=GAUNTLET_GAME_SLUG)
         if plays_gate["plays_left"] == 0:
@@ -214,7 +221,31 @@ def register(router):
         if elapsed < MIN_PLAY_SECONDS:
             raise HTTPException(status_code=400, detail="Game too short.")
 
-        score = raw_score
+        sess_meta = sess.get("meta") if isinstance(sess.get("meta"), dict) else {}
+        seed = str(sess_meta.get("seed") or "").strip()
+        if not seed:
+            raise HTTPException(status_code=400, detail="Run seed missing; start a new run.")
+
+        speed = str(sess_meta.get("speed") or "normal")
+        difficulty = str(sess_meta.get("difficulty") or "normal")
+        if payload.speed is not None and str(payload.speed).strip() and str(payload.speed).strip() != speed:
+            raise HTTPException(status_code=400, detail="Speed does not match this run.")
+        if payload.difficulty is not None and str(payload.difficulty).strip() and str(payload.difficulty).strip() != difficulty:
+            raise HTTPException(status_code=400, detail="Difficulty does not match this run.")
+
+        try:
+            sim = simulate_gauntlet(
+                seed=seed,
+                flaps=flaps,
+                speed=speed,
+                difficulty=difficulty,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e) or "Invalid flaps.") from e
+
+        score = int(sim.get("score") or 0)
+        if score < 0 or score > MAX_SCORE_SANITY:
+            raise HTTPException(status_code=400, detail="Score outside allowed range.")
 
         result = await db.user_meta.update_one(
             {"user_id": uid, "gauntlet_hour_start": hour_start_iso, "gauntlet_hour_count": {"$lt": MAX_PLAYS_PER_HOUR}},
