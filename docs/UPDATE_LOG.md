@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-09 21:38 UTC[/color][/b] — [b]Game Pass prestige + Dead → Alive[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] Claiming inheritance from a dead account can no longer re-complete your VIP Game Pass track after you’ve already [b]prestiged[/b] (£10). Prestige reset (season XP / tier progress) is protected.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-09 20:57 UTC[/color][/b] — [b]Multiplayer Poker: mobile + sync polish[/b][/size]
 [quote]
 [list]

@@ -598,7 +598,12 @@ def register(router):
         has_dead_rank_xp_carry = _dead_has_rank_xp_pass_carryover(dead_user, now, pass_bonus_until_dt, pass_token_expires_dt)
         dead_current_xp = max(0, int(dead_user.get("rank_xp_pass_season_rp") or 0))
         current_current_xp = max(0, int(current_user.get("rank_xp_pass_season_rp") or 0))
-        missing_game_pass_current_xp = dead_current_xp > current_current_xp
+        # Prestiged recipients already reset their VIP track — do not treat a completed
+        # dead pass as "missing Current XP" (that re-completes the prestige loop).
+        recipient_game_pass_prestiged = max(0, int(current_user.get("game_pass_prestige_count") or 0)) >= 1
+        missing_game_pass_current_xp = (
+            (not recipient_game_pass_prestiged) and dead_current_xp > current_current_xp
+        )
         points_at_death_snap = int(dead_user.get("points_at_death") or 0)
 
         pending_swiss = swiss_at_death if not swiss_retrieval_used else 0
@@ -860,7 +865,18 @@ def register(router):
             pass_pending = bool(pass_token_expires_dt and pass_token_expires_dt > now)
             dead_season_rp = max(0, int(dead_user.get("rank_xp_pass_season_rp") or 0))
             current_season_rp = max(0, int(current_user.get("rank_xp_pass_season_rp") or 0))
-            carried_season_rp = max(dead_season_rp, current_season_rp)
+            # Game Pass (£10) prestige loop — take the higher count so a prestiged dead
+            # account does not look like "first pass" after inheritance.
+            dead_gp_prestige = max(0, int(dead_user.get("game_pass_prestige_count") or 0))
+            alive_gp_prestige = max(0, int(current_user.get("game_pass_prestige_count") or 0))
+            # After £10 prestige the VIP track is intentionally reset. Never re-import a
+            # completed dead pass (season RP / grant cursor) onto that prestiged recipient.
+            protect_prestiged_progress = alive_gp_prestige >= 1
+            carried_season_rp = (
+                current_season_rp
+                if protect_prestiged_progress
+                else max(dead_season_rp, current_season_rp)
+            )
 
             pass_updates["rank_xp_pass_season_rp"] = carried_season_rp
             if dead_user.get("game_pass_season_id") is not None:
@@ -868,11 +884,15 @@ def register(router):
 
             if pass_active or pass_rewards_granted:
                 pass_updates["rank_xp_pass_bonus_until"] = pass_bonus_until_dt.isoformat() if pass_active else None
-                pass_updates["rank_xp_pass_tier_snapshot"] = max(
-                    int(dead_user.get("rank_xp_pass_tier_snapshot") or 0),
-                    int(current_user.get("rank_xp_pass_tier_snapshot") or 0),
-                    carried_season_rp,
-                )
+                if protect_prestiged_progress:
+                    # Align snapshot to recipient season RP (never import dead completed-track values).
+                    pass_updates["rank_xp_pass_tier_snapshot"] = max(0, carried_season_rp)
+                else:
+                    pass_updates["rank_xp_pass_tier_snapshot"] = max(
+                        int(dead_user.get("rank_xp_pass_tier_snapshot") or 0),
+                        int(current_user.get("rank_xp_pass_tier_snapshot") or 0),
+                        carried_season_rp,
+                    )
             else:
                 pass_updates["rank_xp_pass_bonus_until"] = None
                 pass_updates["rank_xp_pass_tier_snapshot"] = None
@@ -881,25 +901,33 @@ def register(router):
                 pass_updates["rank_xp_pass_token_expires_at"] = pass_token_expires_dt.isoformat()
                 pass_updates["rank_xp_pass_pending_tier_snapshot"] = dead_user.get("rank_xp_pass_pending_tier_snapshot")
             else:
-                pass_updates["rank_xp_pass_token_expires_at"] = None
-                pass_updates["rank_xp_pass_pending_tier_snapshot"] = None
+                # Keep prestiged recipient entitlement window (set by prestige apply).
+                if protect_prestiged_progress and current_user.get("rank_xp_pass_token_expires_at"):
+                    pass_updates["rank_xp_pass_token_expires_at"] = current_user.get("rank_xp_pass_token_expires_at")
+                    pass_updates["rank_xp_pass_pending_tier_snapshot"] = current_user.get(
+                        "rank_xp_pass_pending_tier_snapshot"
+                    )
+                else:
+                    pass_updates["rank_xp_pass_token_expires_at"] = None
+                    pass_updates["rank_xp_pass_pending_tier_snapshot"] = None
 
             pass_updates["rank_xp_pass_rewards_granted"] = pass_rewards_granted or bool(current_user.get("rank_xp_pass_rewards_granted"))
-            pass_updates["rank_xp_pass_last_granted_micro_tier"] = (
-                max(
-                    int(dead_user.get("rank_xp_pass_last_granted_micro_tier") or 0),
-                    int(current_user.get("rank_xp_pass_last_granted_micro_tier") or 0),
+            if protect_prestiged_progress:
+                pass_updates["rank_xp_pass_last_granted_micro_tier"] = int(
+                    current_user.get("rank_xp_pass_last_granted_micro_tier") or 0
                 )
-                if pass_updates["rank_xp_pass_rewards_granted"] else 0
-            )
+            else:
+                pass_updates["rank_xp_pass_last_granted_micro_tier"] = (
+                    max(
+                        int(dead_user.get("rank_xp_pass_last_granted_micro_tier") or 0),
+                        int(current_user.get("rank_xp_pass_last_granted_micro_tier") or 0),
+                    )
+                    if pass_updates["rank_xp_pass_rewards_granted"] else 0
+                )
             pass_updates["rank_xp_pass_free_last_micro_tier_granted"] = max(
                 int(dead_user.get("rank_xp_pass_free_last_micro_tier_granted") or 0),
                 int(current_user.get("rank_xp_pass_free_last_micro_tier_granted") or 0),
             )
-            # Game Pass (£10) prestige loop — take the higher count so a prestiged dead
-            # account does not look like "first pass" after inheritance.
-            dead_gp_prestige = max(0, int(dead_user.get("game_pass_prestige_count") or 0))
-            alive_gp_prestige = max(0, int(current_user.get("game_pass_prestige_count") or 0))
             carried_gp_prestige = max(dead_gp_prestige, alive_gp_prestige)
             if carried_gp_prestige > 0:
                 pass_updates["game_pass_prestige_count"] = carried_gp_prestige

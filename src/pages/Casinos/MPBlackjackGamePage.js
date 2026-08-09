@@ -36,6 +36,19 @@ function formatMoney(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
+/** Format server showdown totals, e.g. "HP 24 (bust), GhostFace 16". */
+function formatShowdownTotals(rows) {
+  if (!Array.isArray(rows) || !rows.length) return '';
+  return rows
+    .map((r) => {
+      const name = r?.username || '?';
+      const total = Number(r?.total);
+      if (Number.isNaN(total)) return name;
+      return r?.bust || total > 21 ? `${name} ${total} (bust)` : `${name} ${total}`;
+    })
+    .join(', ');
+}
+
 /* ─── Win Particles ─── */
 function WinParticles({ active }) {
   const [particles] = useState(() =>
@@ -124,18 +137,33 @@ function PlayingCard({ card, hidden, index = 0, total, large = false }) {
 function PlayerSeat({ p, isMe, isCurrent, showCards, isWinner, large = false }) {
   const hand = p.hand || [];
   const total = handTotal(hand);
-  const isBust = p.status === 'bust';
+  const isBust = p.status === 'bust' || total > 21;
   const isStood = p.status === 'stood';
   const isEliminated = p.eliminated || p.status === 'eliminated';
   const isWaiting = p.status === 'waiting' || p.status === 'waiting_ready';
   const isReady = p.ready && isWaiting;
   const maskPeek = !isMe && !showCards;
+  // Only count face-up cards (own hand mid-game, or everyone after showdown).
+  const canCountTotal = hand.length > 0
+    && hand.every((c) => c && c.hidden !== true && c.value && c.value !== '?');
 
   let badgeLabel = '—';
   let badgeStyle = { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)' };
 
   if (isWinner) { badgeLabel = 'Win'; badgeStyle = { background: 'rgba(52,211,153,0.25)', color: '#34d399' }; }
   else if (isEliminated) { badgeLabel = 'Out'; badgeStyle = { background: 'rgba(239,68,68,0.2)', color: '#ef4444' }; }
+  else if (canCountTotal && (isMe || showCards)) {
+    // Always show countable total for yourself (and for everyone once cards are revealed).
+    if (isBust) {
+      badgeLabel = `Bust ${total}`;
+      badgeStyle = { background: 'rgba(248,113,113,0.2)', color: '#f87171' };
+    } else {
+      badgeLabel = String(total);
+      badgeStyle = isCurrent
+        ? { background: 'rgba(212,175,55,0.25)', color: 'var(--noir-primary-bright)' }
+        : { background: 'rgba(52,211,153,0.18)', color: '#6ee7b7' };
+    }
+  }
   else if (isBust) { badgeLabel = 'Bust'; badgeStyle = { background: 'rgba(248,113,113,0.2)', color: '#f87171' }; }
   else if (isStood) { badgeLabel = 'Stand'; badgeStyle = { background: 'rgba(161,161,170,0.2)', color: '#a1a1aa' }; }
   else if (isCurrent) { badgeLabel = 'Playing'; badgeStyle = { background: 'rgba(212,175,55,0.2)', color: 'var(--noir-primary)' }; }
@@ -145,7 +173,6 @@ function PlayerSeat({ p, isMe, isCurrent, showCards, isWinner, large = false }) 
   }
   else if (isReady) { badgeLabel = 'Ready'; badgeStyle = { background: 'rgba(52,211,153,0.2)', color: '#34d399' }; }
   else if (isWaiting) { badgeLabel = 'Waiting'; badgeStyle = { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)' }; }
-  else if (hand.length && showCards) { badgeLabel = String(total); }
   else if (hand.length) { badgeLabel = `${hand.length} cd`; }
 
   return (
@@ -191,21 +218,31 @@ function PlayerSeat({ p, isMe, isCurrent, showCards, isWinner, large = false }) 
           {badgeLabel}
         </span>
       </div>
-      <div className={`p-2 ${large ? 'min-h-[96px] sm:min-h-[110px]' : 'min-h-[88px]'} flex items-center justify-center flex-wrap gap-1`}>
-        {isEliminated
-          ? <span className="text-[11px] font-heading uppercase tracking-wider text-red-400/50">Eliminated</span>
-          : hand.length === 0
-            ? <span className="text-[10px] font-heading" style={{ color: 'rgba(255,255,255,0.15)' }}>waiting…</span>
-            : hand.map((card, i) => (
-                <PlayingCard
-                  key={`${card?.suit || 'x'}-${card?.value || '?'}-${i}`}
-                  card={card}
-                  hidden={!showCards || card?.hidden === true || card?.value === '?'}
-                  index={i}
-                  total={hand.length}
-                  large={large}
-                />
-              ))}
+      <div className={`p-2 ${large ? 'min-h-[96px] sm:min-h-[110px]' : 'min-h-[88px]'} flex flex-col items-center justify-center gap-1.5`}>
+        <div className="flex items-center justify-center flex-wrap gap-1">
+          {isEliminated
+            ? <span className="text-[11px] font-heading uppercase tracking-wider text-red-400/50">Eliminated</span>
+            : hand.length === 0
+              ? <span className="text-[10px] font-heading" style={{ color: 'rgba(255,255,255,0.15)' }}>waiting…</span>
+              : hand.map((card, i) => (
+                  <PlayingCard
+                    key={`${card?.suit || 'x'}-${card?.value || '?'}-${i}`}
+                    card={card}
+                    hidden={!showCards || card?.hidden === true || card?.value === '?'}
+                    index={i}
+                    total={hand.length}
+                    large={large}
+                  />
+                ))}
+        </div>
+        {isMe && canCountTotal && !isEliminated && (
+          <p
+            className={`font-heading font-bold tabular-nums ${large ? 'text-base sm:text-lg' : 'text-sm'}`}
+            style={{ color: isBust ? '#f87171' : 'var(--noir-primary-bright)' }}
+          >
+            {isBust ? `Total ${total} — Bust` : `Total ${total}`}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -287,6 +324,7 @@ export default function MPBlackjackGamePage() {
   const startInFlightRef = useRef(false);
   const prevRoundRef = useRef(null);
   const prevRoundEliminatedRef = useRef([]);
+  const lastTieHistoryLenRef = useRef(0);
   const pollSeqRef = useRef(0);
   const actionSeqRef = useRef(0);
   const myUserIdRef = useRef(null);
@@ -335,6 +373,25 @@ export default function MPBlackjackGamePage() {
           toast.message(`Round ${prevRoundRef.current} over — eliminated: ${elimNames.join(', ')}`);
         }
       }
+      // Tie / no winner → pot stays, another round (detect new round_history entry)
+      const history = g?.round_history || [];
+      if (prev == null) {
+        lastTieHistoryLenRef.current = history.length;
+      } else if (history.length > lastTieHistoryLenRef.current) {
+        const latest = history[history.length - 1];
+        if (latest?.tie_play_again) {
+          const totalsLine = formatShowdownTotals(latest.showdown_totals);
+          toast.message(
+            totalsLine
+              ? `Tie / no winner (${totalsLine}) — another round will begin. Ready up to deal again.`
+              : 'Tie / no winner — another round will begin. Ready up to deal again.',
+            { duration: 7000 },
+          );
+        }
+        lastTieHistoryLenRef.current = history.length;
+      } else if (history.length < lastTieHistoryLenRef.current) {
+        lastTieHistoryLenRef.current = history.length;
+      }
       prevRoundRef.current = newRound;
       setPrevStatus(g?.status);
       setPrevPhase(g?.phase);
@@ -377,6 +434,8 @@ export default function MPBlackjackGamePage() {
   }, [gameId, applyGameUpdate]);
 
   useEffect(() => {
+    lastTieHistoryLenRef.current = 0;
+    prevRoundRef.current = null;
     fetchGame();
     if (!gameId) return;
     const t = setInterval(fetchGame, 3000);
@@ -767,10 +826,29 @@ export default function MPBlackjackGamePage() {
       )}
 
       {/* ══ READY PHASE ══ */}
-      {(status === 'playing' || status === 'open') && phase === 'ready' && (
+      {(status === 'playing' || status === 'open') && phase === 'ready' && (() => {
+        const lastHistory = (game?.round_history || [])[(game?.round_history || []).length - 1];
+        const tieRedeal = !!lastHistory?.tie_play_again;
+        return (
         <div className="mobile-panel rounded-xl overflow-hidden border-2" style={{ borderColor: '#5a3e1b', ...tableBackground }}>
           <div style={goldBar} />
           <div className="p-4 sm:p-5 space-y-5">
+            {tieRedeal && (
+              <div className="text-center px-3 py-2.5 rounded-lg border"
+                style={{ background: 'rgba(251,191,36,0.1)', borderColor: 'rgba(251,191,36,0.35)' }}>
+                <p className="text-[11px] sm:text-xs font-heading font-bold uppercase tracking-wider text-amber-300">
+                  Tie / no winner — another round will begin
+                </p>
+                {!!formatShowdownTotals(lastHistory?.showdown_totals) && (
+                  <p className="text-[11px] sm:text-xs font-heading text-foreground mt-1.5 tabular-nums">
+                    {formatShowdownTotals(lastHistory.showdown_totals)}
+                  </p>
+                )}
+                <p className="text-[11px] font-heading text-mutedForeground mt-1">
+                  Pot stays. Everyone ready up to deal again.
+                </p>
+              </div>
+            )}
             {/* Header */}
             <div className="text-center space-y-1">
               {eliminationRounds && currentRound > 1 ? (
@@ -787,7 +865,9 @@ export default function MPBlackjackGamePage() {
                 <>
                   <p className="text-sm font-heading font-bold uppercase tracking-[0.2em]"
                     style={{ background: 'linear-gradient(180deg,#ffd700,var(--noir-primary-bright))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                    {activePlayers.length >= (game?.max_players ?? 6) ? 'Table Full — Ready Up!' : 'Ready Up!'}
+                    {tieRedeal
+                      ? 'Ready for the next deal'
+                      : (activePlayers.length >= (game?.max_players ?? 6) ? 'Table Full — Ready Up!' : 'Ready Up!')}
                   </p>
                   <p className="text-[11px] font-heading" style={{ color: 'rgba(110,231,183,0.5)' }}>
                     {activePlayers.length >= 2 ? 'All seated players must ready — then deal' : 'Need at least 2 players'}
@@ -875,7 +955,8 @@ export default function MPBlackjackGamePage() {
           </div>
           <div style={goldBar} />
         </div>
-      )}
+        );
+      })()}
 
       {/* ══ PLAYING / COMPLETED TABLE ══ */}
       {(status === 'playing' || status === 'completed') && phase !== 'ready' && (
@@ -943,6 +1024,12 @@ export default function MPBlackjackGamePage() {
                         <span className="font-bold" style={{ color: '#34d399' }}>{entry.winner_username}</span>
                       ) : entry.eliminated?.length > 0 ? (
                         <span className="text-amber-400/90">{entry.eliminated.join(', ')} out</span>
+                      ) : entry.tie_play_again ? (
+                        <span className="text-amber-300/90">
+                          Tie{formatShowdownTotals(entry.showdown_totals)
+                            ? ` (${formatShowdownTotals(entry.showdown_totals)})`
+                            : ''} — another round
+                        </span>
                       ) : (
                         <span className="text-mutedForeground">—</span>
                       )}
@@ -1021,6 +1108,9 @@ export default function MPBlackjackGamePage() {
                   )}
                   <span className="text-[11px] font-heading font-bold uppercase tracking-wider text-primary">
                     Your turn
+                    {mySeatPlayer?.hand?.length
+                      ? ` · Total ${handTotal(mySeatPlayer.hand)}`
+                      : ''}
                   </span>
                 </div>
                 <div className="hidden sm:flex items-center justify-center gap-3 pb-1">
@@ -1029,6 +1119,9 @@ export default function MPBlackjackGamePage() {
                   )}
                   <span className="text-[11px] font-heading font-bold uppercase tracking-wider text-primary animate-turn-pulse">
                     Your turn
+                    {mySeatPlayer?.hand?.length
+                      ? ` · Total ${handTotal(mySeatPlayer.hand)}`
+                      : ''}
                   </span>
                 </div>
                 <div className="flex items-stretch gap-2 w-full max-w-md mx-auto">

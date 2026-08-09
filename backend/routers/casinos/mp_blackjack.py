@@ -138,6 +138,21 @@ def register(router):
             return False
         return any(_uid_eq(p.get("user_id"), viewer_user_id) for p in (g.get("players") or []))
 
+    def _showdown_totals(players: list) -> list:
+        """Public post-round totals only (no card faces) for tie / history UI."""
+        out = []
+        for p in players or []:
+            if p.get("eliminated"):
+                continue
+            total = int(_mp_bj_hand_total(p.get("hand") or []))
+            out.append({
+                "user_id": p.get("user_id"),
+                "username": (p.get("username") or "?").strip() or "?",
+                "total": total,
+                "bust": bool(total > 21 or p.get("status") == "bust"),
+            })
+        return out
+
     def _serialize_game(g, viewer_user_id=None):
         """Public game view — never leak shoe order or opponents' live cards."""
         out = {k: v for k, v in g.items() if k != "_id"}
@@ -174,17 +189,46 @@ def register(router):
                 c2["username"] = uid_to_label.get(c2.get("user_id"), "Anonymous")
                 chat.append(c2)
             out["chat"] = chat
+            # Anonymize round history labels (totals stay; real names must not leak).
+            name_to_uid = {p.get("username"): p.get("user_id") for p in (g.get("players") or [])}
+            for e in g.get("eliminated") or []:
+                if e.get("username"):
+                    name_to_uid[e.get("username")] = e.get("user_id")
+            hist = []
+            for entry in out.get("round_history") or []:
+                e2 = dict(entry)
+                win_name = e2.get("winner_username")
+                if win_name:
+                    e2["winner_username"] = uid_to_label.get(name_to_uid.get(win_name), "Anonymous")
+                if e2.get("eliminated"):
+                    e2["eliminated"] = [
+                        uid_to_label.get(name_to_uid.get(name), "Anonymous")
+                        for name in (e2.get("eliminated") or [])
+                        if isinstance(name, str)
+                    ]
+                st = []
+                for row in e2.get("showdown_totals") or []:
+                    r2 = dict(row)
+                    r2["username"] = uid_to_label.get(r2.get("user_id"), "Anonymous")
+                    st.append(r2)
+                if st:
+                    e2["showdown_totals"] = st
+                hist.append(e2)
+            out["round_history"] = hist
         # Hide every other seat's cards for the whole playing phase (not only until you stand).
-        # Reveal when the round settles (dealer / settled / completed).
+        # Reveal only after the hand leaves "playing" (dealer / settled / completed / ready).
+        # Totals are never sent mid-hand — clients must not be able to inspect opponents' values.
         if g.get("status") == "playing" and g.get("phase") == "playing":
             players = list(out.get("players") or [])
             new_players = []
             for p in players:
                 p2 = dict(p)
+                p2.pop("hand_total", None)
                 if viewer_user_id is not None and _uid_eq(p2.get("user_id"), viewer_user_id):
                     new_players.append(p2)
                     continue
                 n = len(p2.get("hand") or [])
+                # Face-down placeholders only — no suit/value for DevTools / network tab.
                 p2["hand"] = [{"hidden": True} for _ in range(n)]
                 new_players.append(p2)
             out["players"] = new_players
@@ -295,6 +339,7 @@ def register(router):
             surviving_ids = [s[0] for s in scored if s[1] != min_score]
             if len(to_eliminate_ids) == len(active):
                 # Everyone tied (e.g. both have 21) — play another round, no elimination
+                showdown_totals = _showdown_totals(players)
                 new_deck = _mp_bj_make_deck()
                 _rng.shuffle(new_deck)
                 for p in players:
@@ -307,6 +352,7 @@ def register(router):
                     "winner_username": None,
                     "eliminated": None,
                     "tie_play_again": True,
+                    "showdown_totals": showdown_totals,
                 }
                 await db.mp_blackjack_games.update_one(
                     {"id": game_id},
@@ -455,6 +501,7 @@ def register(router):
 
             if tie_or_no_winner:
                 # Tie (e.g. both 21) or everyone bust — play another round: no refunds, back to ready
+                showdown_totals = _showdown_totals(players)
                 new_deck = _mp_bj_make_deck()
                 _rng.shuffle(new_deck)
                 for p in players:
@@ -467,6 +514,7 @@ def register(router):
                     "winner_username": None,
                     "eliminated": None,
                     "tie_play_again": True,
+                    "showdown_totals": showdown_totals,
                 }
                 await db.mp_blackjack_games.update_one(
                     {"id": game_id},

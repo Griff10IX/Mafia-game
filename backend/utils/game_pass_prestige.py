@@ -536,6 +536,7 @@ async def execute_game_pass_prestige(
     set_doc: Dict[str, Any] = {
         "rank_xp_pass_season_rp": 0,
         "rank_xp_pass_last_granted_micro_tier": 0,
+        "rank_xp_pass_tier_snapshot": 0,
         "rank_xp_pass_rewards_granted": True,
         "rank_xp_pass_token_expires_at": entitlement_until.isoformat(),
         "game_pass_prestiged_at": now_iso,
