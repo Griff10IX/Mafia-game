@@ -8,6 +8,8 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 PROTECTION_HOURS = 14 * 24
+# Claiming an unowned casino keeps protection, but caps remaining time at 2 days.
+CASINO_CLAIM_PROTECTION_REMAINING_HOURS = 2 * 24
 
 CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL = (
     "That player still has new-account protection and can't be attacked in normal PvP yet."
@@ -29,6 +31,7 @@ CIVILIAN_PROTECTION_CONFIRM_MESSAGE = (
 )
 
 # Intentional player actions that strip protection and require an explicit confirm header.
+# Note: claiming an unowned casino only shortens protection (no confirm / no full revoke).
 CONFIRM_REQUIRED_REASONS = frozenset({
     "manual",
     "search_player",
@@ -37,17 +40,16 @@ CONFIRM_REQUIRED_REASONS = frozenset({
     "crew_join",
     "crew_create",
     "exclusive_car",
-    "casino_claim",
     "casino_buyback_reject",
 })
 
 RULES_BULLETS: List[str] = [
-    "Take a casino from someone and reject their buyback, or ignore buyback until it expires.",
+    "Claim an unowned casino — protection is shortened to 2 days left (not removed), so you can hold a table without being attackable immediately.",
+    "Reject a buyback on someone else's casino you took (or ignore buyback until it expires) — protection ends.",
     "Run a search on another player or a bodyguard (searching only a hitlist NPC does not remove protection).",
     "Put a real player on the hitlist.",
     "Apply to a crew, join one, or start your own.",
     "Buy an exclusive car.",
-    "Claim a casino.",
 ]
 
 _ASSET_RECIPIENT_PROJECTION = {
@@ -55,6 +57,7 @@ _ASSET_RECIPIENT_PROJECTION = {
     "id": 1,
     "created_at": 1,
     "civilian_protection_revoked_at": 1,
+    "civilian_protection_ends_at": 1,
     "is_npc": 1,
     "email": 1,
     "is_moderator": 1,
@@ -91,7 +94,12 @@ def protection_window_end_dt(user: Optional[dict]) -> Optional[datetime]:
     created = _parse_user_dt(user.get("created_at"))
     if not created:
         return None
-    return created + timedelta(hours=PROTECTION_HOURS)
+    natural = created + timedelta(hours=PROTECTION_HOURS)
+    # Optional early cap (e.g. after claiming an unowned casino → max 2 days remaining).
+    override = _parse_user_dt(user.get("civilian_protection_ends_at"))
+    if override is not None:
+        return min(natural, override)
+    return natural
 
 
 def protection_window_end_iso(user: Optional[dict]) -> Optional[str]:
@@ -205,6 +213,51 @@ async def maybe_revoke_civilian_protection(db, user_id: str, reason: str) -> Non
     await revoke_civilian_protection(db, user_id, reason)
 
 
+async def shorten_civilian_protection_for_casino_claim(db, user_id: str) -> bool:
+    """
+    Claiming an unowned casino no longer strips new-account protection.
+    Caps remaining protection at CASINO_CLAIM_PROTECTION_REMAINING_HOURS from now
+    (never extends). Returns True if the end time was shortened.
+    """
+    uid = str(user_id or "").strip()
+    if not uid:
+        return False
+    user = await db.users.find_one(
+        {"id": uid},
+        {
+            "_id": 0,
+            "id": 1,
+            "created_at": 1,
+            "civilian_protection_revoked_at": 1,
+            "civilian_protection_ends_at": 1,
+            "is_npc": 1,
+            "email": 1,
+            "is_moderator": 1,
+        },
+    )
+    if not is_civilian_protected(user):
+        return False
+    now = datetime.now(timezone.utc)
+    current_end = protection_window_end_dt(user)
+    if not current_end or current_end <= now:
+        return False
+    cap_end = now + timedelta(hours=CASINO_CLAIM_PROTECTION_REMAINING_HOURS)
+    new_end = min(current_end, cap_end)
+    # Already within the 2-day cap — nothing to do.
+    if new_end >= current_end - timedelta(seconds=2):
+        return False
+    await db.users.update_one(
+        {"id": uid},
+        {
+            "$set": {
+                "civilian_protection_ends_at": new_end.isoformat(),
+                "civilian_protection_shorten_reason": "casino_claim",
+            }
+        },
+    )
+    return True
+
+
 async def cleanup_expired_buyback_offers_for_user(
     db,
     collection_name: str,
@@ -244,6 +297,8 @@ def civilian_protection_status_payload(user: dict) -> Dict[str, Any]:
         "ends_at": ends_at,
         "revoked_at": revoked_at,
         "revoke_reason": revoke_reason,
+        "shorten_reason": user.get("civilian_protection_shorten_reason"),
         "rules_bullets": list(RULES_BULLETS),
         "protection_hours": PROTECTION_HOURS,
+        "casino_claim_remaining_hours": CASINO_CLAIM_PROTECTION_REMAINING_HOURS,
     }

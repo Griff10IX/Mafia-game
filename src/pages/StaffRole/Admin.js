@@ -14565,7 +14565,7 @@ export default function Admin() {
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={HandCoins}
-          title="Claim costs"
+          title="Claim costs (casinos default free)"
           badge={
             <span className="text-[10px] font-heading text-mutedForeground">
               {claimCostsLoading ? 'Loading…' : 'Casino · airport · armoury'}

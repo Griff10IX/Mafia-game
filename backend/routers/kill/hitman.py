@@ -205,6 +205,7 @@ async def _resolve_username(username: str) -> Optional[dict]:
             "is_moderator": 1,
             "created_at": 1,
             "civilian_protection_revoked_at": 1,
+            "civilian_protection_ends_at": 1,
             "hitman_victim_cooldown_until": 1,
             "hitman_protection_until": 1,
         },

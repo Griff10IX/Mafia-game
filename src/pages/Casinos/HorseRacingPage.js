@@ -314,7 +314,7 @@ const QUICK_BETS = [
 ];
 
 export default function HorseRacingPage() {
-  const [config, setConfig] = useState({ horses: [], max_bet: 10_000_000, claim_cost: 500_000_000 });
+  const [config, setConfig] = useState({ horses: [], max_bet: 10_000_000, claim_cost: 0 });
   const [ownership, setOwnership] = useState(null);
   const [selectedHorseId, setSelectedHorseId] = useState(null);
   const [bet, setBet] = useState('1000');
@@ -359,14 +359,14 @@ export default function HorseRacingPage() {
         horses: horsesList,
         max_bet: data.max_bet || 10_000_000,
         house_edge: data.house_edge ?? 0.0005,
-        claim_cost: data.claim_cost ?? 500_000_000,
+        claim_cost: data.claim_cost ?? 0,
       });
       setSelectedHorseId((prev) => {
         if (prev) return prev;
         return horsesList.length && horsesList[0] ? horsesList[0].id : null;
       });
     }).catch(() => {
-      setConfig({ horses: [], max_bet: 10_000_000, house_edge: 0.005, claim_cost: 500_000_000 });
+      setConfig({ horses: [], max_bet: 10_000_000, house_edge: 0.005, claim_cost: 0 });
     });
     api.get('/casino/horseracing/ownership').then((r) => {
       const data = r.data ?? null;
@@ -760,7 +760,7 @@ export default function HorseRacingPage() {
           <span className="text-mutedForeground">Max: <span className="text-primary font-bold">{formatMoney(maxBet)}</span></span>
           {canClaim && (
             <button onClick={handleClaim} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">
-              Buy ({formatMoney(config.claim_cost)})
+              {(Number(config.claim_cost) || 0) <= 0 ? 'Claim (Free)' : `Claim (${formatMoney(config.claim_cost)})`}
             </button>
           )}
         </div>

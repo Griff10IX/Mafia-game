@@ -184,17 +184,49 @@ async def claimed_counts_live(db) -> Dict[str, Dict[str, Any]]:
         {"_id": 0, "item_id": 1, "owner_id": 1, "owner_username": 1},
     ).to_list(50)
     by_id = {r.get("item_id"): r for r in rows}
+    missing_uids = [
+        str(r.get("owner_id") or "").strip()
+        for r in rows
+        if str(r.get("owner_id") or "").strip() and not str(r.get("owner_username") or "").strip()
+    ]
+    username_by_id: Dict[str, str] = {}
+    if missing_uids:
+        try:
+            users = await db.users.find(
+                {"id": {"$in": list(dict.fromkeys(missing_uids))}},
+                {"_id": 0, "id": 1, "username": 1},
+            ).to_list(20)
+            for u in users:
+                uid = str(u.get("id") or "")
+                uname = str(u.get("username") or "").strip()
+                if uid and uname:
+                    username_by_id[uid] = uname
+        except Exception:
+            logger.exception("resolve vault relic owner usernames failed")
     out: Dict[str, Dict[str, Any]] = {}
     for item_id, cfg in RECLAIMABLE_PASSIVES.items():
         doc = by_id.get(item_id) or {}
-        owned = bool(str(doc.get("owner_id") or "").strip())
+        owner_id = str(doc.get("owner_id") or "").strip()
+        owned = bool(owner_id)
+        owner_username = None
+        if owned:
+            owner_username = str(doc.get("owner_username") or "").strip() or username_by_id.get(owner_id) or None
+            if owner_username and not str(doc.get("owner_username") or "").strip():
+                try:
+                    await db[COLLECTION].update_one(
+                        {"item_id": item_id, "owner_id": owner_id},
+                        {"$set": {"owner_username": owner_username}},
+                    )
+                except Exception:
+                    pass
         out[item_id] = {
             "id": item_id,
             "name": cfg["name"],
             "buff_label": cfg["buff_label"],
             "claimed": 1 if owned else 0,
             "cap": 1,
-            "owner_username": doc.get("owner_username") if owned else None,
+            "owner_id": owner_id or None,
+            "owner_username": owner_username,
         }
     return out
 

@@ -176,7 +176,7 @@ function WinParticles({ active }) {
    Main Page
    ═══════════════════════════════════════════════════════ */
 export default function Blackjack() {
-  const [config, setConfig] = useState({ max_bet: 50_000_000, claim_cost: 1_000_000_000 });
+  const [config, setConfig] = useState({ max_bet: 50_000_000, claim_cost: 0 });
   const [ownership, setOwnership] = useState(null);
   const [bet, setBet] = useState('1000');
   const [game, setGame] = useState(null);
@@ -196,8 +196,8 @@ export default function Blackjack() {
   const navigate = useNavigate();
 
   const fetchConfigAndOwnership = () => {
-    api.get('/casino/blackjack/config').then((r) => setConfig(r.data ?? { max_bet: 50_000_000, claim_cost: 1_000_000_000 })).catch(() => {
-      setConfig({ max_bet: 50_000_000, claim_cost: 1_000_000_000 });
+    api.get('/casino/blackjack/config').then((r) => setConfig(r.data ?? { max_bet: 50_000_000, claim_cost: 0 })).catch(() => {
+      setConfig({ max_bet: 50_000_000, claim_cost: 0 });
     });
     api.get('/casino/blackjack/ownership').then((r) => {
       const data = r.data ?? null;
@@ -515,7 +515,7 @@ export default function Blackjack() {
           <span className="text-mutedForeground">Max: <span className="text-primary font-bold">{formatMoney(maxBet)}</span></span>
           {canClaim && (
             <button onClick={handleClaim} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">
-              Claim ({formatMoney(config.claim_cost)})
+              {(Number(config.claim_cost) || 0) <= 0 ? 'Claim (Free)' : `Claim (${formatMoney(config.claim_cost)})`}
             </button>
           )}
         </div>

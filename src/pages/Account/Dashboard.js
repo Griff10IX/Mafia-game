@@ -510,7 +510,7 @@ export default function Dashboard() {
             <CollapsibleContent>
               <div className={`${dash.panelBody} space-y-2`}>
                 <p className="text-[10px] font-heading text-mutedForeground leading-relaxed">
-                  For your first {formatProtectionDurationLabel(civilianProtection.protection_hours)}, other players can&apos;t attack you in normal PvP. When the countdown hits zero, protection ends on its own — or it ends immediately if you do any of the following. You&apos;ll be asked to confirm first so you know protection will be removed.
+                  For your first {formatProtectionDurationLabel(civilianProtection.protection_hours)}, other players can&apos;t attack you in normal PvP. When the countdown hits zero, protection ends on its own. Some actions end it early (you&apos;ll be asked to confirm). Claiming an unowned casino only shortens protection to 2 days left — it does not remove it.
                 </p>
                 <div>
                   <p className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em] mb-1">These actions remove protection</p>

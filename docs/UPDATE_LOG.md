@@ -6,6 +6,27 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-09 16:15 UTC[/color][/b] — [b]New-account protection: casino claim softens to 2 days[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Claiming an [b]unowned[/b] casino no longer removes new-account protection. Remaining protection is capped at [b]2 days[/b] so you can hold a table without becoming a target immediately.[/color]
+[*][color=#888888][b]Unchanged:[/b] Rejecting (or letting expire) a buyback on someone else’s casino you took still [b]ends[/b] protection.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-09 16:05 UTC[/color][/b] — [b]Unowned casinos & first property buys free[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Dice, Roulette, Blackjack, Horse Racing, and Video Poker tables with [b]no owner[/b] can be claimed for [b]free[/b] (Capo+ / prestige rules unchanged). Airport and Armoury claim costs are unchanged.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Money → Properties[/b] first buy of each unlocked building is [b]free[/b]. Upgrades still cost cash as before.[/color]
+[*][color=#888888][b]Note:[/b] Buying an [b]owned[/b] casino table on Quick Trade / buy-back still costs whatever the seller set.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-09 15:00 UTC[/color][/b] — [b]Vault relics (exclusive passives)[/b][/size]
 [quote]
 [list]

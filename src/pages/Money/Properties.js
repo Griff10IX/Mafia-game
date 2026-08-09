@@ -497,7 +497,11 @@ export default function Properties() {
             <div className="p-3">
               <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mb-2 text-[10px] font-heading">
                 <span className="text-mutedForeground uppercase tracking-wider">Price</span>
-                <span className="text-primary font-bold text-right">${property.price.toLocaleString()}</span>
+                <span className="text-primary font-bold text-right">
+                  {property.owned
+                    ? `$${Number(property.price || 0).toLocaleString()}`
+                    : 'Free'}
+                </span>
                 <span className="text-mutedForeground uppercase tracking-wider">Income/hr</span>
                 <span className="text-foreground text-right">${property.income_per_hour.toLocaleString()}</span>
                 {property.locked && property.required_property_name && (
@@ -601,7 +605,7 @@ export default function Properties() {
                         : 'bg-primary/20 text-primary border-primary/40 hover:bg-primary/30 active:scale-[0.97]'
                     }`}
                   >
-                    {property.locked ? <><Lock size={11} /> Locked</> : 'Buy Property'}
+                    {property.locked ? <><Lock size={11} /> Locked</> : 'Claim (Free)'}
                   </button>
                 )}
               </div>

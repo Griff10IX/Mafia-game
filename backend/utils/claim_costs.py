@@ -11,18 +11,24 @@ import time
 from typing import Any, Dict, Optional
 
 CLAIM_COSTS_SETTINGS_KEY = "claim_costs"
+# One-shot: zero casino table claim cash/points (airport / armoury unchanged).
+CASINO_CLAIMS_FREE_MIGRATION_KEY = "casino_claims_free_v1"
 
-# Must match historical module defaults (see routers before DB-backed costs).
+# Casino tables: free to claim when unowned. Airport / armoury keep cash costs.
 DEFAULT_CLAIM_COSTS: Dict[str, int] = {
-    "dice_cash": 125_000_000,
+    "dice_cash": 0,
     "dice_points": 0,
-    "roulette": 250_000_000,
-    "blackjack": 1_000_000_000,
-    "horseracing": 500_000_000,
-    "video_poker": 750_000_000,
+    "roulette": 0,
+    "blackjack": 0,
+    "horseracing": 0,
+    "video_poker": 0,
     "airport": 175_000_000,
     "armoury": 200_000_000,
 }
+
+CASINO_CLAIM_COST_KEYS = frozenset(
+    ("dice_cash", "dice_points", "roulette", "blackjack", "horseracing", "video_poker")
+)
 
 KNOWN_KEYS = frozenset(DEFAULT_CLAIM_COSTS.keys())
 _MAX_COST = 10**15
@@ -75,3 +81,39 @@ async def load_claim_costs(db, *, ttl_sec: float = 45.0) -> Dict[str, int]:
 def invalidate_claim_costs_cache() -> None:
     global _claim_costs_cache
     _claim_costs_cache = None
+
+
+async def ensure_casino_claim_costs_free(db) -> None:
+    """
+    Idempotent migration: set casino claim costs to $0 / 0 pts in game_settings.
+    Leaves airport and armoury costs alone. Safe to call on every startup.
+    """
+    try:
+        flag = await db.game_settings.find_one(
+            {"key": CASINO_CLAIMS_FREE_MIGRATION_KEY},
+            {"_id": 0, "value": 1},
+        )
+        if flag and flag.get("value"):
+            return
+        doc = await db.game_settings.find_one(
+            {"key": CLAIM_COSTS_SETTINGS_KEY},
+            {"_id": 0, "value": 1},
+        )
+        raw = dict((doc or {}).get("value") or {}) if isinstance((doc or {}).get("value"), dict) else {}
+        for k in CASINO_CLAIM_COST_KEYS:
+            raw[k] = 0
+        merged = merge_claim_costs(raw)
+        await db.game_settings.update_one(
+            {"key": CLAIM_COSTS_SETTINGS_KEY},
+            {"$set": {"key": CLAIM_COSTS_SETTINGS_KEY, "value": merged}},
+            upsert=True,
+        )
+        await db.game_settings.update_one(
+            {"key": CASINO_CLAIMS_FREE_MIGRATION_KEY},
+            {"$set": {"key": CASINO_CLAIMS_FREE_MIGRATION_KEY, "value": True}},
+            upsert=True,
+        )
+        invalidate_claim_costs_cache()
+    except Exception:
+        # Startup must not fail if settings write races; next boot retries.
+        pass

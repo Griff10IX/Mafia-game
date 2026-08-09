@@ -126,7 +126,8 @@ New characters get a short [b]protection window[/b] (about [b]14 days[/b] from a
 [list]
 [*][color=#888888]While active: you [b]cannot[/b] attack other players in normal PvP, and others [b]cannot[/b] attack you[/color]
 [*][color=#888888]Also blocks [b]Hitman for Hire[/b] contracts on you (and you cannot hire against someone who still has it)[/color]
-[*][color=#888888]Ends when the timer runs out, or earlier if you break the on-page rules (examples: putting a real player on the hitlist, joining/starting a crew, claiming or accepting a casino/property transfer, buying an exclusive car, searching a real player/bodyguard, rejecting/ignoring a casino buyback after taking one)[/color]
+[*][color=#888888]Ends when the timer runs out, or earlier if you break the on-page rules (examples: putting a real player on the hitlist, joining/starting a crew, accepting a casino/property transfer, buying an exclusive car, searching a real player/bodyguard, rejecting/ignoring a casino buyback after taking one)[/color]
+[*][color=#2ECC71]Claiming an [b]unowned[/b] casino does [b]not[/b] end protection — it shortens remaining protection to [b]2 days[/b] so you can hold a table without becoming attackable immediately[/color]
 [/list]
 
 [color=#FFD700][b]Hitman for Hire[/b][/color]
@@ -215,6 +216,7 @@ Own properties that generate passive income every hour. Names, prices, and incom
 
 [b]Property Types:[/b]
 [list]
+[*][color=#2ECC71]First buy of each unlocked property is [b]free[/b]; upgrades still cost cash (see each card)[/color]
 [*][color=#888888]Tiers unlock in order — open the Properties page to see current names, base $/hr, and buy order[/color]
 [/list]
 
@@ -765,10 +767,11 @@ Attack other families' rackets to steal income:
 Own casino tables and earn from the house edge!
 
 [list]
+[*][color=#2ECC71][b]Unowned[/b] Dice / Roulette / Blackjack / Horse Racing / Video Poker tables are [b]free to claim[/b] (must be in that city; Capo+ or prestiged; still one casino max)[/color]
 [*][color=#FFD700]Kill a casino table owner to take their table[/color]
 [*][color=#888888]Earn a percentage of all bets placed at your table[/color]
 [*][color=#888888]Passive income from other players gambling[/color]
-[*][color=#888888]Multiple tables available to own[/color]
+[*][color=#888888]Owned tables can also move via Quick Trade / buy-back (seller sets the price)[/color]
 [*][color=#888888]Lose ownership if someone kills you[/color]
 [/list]
 [/quote]
@@ -1477,7 +1480,7 @@ If someone used your card without permission:
 [color=#AAAAAA]A: [b]Rock Paper Scissors[/b] and [b]Noughts & Crosses[/b] vs the house. You get [b]up to 3 plays per rolling 6-hour window[/b] (shared across both games). Wins pay cash and sometimes cars (see the Daily Rewards screen).[/color]
 
 [color=#3498DB][b]Q: How do I own a casino table or airport slot?[/b][/color]
-[color=#AAAAAA]A: Kill the current owner! Casino tables and airport slots transfer to whoever kills the owner. Great passive income source.[/color]
+[color=#AAAAAA]A: [b]Unowned casino tables[/b] (Dice, Roulette, Blackjack, Horse Racing, Video Poker) are [b]free to claim[/b] in-city if you meet Capo+/prestige and the one-casino limit. If someone already owns it, kill them to take it, or buy via Quick Trade / buy-back. [b]Airports[/b] still cost cash to claim; killing the owner also transfers the slot.[/color]
 [/quote]
 
 [hr]

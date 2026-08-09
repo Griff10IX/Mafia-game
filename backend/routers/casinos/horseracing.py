@@ -17,6 +17,7 @@ from utils.civilian_protection import (
     maybe_revoke_civilian_protection,
     raise_if_civilian_protected_asset_recipient,
     require_protection_revoke_confirm,
+    shorten_civilian_protection_for_casino_claim,
 )
 
 from server import (
@@ -310,7 +311,6 @@ def register(router):
         req: Request,
         current_user: dict = Depends(get_current_user_verified),
     ):
-        require_protection_revoke_confirm(current_user, reason="casino_claim", request=req)
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
         prestige_level = int(current_user.get("prestige_level") or 0)
         if rank_id < CAPO_RANK_ID and prestige_level < 1:
@@ -337,7 +337,7 @@ def register(router):
         if not res.modified_count and not res.upserted_id:
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": claim_cost}})
             raise HTTPException(status_code=400, detail="This track already has an owner")
-        await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "casino_claim")
+        await shorten_civilian_protection_for_casino_claim(db, current_user.get("id") or "")
         await cancel_quicktrade_casino_listings_by_locations("casino_horseracing", stored_city or city, city)
         return {"message": f"You now own the race track in {city}!"}
 

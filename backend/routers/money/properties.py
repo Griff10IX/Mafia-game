@@ -1050,13 +1050,20 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
                     status_code=403,
                     detail=f"Max out {name} (reach max level) to unlock this property.",
                 )
-        cost = prop["price"]
-    result = await db.users.update_one(
-        {"id": current_user["id"], "money": {"$gte": cost}},
-        {"$inc": {"money": -cost}}
-    )
-    if result.modified_count == 0:
-        raise HTTPException(status_code=400, detail="Insufficient money")
+        # First acquisition is free; upgrades still use catalog price × (level + 1).
+        cost = 0
+    if cost > 0:
+        result = await db.users.update_one(
+            {"id": current_user["id"], "money": {"$gte": cost}},
+            {"$inc": {"money": -cost}}
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Insufficient money")
+    else:
+        # Ensure user still exists (no cash debit on free first buy).
+        exists = await db.users.find_one({"id": current_user["id"]}, {"_id": 1})
+        if not exists:
+            raise HTTPException(status_code=400, detail="User not found")
     if user_prop is not None:
         await db.user_properties.update_one(
             {"_id": user_prop["_id"]},

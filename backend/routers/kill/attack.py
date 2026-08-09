@@ -1715,6 +1715,7 @@ _BULLET_CALC_TARGET_PROJECTION = {
     "is_bodyguard": 1,
     "created_at": 1,
     "civilian_protection_revoked_at": 1,
+    "civilian_protection_ends_at": 1,
     "prestige_rank_multiplier": 1,
 }
 
@@ -1729,6 +1730,7 @@ _SEARCH_TARGET_PROJECTION = {
     "is_dead": 1,
     "current_state": 1,
     "civilian_protection_revoked_at": 1,
+    "civilian_protection_ends_at": 1,
     "created_at": 1,
 }
 

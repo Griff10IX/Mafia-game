@@ -16,6 +16,7 @@ from utils.point_provenance import log_points_event
 from utils.civilian_protection import (
     cleanup_expired_buyback_offers_for_user,
     maybe_revoke_civilian_protection,
+    shorten_civilian_protection_for_casino_claim,
     raise_if_civilian_protected_asset_recipient,
     require_protection_revoke_confirm,
 )
@@ -506,7 +507,6 @@ def register(router):
         current_user: dict = Depends(get_current_user_verified),
     ):
         """Claim ownership of the dice table in a city (cost in points). Max 1 casino per player. Requires Capo or higher (or prestiged)."""
-        require_protection_revoke_confirm(current_user, reason="casino_claim", request=req)
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
         prestige_level = int(current_user.get("prestige_level") or 0)
         if rank_id < CAPO_RANK_ID and prestige_level < 1:
@@ -554,7 +554,7 @@ def register(router):
             raise HTTPException(status_code=400, detail="This table is already owned")
         if pts_cost > 0:
             await log_points_event(db, user_id=current_user.get("id") or "", points=-pts_cost, event_type="casino_dice", event_ref=f"claim:{city}", meta={"action": "claim_cost", "city": city})
-        await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "casino_claim")
+        await shorten_civilian_protection_for_casino_claim(db, current_user.get("id") or "")
         await cancel_quicktrade_casino_listings_by_locations("casino_dice", db_city, city)
         return {"message": f"You now own the dice table in {city}!"}
 

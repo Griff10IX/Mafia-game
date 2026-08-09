@@ -323,6 +323,12 @@ async def ensure_all_indexes(db):
             await ensure_loot_reclaimable_indexes(db)
         except Exception as e:
             logger.warning("loot_reclaimable_passives indexes: %s", e)
+        try:
+            from utils.claim_costs import ensure_casino_claim_costs_free
+
+            await ensure_casino_claim_costs_free(db)
+        except Exception as e:
+            logger.warning("casino claim costs free migration: %s", e)
         await db.bullet_factory.create_index("owner_id")
         await db.bullet_factory.create_index("state")
         await db.garage_dealership.create_index("owner_id", unique=True, sparse=True)

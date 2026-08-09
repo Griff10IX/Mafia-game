@@ -207,7 +207,7 @@ function WinParticles({ active }) {
 export default function VideoPoker() {
   const [config, setConfig] = useState({
     max_bet: 50_000_000,
-    claim_cost: 750_000_000,
+    claim_cost: 0,
     odds_preset: 'tight',
     pay_table: {},
     pay_table_presets: {},
@@ -579,7 +579,7 @@ export default function VideoPoker() {
           <span className="text-mutedForeground">Max: <span className="text-primary font-bold">{formatMoney(maxBet)}</span></span>
           {canClaim && (
             <button onClick={handleClaim} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">
-              Claim ({formatMoney(config.claim_cost)})
+              {(Number(config.claim_cost) || 0) <= 0 ? 'Claim (Free)' : `Claim (${formatMoney(config.claim_cost)})`}
             </button>
           )}
         </div>

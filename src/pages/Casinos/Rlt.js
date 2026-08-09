@@ -347,7 +347,7 @@ function NumCell({ num, onClick, betCount }) {
    Main Page
    ═══════════════════════════════════════════════════════ */
 export default function Rlt() {
-  const [config, setConfig] = useState({ claim_cost: 250_000_000 });
+  const [config, setConfig] = useState({ claim_cost: 0 });
   const [ownership, setOwnership] = useState(null);
   const [selectedChip, setSelectedChip] = useState(1_000_000);
   const [customChip, setCustomChip] = useState('');
@@ -446,7 +446,7 @@ export default function Rlt() {
       const d = r.data ?? {};
       setConfig((prev) => ({
         ...prev,
-        claim_cost: d.claim_cost ?? prev.claim_cost ?? 250_000_000,
+        claim_cost: d.claim_cost ?? prev.claim_cost ?? 0,
         house_edge_percent: d.house_edge_percent ?? prev.house_edge_percent,
       }));
     }).catch(() => {});
@@ -932,7 +932,7 @@ export default function Rlt() {
           <span className="text-mutedForeground">Max: <span className="text-primary font-bold">{formatMoney(effectiveMaxBet)}</span></span>
           {canClaim && (
             <button onClick={handleClaim} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">
-              Claim ({formatMoney(config.claim_cost ?? 250_000_000)})
+              {(Number(config.claim_cost) || 0) <= 0 ? 'Claim (Free)' : `Claim (${formatMoney(config.claim_cost)})`}
             </button>
           )}
         </div>

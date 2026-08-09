@@ -724,18 +724,26 @@ function ChestIcon({ shaking, exploding, ready, tier = 'common', openAnimLevel =
 }
 
 /* ─── Scarcity row ─── */
-function ScarcityRow({ icon: Icon, label, claimed, cap }) {
+function ScarcityRow({ icon: Icon, label, claimed, cap, holder }) {
   const full = claimed >= cap;
+  const holderLabel = String(holder || '').trim();
   return (
     <li className={`flex items-center gap-2 py-1.5 px-2 rounded border ${full ? 'bg-red-500/10 border-red-500/25' : 'bg-primary/5 border-primary/15'}`}>
       <Icon size={12} className={full ? 'text-red-400 shrink-0' : 'text-primary shrink-0'} />
-      <span className="flex-1 text-[10px] font-heading text-foreground">{label}</span>
-      <div className="flex gap-0.5">
-        {Array.from({ length: cap }, (_, i) => (
+      <div className="flex-1 min-w-0">
+        <span className="block text-[10px] font-heading text-foreground truncate">{label}</span>
+        {holderLabel ? (
+          <span className={`block text-[8px] font-heading truncate mt-0.5 ${full ? 'text-red-300/90' : 'text-mutedForeground'}`}>
+            Held by {holderLabel}
+          </span>
+        ) : null}
+      </div>
+      <div className="flex gap-0.5 shrink-0">
+        {Array.from({ length: Math.max(1, Number(cap) || 1) }, (_, i) => (
           <div key={i} className={`w-1.5 h-1.5 rounded-full border ${i < claimed ? (full ? 'bg-red-400 border-red-400' : 'bg-primary border-primary') : 'bg-zinc-600 border-zinc-500'}`} />
         ))}
       </div>
-      <span className={`text-[9px] font-heading min-w-[2rem] text-right ${full ? 'text-red-400' : 'text-mutedForeground'}`}>{claimed}/{cap}</span>
+      <span className={`text-[9px] font-heading min-w-[2rem] text-right shrink-0 ${full ? 'text-red-400' : 'text-mutedForeground'}`}>{claimed}/{cap}</span>
     </li>
   );
 }
@@ -1261,13 +1269,15 @@ export default function LootBox() {
                         const label = item.buff_label
                           ? `${item.name} (${item.buff_label})`
                           : item.name;
+                        const claimedN = Number(live.claimed ?? 0);
                         return (
                           <ScarcityRow
                             key={item.id}
                             icon={Gem}
                             label={label}
-                            claimed={Number(live.claimed ?? 0)}
+                            claimed={claimedN}
                             cap={Number(live.cap ?? item.cap ?? 1)}
+                            holder={claimedN > 0 ? (live.owner_username || null) : null}
                           />
                         );
                       })}
