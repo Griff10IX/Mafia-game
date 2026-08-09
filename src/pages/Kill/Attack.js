@@ -73,7 +73,7 @@ function formatInflationResetReady(availableAtIso) {
 // Shown in toast when caught during booze run (prohibition bust)
 const BOOZE_CAUGHT_IMAGE = 'https://historicipswich.net/wp-content/uploads/2021/12/0a79f-boston-rum-prohibition1.jpg';
 const MOLOTOV_BULLET_EQUIV = 250;
-const MAX_BULLETS_REQUIRED = 230000;
+const MAX_BULLETS_REQUIRED = 207000;
 const MOBILE_SEARCH_RENDER_STEP = 40;
 
 function clampBulletsRequired(value) {

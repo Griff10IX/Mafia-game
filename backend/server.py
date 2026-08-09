@@ -271,12 +271,12 @@ BANK_INTEREST_OPTIONS = [
 DEFAULT_HEALTH = 100
 # Passive regen: linear 0→100% over this many seconds of real time (lazy: applied on auth + before PvP damage calc)
 HEALTH_REGEN_FULL_SECONDS = 7200  # 2 hours
-MIN_BULLETS_TO_KILL = 8000
-MAX_BULLETS_TO_KILL = 230000
-# Base bullets before rank/weapon/gap factors (~55% above prior table; hard floor 8k in attack._apply_bullet_caps).
+MIN_BULLETS_TO_KILL = 7200
+MAX_BULLETS_TO_KILL = 207000
+# Base bullets before rank/weapon/gap factors; hard floor applied in attack._apply_bullet_caps.
 MAX_ARMOUR_LEVEL = 7
 LOOT_EXCLUSIVE_ARMOUR_LEVEL = 7
-ARMOUR_BASE_BULLETS = {0: 8000, 1: 22000, 2: 39000, 3: 56000, 4: 73000, 5: 85000, 6: 93000, 7: 102000}
+ARMOUR_BASE_BULLETS = {0: 7200, 1: 19800, 2: 35100, 3: 50400, 4: 65700, 5: 76500, 6: 83700, 7: 91800}
 # Level 6: Points Store only (not armoury factory stock). Requires owning level 5 first.
 ARMOUR_POINT_STORE_TIER = {
     "level": 6,

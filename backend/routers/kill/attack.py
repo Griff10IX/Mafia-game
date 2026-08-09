@@ -1698,8 +1698,8 @@ def _bullets_to_kill_breakdown(
 
 # Attacker has Colt Monitor (weapon_loot) equipped: fewer bullets needed to kill.
 LOOT_EXCLUSIVE_WEAPON_ATTACK_BULLET_MULT = 0.75
-MAX_BULLETS_TO_KILL = 230_000
-ROBOT_BODYGUARD_MAX_BULLETS_TO_KILL = 125_000
+MAX_BULLETS_TO_KILL = 207_000
+ROBOT_BODYGUARD_MAX_BULLETS_TO_KILL = 112_500
 
 _BULLET_CALC_TARGET_PROJECTION = {
     "_id": 0,

@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-09 13:20 UTC[/color][/b] — [b]Kill bullet costs trimmed ~10%[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Bullets needed to kill lowered by about [b]10%[/b] (armour bases, 7,200 minimum, and caps).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-09 13:10 UTC[/color][/b] — [b]Kill cash gated by prestige[/b][/size]
 [quote]
 [list]
