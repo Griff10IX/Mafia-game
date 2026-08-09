@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-09 16:50 UTC[/color][/b] — [b]Weed Empire: stolen gear auto-equips[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Gear stolen in raids [b]auto-equips[/b] when your house can hold it (including clearing duplicate pieces that do not upgrade you). Pieces that need a bigger house stay in Stolen gear inventory until you upgrade.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-09 16:15 UTC[/color][/b] — [b]New-account protection: casino claim softens to 2 days[/b][/size]
 [quote]
 [list]

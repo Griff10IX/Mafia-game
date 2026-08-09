@@ -177,12 +177,19 @@ function softenClimateDisplay(model) {
   });
 }
 
+function stageLabel(stage) {
+  const s = String(stage || "empty").replace(/_/g, " ");
+  if (!s) return "Empty";
+  return s.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function WeedEmpire3D({
   lightClass = "cfl",
   stage = "empty",
   progress = 0,
   budMeshKey = "dense",
   strainType = "hybrid",
+  strainName = "",
   quality = 50,
   equipment = {},
   houseTier = 0,
@@ -203,6 +210,9 @@ export default function WeedEmpire3D({
   const [sceneReady, setSceneReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadWarning, setLoadWarning] = useState("");
+  const progressPct = Math.max(0, Math.min(100, Number(progress || 0) * 100));
+  const lightLabel = String(lightClass || "cfl").toUpperCase();
+  const showGrowHud = String(stage || "") !== "empty" && String(stage || "") !== "dead";
 
   propsRef.current = {
     stage,
@@ -226,17 +236,18 @@ export default function WeedEmpire3D({
     const height = mount.clientHeight || 320;
     const mobileLod = width < 480;
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x161310);
-    scene.fog = new THREE.FogExp2(0x272019, 0.011);
-    const camera = new THREE.PerspectiveCamera(40, width / height, 0.08, 40);
-    camera.position.set(0.12, 1.35, 3.25);
+    scene.background = new THREE.Color(0x12100e);
+    scene.fog = new THREE.FogExp2(0x1f1a14, mobileLod ? 0.014 : 0.011);
+    const camera = new THREE.PerspectiveCamera(mobileLod ? 38 : 40, width / height, 0.08, 40);
+    const startZ = mobileLod ? 2.85 : 3.25;
+    camera.position.set(0.08, mobileLod ? 1.28 : 1.35, startZ);
     camera.lookAt(0, 0.78, 0);
     const renderer = new THREE.WebGLRenderer({ antialias: !mobileLod, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobileLod ? 1.5 : 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobileLod ? 1.65 : 2));
     renderer.setSize(width, height);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.08;
+    renderer.toneMappingExposure = mobileLod ? 1.14 : 1.1;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.style.touchAction = "none";
@@ -275,7 +286,7 @@ export default function WeedEmpire3D({
       animationFrame: 0,
       startedAt: performance.now(),
       lastFrameAt: performance.now(),
-      cameraTargetZ: 3.25,
+      cameraTargetZ: startZ,
     };
     stateRef.current = state;
 
@@ -446,7 +457,8 @@ export default function WeedEmpire3D({
       state.cameraTargetZ = THREE.MathUtils.clamp(state.cameraTargetZ + event.deltaY * 0.0022, 1.65, 3.5);
     };
     const toggleZoom = () => {
-      state.cameraTargetZ = state.cameraTargetZ > 2.4 ? 1.72 : 3.25;
+      const far = state.mobileLod ? 2.85 : 3.25;
+      state.cameraTargetZ = state.cameraTargetZ > 2.35 ? 1.68 : far;
     };
     renderer.domElement.addEventListener("wheel", zoom, { passive: false });
     renderer.domElement.addEventListener("dblclick", toggleZoom);
@@ -803,18 +815,74 @@ export default function WeedEmpire3D({
 
   return (
     <div
-      ref={mountRef}
-      className="relative w-full h-[220px] sm:h-[280px] md:h-[360px] rounded-lg overflow-hidden border border-emerald-900/40 bg-black"
+      className="weed-3d-shell relative rounded-xl overflow-hidden border border-emerald-500/25 bg-[#0c0f0d] shadow-[0_0_0_1px_rgba(16,185,129,0.08),0_12px_40px_rgba(0,0,0,0.45)]"
       aria-label="Grow room 3D view"
       aria-busy={loading}
     >
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent" />
+      <div
+        ref={mountRef}
+        className="relative w-full h-[min(58vw,300px)] sm:h-[300px] md:h-[380px] bg-black"
+      />
+      <div className="pointer-events-none absolute inset-0 z-[5] bg-[radial-gradient(ellipse_at_center,transparent_42%,rgba(0,0,0,0.55)_100%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-[6] h-16 bg-gradient-to-b from-black/55 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[6] h-20 bg-gradient-to-t from-black/70 to-transparent" />
+
+      <div className="pointer-events-none absolute top-2 left-2 right-2 z-20 flex items-start justify-between gap-2">
+        <div className="min-w-0 rounded-md border border-white/10 bg-black/55 px-2 py-1 backdrop-blur-[2px]">
+          <div className="text-[9px] uppercase tracking-[0.14em] text-emerald-300/85 font-heading">
+            {stageLabel(stage)}
+          </div>
+          {strainName ? (
+            <div className="text-[11px] font-heading text-foreground/95 truncate max-w-[10.5rem] sm:max-w-[14rem]">
+              {strainName}
+            </div>
+          ) : null}
+        </div>
+        <div className="shrink-0 rounded-md border border-amber-500/25 bg-black/55 px-2 py-1 text-[9px] uppercase tracking-wide text-amber-200/90 font-heading backdrop-blur-[2px]">
+          {lightLabel} light
+        </div>
+      </div>
+
+      {showGrowHud ? (
+        <div className="pointer-events-none absolute bottom-2 left-2 right-2 z-20 flex items-end justify-between gap-2">
+          <div className="min-w-0 flex-1 max-w-[70%]">
+            <div className="flex justify-between text-[9px] font-heading text-emerald-100/80 mb-0.5">
+              <span>Grow</span>
+              <span className="tabular-nums">{progressPct.toFixed(0)}%</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-black/60 overflow-hidden border border-white/10">
+              <div
+                className={`h-full rounded-full transition-[width] duration-500 ${
+                  String(stage).includes("harvest") ? "bg-amber-400" : "bg-emerald-400"
+                }`}
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+          </div>
+          <div className="shrink-0 rounded-md border border-white/10 bg-black/55 px-1.5 py-1 text-[9px] font-heading text-muted-foreground tabular-nums backdrop-blur-[2px]">
+            Q {Math.round(Number(quality) || 0)}
+          </div>
+        </div>
+      ) : (
+        <div className="pointer-events-none absolute bottom-2 left-1/2 z-20 -translate-x-1/2 rounded-md border border-white/10 bg-black/55 px-2 py-1 text-[9px] font-heading text-muted-foreground backdrop-blur-[2px]">
+          Double-tap to zoom
+        </div>
+      )}
+
+      {miteInfested ? (
+        <div className="pointer-events-none absolute top-12 left-2 z-20 rounded border border-red-500/40 bg-red-950/70 px-1.5 py-0.5 text-[9px] uppercase font-heading text-red-200">
+          Mites {Math.round(miteInfestationPct || 0)}%
+        </div>
+      ) : null}
+
       {loading && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/35 text-xs font-medium tracking-wide text-emerald-100/80">
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/45 text-xs font-heading tracking-wide text-emerald-100/85">
           Loading grow room…
         </div>
       )}
       {loadWarning && (
-        <div className="pointer-events-none absolute bottom-2 left-1/2 z-10 -translate-x-1/2 rounded bg-black/70 px-2 py-1 text-[10px] text-amber-200/90">
+        <div className="pointer-events-none absolute bottom-10 left-1/2 z-30 -translate-x-1/2 rounded bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
           {loadWarning}
         </div>
       )}

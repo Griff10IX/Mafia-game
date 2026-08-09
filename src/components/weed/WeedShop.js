@@ -55,33 +55,36 @@ export default function WeedShop({
         prerequisite upgrades — locked cards stay visible so you can plan the path.
       </p>
 
-      <div className="flex flex-wrap gap-1">
-        {GROUP_META.map(({ id, label, Icon }) => {
-          const gRows = rows.filter((r) => r.group === id);
-          if (!gRows.length) return null;
-          const open = gRows.filter((r) => r.owned_level > 0 || !r.locked).length;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setShopGroup(id)}
-              className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] uppercase border ${
-                shopGroup === id
-                  ? "border-emerald-500/50 text-emerald-300 bg-emerald-500/10"
-                  : "border-border/40 text-muted-foreground"
-              }`}
-            >
-              <Icon className="w-3 h-3" />
-              {label}
-              <span className="opacity-70">
-                {open}/{gRows.length}
-              </span>
-            </button>
-          );
-        })}
+      <div className="-mx-1 px-1 overflow-x-auto overscroll-x-contain">
+        <div className="flex gap-1.5 min-w-max pb-0.5">
+          {GROUP_META.map(({ id, label, Icon }) => {
+            const gRows = rows.filter((r) => r.group === id);
+            if (!gRows.length) return null;
+            const open = gRows.filter((r) => r.owned_level > 0 || !r.locked).length;
+            const active = shopGroup === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setShopGroup(id)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[10px] uppercase border font-heading min-h-10 tap-feedback touch-manipulation shrink-0 ${
+                  active
+                    ? "border-emerald-500/50 text-emerald-300 bg-emerald-500/15 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]"
+                    : "border-white/10 text-muted-foreground bg-black/25"
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {label}
+                <span className="opacity-70 tabular-nums">
+                  {open}/{gRows.length}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="text-[10px] text-muted-foreground">
+      <div className="text-[10px] text-muted-foreground font-heading">
         {shopGroup}: {unlockedCount}/{inGroup.length} available · Grower Lv {farm?.grower_level || 1}
       </div>
 
@@ -97,7 +100,7 @@ export default function WeedShop({
                 type="button"
                 disabled={busy || !owned}
                 onClick={() => onBuySoil(type)}
-                className="text-xs px-2 py-1 border rounded disabled:opacity-40"
+                className="text-xs px-2.5 py-2 border border-emerald-500/25 rounded-lg bg-black/25 disabled:opacity-40 min-h-10 tap-feedback"
                 title={!owned ? "Unlock this soil line first" : "Restock bags"}
               >
                 Restock {type.replace(/_/g, " ")}
@@ -121,16 +124,16 @@ export default function WeedShop({
             return (
               <div
                 key={row.category_id}
-                className={`rounded-lg border p-3 bg-card/40 ${
+                className={`rounded-xl border p-3 bg-gradient-to-b from-white/[0.03] to-black/20 ${
                   locked
-                    ? "border-border/30 opacity-70"
+                    ? "border-white/8 opacity-70"
                     : row.needs_rebuy
                       ? "border-amber-500/40"
-                      : "border-border/50"
+                      : "border-emerald-500/15"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="font-heading text-sm truncate">{row.name}</span>
                       <span
@@ -159,12 +162,12 @@ export default function WeedShop({
                               : `Saved Lv ${shownLevel}/${row.max_level} (not installed)`
                             : `Lv ${row.owned_level || 0}/${row.max_level}`}
                         </span>
-                        <span>{pct}%</span>
+                        <span className="tabular-nums">{pct}%</span>
                       </div>
-                      <div className="h-1.5 rounded bg-zinc-800 overflow-hidden">
+                      <div className="h-1.5 rounded-full bg-zinc-900 overflow-hidden border border-white/5">
                         <div
                           className={`h-full ${
-                            locked ? "bg-zinc-600" : row.needs_rebuy ? "bg-amber-500/80" : "bg-emerald-500/80"
+                            locked ? "bg-zinc-600" : row.needs_rebuy ? "bg-amber-500/80" : "bg-emerald-500/85"
                           }`}
                           style={{ width: `${pct}%` }}
                         />
@@ -182,7 +185,7 @@ export default function WeedShop({
                   </div>
                   <div className="shrink-0">
                     {maxed ? (
-                      <span className="text-[10px] uppercase text-emerald-400 px-2 py-1.5 border border-emerald-500/30 rounded">
+                      <span className="text-[10px] uppercase text-emerald-400 px-2 py-2 border border-emerald-500/30 rounded-lg">
                         MAX
                       </span>
                     ) : row.can_upgrade ? (
@@ -190,10 +193,10 @@ export default function WeedShop({
                         type="button"
                         disabled={busy}
                         onClick={() => onUpgrade(row.category_id)}
-                        className={`text-xs px-3 py-1.5 rounded font-heading ${
+                        className={`text-xs px-3 py-2 rounded-lg font-heading min-h-10 tap-feedback touch-manipulation ${
                           row.needs_rebuy
-                            ? "bg-amber-700/80 hover:bg-amber-600"
-                            : "bg-emerald-700/70 hover:bg-emerald-600"
+                            ? "bg-amber-700/85 hover:bg-amber-600"
+                            : "bg-emerald-700/80 hover:bg-emerald-600"
                         }`}
                       >
                         {row.needs_rebuy
@@ -201,7 +204,7 @@ export default function WeedShop({
                           : money(row.next_cost)}
                       </button>
                     ) : (
-                      <span className="inline-flex items-center justify-center w-9 h-9 rounded border border-border/40 text-muted-foreground">
+                      <span className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-white/10 text-muted-foreground bg-black/30">
                         <Lock className="w-4 h-4" />
                       </span>
                     )}

@@ -424,7 +424,7 @@ Open [b]Money → Weed Empire[/b] (when the feature is live). Grow strains, care
 [list]
 [*][color=#888888]Need [b]Grower Level 5[/b] to raid or appear on the target list[/color]
 [*][color=#888888][b]3 hour[/b] cooldown [b]per target[/b] — raiding one grower does not lock out others[/color]
-[*][color=#888888]Successful raids can take stash and steal gear (rebuy stolen gear later at its saved upgrade level). Target [b]security[/b] lowers your odds (fully maxed security ≈ [b]25%[/b] success)[/color]
+[*][color=#888888]Successful raids can take stash and steal gear (rebuy your stolen gear later at its saved upgrade level). Stolen gear [b]auto-equips[/b] on the attacker when their house can hold it. Target [b]security[/b] lowers your odds (fully maxed security ≈ [b]25%[/b] success)[/color]
 [/list]
 
 [color=#27AE60][b]Crew[/b][/color]

@@ -9,34 +9,57 @@ import PrestigeBadge from '../../components/PrestigeBadge';
 import CountryFlagThumb from '../../components/CountryFlagThumb';
 import ProfileHoverPreview from '../../components/ProfileHoverPreview';
 import styles from '../../styles/noir.module.css';
-import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 import {
   readUsersOnlineBoot,
   cacheUsersOnlineResponse,
 } from '../../utils/usersOnlineWarm';
 
 const UO_STYLES = `
-  @keyframes uo-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-  .uo-fade-in { animation: uo-fade-in 0.4s ease-out both; }
-  .uo-card { transition: transform 0.3s ease, background 0.3s ease, box-shadow 0.3s ease; }
-  .uo-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
-  .uo-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
+  @keyframes uo-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .uo-fade-in { animation: uo-fade-in 0.35s ease-out both; }
+  .uo-card { transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; }
+  .uo-row { -webkit-tap-highlight-color: transparent; }
+  @media (hover: hover) and (pointer: fine) {
+    .uo-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.12); }
+    .uo-row:hover { background: rgba(var(--noir-primary-rgb), 0.07); }
+  }
+  .uo-row:active { background: rgba(var(--noir-primary-rgb), 0.1); }
   @keyframes uo-hitlist-pulse {
-    0%, 100% { box-shadow: 0 0 12px rgba(220, 38, 38, 0.4), inset 0 0 0 1px rgba(220, 38, 38, 0.25); }
-    50% { box-shadow: 0 0 20px rgba(220, 38, 38, 0.7), inset 0 0 0 1px rgba(220, 38, 38, 0.45); }
+    0%, 100% { box-shadow: 0 0 10px rgba(220, 38, 38, 0.35), inset 0 0 0 1px rgba(220, 38, 38, 0.22); }
+    50% { box-shadow: 0 0 16px rgba(220, 38, 38, 0.55), inset 0 0 0 1px rgba(220, 38, 38, 0.4); }
   }
   .uo-hitlist {
-    animation: uo-hitlist-pulse 2s ease-in-out infinite;
-    box-shadow: 0 0 12px rgba(220, 38, 38, 0.4), inset 0 0 0 1px rgba(220, 38, 38, 0.25);
+    animation: uo-hitlist-pulse 2.2s ease-in-out infinite;
+    box-shadow: 0 0 10px rgba(220, 38, 38, 0.35), inset 0 0 0 1px rgba(220, 38, 38, 0.22);
   }
-  .uo-hitlist:hover { box-shadow: 0 0 20px rgba(220, 38, 38, 0.65), 0 4px 16px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(220, 38, 38, 0.4); }
   .uo-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
   @keyframes uo-preview-enter { from { opacity: 0.72; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
   .uo-preview-enter { animation: uo-preview-enter 0.2s ease-out both; }
   @keyframes uo-preview-shimmer { 0% { opacity: 0.35; } 50% { opacity: 0.85; } 100% { opacity: 0.35; } }
   .uo-preview-shimmer { animation: uo-preview-shimmer 1.1s ease-in-out infinite; }
+  .uo-users-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.375rem;
+  }
+  @media (min-width: 640px) {
+    .uo-users-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+  }
+  @media (min-width: 1024px) {
+    .uo-users-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+  .uo-info details summary { list-style: none; cursor: pointer; }
+  .uo-info details summary::-webkit-details-marker { display: none; }
+  .uo-info details summary::after {
+    content: '+';
+    margin-left: auto;
+    color: rgba(var(--noir-primary-rgb), 0.85);
+    font-weight: 700;
+    font-size: 12px;
+  }
+  .uo-info details[open] summary::after { content: '−'; }
   @media (prefers-reduced-motion: reduce) {
-    .uo-preview-enter, .uo-preview-shimmer, .uo-hitlist { animation: none !important; }
+    .uo-preview-enter, .uo-preview-shimmer, .uo-hitlist, .uo-fade-in { animation: none !important; }
   }
 `;
 
@@ -100,18 +123,22 @@ function countryDisplayName(code) {
   }
 }
 
-/** Sits on the same row as the big count (to the right), not stacked under the caption. */
-function SnapshotCountryInline({ rows }) {
+function SnapshotCountryInline({ rows, compact = false, max = 6 }) {
   if (!rows || rows.length === 0) {
-    return (
+    return compact ? null : (
       <span className="text-[7px] text-mutedForeground/75 font-heading leading-snug flex-1 min-w-0 self-center">
-        Country % when location headers are present (e.g. Cloudflare).
+        Country % when location headers are present.
       </span>
     );
   }
+  const shown = rows.slice(0, max);
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 flex-1 min-w-0 self-center pl-1.5 ml-0.5 border-l border-zinc-600/35">
-      {rows.map((row, idx) => {
+    <div
+      className={`flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0 ${
+        compact ? 'justify-start' : 'flex-1 self-center pl-1.5 ml-0.5 border-l border-zinc-600/35'
+      }`}
+    >
+      {shown.map((row, idx) => {
         const code = (row.code || '').trim();
         const label = countryDisplayName(code || undefined);
         const pct = Number(row.pct);
@@ -119,7 +146,7 @@ function SnapshotCountryInline({ rows }) {
         return (
           <span
             key={`${code || 'unk'}-${idx}`}
-            className="inline-flex items-center gap-1 text-[8px] font-heading text-foreground/90 tabular-nums leading-none"
+            className="inline-flex items-center gap-0.5 text-[8px] font-heading text-foreground/90 tabular-nums leading-none"
             title={`${label} · ${row.count ?? 0} accounts`}
           >
             <CountryFlagThumb code={code} />
@@ -131,22 +158,39 @@ function SnapshotCountryInline({ rows }) {
   );
 }
 
-const snapshotTile = (Icon, label, value, caption, accentClass, countryRows) => (
+const snapshotTile = (Icon, label, value, caption, accentClass, countryRows, { featured = false } = {}) => (
   <div
-    className={`rounded-md border border-primary/15 bg-black/20 px-2 py-1.5 flex flex-col gap-0.5 min-h-[5.25rem] sm:min-h-[5.5rem] ${accentClass || ''}`}
+    className={`rounded-md border border-primary/15 bg-black/25 px-2.5 py-2 flex flex-col gap-1 ${
+      featured ? 'min-h-0 sm:min-h-[5.5rem]' : 'min-h-[4.5rem] sm:min-h-[5.5rem]'
+    } ${accentClass || ''}`}
   >
     <div className="flex items-center gap-1.5 text-mutedForeground">
-      <Icon size={14} className="shrink-0 text-primary/85" aria-hidden />
+      <Icon size={featured ? 15 : 13} className="shrink-0 text-primary/85" aria-hidden />
       <span className="text-[9px] font-heading uppercase tracking-wide leading-tight">{label}</span>
     </div>
-    {/* nowrap so the count never sits alone on a row above the flags; chips wrap inside the right column */}
-    <div className="flex flex-nowrap items-center gap-x-2 mt-0.5 min-w-0">
-      <div className="text-lg md:text-xl font-heading font-bold text-foreground tabular-nums leading-none shrink-0">
-        {value}
-      </div>
-      <SnapshotCountryInline rows={countryRows} />
-    </div>
-    <div className="text-[9px] text-mutedForeground font-heading mt-auto pt-0.5">{caption}</div>
+    {featured ? (
+      <>
+        <div className="flex items-end justify-between gap-2 min-w-0">
+          <div className="text-3xl font-heading font-bold text-foreground tabular-nums leading-none tracking-tight">
+            {value}
+          </div>
+          <div className="text-[9px] text-mutedForeground font-heading text-right leading-tight shrink-0 pb-0.5">
+            {caption}
+          </div>
+        </div>
+        <SnapshotCountryInline rows={countryRows} compact max={8} />
+      </>
+    ) : (
+      <>
+        <div className="flex flex-nowrap items-center gap-x-2 min-w-0">
+          <div className="text-lg md:text-xl font-heading font-bold text-foreground tabular-nums leading-none shrink-0">
+            {value}
+          </div>
+          <SnapshotCountryInline rows={countryRows} max={4} />
+        </div>
+        <div className="text-[9px] text-mutedForeground font-heading mt-auto">{caption}</div>
+      </>
+    )}
   </div>
 );
 
@@ -164,31 +208,45 @@ const ActivitySnapshotCard = ({
 }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-card uo-fade-in mobile-panel`}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         Who&apos;s around
       </h2>
+      <span className="text-[9px] font-heading text-mutedForeground tabular-nums">Live roster</span>
     </div>
-    <div className="p-2">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+    <div className="p-2 space-y-2">
+      <div className="sm:hidden">
         {snapshotTile(
           Radio,
           'Right now',
           totalOnline,
           'On live roster',
-          'ring-1 ring-emerald-500/20 bg-emerald-500/5',
+          'ring-1 ring-emerald-500/25 bg-emerald-500/[0.07]',
           countriesRoster,
+          { featured: true },
         )}
+      </div>
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 sm:gap-2">
+        <div className="hidden sm:block sm:col-span-1">
+          {snapshotTile(
+            Radio,
+            'Right now',
+            totalOnline,
+            'On live roster',
+            'ring-1 ring-emerald-500/20 bg-emerald-500/5',
+            countriesRoster,
+          )}
+        </div>
         {snapshotTile(Clock, 'Past hour', activeHour, 'Accounts', undefined, countriesHour)}
         {snapshotTile(CalendarDays, 'Past day', activeDay, 'Accounts', undefined, countriesDay)}
         {snapshotTile(CalendarRange, 'Past week', activeWeek, 'Accounts', undefined, countriesWeek)}
       </div>
     </div>
-    {staffDupeScreenFooter ? (
-      <div className="px-2.5 pb-2 pt-2 border-t border-primary/15">{staffDupeScreenFooter}</div>
-    ) : null}
-    {staffUnknownFooter ? (
-      <div className="px-2.5 pb-2 pt-0 border-t border-primary/15">{staffUnknownFooter}</div>
+    {(staffDupeScreenFooter || staffUnknownFooter) ? (
+      <div className="px-2.5 pb-2 pt-2 border-t border-primary/15 flex flex-col gap-1.5">
+        {staffDupeScreenFooter}
+        {staffUnknownFooter}
+      </div>
     ) : null}
     <div className="uo-art-line text-primary mx-2.5" />
   </div>
@@ -228,49 +286,27 @@ function roleKeySwatchStyle(colors, emptyFallbackHex) {
   };
 }
 
-const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor, hdoKeyColors, entertainerKeyColors }) => {
+const RoleKeyStrip = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor, hdoKeyColors, entertainerKeyColors }) => {
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
   const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
   const hdoColor = (hdoOnlineColor && hdoOnlineColor.trim()) || DEFAULT_HDO_COLOR;
   const hdoSwatchStyle = roleKeySwatchStyle(hdoKeyColors, hdoColor);
   const entertainerSwatchStyle = roleKeySwatchStyle(entertainerKeyColors, DEFAULT_ENTERTAINER_COLOR);
+  const item = (swatch, label) => (
+    <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-heading text-mutedForeground whitespace-nowrap">
+      {swatch}
+      {label}
+    </span>
+  );
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in mobile-panel`}>
-      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-        <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Key</h3>
-      </div>
-      <div className="px-2.5 py-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] font-heading">
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full shrink-0 bg-emerald-500" aria-hidden />
-          <span className="text-mutedForeground">Online</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full shrink-0 bg-amber-500" aria-hidden />
-          <span className="text-mutedForeground">Idle</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full shrink-0 border border-white/20" style={{ backgroundColor: adminColor }} aria-hidden />
-          <span className="text-mutedForeground">Admin</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full shrink-0 border border-white/20" style={{ backgroundColor: modColor }} aria-hidden />
-          <span className="text-mutedForeground">Mod</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full shrink-0 border border-white/20" style={hdoSwatchStyle} aria-hidden />
-          <span className="text-mutedForeground">Help Desk</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full shrink-0 border border-white/20" style={entertainerSwatchStyle} aria-hidden />
-          <span className="text-mutedForeground">Entertainer</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <Target size={12} className="text-red-400 shrink-0" aria-hidden />
-          <span className="text-mutedForeground">Hitlist</span>
-        </span>
-      </div>
-      <div className="uo-art-line text-primary mx-2.5" />
+    <div className="px-2.5 py-1.5 border-b border-primary/15 bg-black/15 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+      {item(<span className="w-2 h-2 rounded-full shrink-0 bg-emerald-500" aria-hidden />, 'Online')}
+      {item(<span className="w-2 h-2 rounded-full shrink-0 bg-amber-500" aria-hidden />, 'Idle')}
+      {item(<span className="w-2 h-2 rounded-full shrink-0 border border-white/20" style={{ backgroundColor: adminColor }} aria-hidden />, 'Admin')}
+      {item(<span className="w-2 h-2 rounded-full shrink-0 border border-white/20" style={{ backgroundColor: modColor }} aria-hidden />, 'Mod')}
+      {item(<span className="w-2 h-2 rounded-full shrink-0 border border-white/20" style={hdoSwatchStyle} aria-hidden />, 'Help Desk')}
+      {item(<span className="w-2 h-2 rounded-full shrink-0 border border-white/20" style={entertainerSwatchStyle} aria-hidden />, 'Entertainer')}
+      {item(<Target size={11} className="text-red-400 shrink-0" aria-hidden />, 'Hitlist')}
     </div>
   );
 };
@@ -293,7 +329,7 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
   const profileTo = selfFromRoster
     ? `/profile/${encodeURIComponent(user.username)}?view=public`
     : `/profile/${encodeURIComponent(user.username)}`;
-  const linkClass = `relative z-10 inline-block max-w-[160px] truncate text-[11px] font-heading font-bold transition-colors ${displayColor ? '' : 'text-foreground hover:text-primary'}`;
+  const linkClass = `relative z-10 min-w-0 flex-1 truncate text-[11px] sm:text-[12px] font-heading font-bold transition-colors ${displayColor ? '' : 'text-foreground hover:text-primary'}`;
   const prefetchFullProfile = () => warmProfilePrefetchFromUsername(user.username);
 
   const profileLink = (extra = {}) => (
@@ -317,61 +353,61 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
     (user.profile_cosmetic_active && user.profile_name_glow_color) ||
     null;
 
-  const hoverPreview = profileHoverEnabled ? (
-    <HoverCard
-      openDelay={0}
-      closeDelay={120}
-      onOpenChange={(open) => {
-        if (open) {
-          prefetchFullProfile();
-          ensureProfilePreview(user.username, user);
-        }
-      }}
-    >
-      <HoverCardTrigger asChild>
-        {profileLink({
-          onPointerEnter: () => {
-            prefetchFullProfile();
-            ensureProfilePreview(user.username, user);
-          },
-        })}
-      </HoverCardTrigger>
-      {user.prestige_level > 0 && (
-        <span className="relative z-10">
-          <PrestigeBadge level={user.prestige_level} size="sm" />
-        </span>
-      )}
-      <HoverCardPortal>
-        <HoverCardContent
-          align="start"
-          sideOffset={8}
-          className={`z-[9999] w-[20.5rem] max-w-[92vw] ${styles.panel} border-2 ${previewCosmeticHex ? '' : 'border-primary/40'} rounded-lg shadow-2xl p-0 overflow-hidden backdrop-blur-sm`}
-          style={previewCosmeticHex ? {
-            borderColor: `${previewCosmeticHex}b3`,
-            boxShadow: `0 0 18px ${previewCosmeticHex}55, 0 25px 50px -12px rgba(0,0,0,0.65)`,
-          } : undefined}
+  const prestigeBadge =
+    user.prestige_level > 0 ? (
+      <span className="relative z-10 shrink-0">
+        <PrestigeBadge level={user.prestige_level} size="sm" />
+      </span>
+    ) : null;
+
+  const hoverPreview = (
+    <div className="flex items-center gap-1 min-w-0 flex-1">
+      {profileHoverEnabled ? (
+        <HoverCard
+          openDelay={0}
+          closeDelay={120}
+          onOpenChange={(open) => {
+            if (open) {
+              prefetchFullProfile();
+              ensureProfilePreview(user.username, user);
+            }
+          }}
         >
-          <ProfileHoverPreview preview={preview} userStatus={userStatus} />
-        </HoverCardContent>
-      </HoverCardPortal>
-    </HoverCard>
-  ) : (
-    <>
-      {profileLink()}
-      {user.prestige_level > 0 && (
-        <span className="relative z-10">
-          <PrestigeBadge level={user.prestige_level} size="sm" />
-        </span>
+          <HoverCardTrigger asChild>
+            {profileLink({
+              onPointerEnter: () => {
+                prefetchFullProfile();
+                ensureProfilePreview(user.username, user);
+              },
+            })}
+          </HoverCardTrigger>
+          <HoverCardPortal>
+            <HoverCardContent
+              align="start"
+              sideOffset={8}
+              className={`z-[9999] w-[20.5rem] max-w-[92vw] ${styles.panel} border-2 ${previewCosmeticHex ? '' : 'border-primary/40'} rounded-lg shadow-2xl p-0 overflow-hidden backdrop-blur-sm`}
+              style={previewCosmeticHex ? {
+                borderColor: `${previewCosmeticHex}b3`,
+                boxShadow: `0 0 18px ${previewCosmeticHex}55, 0 25px 50px -12px rgba(0,0,0,0.65)`,
+              } : undefined}
+            >
+              <ProfileHoverPreview preview={preview} userStatus={userStatus} />
+            </HoverCardContent>
+          </HoverCardPortal>
+        </HoverCard>
+      ) : (
+        profileLink()
       )}
-    </>
+      {prestigeBadge}
+    </div>
   );
 
   return (
     <div
-      className={`relative z-10 ${styles.panel} rounded-md border px-2 py-1 h-7 md:h-8 flex items-center uo-row uo-card uo-fade-in ${user.on_hitlist ? 'uo-hitlist border-red-500/40' : 'border-primary/20'}`}
+      className={`relative z-10 ${styles.panel} rounded-md border px-2 sm:px-2.5 min-h-10 flex items-center uo-row uo-card uo-fade-in ${user.on_hitlist ? 'uo-hitlist border-red-500/40' : 'border-primary/20 bg-black/20'}`}
       data-testid="user-card"
     >
-      <div className="flex items-center gap-1 min-h-[20px] w-full">
+      <div className="flex items-center gap-1.5 w-full min-w-0 py-1.5">
         <span
           className={`w-2 h-2 rounded-full shrink-0 ${userStatus === 'idle' ? 'bg-amber-500' : 'bg-emerald-500'}`}
           title={userStatus === 'idle' ? 'Idle' : 'Online'}
@@ -380,7 +416,7 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
         {hoverPreview}
 
         {user.in_jail && (
-          <span className="shrink-0 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-heading font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/30">
+          <span className="shrink-0 inline-flex items-center px-1 py-0.5 rounded text-[8px] font-heading font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/30 leading-none">
             Jail
           </span>
         )}
@@ -395,62 +431,42 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
 };
 
 const InfoCard = ({ profileHoverEnabled = true }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in mobile-panel`} style={{ animationDelay: '0.08s' }}>
+  <div className={`uo-info relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in mobile-panel`} style={{ animationDelay: '0.08s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-      <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-        ℹ️ How It Works
-      </h3>
-    </div>
-    <div className="p-2">
-      <div className="space-y-0.5 text-[10px] text-mutedForeground font-heading leading-snug">
-        <p className="flex items-start gap-1">
-          <span className="text-primary shrink-0">•</span>
-          <span>
-            Status updates automatically every <strong className="text-foreground">30 seconds</strong>
-          </span>
-        </p>
-        <p className="flex items-start gap-1">
-          <span className="text-primary shrink-0">•</span>
-          <span>
-            <span className="text-emerald-400 font-bold">Online</span> = active within 5 min, <span className="text-amber-400 font-bold">Idle</span> = 5-10 min
-          </span>
-        </p>
-        <p className="flex items-start gap-1">
-          <span className="text-primary shrink-0">•</span>
-          <span>
+    <details className="group">
+      <summary className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2 min-h-10">
+        <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+          How it works
+        </h3>
+      </summary>
+      <div className="p-2.5">
+        <div className="space-y-1.5 text-[10px] text-mutedForeground font-heading leading-snug">
+          <p>
+            Status updates every <strong className="text-foreground">30 seconds</strong>.
+            {' '}
+            <span className="text-emerald-400 font-bold">Online</span> = active within 5 min,
+            {' '}
+            <span className="text-amber-400 font-bold">Idle</span> = 5–10 min.
+          </p>
+          <p>
             Snapshot tiles count accounts with a recent <strong className="text-foreground">last seen</strong> (not the same as the live list).
-          </span>
-        </p>
-        <p className="flex items-start gap-1">
-          <span className="text-primary shrink-0">•</span>
-          <span>
+          </p>
+          <p>
             Search any user (including offline or dead) from the top bar.
-          </span>
-        </p>
-        <p className="flex items-start gap-1">
-          <span className="text-primary shrink-0">•</span>
-          <span>
+            {' '}
             {profileHoverEnabled ? (
               <>
-                <strong className="text-foreground">Hover</strong> over usernames for a quick profile preview
+                <strong className="text-foreground">Hover</strong> a name for a quick profile preview.
               </>
             ) : (
               <>
-                <strong className="text-foreground">Tap</strong> a username to open their profile (hover preview is desktop only)
+                <strong className="text-foreground">Tap</strong> a name to open their profile.
               </>
             )}
-          </span>
-        </p>
-        <p className="flex items-start gap-1">
-          <span className="text-primary shrink-0">•</span>
-          <span>
-            Plan <strong className="text-foreground">attacks</strong> and <strong className="text-foreground">rackets</strong> based on who's active
-          </span>
-        </p>
+          </p>
+        </div>
       </div>
-    </div>
-    <div className="uo-art-line text-primary mx-2.5" />
+    </details>
   </div>
 );
 
@@ -538,9 +554,9 @@ export default function UsersOnline() {
     return (
       <Link
         to="/tjjeujr3wa/users-online"
-        className="inline-flex items-center gap-1.5 text-[10px] font-heading font-bold uppercase tracking-wide text-red-300 hover:text-red-200 border border-red-500/40 rounded px-2.5 py-1.5 bg-red-500/10"
+        className="inline-flex w-full items-center justify-center gap-1.5 text-[10px] font-heading font-bold uppercase tracking-wide text-red-300 hover:text-red-200 border border-red-500/40 rounded-md px-2.5 py-2.5 min-h-10 bg-red-500/10 tap-feedback touch-manipulation"
       >
-        Staff — open online dupe / proxy screen →
+        Staff — online dupe / proxy screen
       </Link>
     );
   }, [staffFlags]);
@@ -551,9 +567,9 @@ export default function UsersOnline() {
     return (
       <Link
         to="/tjjeujr3wa/users-online?unknown=1"
-        className="inline-flex items-center gap-1 text-[9px] font-heading font-bold uppercase tracking-wide text-amber-400/95 hover:text-amber-300 border border-amber-500/35 rounded px-2 py-1 bg-amber-500/10"
+        className="inline-flex w-full items-center justify-center gap-1 text-[9px] font-heading font-bold uppercase tracking-wide text-amber-400/95 hover:text-amber-300 border border-amber-500/35 rounded-md px-2 py-2 min-h-10 bg-amber-500/10 tap-feedback touch-manipulation"
       >
-        Staff — who has unknown country? ({unknownRosterCount})
+        Staff — unknown country ({unknownRosterCount})
       </Link>
     );
   }, [staffFlags, unknownRosterCount]);
@@ -659,7 +675,7 @@ export default function UsersOnline() {
   }, [fetchOnlineUsers]);
 
   return (
-    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="users-online-page">
+    <div className={`space-y-2.5 ${styles.pageContent} mobile-page-root`} data-testid="users-online-page">
       <style>{UO_STYLES}</style>
 
       <ActivitySnapshotCard
@@ -698,42 +714,43 @@ export default function UsersOnline() {
           </p>
         </div>
       ) : (
-        <div className={`relative z-10 ${styles.panel} rounded-md border border-primary/20 uo-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
+        <div className={`relative z-10 ${styles.panel} rounded-md border border-primary/20 uo-fade-in mobile-panel overflow-hidden`} style={{ animationDelay: '0.03s' }}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+          <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
             <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-              👤 Active Users ({users.length})
+              Active users
             </h2>
+            <span className="text-[11px] font-heading font-bold text-foreground tabular-nums">
+              {users.length}
+            </span>
           </div>
-          <div className="p-2.5">
-            <div className="flex flex-wrap gap-1.5" data-testid="users-grid">
-                {users.map((user, idx) => (
-                  <UserCard
-                    key={user.username || `user-${idx}`}
-                    user={user}
-                    profileCache={profileCache}
-                    ensureProfilePreview={ensureProfilePreview}
-                    adminOnlineColor={adminOnlineColor}
-                    modDefaultOnlineColor={modDefaultOnlineColor}
-                    profileHoverEnabled={profileHoverEnabled}
-                    myUsername={myUsername}
-                  />
-                ))}
-              </div>
+          <RoleKeyStrip
+            adminOnlineColor={adminOnlineColor}
+            modDefaultOnlineColor={modDefaultOnlineColor}
+            hdoOnlineColor={hdoOnlineColor}
+            hdoKeyColors={hdoKeyColors}
+            entertainerKeyColors={entertainerKeyColors}
+          />
+          <div className="p-2 sm:p-2.5">
+            <div className="uo-users-grid" data-testid="users-grid">
+              {users.map((user, idx) => (
+                <UserCard
+                  key={user.username || `user-${idx}`}
+                  user={user}
+                  profileCache={profileCache}
+                  ensureProfilePreview={ensureProfilePreview}
+                  adminOnlineColor={adminOnlineColor}
+                  modDefaultOnlineColor={modDefaultOnlineColor}
+                  profileHoverEnabled={profileHoverEnabled}
+                  myUsername={myUsername}
+                />
+              ))}
+            </div>
           </div>
-          <div className="uo-art-line text-primary mx-2.5" />
         </div>
       )}
 
       <InfoCard profileHoverEnabled={profileHoverEnabled} />
-
-      <RoleKey
-        adminOnlineColor={adminOnlineColor}
-        modDefaultOnlineColor={modDefaultOnlineColor}
-        hdoOnlineColor={hdoOnlineColor}
-        hdoKeyColors={hdoKeyColors}
-        entertainerKeyColors={entertainerKeyColors}
-      />
     </div>
   );
 }

@@ -21,16 +21,101 @@ import WeedShop from "../../components/weed/WeedShop";
 import styles from "../../styles/noir.module.css";
 
 const TABS = [
-  { id: "grow", label: "Grow", Icon: Leaf },
-  { id: "shop", label: "Equipment", Icon: ShoppingCart },
-  { id: "stash", label: "Stash / Sell", Icon: Package },
-  { id: "crew", label: "Crew", Icon: Users },
-  { id: "house", label: "House", Icon: Warehouse },
-  { id: "raid", label: "Raid", Icon: Swords },
+  { id: "grow", label: "Grow", short: "Grow", Icon: Leaf },
+  { id: "shop", label: "Equipment", short: "Gear", Icon: ShoppingCart },
+  { id: "stash", label: "Stash / Sell", short: "Sell", Icon: Package },
+  { id: "crew", label: "Crew", short: "Crew", Icon: Users },
+  { id: "house", label: "House", short: "House", Icon: Warehouse },
+  { id: "raid", label: "Raid", short: "Raid", Icon: Swords },
 ];
 
 const SELL_UNIT_GRAMS = { g: 1, oz: 28, lb: 448, kg: 1000 };
 const SELL_BULK_MULT = { g: 1, oz: 1, lb: 1.03, kg: 1.05 };
+
+const WEED_STYLES = `
+  @keyframes weed-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .weed-fade { animation: weed-fade-up 0.35s ease-out both; }
+  .weed-panel {
+    border-radius: 0.75rem;
+    border: 1px solid rgba(16, 185, 129, 0.16);
+    background:
+      linear-gradient(180deg, rgba(16, 185, 129, 0.06), transparent 42%),
+      rgba(9, 12, 10, 0.72);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+  .weed-stat {
+    border-radius: 0.65rem;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(0,0,0,0.28);
+  }
+  .weed-tabs {
+    display: flex;
+    gap: 0.35rem;
+    min-width: max-content;
+  }
+  .weed-tab {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.15rem;
+    min-width: 3.35rem;
+    min-height: 2.75rem;
+    padding: 0.4rem 0.55rem;
+    border-radius: 0.65rem;
+    border: 1px solid rgba(255,255,255,0.08);
+    color: rgba(161, 161, 170, 0.95);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    -webkit-tap-highlight-color: transparent;
+  }
+  @media (min-width: 640px) {
+    .weed-tab {
+      flex-direction: row;
+      gap: 0.4rem;
+      min-width: 0;
+      min-height: 2.5rem;
+      padding: 0.5rem 0.85rem;
+      font-size: 11px;
+    }
+  }
+  .weed-tab-active {
+    border-color: rgba(16, 185, 129, 0.45);
+    background: linear-gradient(180deg, rgba(16, 185, 129, 0.22), rgba(16, 185, 129, 0.08));
+    color: #6ee7b7;
+    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.12), 0 6px 18px rgba(0,0,0,0.25);
+  }
+  .weed-pot {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.65rem;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+  }
+  .weed-pot::before {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(16,185,129,0.55), transparent);
+    opacity: 0.35;
+  }
+  .weed-meter {
+    height: 0.4rem;
+    border-radius: 999px;
+    background: rgba(24, 24, 27, 0.95);
+    overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.45);
+  }
+  .weed-meter > div {
+    height: 100%;
+    border-radius: inherit;
+    transition: width 0.35s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .weed-fade { animation: none !important; }
+  }
+`;
 
 function weedActionCodePayload(data) {
   const name = String(data?.action_code_name || "");
@@ -73,18 +158,28 @@ function CareMeter({ label, pct, hoursLeft, colorClass, warn, fillUp = false }) 
         ? " · ready"
         : ` · ${Number(hoursLeft).toFixed(1)}h`;
   return (
-    <div className="space-y-0.5">
-      <div className="flex justify-between gap-2 text-[10px]">
+    <div className="space-y-1">
+      <div className="flex justify-between gap-2 text-[10px] font-heading">
         <span className={warn || ready ? "text-amber-300" : "text-muted-foreground"}>{label}</span>
         <span className="text-muted-foreground tabular-nums">
           {v.toFixed(0)}%{hoursLabel}
         </span>
       </div>
-      <div className="h-1.5 rounded bg-zinc-800 overflow-hidden">
-        <div className={`h-full transition-all ${bar}`} style={{ width: `${v}%` }} />
+      <div className="weed-meter">
+        <div className={bar} style={{ width: `${v}%` }} />
       </div>
     </div>
   );
+}
+
+function potStageTone(st, ready, needsCare) {
+  if (ready) return "border-amber-400/55 bg-amber-500/12";
+  if (needsCare) return "border-red-500/45 bg-red-950/25";
+  if (st === "flower" || st === "harvest_ready") return "border-emerald-400/35 bg-emerald-500/10";
+  if (st === "veg") return "border-lime-500/30 bg-lime-500/8";
+  if (st === "seedling") return "border-sky-500/30 bg-sky-500/8";
+  if (st === "dead") return "border-zinc-600/50 bg-zinc-900/50";
+  return "border-white/10 bg-black/25";
 }
 
 export default function WeedEmpire() {
@@ -691,13 +786,6 @@ export default function WeedEmpire() {
       else toast.success("Plant prefs saved");
     });
 
-  const equipStolen = (index) =>
-    run(async () => {
-      const { data } = await api.post("/weed-empire/stolen-equipment/equip", { index });
-      applyFarm(data.farm, { force: true });
-      toast.success(`Equipped ${data.equipped?.name || "gear"}`);
-    });
-
   if (loading) {
     return (
       <div className={`${styles.pageContent} mobile-page-root p-6 text-sm text-muted-foreground`}>
@@ -747,39 +835,49 @@ export default function WeedEmpire() {
   const miteInfested = !!selectedPlot?.mite_infested || mitePct > 0;
 
   return (
-    <div className={`${styles.pageContent} mobile-page-root max-w-6xl mx-auto px-3 py-4 space-y-4`}>
-      <header className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end sm:justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-500/80 font-heading">Money</p>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-heading text-foreground">Weed Business Empire</h1>
-          <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
-            Upgrades use business cash only. Personal withdraw is fixed at {money(dailyWithdrawCap)}/day (keep{" "}
-            {money(reserveCash)} in the business). Sell cap upgrades are separate — Points Store.
+    <div className={`${styles.pageContent} mobile-page-root max-w-6xl mx-auto px-3 py-3 sm:py-4 space-y-3 sm:space-y-4`}>
+      <style>{WEED_STYLES}</style>
+
+      <header className="weed-panel weed-fade p-3 sm:p-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-end sm:justify-between gap-3">
+        <div className="min-w-0 flex items-start gap-2.5">
+          <div className="hidden sm:flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10">
+            <Leaf className="h-5 w-5 text-emerald-400" aria-hidden />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-400/85 font-heading">Money</p>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-heading text-foreground leading-tight">
+              Weed Empire
+            </h1>
+            <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
+              Upgrades use business cash only. Personal withdraw is fixed at {money(dailyWithdrawCap)}/day (keep{" "}
+              {money(reserveCash)} in the business). Sell cap upgrades are separate — Points Store.
+              {staffPreview ? (
+                <span className="ml-2 inline-flex items-center rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase text-amber-300">
+                  Staff preview
+                </span>
+              ) : null}
+            </p>
             {staffPreview ? (
-              <span className="ml-2 inline-flex items-center rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase text-amber-300">
+              <span className="mt-1 sm:hidden inline-flex items-center rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase text-amber-300">
                 Staff preview
               </span>
             ) : null}
-          </p>
-          {staffPreview ? (
-            <span className="mt-1 sm:hidden inline-flex items-center rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase text-amber-300">
-              Staff preview
-            </span>
-          ) : null}
-        </div>
-        <div className="w-full sm:w-auto sm:text-right text-sm space-y-1.5 sm:min-w-[11rem]">
-          <div className="flex items-baseline justify-between sm:justify-end gap-2">
-            <div className="text-[10px] text-muted-foreground uppercase sm:hidden">Business cash</div>
-            <div className="font-heading text-emerald-400 text-lg tabular-nums">{money(farm.business_cash)}</div>
           </div>
-          <div className="hidden sm:block text-[10px] text-muted-foreground uppercase">Business cash</div>
+        </div>
+        <div className="w-full sm:w-auto sm:text-right text-sm space-y-1.5 sm:min-w-[12rem] rounded-lg border border-emerald-500/20 bg-black/30 p-2.5">
+          <div className="flex items-baseline justify-between sm:justify-end gap-2">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-heading">Business cash</div>
+            <div className="font-heading text-emerald-300 text-xl tabular-nums tracking-tight">
+              {money(farm.business_cash)}
+            </div>
+          </div>
           <div className="text-[10px] text-muted-foreground">
             Withdrawable {money(withdrawable)}
             <span className="block sm:inline sm:before:content-['·_']">
               Daily left {money(dailyWithdrawRemaining)} / {money(dailyWithdrawCap)}
             </span>
           </div>
-          <div className="flex flex-wrap sm:justify-end gap-1">
+          <div className="flex flex-wrap sm:justify-end gap-1.5">
             <input
               type="number"
               min={1}
@@ -788,13 +886,13 @@ export default function WeedEmpire() {
               onChange={(e) => setWithdrawAmount(e.target.value)}
               placeholder="Amount"
               disabled={busy || withdrawable <= 0}
-              className="flex-1 sm:flex-none w-auto sm:w-24 min-w-0 rounded border border-border/50 bg-zinc-900/80 px-2 py-1 text-xs tabular-nums min-h-10 disabled:opacity-40"
+              className="flex-1 sm:flex-none w-auto sm:w-24 min-w-0 rounded-md border border-border/50 bg-zinc-950/80 px-2 py-1 text-xs tabular-nums min-h-10 disabled:opacity-40"
             />
             <button
               type="button"
               disabled={busy || withdrawable <= 0 || !(Number(withdrawAmount) > 0)}
               onClick={() => requestWithdraw(withdrawAmount, "Withdraw")}
-              className="text-[10px] uppercase px-2.5 py-1 rounded border border-emerald-500/40 text-emerald-300 tap-feedback min-h-10 disabled:opacity-40"
+              className="text-[10px] uppercase px-2.5 py-1 rounded-md border border-emerald-500/40 text-emerald-300 tap-feedback min-h-10 disabled:opacity-40"
             >
               Withdraw
             </button>
@@ -802,7 +900,7 @@ export default function WeedEmpire() {
               type="button"
               disabled={busy || withdrawable <= 0}
               onClick={() => requestWithdraw(withdrawable, "Max withdraw")}
-              className="text-[10px] uppercase px-2.5 py-1 rounded bg-emerald-800/70 tap-feedback min-h-10 disabled:opacity-40"
+              className="text-[10px] uppercase px-2.5 py-1 rounded-md bg-emerald-700/80 tap-feedback min-h-10 disabled:opacity-40"
             >
               Max
             </button>
@@ -811,7 +909,7 @@ export default function WeedEmpire() {
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div className="rounded border border-border/50 bg-card/40 p-3 space-y-1.5">
+        <div className="weed-panel p-3 space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <div className="text-[10px] uppercase tracking-wider font-heading text-muted-foreground">
               Daily sell cap
@@ -823,7 +921,7 @@ export default function WeedEmpire() {
           <div className="font-heading text-sm tabular-nums text-foreground">
             {money(farm.daily_sold_usd)} / {money(farm.daily_sold_cap)}
           </div>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[10px] text-muted-foreground hidden sm:block">
             Street &amp; dealer sales only. Base {money(farm.daily_sell_cap_base || 250_000_000)}; +
             {money(farm.daily_sell_cap_step || 250_000_000)} per Points Store buy (max{" "}
             {money(5_000_000_000)}). Withdraw stays {money(dailyWithdrawCap)}/day.
@@ -840,10 +938,10 @@ export default function WeedEmpire() {
           )}
         </div>
 
-        <div className="rounded border border-border/50 bg-card/40 p-3 space-y-2">
+        <div className="weed-panel p-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="text-[10px] uppercase tracking-wider font-heading text-muted-foreground flex items-center gap-1.5">
-              <Shield className="h-3 w-3" /> Safety Deposit
+              <Shield className="h-3 w-3 text-emerald-400/80" /> Safety Deposit
             </div>
             {farm.safety_bank_unlocked ? (
               <span className="text-[10px] text-emerald-400/90 uppercase">Unlocked</span>
@@ -854,8 +952,12 @@ export default function WeedEmpire() {
           {!farm.safety_bank_unlocked ? (
             <>
               <p className="text-[10px] text-muted-foreground">
-                Raid- and bust-safe vault. Unlock once in Points Store (
-                {farm.safety_bank_unlock_points || 500} pts), then expand capacity with weed business cash.
+                Raid- and bust-safe vault.
+                <span className="hidden sm:inline">
+                  {" "}
+                  Unlock once in Points Store ({farm.safety_bank_unlock_points || 500} pts), then expand with
+                  business cash.
+                </span>
               </p>
               <Link
                 to="/game/store?tab=upgrades#store-weed-safety-deposit"
@@ -935,7 +1037,7 @@ export default function WeedEmpire() {
       </div>
 
       {ownedGamePassStrains.length > 0 && (
-        <div className="rounded border border-emerald-500/40 bg-emerald-500/10 p-3 space-y-1.5">
+        <div className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-3 space-y-1.5">
           <div className="text-[10px] uppercase tracking-wider font-heading text-emerald-300">
             Game Pass strains (permanent)
           </div>
@@ -965,7 +1067,7 @@ export default function WeedEmpire() {
       )}
 
       {ownedExclusiveStrains.length > 0 && (
-        <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 space-y-1.5">
+        <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 space-y-1.5">
           <div className="text-[10px] uppercase tracking-wider font-heading text-amber-300">
             Loot exclusive strains
           </div>
@@ -992,42 +1094,41 @@ export default function WeedEmpire() {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 text-xs">
-        <div className="rounded border border-border/50 bg-card/40 p-2">
-          <div className="text-muted-foreground flex justify-between gap-1">
-            <span className="truncate">Lv {farm.grower_level || 1}</span>
+        <div className="weed-stat p-2.5">
+          <div className="text-muted-foreground flex justify-between gap-1 font-heading">
+            <span className="truncate">Grower Lv {farm.grower_level || 1}</span>
             <span className="tabular-nums shrink-0">
               {farm.grower_xp || 0}/{farm.grower_xp_to_next || 100}
             </span>
           </div>
-          <div className="h-1.5 mt-1 rounded bg-zinc-800 overflow-hidden">
-            <div
-              className="h-full bg-amber-500/80"
-              style={{ width: `${Math.min(100, farm.grower_xp_pct || 0)}%` }}
-            />
+          <div className="weed-meter mt-1.5">
+            <div className="bg-amber-500/85" style={{ width: `${Math.min(100, farm.grower_xp_pct || 0)}%` }} />
           </div>
-          <div className="text-[10px] mt-1 text-muted-foreground truncate">{farm.house?.name}</div>
+          <div className="text-[10px] mt-1.5 text-muted-foreground truncate">{farm.house?.name}</div>
         </div>
-        <div className="rounded border border-border/50 bg-card/40 p-2">
-          <div className="text-muted-foreground flex justify-between">
+        <div className="weed-stat p-2.5">
+          <div className="text-muted-foreground flex justify-between font-heading">
             <span>Sell cap</span>
             <span className="tabular-nums">{capPct.toFixed(0)}%</span>
           </div>
-          <div className="h-1.5 mt-1 rounded bg-zinc-800 overflow-hidden">
-            <div className="h-full bg-emerald-500/80" style={{ width: `${capPct}%` }} />
+          <div className="weed-meter mt-1.5">
+            <div className="bg-emerald-500/85" style={{ width: `${capPct}%` }} />
           </div>
-          <div className="text-[10px] mt-1 text-muted-foreground truncate tabular-nums">
+          <div className="text-[10px] mt-1.5 text-muted-foreground truncate tabular-nums">
             {money(farm.daily_sold_usd)} / {money(farm.daily_sold_cap)}
             {farm.daily_cap_next_cost_points != null ? " · Store +" : " · max"}
           </div>
         </div>
         <div
-          className={`col-span-2 sm:col-span-1 rounded border p-2 flex items-center justify-between gap-2 ${
-            heatHigh ? "border-red-500/60 bg-red-950/30" : "border-border/50 bg-card/40"
+          className={`col-span-2 sm:col-span-1 weed-stat p-2.5 flex items-center justify-between gap-2 ${
+            heatHigh ? "!border-red-500/55 !bg-red-950/35" : ""
           }`}
         >
           <div className="min-w-0">
-            <div className="text-muted-foreground">Heat</div>
-            <div className={`font-heading tabular-nums ${heatHigh ? "text-red-300" : ""}`}>{farm.heat}</div>
+            <div className="text-muted-foreground font-heading text-[10px] uppercase tracking-wide">Heat</div>
+            <div className={`font-heading text-lg tabular-nums leading-none ${heatHigh ? "text-red-300" : ""}`}>
+              {farm.heat}
+            </div>
             <div className="text-[9px] text-muted-foreground mt-0.5">
               +{heatBandLo.toFixed(1)}–{heatBandHi.toFixed(1)}%/h
               {heatHigh ? " · bust risk" : ""}
@@ -1037,14 +1138,14 @@ export default function WeedEmpire() {
             type="button"
             disabled={busy || Number(farm.heat || 0) < 0.5 || Number(farm.business_cash || 0) < coolCost}
             onClick={coolOff}
-            className="shrink-0 text-[10px] uppercase px-2.5 py-1.5 rounded border border-border hover:bg-muted/40 tap-feedback touch-manipulation active:scale-[0.97] min-h-10 disabled:opacity-40"
+            className="shrink-0 text-[10px] uppercase px-2.5 py-1.5 rounded-md border border-border/60 hover:bg-muted/40 tap-feedback touch-manipulation active:scale-[0.97] min-h-10 disabled:opacity-40"
           >
             Clear · {money(coolCost)}
           </button>
         </div>
         <div
-          className={`col-span-2 sm:col-span-1 lg:col-span-2 rounded border p-2 ${
-            cleanlinessRisk ? "border-red-500/50 bg-red-950/20" : "border-emerald-500/30 bg-card/40"
+          className={`col-span-2 sm:col-span-1 lg:col-span-2 weed-stat p-2.5 ${
+            cleanlinessRisk ? "!border-red-500/50 !bg-red-950/25" : "!border-emerald-500/25"
           }`}
         >
           <CareMeter
@@ -1054,7 +1155,7 @@ export default function WeedEmpire() {
             warn={cleanlinessRisk}
             fillUp
           />
-          <div className="mt-1 flex items-center justify-between gap-2">
+          <div className="mt-1.5 flex items-center justify-between gap-2">
             <div className="text-[9px] text-muted-foreground truncate">
               −{Number(farm.cleanliness?.decay_per_hour || 0).toFixed(2)}%/h · IPM{" "}
               {Number(farm.cleanliness?.mite_resistance_pct || 0).toFixed(0)}%
@@ -1075,26 +1176,27 @@ export default function WeedEmpire() {
         </div>
       </div>
 
-      <div className="-mx-3 px-3 overflow-x-auto overscroll-x-contain">
-        <div className="flex gap-1 min-w-max pb-0.5">
-          {TABS.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => {
-                setTab(id);
-                if (id === "raid" && raidUnlocked) loadTargets();
-              }}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded text-xs font-heading uppercase tracking-wide border shrink-0 tap-feedback touch-manipulation min-h-10 ${
-                tab === id
-                  ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
-                  : "border-border/40 text-muted-foreground hover:bg-muted/30"
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-            </button>
-          ))}
+      <div className="sticky top-0 z-20 -mx-3 px-3 py-1.5 bg-[#0a0c0b]/92 backdrop-blur-md border-y border-emerald-500/10">
+        <div className="overflow-x-auto overscroll-x-contain">
+          <div className="weed-tabs pb-0.5">
+            {TABS.map(({ id, label, short, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  setTab(id);
+                  if (id === "raid" && raidUnlocked) loadTargets();
+                }}
+                className={`weed-tab font-heading tap-feedback touch-manipulation ${
+                  tab === id ? "weed-tab-active" : "hover:bg-white/[0.03]"
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span className="sm:hidden">{short}</span>
+                <span className="hidden sm:inline">{label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -1108,6 +1210,11 @@ export default function WeedEmpire() {
               progress={selectedPlot?.progress || 0}
               budMeshKey={selStrain.bud_mesh_key || "dense"}
               strainType={selStrain.type || "hybrid"}
+              strainName={
+                selectedPlotIds.length > 1
+                  ? `${selectedPlotIds.length} pots`
+                  : selStrain.name || selectedPlot?.strain_id || ""
+              }
               quality={selectedPlot?.quality || 50}
               equipment={farm.equipment || {}}
               houseTier={farm.house_tier || 0}
@@ -1122,14 +1229,16 @@ export default function WeedEmpire() {
               fxNonce={fxNonce}
               onFxDone={() => setFx(null)}
             />
-            <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <Lightbulb className="w-3 h-3 text-amber-400" />
-                {String(farm.active_light_class || "cfl").toUpperCase()} glow
+            <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground px-0.5">
+              <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-amber-200/90">
+                <Lightbulb className="w-3 h-3" />
+                {String(farm.active_light_class || "cfl").toUpperCase()}
               </span>
-              <span>
-                Yield ×{(farm.stats?.yield_mult || 1).toFixed(2)} · Quality{" "}
-                {(farm.stats?.quality_ceiling || 0).toFixed(0)}
+              <span className="rounded-md border border-white/10 bg-black/25 px-1.5 py-0.5 tabular-nums">
+                Yield ×{(farm.stats?.yield_mult || 1).toFixed(2)}
+              </span>
+              <span className="rounded-md border border-white/10 bg-black/25 px-1.5 py-0.5 tabular-nums">
+                Quality ceil {(farm.stats?.quality_ceiling || 0).toFixed(0)}
               </span>
             </div>
           </div>
@@ -1138,9 +1247,9 @@ export default function WeedEmpire() {
             {/* Care / water meters sit directly under the grow view */}
             {growingSelected.length > 0 && (
               <div className="space-y-2">
-                <div className="rounded border border-border/40 bg-card/30 p-3 space-y-2">
+                <div className="weed-panel p-3 space-y-2">
                   <div className="flex items-baseline justify-between gap-2">
-                    <div className="text-xs font-heading uppercase text-muted-foreground">
+                    <div className="text-xs font-heading uppercase text-muted-foreground tracking-wide">
                       {selectedPlotIds.length > 1
                         ? `${selectedPlotIds.length} pots selected`
                         : `Pot ${(farm.plots || []).findIndex((p) => p.id === selectedPlotId) + 1 || 1}`}
@@ -1272,7 +1381,7 @@ export default function WeedEmpire() {
             )}
 
             {plantableSelected.length > 0 && (
-              <div className="rounded border border-border/50 p-3 space-y-3 bg-card/30">
+              <div className="weed-panel p-3 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="text-xs font-heading uppercase text-muted-foreground">
@@ -1488,7 +1597,7 @@ export default function WeedEmpire() {
                   ? "Multi on — tap pots to add/remove."
                   : "Tap a pot, or use All empty / Multi for bulk plant."}
               </p>
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-1.5">
                 {(farm.plots || []).map((p, idx) => {
                   const st = p.stage || p.state || "empty";
                   const active = selectedIdSet.has(p.id);
@@ -1496,36 +1605,44 @@ export default function WeedEmpire() {
                   const ready = st === "harvest_ready";
                   const growing = p.strain_id && st !== "empty" && st !== "dead";
                   const needsCare = !!(p.needs_water || p.needs_feed || p.mite_infested);
+                  const tone = potStageTone(st, ready, needsCare);
                   return (
                     <button
                       key={p.id}
                       type="button"
                       onClick={() => togglePlotSelect(p.id)}
-                      className={`relative text-left rounded border px-1.5 py-1.5 min-h-[3.25rem] tap-feedback touch-manipulation active:scale-[0.97] ${
+                      className={`weed-pot text-left border px-1.5 py-1.5 min-h-[3.6rem] tap-feedback touch-manipulation active:scale-[0.97] ${tone} ${
                         active
                           ? focused
-                            ? "border-emerald-500/70 bg-emerald-500/15 ring-1 ring-emerald-400/40"
-                            : "border-emerald-500/50 bg-emerald-500/10"
-                          : ready
-                            ? "border-amber-500/50 bg-amber-500/10"
-                            : needsCare
-                              ? "border-red-500/40 bg-card/40"
-                              : "border-border/40 bg-card/30"
+                            ? "ring-1 ring-emerald-400/50 border-emerald-400/70"
+                            : "ring-1 ring-emerald-500/30"
+                          : ""
                       }`}
                     >
-                      <div className="text-[10px] font-heading leading-tight">#{idx + 1}</div>
+                      <div className="flex items-center justify-between gap-0.5">
+                        <div className="text-[10px] font-heading leading-tight text-foreground/95">#{idx + 1}</div>
+                        {needsCare ? (
+                          <span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" aria-hidden />
+                        ) : ready ? (
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" aria-hidden />
+                        ) : growing ? (
+                          <Leaf className="h-2.5 w-2.5 text-emerald-400/80 shrink-0" aria-hidden />
+                        ) : null}
+                      </div>
                       <div className="text-[9px] text-muted-foreground capitalize truncate leading-tight">
                         {String(st).replace(/_/g, " ")}
                       </div>
                       {p.strain_id ? (
-                        <div className="truncate text-[9px] text-foreground/80 leading-tight mt-0.5">
+                        <div className="truncate text-[9px] text-foreground/85 leading-tight mt-0.5">
                           {strainMap[p.strain_id]?.name || p.strain_id}
                         </div>
-                      ) : null}
+                      ) : (
+                        <div className="text-[9px] text-muted-foreground/70 mt-0.5">Empty</div>
+                      )}
                       {growing ? (
-                        <div className="mt-1 h-1 rounded bg-zinc-800 overflow-hidden">
+                        <div className="weed-meter mt-1.5 !h-1">
                           <div
-                            className={`h-full ${ready ? "bg-amber-500" : "bg-emerald-500/80"}`}
+                            className={ready ? "bg-amber-400" : "bg-emerald-400/90"}
                             style={{ width: `${Math.min(100, (p.progress || 0) * 100)}%` }}
                           />
                         </div>
@@ -1551,23 +1668,33 @@ export default function WeedEmpire() {
       )}
 
       {tab === "stash" && (
-        <div className="space-y-4">
-          <div className="rounded border border-border/40 p-3 bg-card/30">
-            <div className="text-xs font-heading uppercase text-muted-foreground mb-2">Curing</div>
+        <div className="space-y-3">
+          <div className="weed-panel p-3">
+            <div className="text-xs font-heading uppercase tracking-wide text-muted-foreground mb-2">Curing</div>
             {(farm.curing || []).length === 0 ? (
               <p className="text-sm text-muted-foreground">No batches curing.</p>
             ) : (
-              <ul className="text-sm space-y-1">
+              <ul className="text-sm space-y-1.5">
                 {farm.curing.map((b) => (
-                  <li key={b.id}>
-                    {strainMap[b.strain_id]?.name || b.strain_id}: {b.grams}g (ready {shortReadyDate(b.ready_at)})
+                  <li
+                    key={b.id}
+                    className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 rounded-md border border-white/8 bg-black/25 px-2 py-1.5"
+                  >
+                    <span className="font-heading text-foreground/95">
+                      {strainMap[b.strain_id]?.name || b.strain_id}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                      {b.grams}g · ready {shortReadyDate(b.ready_at)}
+                    </span>
                   </li>
                 ))}
               </ul>
             )}
           </div>
-          <div className="rounded border border-border/40 p-3 bg-card/30 space-y-2">
-            <div className="text-xs font-heading uppercase text-muted-foreground">Stash / Sell (g · oz · lb · kg)</div>
+          <div className="weed-panel p-3 space-y-2">
+            <div className="text-xs font-heading uppercase tracking-wide text-muted-foreground">
+              Stash / Sell
+            </div>
             <div className="text-sm space-y-1">
               {Object.keys(farm.stash || {}).length === 0 ? (
                 <p className="text-muted-foreground">Empty stash.</p>
@@ -1711,19 +1838,15 @@ export default function WeedEmpire() {
             {(farm.stolen_equipment || []).length > 0 ? (
               <div className="space-y-1 rounded border border-amber-500/30 p-2">
                 <div className="text-[10px] uppercase text-amber-300">Stolen gear inventory</div>
+                <p className="text-[10px] text-muted-foreground">
+                  Auto-equips when your house can hold it. Upgrade the house to install these.
+                </p>
                 {(farm.stolen_equipment || []).map((item, idx) => (
                   <div key={`${item.category_id}-${idx}`} className="flex justify-between gap-2 text-xs">
                     <span>
                       {item.name || item.category_id} Lv {item.level}
                     </span>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => equipStolen(idx)}
-                      className="underline text-emerald-300 min-h-10 tap-feedback"
-                    >
-                      Equip
-                    </button>
+                    <span className="text-[10px] text-amber-200/80 shrink-0">Needs bigger house</span>
                   </div>
                 ))}
               </div>
@@ -1921,7 +2044,7 @@ export default function WeedEmpire() {
             <Shield className="w-4 h-4 shrink-0 mt-0.5" />
             Reach Grower Lv {raidMeta.required_grower_level || 5} to raid or be raided. Success steals the full stash,
             cash, and one gear line (they keep their upgrade
-            level — rebuy in Equipment to restore it; you equip the stolen piece later if your house is too small).
+            level — rebuy in Equipment to restore it; stolen gear auto-equips when your house can hold it).
             Cooldown is {raidMeta.raid_cooldown_hours || 3}h per target — you can still raid other growers. After a heat
             bust, growers are raid-protected for {farm.bust_raid_immune_hours || 6}h. Target security caps your odds —
             fully maxed security = 25% success (75% fail).

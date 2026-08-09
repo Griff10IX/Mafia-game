@@ -388,6 +388,52 @@ def _equip_levels(farm: dict) -> Dict[str, int]:
     return out
 
 
+def _auto_equip_stolen_inventory(farm: dict) -> bool:
+    """Install stolen gear the house can hold; absorb same/lower duplicates. Returns True if mutated."""
+    inv = list(farm.get("stolen_equipment") or [])
+    if not inv:
+        return False
+    house_max = int(_house(farm).get("max_equip_tier") or 100)
+    house_tier = int(farm.get("house_tier") or 0)
+    equip = dict(farm.get("equipment") or {})
+    kept: list = []
+    mutated = False
+    items = [x for x in inv if isinstance(x, dict)]
+    if len(items) != len(inv):
+        mutated = True
+    # Highest level first so upgrades land before duplicate scrap.
+    items.sort(key=lambda it: int(it.get("level") or 0), reverse=True)
+    for item in items:
+        cat_id = str(item.get("category_id") or "")
+        try:
+            lvl = int(item.get("level") or 0)
+        except (TypeError, ValueError):
+            mutated = True
+            continue
+        cat = EQUIPMENT_BY_ID.get(cat_id)
+        if not cat or lvl <= 0:
+            mutated = True
+            continue
+        if house_tier < int(cat.get("min_house_tier") or 0) or lvl > house_max:
+            kept.append(
+                {
+                    "category_id": cat_id,
+                    "level": lvl,
+                    "name": item.get("name") or cat.get("name") or cat_id,
+                }
+            )
+            continue
+        cur = int(equip.get(cat_id) or 0)
+        if lvl > cur:
+            equip[cat_id] = lvl
+        mutated = True
+    if not mutated:
+        return False
+    farm["equipment"] = equip
+    farm["stolen_equipment"] = kept
+    return True
+
+
 def _stats(farm: dict) -> Dict[str, float]:
     stats = aggregate_stats(_equip_levels(farm), _house(farm))
     return apply_exclusive_stat_bonuses(
@@ -2173,6 +2219,7 @@ async def weed_status(current_user: dict = Depends(_gate)):
             current_user["id"],
             username=current_user.get("username") or "",
         )
+        _auto_equip_stolen_inventory(farm)
         # Persist lazy ticks — never overwrite a concurrent sell/raid write.
         pub = _public_farm(farm, username=current_user.get("username") or "")
         save_fields = {
@@ -2898,9 +2945,17 @@ async def weed_upgrade_house(body: UpgradeHouseBody, current_user: dict = Depend
         if int(s.get("unlock_house_tier") or 0) <= target:
             unlocks.add(s["id"])
     farm["unlocks"] = list(unlocks)
+    _auto_equip_stolen_inventory(farm)
     await _save_farm(
         farm,
-        {"business_cash": farm["business_cash"], "house_tier": target, "plots": farm["plots"], "unlocks": farm["unlocks"]},
+        {
+            "business_cash": farm["business_cash"],
+            "house_tier": target,
+            "plots": farm["plots"],
+            "unlocks": farm["unlocks"],
+            "equipment": farm.get("equipment"),
+            "stolen_equipment": farm.get("stolen_equipment"),
+        },
     )
     return {"ok": True, "farm": _public_farm(farm, username=current_user.get("username") or "")}
 
@@ -3378,26 +3433,18 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
             "name": equip_name,
             "defender_keeps_level": True,
         }
-        atk_equip = dict(atk.get("equipment") or {})
-        cur = int(atk_equip.get(cat_id) or 0)
-        house_max = int(_house(atk).get("max_equip_tier") or 100)
-        cat = EQUIPMENT_BY_ID.get(cat_id)
-        can_install = (
-            cat
-            and cur < lvl
-            and int(atk.get("house_tier") or 0) >= int(cat.get("min_house_tier") or 0)
-            and lvl <= house_max
+        inv = list(atk.get("stolen_equipment") or [])
+        inv.append({"category_id": cat_id, "level": int(lvl), "name": equip_name})
+        atk["stolen_equipment"] = inv
+        _auto_equip_stolen_inventory(atk)
+        still_stored = any(
+            isinstance(x, dict)
+            and str(x.get("category_id") or "") == cat_id
+            and int(x.get("level") or 0) == int(lvl)
+            for x in (atk.get("stolen_equipment") or [])
         )
-        if can_install:
-            atk_equip[cat_id] = max(cur, lvl)
-            atk["equipment"] = atk_equip
-            stolen["equipment"]["installed"] = True
-        else:
-            inv = list(atk.get("stolen_equipment") or [])
-            inv.append({"category_id": cat_id, "level": lvl, "name": equip_name})
-            atk["stolen_equipment"] = inv
-            stolen["equipment"]["installed"] = False
-            stolen["equipment"]["stored"] = True
+        stolen["equipment"]["installed"] = not still_stored
+        stolen["equipment"]["stored"] = still_stored
 
     if body.sabotage and atk.get("sabotage_unlocked"):
         dfn["heat"] = min(MAX_HEAT, float(dfn.get("heat") or 0) + 20)
@@ -3485,34 +3532,37 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
 
 @router.post("/stolen-equipment/equip")
 async def weed_equip_stolen(body: EquipStolenBody, current_user: dict = Depends(_gate)):
+    """Equip one stolen slot (and auto-equip any other pieces the house can hold)."""
     farm = await _get_or_create_farm(current_user["id"])
     inv = list(farm.get("stolen_equipment") or [])
     if body.index < 0 or body.index >= len(inv):
         raise HTTPException(status_code=400, detail="No stolen gear at that slot")
-    item = inv.pop(body.index)
+    item = inv[body.index] if isinstance(inv[body.index], dict) else {}
     cat_id = str(item.get("category_id") or "")
-    lvl = int(item.get("level") or 0)
+    try:
+        lvl = int(item.get("level") or 0)
+    except (TypeError, ValueError):
+        lvl = 0
     cat = EQUIPMENT_BY_ID.get(cat_id)
     if not cat or lvl <= 0:
+        inv.pop(body.index)
         farm["stolen_equipment"] = inv
         await _save_farm(farm, {"stolen_equipment": inv})
         raise HTTPException(status_code=400, detail="Invalid stolen gear")
     house_max = int(_house(farm).get("max_equip_tier") or 100)
     if int(farm.get("house_tier") or 0) < int(cat.get("min_house_tier") or 0):
-        inv.insert(body.index, item)
         raise HTTPException(status_code=400, detail="House too small for this gear")
     if lvl > house_max:
-        inv.insert(body.index, item)
         raise HTTPException(status_code=400, detail="Upgrade house for this gear level")
-    equip = dict(farm.get("equipment") or {})
-    cur = int(equip.get(cat_id) or 0)
-    equip[cat_id] = max(cur, lvl)
-    farm["equipment"] = equip
-    farm["stolen_equipment"] = inv
-    await _save_farm(farm, {"equipment": equip, "stolen_equipment": inv})
+    _auto_equip_stolen_inventory(farm)
+    await _save_farm(
+        farm,
+        {"equipment": farm.get("equipment"), "stolen_equipment": farm.get("stolen_equipment")},
+    )
+    equip_lvl = int((farm.get("equipment") or {}).get(cat_id) or 0)
     return {
         "ok": True,
-        "equipped": {"category_id": cat_id, "level": equip[cat_id], "name": cat.get("name") or cat_id},
+        "equipped": {"category_id": cat_id, "level": equip_lvl, "name": cat.get("name") or cat_id},
         "farm": _public_farm(farm, username=current_user.get("username") or ""),
     }
 
