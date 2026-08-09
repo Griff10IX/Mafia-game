@@ -317,6 +317,37 @@ async def execute_paid_revive(
                 reviver.get("id"),
                 dead_user.get("id"),
             )
+        # Airport / armoury + Game Pass prestige entitlement from sacrificing alt → revived.
+        try:
+            from utils.dead_alive_estate_heal import (
+                transfer_armoury_airport_reviver_to_revived,
+                transfer_game_pass_prestige_reviver_to_revived,
+            )
+
+            prop_xfer = await transfer_armoury_airport_reviver_to_revived(
+                db,
+                from_user_id=reviver["id"],
+                to_user=dead_user,
+                transfer_source="revive_sacrifice_transfer",
+            )
+            if restore_summary is not None and prop_xfer:
+                if int(prop_xfer.get("airports") or 0) > 0:
+                    restore_summary["airports_from_reviver"] = int(prop_xfer["airports"])
+                if int(prop_xfer.get("armouries") or 0) > 0:
+                    restore_summary["armouries_from_reviver"] = int(prop_xfer["armouries"])
+            prestige_xfer = await transfer_game_pass_prestige_reviver_to_revived(
+                db, from_user=reviver, to_user=dead_user
+            )
+            if restore_summary is not None and (prestige_xfer or {}).get("moved"):
+                restore_summary["game_pass_prestige_from_reviver"] = int(
+                    prestige_xfer.get("prestige_count") or 0
+                )
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "airport/prestige transfer reviver→revived reviver=%s revived=%s",
+                reviver.get("id"),
+                dead_user.get("id"),
+            )
 
         await db.users.update_one(
             {"id": reviver["id"]},

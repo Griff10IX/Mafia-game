@@ -77,6 +77,9 @@ VIDEO_POKER_ABSOLUTE_MAX_BET = 500_000_000
 # Video poker claim cost: utils.claim_costs (key video_poker)
 VIDEO_POKER_HISTORY_MAX = 10
 VIDEO_POKER_HOUSE_EDGE = 0.0005  # 0.05% of profit to house (state head when no owner), like dice
+# Secret owner favor (like roulette): advertised deal/draw looks fair; ~7% of would-be paying
+# draws are silently re-drawn to a non-paying hand. Never changes held cards; never exposed in API.
+VIDEO_POKER_SECRET_MISS_CHANCE = 0.07
 
 SUITS = ["H", "D", "C", "S"]
 VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
@@ -85,8 +88,8 @@ VALUE_RANK = {"2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "1
 # Payout multipliers: cash credited to the player on draw = round(bet * multiplier) (stake was already taken on deal).
 # So "even money" on a pair of Jacks requires multiplier 2 (full stake back + equal win), not 1.5.
 #
-# Presets change pay table multipliers only. Cards are dealt fairly from a shuffled deck; hit frequency
-# does not change when the owner switches preset — only the cash returned for each hand tier changes.
+# Presets change pay table multipliers only. Deal is fair; draw has a small secret miss rate (see
+# VIDEO_POKER_SECRET_MISS_CHANCE). Owner preset still only changes cash returned per hand tier.
 VIDEO_POKER_DEFAULT_ODDS_PRESET = "tight"
 VIDEO_POKER_ODDS_PRESET_LABELS = {
     "tight": "Tight payouts",
@@ -159,18 +162,47 @@ def _vp_deal_initial_hand(deck: list, preset: str, pay_table: dict[str, float]) 
     return hand
 
 
-def _vp_draw_biased_hand(hand: list, held_idx: set[int], deck: list, preset: str, pay_table: dict[str, float]) -> list:
-    """Draw replacements fairly from the remaining deck (preset affects payouts only, not draw odds)."""
-    swap_indices = [i for i in range(5) if i not in held_idx]
-    if not swap_indices:
-        return hand
+def _vp_hand_pays(hand: list, pay_table: dict[str, float]) -> bool:
+    """True if this hand would credit any payout under the active pay table."""
+    _key, _name, multiplier = _evaluate_hand(hand, pay_table)
+    return float(multiplier or 0) > 0
+
+
+def _vp_draw_once(hand: list, swap_indices: list[int], deck: list) -> tuple[list, list]:
+    """Fair draw of replacements. Returns (new_hand, remaining_deck) without mutating inputs."""
     candidate_deck = list(deck)
     _rng.shuffle(candidate_deck)
     new_hand = list(hand)
     for i in swap_indices:
         if candidate_deck:
             new_hand[i] = candidate_deck.pop()
-    deck[:] = candidate_deck
+    return new_hand, candidate_deck
+
+
+def _vp_draw_biased_hand(hand: list, held_idx: set[int], deck: list, preset: str, pay_table: dict[str, float]) -> list:
+    """Draw replacements, then secretly void ~7% of would-be paying results (owner favor).
+
+    Held cards never change. Client only sees a normal non-paying hand — same pattern as
+    dice/roulette secret miss. If every card is held (nothing drawn), no void is possible.
+    """
+    swap_indices = [i for i in range(5) if i not in held_idx]
+    if not swap_indices:
+        return hand
+
+    new_hand, remaining = _vp_draw_once(hand, swap_indices, deck)
+    if not _vp_hand_pays(new_hand, pay_table) or _rng.random() >= VIDEO_POKER_SECRET_MISS_CHANCE:
+        deck[:] = remaining
+        return new_hand
+
+    # Secret void: re-draw replacements until the hand does not pay (looks like a fair bust).
+    for _ in range(48):
+        alt_hand, alt_remaining = _vp_draw_once(hand, swap_indices, deck)
+        if not _vp_hand_pays(alt_hand, pay_table):
+            deck[:] = alt_remaining
+            return alt_hand
+
+    # Could not find a non-paying draw — keep the original fair result (rare).
+    deck[:] = remaining
     return new_hand
 
 

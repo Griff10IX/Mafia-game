@@ -112,65 +112,96 @@ function PokerCard({ card, held, onToggleHold, canHold, index, dealing, revealed
   const isRed = card?.suit === 'H' || card?.suit === 'D';
 
   return (
-    <div className="flex flex-col items-center gap-0.5 sm:gap-1.5 min-w-0 w-full sm:w-auto sm:shrink-0">
-      <button
-        type="button"
-        onClick={canHold ? onToggleHold : undefined}
-        className={`vp-card-btn relative rounded-md sm:rounded-lg overflow-hidden transition-all ${canHold ? 'cursor-pointer hover:scale-[1.03] active:scale-[0.97]' : 'cursor-default'}`}
+    <div className="flex flex-col items-center min-w-0 w-full sm:w-auto sm:shrink-0">
+      {/* Deal animation on wrapper so hold translateY does not fight keyframes */}
+      <div
+        className="w-full flex justify-center"
         style={{
-          boxShadow: held
-            ? '0 0 0 3px var(--noir-primary), 0 6px 20px rgba(212,175,55,0.4)'
-            : '0 4px 16px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.2)',
-          transform: held ? 'translateY(-6px)' : 'translateY(0)',
           animation: dealing ? `card-deal-vp 0.35s cubic-bezier(0.2, 0.8, 0.3, 1) ${index * 0.1}s backwards` : undefined,
         }}
       >
-        {!revealed ? (
-          <div
-            className="absolute inset-0 rounded-lg"
-            style={{ background: 'linear-gradient(135deg, #1a3a7a, #0d2255)', border: '2px solid #2a4a9a' }}
-          >
+        <button
+          type="button"
+          onClick={canHold ? onToggleHold : undefined}
+          aria-pressed={canHold ? held : undefined}
+          className={`vp-card-btn relative rounded-md sm:rounded-lg overflow-hidden transition-transform duration-150 ${canHold ? 'cursor-pointer hover:scale-[1.03] active:scale-[0.97]' : 'cursor-default'}`}
+          style={{
+            boxShadow: held
+              ? '0 0 0 3px var(--noir-primary), 0 6px 20px rgba(212,175,55,0.45)'
+              : '0 4px 16px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.2)',
+            transform: held ? 'translateY(-6px) scale(1.02)' : 'translateY(0) scale(1)',
+          }}
+        >
+          {!revealed ? (
             <div
-              className="absolute inset-1 rounded border border-white/10"
-              style={{
-                backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.03) 4px, rgba(255,255,255,0.03) 8px),
-                  repeating-linear-gradient(-45deg, transparent, transparent 4px, rgba(255,255,255,0.03) 4px, rgba(255,255,255,0.03) 8px)`,
-              }}
+              className="absolute inset-0 rounded-lg"
+              style={{ background: 'linear-gradient(135deg, #1a3a7a, #0d2255)', border: '2px solid #2a4a9a' }}
             >
-              <div className="absolute inset-2 rounded border border-primary/20 flex items-center justify-center">
-                <span className="text-primary/40 text-lg">♠</span>
+              <div
+                className="absolute inset-1 rounded border border-white/10"
+                style={{
+                  backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.03) 4px, rgba(255,255,255,0.03) 8px),
+                    repeating-linear-gradient(-45deg, transparent, transparent 4px, rgba(255,255,255,0.03) 4px, rgba(255,255,255,0.03) 8px)`,
+                }}
+              >
+                <div className="absolute inset-2 rounded border border-primary/20 flex items-center justify-center">
+                  <span className="text-primary/40 text-lg">♠</span>
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div
-            className="absolute inset-0 rounded-lg"
-            style={{
-              background: 'linear-gradient(180deg, #ffffff, #f8f8f8, #f0f0f0)',
-              border: `2px solid ${isRed ? '#fca5a5' : '#d4d4d8'}`,
-            }}
-          >
-            <div className="absolute top-0.5 left-1 sm:top-1 sm:left-1.5 leading-none" style={{ color: s.color }}>
-              <div className="text-[8px] sm:text-[11px] md:text-xs font-bold">{card.value}</div>
-              <div className="text-[7px] sm:text-[10px] md:text-[11px] -mt-0.5">{s.sym}</div>
+          ) : (
+            <div
+              className="absolute inset-0 rounded-lg"
+              style={{
+                background: 'linear-gradient(180deg, #ffffff, #f8f8f8, #f0f0f0)',
+                border: `2px solid ${isRed ? '#fca5a5' : '#d4d4d8'}`,
+              }}
+            >
+              <div className="absolute top-1 left-1.5 leading-none" style={{ color: s.color }}>
+                <div className="text-[10px] sm:text-[11px] md:text-xs font-bold">{card.value}</div>
+                <div className="text-[9px] sm:text-[10px] md:text-[11px] -mt-0.5">{s.sym}</div>
+              </div>
+              <div
+                className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                style={{ color: s.color, paddingBottom: canHold ? 14 : 0 }}
+              >
+                <span
+                  className="text-xl sm:text-2xl md:text-3xl opacity-90"
+                  style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.1))' }}
+                >
+                  {s.sym}
+                </span>
+              </div>
+              {!canHold && (
+                <div className="absolute bottom-1 right-1.5 leading-none rotate-180" style={{ color: s.color }}>
+                  <div className="text-[10px] sm:text-[11px] md:text-xs font-bold">{card.value}</div>
+                  <div className="text-[9px] sm:text-[10px] md:text-[11px] -mt-0.5">{s.sym}</div>
+                </div>
+              )}
             </div>
-            <div className="absolute inset-0 flex items-center justify-center" style={{ color: s.color }}>
-              <span className="text-lg sm:text-2xl md:text-3xl opacity-90" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.1))' }}>{s.sym}</span>
-            </div>
-            <div className="absolute bottom-0.5 right-1 sm:bottom-1 sm:right-1.5 leading-none rotate-180" style={{ color: s.color }}>
-              <div className="text-[8px] sm:text-[11px] md:text-xs font-bold">{card.value}</div>
-              <div className="text-[7px] sm:text-[10px] md:text-[11px] -mt-0.5">{s.sym}</div>
-            </div>
-          </div>
-        )}
-      </button>
-      {canHold && (
-        <span
-          className={`text-[8px] sm:text-[9px] font-heading font-bold uppercase tracking-wider transition-all truncate w-full text-center ${held ? 'text-primary' : 'text-emerald-200/40'}`}
-        >
-          {held ? 'HELD' : 'HOLD'}
-        </span>
-      )}
+          )}
+          {canHold && (
+            <span
+              className="absolute bottom-1 left-1/2 -translate-x-1/2 z-10 px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-heading font-black uppercase tracking-wider whitespace-nowrap pointer-events-none"
+              style={
+                held
+                  ? {
+                      background: 'linear-gradient(180deg, var(--noir-primary), #8a6e18)',
+                      color: '#1a1200',
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+                    }
+                  : {
+                      background: 'rgba(0,0,0,0.55)',
+                      color: 'rgba(209,250,229,0.85)',
+                      border: '1px solid rgba(167,243,208,0.25)',
+                    }
+              }
+            >
+              {held ? 'HELD' : 'HOLD'}
+            </span>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
@@ -229,6 +260,7 @@ export default function VideoPoker() {
   const [buyBackOffer, setBuyBackOffer] = useState(null);
   const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
+  const [payTableOpen, setPayTableOpen] = useState(true);
   const buyBackFromGameRef = useRef(false);
 
   const fetchConfigAndOwnership = () => {
@@ -279,6 +311,11 @@ export default function VideoPoker() {
       setGame(null);
     });
   }, []);
+
+  // Mobile: expand pay table on bet screen; auto-collapse while a hand is active.
+  useEffect(() => {
+    setPayTableOpen(!game);
+  }, [game]);
 
   // Buy-back countdown timer
   useEffect(() => {
@@ -510,12 +547,15 @@ export default function VideoPoker() {
   const playAgain = () => { setGame(null); setHolds([false, false, false, false, false]); setShowWin(false); };
 
   return (
-    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="videopoker-page">
+    <div
+      className={`space-y-4 ${styles.pageContent} mobile-page-root pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0`}
+      data-testid="videopoker-page"
+    >
       <style>{CG_STYLES}</style>
       <style>{`
         @keyframes card-deal-vp {
           0% { transform: translateY(-30px) rotate(-5deg) scale(0.8); opacity: 0; }
-          100% { opacity: 1; }
+          100% { transform: translateY(0) rotate(0) scale(1); opacity: 1; }
         }
         @keyframes vp-particle {
           0% { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
@@ -528,9 +568,16 @@ export default function VideoPoker() {
         }
         .animate-vp-particle { animation: vp-particle ease-in forwards; }
         .animate-vp-result-banner { animation: vp-result-banner 0.4s cubic-bezier(0.2, 0.8, 0.3, 1) forwards; }
-        .vp-card-btn { width: 100%; aspect-ratio: 2/3; max-height: 96px; }
+        .vp-card-btn { width: min(100%, 72px); aspect-ratio: 2/3; max-height: 118px; min-height: 76px; }
         @media (min-width: 640px) {
-          .vp-card-btn { width: clamp(52px, 18vw, 68px); height: clamp(72px, 24vw, 96px); aspect-ratio: auto; max-height: none; }
+          .vp-card-btn { width: clamp(56px, 18vw, 72px); height: clamp(80px, 24vw, 104px); aspect-ratio: auto; max-height: none; min-height: 0; }
+        }
+        .vp-cta {
+          width: 100%;
+          max-width: 24rem;
+        }
+        @media (min-width: 640px) {
+          .vp-cta { width: auto; max-width: none; }
         }
       `}</style>
 
@@ -572,13 +619,17 @@ export default function VideoPoker() {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-3 text-xs font-heading">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs font-heading">
           {ownership?.owner_name ? (
             <span className="text-mutedForeground">Buy-back: <span className="text-primary font-bold">{Number(ownership.buy_back_reward ?? 0).toLocaleString()} pts</span></span>
           ) : null}
           <span className="text-mutedForeground">Max: <span className="text-primary font-bold">{formatMoney(maxBet)}</span></span>
           {canClaim && (
-            <button onClick={handleClaim} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">
+            <button
+              onClick={handleClaim}
+              disabled={ownerLoading}
+              className="bg-primary/20 text-primary rounded px-3 min-h-8 py-1.5 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading"
+            >
               {(Number(config.claim_cost) || 0) <= 0 ? 'Claim (Free)' : `Claim (${formatMoney(config.claim_cost)})`}
             </button>
           )}
@@ -702,7 +753,7 @@ export default function VideoPoker() {
       {/* ═══ Game Table ═══ */}
       {!isOwner && (
         <div
-          className="rounded-xl overflow-hidden border-2"
+          className="mobile-panel rounded-xl border-2 overflow-hidden"
           style={{
             borderColor: '#5a3e1b',
             background: 'linear-gradient(180deg, #0c3d1a 0%, #0a5e2a 20%, #0d7a35 50%, #0a5e2a 80%, #0c3d1a 100%)',
@@ -712,32 +763,51 @@ export default function VideoPoker() {
           <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, var(--noir-primary-bright), #8b6914, var(--noir-primary-bright), #5a3e1b)' }} />
 
           <div className="p-3 sm:p-5">
-            {/* Pay Table */}
-            <div className="mb-4 rounded-lg overflow-hidden border border-primary/30" style={{ background: 'rgba(0,0,0,0.35)' }}>
-              <div className="px-3 py-1.5 border-b border-primary/20" style={{ background: 'rgba(212,175,55,0.1)' }}>
-                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-widest">Jacks or Better — {activePayLabel}</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-px p-1">
-                {payTableRows.map((row) => (
-                  <div
-                    key={row.key}
-                    className={`flex items-center justify-between px-2 py-1 rounded-sm transition-all ${game?.hand_key === row.key ? 'ring-1 ring-primary' : ''}`}
-                    style={{ background: game?.hand_key === row.key ? 'rgba(212,175,55,0.15)' : 'transparent' }}
-                  >
-                    <span className={`text-[10px] font-heading truncate ${game?.hand_key === row.key ? 'text-primary font-bold' : 'text-emerald-100/70'}`}>
-                      {row.name}
-                    </span>
-                    <span className={`text-[10px] font-heading font-bold ml-2 ${game?.hand_key === row.key ? 'text-primary' : 'text-primary/60'}`}>
-                      {formatPayMultiplier(row.multiplier)}
-                    </span>
-                  </div>
-                ))}
+            {/* Pay Table — collapsible on mobile while a hand is active */}
+            <div className="mb-3 sm:mb-4 rounded-lg overflow-hidden border border-primary/30" style={{ background: 'rgba(0,0,0,0.35)' }}>
+              <button
+                type="button"
+                className="w-full px-3 py-2 border-b border-primary/20 flex items-center justify-between gap-2 text-left sm:pointer-events-none"
+                style={{ background: 'rgba(212,175,55,0.1)' }}
+                onClick={() => setPayTableOpen((v) => !v)}
+                aria-expanded={payTableOpen}
+              >
+                <span className="text-[10px] sm:text-[11px] font-heading font-bold text-primary uppercase tracking-widest truncate">
+                  Jacks or Better — {activePayLabel}
+                </span>
+                <span className="sm:hidden text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider shrink-0">
+                  {payTableOpen ? 'Hide' : 'Show odds'}
+                </span>
+              </button>
+              <div className={`${payTableOpen ? 'block' : 'hidden'} sm:block`}>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-px p-1.5">
+                  {payTableRows.map((row) => {
+                    const active = game?.hand_key === row.key;
+                    return (
+                      <div
+                        key={row.key}
+                        className={`flex items-center justify-between px-2 py-1.5 rounded-sm transition-all ${active ? 'ring-1 ring-primary' : ''}`}
+                        style={{
+                          background: active ? 'rgba(212,175,55,0.15)' : 'transparent',
+                          borderLeft: active ? '2px solid var(--noir-primary)' : '2px solid transparent',
+                        }}
+                      >
+                        <span className={`text-[11px] font-heading truncate ${active ? 'text-primary font-bold' : 'text-emerald-100/70'}`}>
+                          {row.name}
+                        </span>
+                        <span className={`text-[11px] font-heading font-bold ml-2 tabular-nums ${active ? 'text-primary' : 'text-primary/70'}`}>
+                          {formatPayMultiplier(row.multiplier)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
             {!game ? (
               /* ── Betting UI ── */
-              <div className="flex flex-col items-center gap-5 py-4">
+              <div className="flex flex-col items-center gap-4 sm:gap-5 py-3 sm:py-4">
                 <div className="text-center">
                   <p
                     className="text-sm sm:text-base font-heading font-bold uppercase tracking-[0.2em]"
@@ -754,16 +824,16 @@ export default function VideoPoker() {
                     value={bet}
                     onChange={(raw) => setBet(raw)}
                     placeholder="50,000"
-                    className="w-32 sm:w-36 bg-black/30 border border-emerald-700/30 rounded-lg h-11 px-4 text-white text-base font-heading font-bold text-center focus:border-primary/60 focus:outline-none"
+                    className="w-40 sm:w-36 bg-black/30 border border-emerald-700/30 rounded-lg h-11 px-4 text-white text-base font-heading font-bold text-center focus:border-primary/60 focus:outline-none"
                   />
                 </div>
 
-                <div className="flex gap-2 flex-wrap justify-center">
+                <div className="flex gap-2.5 flex-wrap justify-center">
                   {QUICK_BETS.map((qb) => (
                     <button
                       key={qb.value}
                       onClick={() => setBet(String(qb.value))}
-                      className="w-10 h-10 rounded-full text-[9px] font-bold transition-all hover:scale-110 active:scale-95"
+                      className="w-12 h-12 sm:w-11 sm:h-11 rounded-full text-[10px] font-bold transition-all hover:scale-110 active:scale-95"
                       style={{
                         background: `radial-gradient(circle at 40% 35%, ${qb.color}, ${qb.color}dd)`,
                         border: `2px dashed ${qb.color}88`,
@@ -777,7 +847,7 @@ export default function VideoPoker() {
                 <button
                   onClick={deal}
                   disabled={!canDeal}
-                  className="rounded-lg px-10 py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
+                  className="vp-cta rounded-lg px-10 py-3.5 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
                   style={{
                     background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
                     borderColor: 'var(--noir-primary-bright)', color: '#1a1200',
@@ -789,12 +859,12 @@ export default function VideoPoker() {
               </div>
             ) : (
               /* ── Active Game ── */
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {/* Bet info */}
                 <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[10px] font-heading px-1">
                   <span className="text-emerald-200/60">Bet: <span className="text-white font-bold">{formatMoney(game.bet)}</span></span>
                   {isDealPhase && (
-                    <span className="text-emerald-200/40 uppercase tracking-wider text-center">Select cards to hold, then draw</span>
+                    <span className="text-emerald-200/40 uppercase tracking-wider text-center">Tap cards to hold, then draw</span>
                   )}
                 </div>
 
@@ -802,27 +872,29 @@ export default function VideoPoker() {
                 {isDealPhase && game.hand_key && (
                   <div className="flex justify-center px-1">
                     <div
-                      className="px-4 py-1.5 rounded-lg border-2 max-w-[95vw]"
+                      className="px-4 py-2 rounded-lg border-2 max-w-[95vw] w-full sm:w-auto text-center sm:text-left"
                       style={{
                         background: `linear-gradient(180deg, ${outcomeColor(game.hand_key)}18, ${outcomeColor(game.hand_key)}0a)`,
                         borderColor: `${outcomeColor(game.hand_key)}55`,
                       }}
                     >
-                      <span className="text-[10px] text-emerald-200/50 font-heading uppercase tracking-wider mr-2">Your hand</span>
-                      <span className="text-sm sm:text-base font-heading font-black uppercase tracking-wide" style={{ color: outcomeColor(game.hand_key) }}>
-                        {game.hand_name}
-                      </span>
-                      {Number(game.multiplier) > 0 && (
-                        <span className="ml-2 text-[10px] sm:text-xs font-heading font-bold opacity-85" style={{ color: outcomeColor(game.hand_key) }}>
-                          {formatPayMultiplier(game.multiplier)} table
+                      <div className="text-[10px] text-emerald-200/50 font-heading uppercase tracking-wider">Your hand</div>
+                      <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
+                        <span className="text-base sm:text-lg font-heading font-black uppercase tracking-wide" style={{ color: outcomeColor(game.hand_key) }}>
+                          {game.hand_name}
                         </span>
-                      )}
+                        {Number(game.multiplier) > 0 && (
+                          <span className="text-[11px] sm:text-xs font-heading font-bold opacity-85" style={{ color: outcomeColor(game.hand_key) }}>
+                            {formatPayMultiplier(game.multiplier)} table
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {/* Cards — grid on mobile (fit 5), centered flex on desktop (fixed card size) */}
-                <div className="grid grid-cols-5 gap-1 sm:flex sm:flex-nowrap sm:justify-center sm:gap-3 max-w-full w-full px-1 sm:px-0">
+                {/* Cards — grid on mobile (fit 5), centered flex on desktop; pt for held lift */}
+                <div className="grid grid-cols-5 gap-1.5 sm:flex sm:flex-nowrap sm:justify-center sm:gap-3 max-w-full w-full px-0.5 sm:px-0 pt-3 pb-1">
                   {(game.hand || []).map((card, i) => (
                     <PokerCard
                       key={`${card.suit}-${card.value}-${i}`}
@@ -839,22 +911,22 @@ export default function VideoPoker() {
 
                 {/* Result Banner */}
                 {isDone && game.hand_key && (
-                  <div className="flex justify-center animate-vp-result-banner">
+                  <div className="flex justify-center animate-vp-result-banner px-1">
                     <div
-                      className="px-6 py-2 rounded-lg border-2"
+                      className="px-5 py-2.5 rounded-lg border-2 max-w-[95vw] w-full sm:w-auto text-center"
                       style={{
                         background: `linear-gradient(180deg, ${outcomeColor(game.hand_key)}22, ${outcomeColor(game.hand_key)}11)`,
                         borderColor: `${outcomeColor(game.hand_key)}66`,
                         boxShadow: `0 0 20px ${outcomeColor(game.hand_key)}22`,
                       }}
                     >
-                      <span className="text-lg sm:text-xl font-heading font-black uppercase tracking-wider" style={{ color: outcomeColor(game.hand_key) }}>
+                      <div className="text-lg sm:text-xl font-heading font-black uppercase tracking-wider" style={{ color: outcomeColor(game.hand_key) }}>
                         {game.hand_name}
-                      </span>
+                      </div>
                       {game.payout > 0 && game.payout !== game.bet && (
-                        <span className="ml-3 text-sm font-heading font-bold" style={{ color: outcomeColor(game.hand_key) }}>
+                        <div className="mt-0.5 text-sm font-heading font-bold" style={{ color: outcomeColor(game.hand_key) }}>
                           +{formatMoney(game.payout - game.bet)}
-                        </span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -866,7 +938,7 @@ export default function VideoPoker() {
                     <button
                       onClick={draw}
                       disabled={loading}
-                      className="rounded-lg px-10 py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 active:scale-[0.98] transition-all"
+                      className="vp-cta rounded-lg px-10 py-3.5 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 active:scale-[0.98] transition-all"
                       style={{
                         background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
                         borderColor: 'var(--noir-primary-bright)', color: '#1a1200',
@@ -878,7 +950,7 @@ export default function VideoPoker() {
                   ) : isDone ? (
                     <button
                       onClick={playAgain}
-                      className="rounded-lg px-10 py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 active:scale-[0.98] transition-all"
+                      className="vp-cta rounded-lg px-10 py-3.5 text-sm font-heading font-bold uppercase tracking-wider border-2 active:scale-[0.98] transition-all"
                       style={{
                         background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
                         borderColor: 'var(--noir-primary-bright)', color: '#1a1200',
@@ -911,16 +983,16 @@ export default function VideoPoker() {
             <div className="mb-2 text-[10px] text-mutedForeground font-heading uppercase tracking-wider">
               Jacks or Better - {activePayLabel}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-px p-1 rounded-md border border-primary/20 bg-black/25">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-px p-1.5 rounded-md border border-primary/20 bg-black/25">
               {payTableRows.map((row) => (
                 <div
                   key={`owner-${row.key}`}
-                  className="flex items-center justify-between px-2 py-1 rounded-sm"
+                  className="flex items-center justify-between px-2 py-1.5 rounded-sm"
                 >
-                  <span className="text-[10px] font-heading truncate text-emerald-100/70">
+                  <span className="text-[11px] font-heading truncate text-emerald-100/70">
                     {row.name}
                   </span>
-                  <span className="text-[10px] font-heading font-bold ml-2 text-primary/80">
+                  <span className="text-[11px] font-heading font-bold ml-2 tabular-nums text-primary/80">
                     {formatPayMultiplier(row.multiplier)}
                   </span>
                 </div>
@@ -943,14 +1015,31 @@ export default function VideoPoker() {
             <div className="p-2 space-y-1 max-h-48 overflow-y-auto">
               {history.map((item, i) => {
                 const profit = (item.payout ?? 0) - (item.bet ?? 0);
+                const profitColor = profit >= 0 ? '#34d399' : '#f87171';
                 return (
-                  <div key={item.created_at || i} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-zinc-800/30 text-xs font-heading">
-                    <span className="text-mutedForeground truncate">{formatHistoryDate(item.created_at)}</span>
-                    <span style={{ color: outcomeColor(item.hand_key) }}>{item.hand_name}</span>
-                    <span className="text-mutedForeground">{formatMoney(item.bet)}</span>
-                    <span className="font-bold tabular-nums" style={{ color: profit >= 0 ? '#34d399' : '#f87171' }}>
-                      {profit >= 0 ? '+' : ''}{formatMoney(profit)}
-                    </span>
+                  <div key={item.created_at || i} className="px-2 py-1.5 rounded bg-zinc-800/30 text-xs font-heading">
+                    {/* Mobile: 2 lines */}
+                    <div className="sm:hidden space-y-0.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold truncate" style={{ color: outcomeColor(item.hand_key) }}>{item.hand_name}</span>
+                        <span className="font-bold tabular-nums shrink-0" style={{ color: profitColor }}>
+                          {profit >= 0 ? '+' : ''}{formatMoney(profit)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 text-mutedForeground">
+                        <span className="truncate">{formatHistoryDate(item.created_at)}</span>
+                        <span className="shrink-0">{formatMoney(item.bet)}</span>
+                      </div>
+                    </div>
+                    {/* Desktop: single row */}
+                    <div className="hidden sm:flex items-center justify-between gap-2">
+                      <span className="text-mutedForeground truncate">{formatHistoryDate(item.created_at)}</span>
+                      <span style={{ color: outcomeColor(item.hand_key) }}>{item.hand_name}</span>
+                      <span className="text-mutedForeground">{formatMoney(item.bet)}</span>
+                      <span className="font-bold tabular-nums" style={{ color: profitColor }}>
+                        {profit >= 0 ? '+' : ''}{formatMoney(profit)}
+                      </span>
+                    </div>
                   </div>
                 );
               })}

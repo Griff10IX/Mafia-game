@@ -569,6 +569,271 @@ async def heal_game_pass_weed_from_revive_sacrifice(db, *, dry_run: bool = True)
     return out
 
 
+async def transfer_armoury_airport_reviver_to_revived(
+    db,
+    *,
+    from_user_id: str,
+    to_user: dict,
+    transfer_source: str = "revive_sacrifice_transfer",
+) -> Dict[str, Any]:
+    """Move armoury + airport ownership from sacrificing reviver → revived character."""
+    from server import CAPO_RANK_ID, get_rank_info, user_prestige_rank_mult
+
+    to_uid = str(to_user.get("id") or "")
+    to_un = (to_user.get("username") or "").strip() or "?"
+    if not from_user_id or not to_uid or from_user_id == to_uid:
+        return {"airports": 0, "armouries": 0, "details": []}
+
+    rank_id, _ = get_rank_info(int(to_user.get("rank_points") or 0), user_prestige_rank_mult(to_user))
+    set_doc: Dict[str, Any] = {"owner_id": to_uid, "owner_username": to_un}
+    update_op: Dict[str, Any] = {"$set": dict(set_doc)}
+    if rank_id < CAPO_RANK_ID:
+        update_op["$set"]["below_capo_acquired_at"] = datetime.now(timezone.utc)
+    else:
+        update_op["$unset"] = {"below_capo_acquired_at": ""}
+
+    details: List[dict] = []
+    airports = 0
+    armouries = 0
+
+    air_docs = await db.airport_ownership.find({"owner_id": from_user_id}, {"_id": 0}).to_list(50)
+    for doc in air_docs:
+        q = {"owner_id": from_user_id, "state": doc.get("state")}
+        if doc.get("slot") is not None:
+            q["slot"] = int(doc["slot"])
+        res = await db.airport_ownership.update_one(q, update_op)
+        if res.modified_count:
+            airports += 1
+            details.append(
+                {
+                    "kind": "airport",
+                    "state": doc.get("state"),
+                    "slot": doc.get("slot"),
+                    "transfer_source": transfer_source,
+                }
+            )
+
+    arm_docs = await db.bullet_factory.find({"owner_id": from_user_id}, {"_id": 0}).to_list(50)
+    for doc in arm_docs:
+        q = {"owner_id": from_user_id, "state": doc.get("state")}
+        res = await db.bullet_factory.update_one(q, update_op)
+        if res.modified_count:
+            armouries += 1
+            details.append(
+                {
+                    "kind": "armoury",
+                    "state": doc.get("state"),
+                    "transfer_source": transfer_source,
+                }
+            )
+
+    if airports:
+        try:
+            from routers.admin.airport import _invalidate_airports_list_cache
+
+            _invalidate_airports_list_cache()
+        except Exception:
+            pass
+
+    return {"airports": airports, "armouries": armouries, "details": details}
+
+
+async def transfer_game_pass_prestige_reviver_to_revived(
+    db,
+    *,
+    from_user: dict,
+    to_user: dict,
+) -> Dict[str, Any]:
+    """
+    Move Game Pass £10 prestige entitlement (flags only — rewards already paid on purchase)
+    from sacrificing reviver → revived character.
+    """
+    from utils.game_pass_prestige import GAME_PASS_PRESTIGE_PENDING_CAP
+
+    from_uid = str(from_user.get("id") or "")
+    to_uid = str(to_user.get("id") or "")
+    if not from_uid or not to_uid or from_uid == to_uid:
+        return {"moved": False}
+
+    from_count = max(0, int(from_user.get("game_pass_prestige_count") or 0))
+    to_count = max(0, int(to_user.get("game_pass_prestige_count") or 0))
+    from_pending = max(0, int(from_user.get("game_pass_prestige_pending") or 0))
+    to_pending = max(0, int(to_user.get("game_pass_prestige_pending") or 0))
+    carried_count = max(from_count, to_count)
+    carried_pending = min(GAME_PASS_PRESTIGE_PENDING_CAP, max(from_pending, to_pending))
+
+    if from_count <= 0 and from_pending <= 0:
+        return {"moved": False, "reason": "reviver_has_no_prestige"}
+    if carried_count <= to_count and carried_pending <= to_pending and from_count <= to_count:
+        # Recipient already has equal/better entitlement; still clear stuck flags on dead alt.
+        await db.users.update_one(
+            {"id": from_uid},
+            {
+                "$set": {"game_pass_prestige_count": 0, "game_pass_prestige_pending": 0},
+                "$unset": {"game_pass_prestiged_at": ""},
+            },
+        )
+        return {"moved": False, "cleared_reviver": True, "prestige_count": to_count}
+
+    set_to: Dict[str, Any] = {
+        "game_pass_prestige_count": carried_count,
+        "game_pass_prestige_pending": carried_pending,
+    }
+    if from_count > to_count and from_user.get("game_pass_prestiged_at") is not None:
+        set_to["game_pass_prestiged_at"] = from_user.get("game_pass_prestiged_at")
+    elif to_user.get("game_pass_prestiged_at") is not None:
+        set_to["game_pass_prestiged_at"] = to_user.get("game_pass_prestiged_at")
+    elif from_user.get("game_pass_prestiged_at") is not None:
+        set_to["game_pass_prestiged_at"] = from_user.get("game_pass_prestiged_at")
+
+    await db.users.update_one({"id": to_uid}, {"$set": set_to})
+    await db.users.update_one(
+        {"id": from_uid},
+        {
+            "$set": {"game_pass_prestige_count": 0, "game_pass_prestige_pending": 0},
+            "$unset": {"game_pass_prestiged_at": ""},
+        },
+    )
+    return {
+        "moved": True,
+        "prestige_count": carried_count,
+        "prestige_pending": carried_pending,
+        "prestiged_at": set_to.get("game_pass_prestiged_at"),
+    }
+
+
+async def heal_airport_armoury_from_revive_sacrifice(db, *, dry_run: bool = True) -> dict:
+    """Move armoury/airport stuck on £10 revive sacrifice alts onto the revived recipient."""
+    out: Dict[str, Any] = {
+        "checked": 0,
+        "healed": 0,
+        "airports": 0,
+        "armouries": 0,
+        "actions": [],
+    }
+    sacrificers = await db.users.find(
+        {
+            "is_dead": True,
+            "revive_sacrifice_for_user_id": {"$exists": True, "$nin": [None, ""]},
+        },
+        {"_id": 0, "id": 1, "username": 1, "revive_sacrifice_for_user_id": 1},
+    ).to_list(2000)
+
+    for sac in sacrificers:
+        out["checked"] += 1
+        recipient_id = str(sac.get("revive_sacrifice_for_user_id") or "")
+        if not recipient_id:
+            continue
+        air_n = await db.airport_ownership.count_documents({"owner_id": sac["id"]})
+        arm_n = await db.bullet_factory.count_documents({"owner_id": sac["id"]})
+        if air_n <= 0 and arm_n <= 0:
+            continue
+        recip = await db.users.find_one(
+            {"id": recipient_id},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "rank_points": 1, "prestige_level": 1},
+        )
+        if not recip or recip.get("is_dead"):
+            continue
+        action = {
+            "kind": "airport_armoury_from_revive_sacrifice",
+            "dead_username": sac.get("username"),
+            "recipient_username": recip.get("username"),
+            "airports": int(air_n),
+            "armouries": int(arm_n),
+        }
+        if dry_run:
+            action["would_apply"] = True
+            out["actions"].append(action)
+            out["healed"] += 1
+            out["airports"] += int(air_n)
+            out["armouries"] += int(arm_n)
+            continue
+        result = await transfer_armoury_airport_reviver_to_revived(
+            db,
+            from_user_id=sac["id"],
+            to_user=recip,
+            transfer_source="revive_sacrifice_heal",
+        )
+        moved_air = int((result or {}).get("airports") or 0)
+        moved_arm = int((result or {}).get("armouries") or 0)
+        action["applied"] = (moved_air + moved_arm) > 0
+        action["airports"] = moved_air
+        action["armouries"] = moved_arm
+        out["actions"].append(action)
+        if moved_air or moved_arm:
+            out["healed"] += 1
+            out["airports"] += moved_air
+            out["armouries"] += moved_arm
+
+    return out
+
+
+async def heal_game_pass_prestige_from_revive_sacrifice(db, *, dry_run: bool = True) -> dict:
+    """Move Game Pass prestige flags stuck on £10 revive sacrifice alts onto the revived recipient."""
+    out: Dict[str, Any] = {"checked": 0, "healed": 0, "actions": []}
+    sacrificers = await db.users.find(
+        {
+            "is_dead": True,
+            "revive_sacrifice_for_user_id": {"$exists": True, "$nin": [None, ""]},
+            "$or": [
+                {"game_pass_prestige_count": {"$gte": 1}},
+                {"game_pass_prestige_pending": {"$gte": 1}},
+            ],
+        },
+        {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "revive_sacrifice_for_user_id": 1,
+            "game_pass_prestige_count": 1,
+            "game_pass_prestige_pending": 1,
+            "game_pass_prestiged_at": 1,
+        },
+    ).to_list(2000)
+
+    for sac in sacrificers:
+        out["checked"] += 1
+        recipient_id = str(sac.get("revive_sacrifice_for_user_id") or "")
+        if not recipient_id:
+            continue
+        recip = await db.users.find_one(
+            {"id": recipient_id},
+            {
+                "_id": 0,
+                "id": 1,
+                "username": 1,
+                "is_dead": 1,
+                "game_pass_prestige_count": 1,
+                "game_pass_prestige_pending": 1,
+                "game_pass_prestiged_at": 1,
+            },
+        )
+        if not recip or recip.get("is_dead"):
+            continue
+        action = {
+            "kind": "game_pass_prestige_from_revive_sacrifice",
+            "dead_username": sac.get("username"),
+            "recipient_username": recip.get("username"),
+            "prestige_count": int(sac.get("game_pass_prestige_count") or 0),
+            "prestige_pending": int(sac.get("game_pass_prestige_pending") or 0),
+        }
+        if dry_run:
+            action["would_apply"] = True
+            out["actions"].append(action)
+            out["healed"] += 1
+            continue
+        result = await transfer_game_pass_prestige_reviver_to_revived(
+            db, from_user=sac, to_user=recip
+        )
+        action["applied"] = bool((result or {}).get("moved") or (result or {}).get("cleared_reviver"))
+        action["result"] = result
+        out["actions"].append(action)
+        if action["applied"]:
+            out["healed"] += 1
+
+    return out
+
+
 async def heal_vip_from_revive_sacrifice(db, *, dry_run: bool = True) -> dict:
     """Move VIP cars stuck on £10 revive sacrifice alts onto the revived recipient."""
     from utils.game_pass_vip_car import (
@@ -1419,6 +1684,8 @@ async def run_dead_alive_estate_heal(db, *, dry_run: bool = True) -> dict:
     gp_weed = await backfill_game_pass_weed_strains_dead_alive(db, dry_run=dry_run)
     gp_weed_sac = await heal_game_pass_weed_from_revive_sacrifice(db, dry_run=dry_run)
     vip = await heal_vip_pass_car_gaps(db, dry_run=dry_run)
+    airport_sac = await heal_airport_armoury_from_revive_sacrifice(db, dry_run=dry_run)
+    prestige_sac = await heal_game_pass_prestige_from_revive_sacrifice(db, dry_run=dry_run)
     return {
         "dry_run": bool(dry_run),
         "started_at": started,
@@ -1431,6 +1698,8 @@ async def run_dead_alive_estate_heal(db, *, dry_run: bool = True) -> dict:
         "game_pass_weed_inheritance": gp_weed,
         "game_pass_weed_from_sacrifice": gp_weed_sac,
         "vip_pass_car": vip,
+        "airport_armoury_from_sacrifice": airport_sac,
+        "game_pass_prestige_from_sacrifice": prestige_sac,
         "totals": {
             "biz_healed": int(biz.get("healed") or 0),
             "killer_biz_healed": int(killer_biz.get("healed") or 0),
@@ -1449,5 +1718,9 @@ async def run_dead_alive_estate_heal(db, *, dry_run: bool = True) -> dict:
             "vip_sacrifice_cars": int(
                 (vip.get("sacrifice_backfill") or {}).get("transferred_cars") or 0
             ),
+            "airport_sacrifice_healed": int(airport_sac.get("healed") or 0),
+            "airport_sacrifice_airports": int(airport_sac.get("airports") or 0),
+            "airport_sacrifice_armouries": int(airport_sac.get("armouries") or 0),
+            "game_pass_prestige_sacrifice_healed": int(prestige_sac.get("healed") or 0),
         },
     }
