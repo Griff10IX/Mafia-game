@@ -1,6 +1,5 @@
 # Game chat: whole-game chat with family-only toggle and block list
 from datetime import datetime, timezone, timedelta
-import re
 import uuid
 import logging
 import time
@@ -9,7 +8,17 @@ from typing import Optional, List, Literal
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
-from server import db, get_current_user, send_notification, ADMIN_EMAILS, MOD_EMAILS, _is_admin, _is_moderator, require_staff_issued_if_staff_capable
+from server import (
+    db,
+    get_current_user,
+    send_notification,
+    ADMIN_EMAILS,
+    MOD_EMAILS,
+    _is_admin,
+    _is_moderator,
+    require_staff_issued_if_staff_capable,
+    _get_staff_user_ids,
+)
 from utils.mentions import extract_mention_usernames, resolve_usernames_to_users
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_GAME_CHAT
 
@@ -159,19 +168,6 @@ async def _backfill_author_colors(messages: list[dict]) -> None:
             message["author_online_color"] = color
         if message.get("user_id") in staff_flags:
             message["sender_is_staff"] = staff_flags[message["user_id"]]
-
-
-async def _get_staff_user_ids():
-    """User IDs of admins and moderators (for spam alerts)."""
-    or_clauses: list = [{"is_moderator": True}]
-    for e in (ADMIN_EMAILS or []):
-        if e:
-            or_clauses.append({"email": re.compile("^" + re.escape(e) + "$", re.IGNORECASE)})
-    for e in (MOD_EMAILS or []):
-        if e:
-            or_clauses.append({"email": re.compile("^" + re.escape(e) + "$", re.IGNORECASE)})
-    cursor = db.users.find({"$or": or_clauses}, {"_id": 0, "id": 1})
-    return [u["id"] for u in await cursor.to_list(500)]
 
 
 async def _notify_staff_game_chat_spam(spammer_user_id: str, spammer_username: str):

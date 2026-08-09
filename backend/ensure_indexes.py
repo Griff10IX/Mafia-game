@@ -447,6 +447,8 @@ async def ensure_all_indexes(db):
             compound_indexes=[
                 [("user_id", 1), ("at", -1)],
                 [("at", 1), ("success", 1), ("user_id", 1)],
+                # Weekly boards match success=true then at-range — equality-first beats at-first.
+                [("success", 1), ("at", 1), ("user_id", 1)],
             ],
         )
         await _ensure_event_log_ttl(
@@ -456,6 +458,7 @@ async def ensure_all_indexes(db):
             compound_indexes=[
                 [("user_id", 1), ("at", -1)],
                 [("at", 1), ("success", 1), ("user_id", 1)],
+                [("success", 1), ("at", 1), ("user_id", 1)],
             ],
         )
         await _ensure_event_log_ttl(
@@ -465,6 +468,7 @@ async def ensure_all_indexes(db):
             compound_indexes=[
                 [("user_id", 1), ("at", -1)],
                 [("at", 1), ("success", 1), ("user_id", 1)],
+                [("success", 1), ("at", 1), ("user_id", 1)],
             ],
         )
         await _ensure_event_log_ttl(
@@ -534,6 +538,15 @@ async def ensure_all_indexes(db):
         except Exception as e:
             logger.warning("users.username unique index: %s", e)
         await db.users.create_index("email")
+        # Hot path: staff exclusion / _get_staff_user_ids — avoid COLLSCAN on is_moderator.
+        try:
+            await db.users.create_index(
+                [("is_moderator", 1)],
+                partialFilterExpression={"is_moderator": True},
+                name="users_is_moderator_true",
+            )
+        except Exception as e:
+            logger.warning("users.is_moderator partial index: %s", e)
         await db.password_resets.create_index("token", unique=True)
         await db.email_verifications.create_index("token", unique=True)
         await db.email_verifications.create_index("expires_at")

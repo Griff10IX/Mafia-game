@@ -2873,7 +2873,9 @@ def _staff_exclude_user_filter(*, with_email_nor: bool = True) -> dict:
         }
     )
     if staff_emails:
-        q["$nor"] = [{"email": re.compile("^" + re.escape(e) + "$", re.IGNORECASE)} for e in staff_emails]
+        # Exact lowercase match — emails are stored lowercased at registration.
+        # Avoids case-insensitive regex scans on the email index.
+        q["email"] = {"$nin": staff_emails}
     return q
 
 
@@ -2919,20 +2921,59 @@ def expand_user_ids_for_mongo_nin(raw_ids) -> list:
     return out
 
 
+_STAFF_ID_CACHE_TTL_SEC = 60.0
+_staff_id_cache: dict = {
+    "staff": (None, 0.0),
+    "admin": (None, 0.0),
+    "mod_env": (None, 0.0),
+}
+
+
+def invalidate_staff_user_ids_cache() -> None:
+    """Clear cached admin/mod user id lists (call after promote/demote)."""
+    _staff_id_cache["staff"] = (None, 0.0)
+    _staff_id_cache["admin"] = (None, 0.0)
+    _staff_id_cache["mod_env"] = (None, 0.0)
+
+
+def _staff_id_cache_get(key: str):
+    ids, exp = _staff_id_cache.get(key) or (None, 0.0)
+    if ids is not None and time.monotonic() < exp:
+        return list(ids)
+    return None
+
+
+def _staff_id_cache_set(key: str, ids: list) -> None:
+    _staff_id_cache[key] = (list(ids), time.monotonic() + _STAFF_ID_CACHE_TTL_SEC)
+
+
+def _normalized_staff_emails(emails) -> list:
+    return sorted({e.strip().lower() for e in (emails or []) if e and str(e).strip()})
+
+
 async def _get_mod_env_user_ids(database=None) -> list:
     """User IDs for accounts whose email is in MOD_EMAILS (env), excluding DB flag handling."""
+    cached = _staff_id_cache_get("mod_env")
+    if cached is not None:
+        return cached
     dd = db if database is None else database
-    mod_emails = [e.strip().lower() for e in (MOD_EMAILS or []) if e and str(e).strip()]
+    mod_emails = _normalized_staff_emails(MOD_EMAILS)
     if not mod_emails:
+        _staff_id_cache_set("mod_env", [])
         return []
-    or_clauses = [{"email": re.compile("^" + re.escape(e) + "$", re.IGNORECASE)} for e in mod_emails]
-    cursor = dd.users.find({"$or": or_clauses}, {"_id": 0, "id": 1})
-    return [u["id"] for u in await cursor.to_list(200)]
+    cursor = dd.users.find({"email": {"$in": mod_emails}}, {"_id": 0, "id": 1})
+    out = [u["id"] for u in await cursor.to_list(200) if u.get("id")]
+    _staff_id_cache_set("mod_env", out)
+    return list(out)
 
 
 async def _get_staff_user_ids(database=None) -> list:
     """Return user IDs of all admin and moderator accounts (for excluding from non-users collections)."""
+    cached = _staff_id_cache_get("staff")
+    if cached is not None:
+        return cached
     d = db if database is None else database
+    # Partial index on is_moderator=true makes this cheap; cache avoids repeating under load.
     mod_ids = [u["id"] for u in await d.users.find({"is_moderator": True}, {"_id": 0, "id": 1}).to_list(500)]
     admin_ids = await _get_admin_user_ids(d)
     mod_env_ids = await _get_mod_env_user_ids(d)
@@ -2942,7 +2983,8 @@ async def _get_staff_user_ids(database=None) -> list:
         if uid and uid not in seen:
             seen.add(uid)
             out.append(uid)
-    return out
+    _staff_id_cache_set("staff", out)
+    return list(out)
 
 
 async def honours_stat_excluded_user_ids(database=None) -> list:
@@ -2972,13 +3014,18 @@ async def stat_leaderboard_users_match(*, dead: bool, database=None) -> dict:
 
 async def _get_admin_user_ids(database=None) -> list:
     """Return user IDs for accounts in ADMIN_EMAILS (game admins only)."""
+    cached = _staff_id_cache_get("admin")
+    if cached is not None:
+        return cached
     d = db if database is None else database
-    admin_emails = [e.strip().lower() for e in (ADMIN_EMAILS or []) if e and str(e).strip()]
+    admin_emails = _normalized_staff_emails(ADMIN_EMAILS)
     if not admin_emails:
+        _staff_id_cache_set("admin", [])
         return []
-    or_clauses = [{"email": re.compile("^" + re.escape(e) + "$", re.IGNORECASE)} for e in admin_emails]
-    cursor = d.users.find({"$or": or_clauses}, {"_id": 0, "id": 1})
-    return [u["id"] for u in await cursor.to_list(200)]
+    cursor = d.users.find({"email": {"$in": admin_emails}}, {"_id": 0, "id": 1})
+    out = [u["id"] for u in await cursor.to_list(200) if u.get("id")]
+    _staff_id_cache_set("admin", out)
+    return list(out)
 
 
 # Admin endpoints -> routers/admin.py

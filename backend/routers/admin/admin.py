@@ -9301,6 +9301,10 @@ def register(router):
         if target.get("is_moderator"):
             return {"message": f"{target.get('username', target_username)} is already a moderator."}
         await db.users.update_one({"id": target["id"]}, {"$set": {"is_moderator": True}})
+        try:
+            srv.invalidate_staff_user_ids_cache()
+        except Exception:
+            pass
         return {"message": f"Promoted {target.get('username', target_username)} to moderator."}
 
     @router.post("/admin/demote-moderator")
@@ -9313,6 +9317,10 @@ def register(router):
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
         await db.users.update_one({"id": target["id"]}, {"$set": {"is_moderator": False}})
+        try:
+            srv.invalidate_staff_user_ids_cache()
+        except Exception:
+            pass
         return {"message": f"Removed moderator role from {target.get('username', target_username)}."}
 
     @router.get("/admin/help-desk-operators")
