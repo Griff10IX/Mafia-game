@@ -68,6 +68,11 @@ const FORUM_STYLES = `
   @media (max-width: 768px) {
     .hm-kb-grid { grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 5px; }
   }
+  @media (max-width: 767px) {
+    body[data-mobile-layout="pocket_deck"] .forum-tabs-sticky {
+      top: var(--pocket-hud-top, 2.75rem);
+    }
+  }
 `;
 
 // ─── Hangman game panel ──────────────────────────────────────────────────────
@@ -415,6 +420,8 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
   const [auctionEndAt, setAuctionEndAt] = useState('');
   const [showEmojis, setShowEmojis] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
+  const [showImageUrl, setShowImageUrl] = useState(false);
+  const [imageUrlDraft, setImageUrlDraft] = useState('');
   const contentTextareaRef = useRef(null);
 
   const insertEmoji = (emoji) => setContent((c) => c + emoji);
@@ -433,6 +440,21 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
       ta.focus();
       ta.setSelectionRange(cursor, cursor);
     }, 0);
+  };
+
+  const insertImageFromDraft = () => {
+    const url = imageUrlDraft.trim();
+    if (!url) {
+      toast.error('Enter an image URL');
+      return;
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      toast.error('Image URL must start with http:// or https://');
+      return;
+    }
+    insertTopicMarkup(`[img]${url}[/img]`);
+    setImageUrlDraft('');
+    setShowImageUrl(false);
   };
 
   const handleSubmit = async (e) => {
@@ -508,153 +530,172 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
             {category === 'entertainer' ? '🎭 Entertainer: New Topic' : category === 'designer' ? '🎨 Designer Forum: New Topic' : category === 'game_ideas' ? '💡 Game Ideas: New Topic (admin)' : '📝 Create New Topic'}
           </h2>
         </div>
-        <form onSubmit={handleSubmit} className="p-3 space-y-3 overflow-y-auto overscroll-contain flex-1 min-h-0">
-          <div className="space-y-2">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Title…"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                style={titleColor ? { color: titleColor } : {}}
-                className="flex-1 px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 placeholder:italic focus:border-primary/50 focus:outline-none"
-              />
-              {canUseColors && (
-                <button
-                  type="button"
-                  onClick={() => setShowTitleColors(!showTitleColors)}
-                  className="px-2 py-1.5 min-h-8 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 flex items-center gap-1 touch-manipulation"
-                  title="Title Color (Staff Only)"
-                >
-                  <Palette size={14} />
-                  {titleColor && <span className="w-3 h-3 rounded-full" style={{ backgroundColor: titleColor }} />}
-                </button>
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="p-3 space-y-3 overflow-y-auto overscroll-contain flex-1 min-h-0">
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Title…"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  style={titleColor ? { color: titleColor } : {}}
+                  className="flex-1 px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 placeholder:italic focus:border-primary/50 focus:outline-none"
+                />
+                {canUseColors && (
+                  <button
+                    type="button"
+                    onClick={() => setShowTitleColors(!showTitleColors)}
+                    className="px-2 py-1.5 min-h-10 min-w-10 sm:min-h-8 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 flex items-center justify-center gap-1 touch-manipulation"
+                    title="Title Color (Staff Only)"
+                  >
+                    <Palette size={14} />
+                    {titleColor && <span className="w-3 h-3 rounded-full" style={{ backgroundColor: titleColor }} />}
+                  </button>
+                )}
+              </div>
+              {canUseColors && showTitleColors && (
+                <div className="flex flex-wrap gap-1 p-2 bg-zinc-900/50 border border-zinc-700/50 rounded">
+                  {TITLE_COLORS.map((c) => (
+                    <button
+                      key={c.value || 'default'}
+                      type="button"
+                      onClick={() => { setTitleColor(c.value); setShowTitleColors(false); }}
+                      className={`px-2 py-1.5 min-h-9 text-[10px] font-heading rounded border transition-all touch-manipulation ${
+                        titleColor === c.value
+                          ? 'border-primary bg-primary/20 text-primary'
+                          : 'border-zinc-700/50 hover:border-primary/50'
+                      }`}
+                      style={c.value ? { color: c.value } : {}}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
-            {canUseColors && showTitleColors && (
-              <div className="flex flex-wrap gap-1 p-2 bg-zinc-900/50 border border-zinc-700/50 rounded">
-                {TITLE_COLORS.map((c) => (
-                  <button
-                    key={c.value || 'default'}
-                    type="button"
-                    onClick={() => { setTitleColor(c.value); setShowTitleColors(false); }}
-                    className={`px-2 py-1 text-[10px] font-heading rounded border transition-all ${
-                      titleColor === c.value 
-                        ? 'border-primary bg-primary/20 text-primary' 
-                        : 'border-zinc-700/50 hover:border-primary/50'
-                    }`}
-                    style={c.value ? { color: c.value } : {}}
-                  >
-                    {c.name}
+            {category === 'designer' && (
+              <div className="rounded border border-zinc-700/50 p-2 space-y-2">
+                <label className="inline-flex items-center gap-2 text-[11px] font-heading text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={isAuction}
+                    onChange={(e) => setIsAuction(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-primary"
+                  />
+                  Create as image auction
+                </label>
+                {isAuction && (
+                  <div className="grid grid-cols-1 gap-2">
+                    <input
+                      type="url"
+                      placeholder="Picture URL (image-host link or external URL)"
+                      value={auctionImageUrl}
+                      onChange={(e) => setAuctionImageUrl(e.target.value)}
+                      className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={auctionCurrency}
+                        onChange={(e) => setAuctionCurrency(e.target.value)}
+                        className="px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                      >
+                        <option value="money">Cash ($)</option>
+                        <option value="points">Points</option>
+                      </select>
+                      <FormattedNumberInput
+                        value={auctionStartingBid}
+                        onChange={setAuctionStartingBid}
+                        placeholder="Starting bid"
+                        className="px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
+                      />
+                    </div>
+                    <input
+                      type="datetime-local"
+                      value={auctionEndAt}
+                      onChange={(e) => setAuctionEndAt(e.target.value)}
+                      className="px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                    />
+                    <p className="text-[10px] text-zinc-500">Max auction length: 1 day. Winner is highest bidder at close; funds go to escrow until both confirm delivery.</p>
+                  </div>
+                )}
+              </div>
+            )}
+            {showGifPicker && (
+              <div className="rounded border border-zinc-700/50 overflow-hidden">
+                <GifPicker
+                  onSelect={(url) => {
+                    if (url) {
+                      setTopicGifUrl(url);
+                      insertTopicMarkup('[gif]' + url + '[/gif]');
+                    }
+                    setShowGifPicker(false);
+                  }}
+                  onClose={() => setShowGifPicker(false)}
+                />
+              </div>
+            )}
+            <textarea
+              ref={contentTextareaRef}
+              placeholder="Write your post…"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              rows={4}
+              className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 placeholder:italic focus:border-primary/50 focus:outline-none resize-y"
+            />
+            <p className="text-[9px] text-zinc-500 font-heading -mt-1">
+              Tips: [b]bold[/b] · [i]italic[/i] · [img]url[/img] · [gif]url[/gif] · :) smileys
+            </p>
+
+            <div className="flex flex-wrap items-center gap-1">
+              <button type="button" onClick={() => insertTopicMarkup('[b]', '[/b]')} className="p-1.5 min-h-10 min-w-10 sm:min-h-8 sm:min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Bold"><Bold size={14} /></button>
+              <button type="button" onClick={() => insertTopicMarkup('[i]', '[/i]')} className="p-1.5 min-h-10 min-w-10 sm:min-h-8 sm:min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Italic"><Italic size={14} /></button>
+              <button type="button" onClick={() => insertTopicMarkup('[color=#eab308]', '[/color]')} className="p-1.5 min-h-10 min-w-10 sm:min-h-8 sm:min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Colour"><Palette size={14} /></button>
+              <button
+                type="button"
+                onClick={() => { setShowImageUrl((v) => !v); setShowGifPicker(false); }}
+                className={`p-1.5 min-h-10 min-w-10 sm:min-h-8 sm:min-w-8 inline-flex items-center justify-center rounded border touch-manipulation ${showImageUrl ? 'border-primary/40 text-primary bg-primary/10' : 'border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10'}`}
+                title="Image"
+              >
+                <Image size={14} />
+              </button>
+              <button type="button" onClick={() => { setShowGifPicker((v) => !v); setShowImageUrl(false); }} className="px-2.5 py-1.5 min-h-10 sm:min-h-8 rounded border border-primary/30 text-primary text-[10px] font-heading hover:bg-primary/10 touch-manipulation">GIF</button>
+              <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="px-2.5 py-1.5 min-h-10 sm:min-h-8 rounded border border-zinc-700/50 text-mutedForeground text-[10px] font-heading hover:text-foreground touch-manipulation">{showEmojis ? 'Hide emoji' : '😀 Emoji'}</button>
+            </div>
+            {showImageUrl && (
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={imageUrlDraft}
+                  onChange={(e) => setImageUrlDraft(e.target.value)}
+                  placeholder="https://… image URL"
+                  className="flex-1 min-w-0 px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 focus:border-primary/50 focus:outline-none"
+                />
+                <button type="button" onClick={insertImageFromDraft} className="shrink-0 px-3 min-h-10 sm:min-h-9 rounded border border-primary/40 bg-primary/15 text-primary text-[10px] font-heading font-bold uppercase touch-manipulation">
+                  Insert
+                </button>
+              </div>
+            )}
+            {showEmojis && (
+              <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto overscroll-contain p-1 rounded border border-zinc-700/40 bg-zinc-900/40">
+                {CLASSIC_SMILEYS.map(({ code, img }) => (
+                  <button key={code} type="button" onClick={() => insertEmoji(code)} className="min-w-10 min-h-10 inline-flex items-center justify-center hover:scale-110 transition-transform touch-manipulation" title={code}>
+                    <img src={`/images/smileys/${img}.png`} alt={code} className="object-contain shrink-0" style={{ width: FORUM_INLINE_SMILEY_PX, height: FORUM_INLINE_SMILEY_PX }} />
+                  </button>
+                ))}
+                {EMOJI_STRIP.map((em) => (
+                  <button key={em} type="button" onClick={() => insertEmoji(em)} className="min-w-10 min-h-10 inline-flex items-center justify-center text-base hover:scale-110 transition-transform touch-manipulation">
+                    {em}
                   </button>
                 ))}
               </div>
             )}
           </div>
-          {category === 'designer' && (
-            <div className="rounded border border-zinc-700/50 p-2 space-y-2">
-              <label className="inline-flex items-center gap-2 text-[11px] font-heading text-foreground">
-                <input
-                  type="checkbox"
-                  checked={isAuction}
-                  onChange={(e) => setIsAuction(e.target.checked)}
-                  className="w-3.5 h-3.5 accent-primary"
-                />
-                Create as image auction
-              </label>
-              {isAuction && (
-                <div className="grid grid-cols-1 gap-2">
-                  <input
-                    type="url"
-                    placeholder="Picture URL (image-host link or external URL)"
-                    value={auctionImageUrl}
-                    onChange={(e) => setAuctionImageUrl(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <select
-                      value={auctionCurrency}
-                      onChange={(e) => setAuctionCurrency(e.target.value)}
-                      className="px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground focus:border-primary/50 focus:outline-none"
-                    >
-                      <option value="money">Cash ($)</option>
-                      <option value="points">Points</option>
-                    </select>
-                    <FormattedNumberInput
-                      value={auctionStartingBid}
-                      onChange={setAuctionStartingBid}
-                      placeholder="Starting bid"
-                      className="px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
-                    />
-                  </div>
-                  <input
-                    type="datetime-local"
-                    value={auctionEndAt}
-                    onChange={(e) => setAuctionEndAt(e.target.value)}
-                    className="px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground focus:border-primary/50 focus:outline-none"
-                  />
-                  <p className="text-[10px] text-zinc-500">Max auction length: 1 day. Winner is highest bidder at close; funds go to escrow until both confirm delivery.</p>
-                </div>
-              )}
-            </div>
-          )}
-          {showGifPicker && (
-            <div className="rounded border border-zinc-700/50 overflow-hidden">
-              <GifPicker
-                onSelect={(url) => {
-                  if (url) {
-                    setTopicGifUrl(url);
-                    insertTopicMarkup('[gif]' + url + '[/gif]');
-                  }
-                  setShowGifPicker(false);
-                }}
-                onClose={() => setShowGifPicker(false)}
-              />
-            </div>
-          )}
-          <textarea
-            ref={contentTextareaRef}
-            placeholder="Write your post…"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            rows={4}
-            className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 placeholder:italic focus:border-primary/50 focus:outline-none resize-y"
-          />
-          <p className="text-[9px] text-zinc-500 font-heading -mt-1">
-            Tips: [b]bold[/b] · [i]italic[/i] · [img]url[/img] · [gif]url[/gif] · :) smileys
-          </p>
-          
-          {/* Rich toolbar */}
-          <div className="flex flex-wrap items-center gap-1">
-            <button type="button" onClick={() => insertTopicMarkup('[b]', '[/b]')} className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Bold"><Bold size={14} /></button>
-            <button type="button" onClick={() => insertTopicMarkup('[i]', '[/i]')} className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Italic"><Italic size={14} /></button>
-            <button type="button" onClick={() => insertTopicMarkup('[color=#eab308]', '[/color]')} className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Colour"><Palette size={14} /></button>
-            <button type="button" onClick={() => { const u = window.prompt('Image URL (http/https):'); if (u && u.trim()) insertTopicMarkup('[img]' + u.trim() + '[/img]'); }} className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Image"><Image size={14} /></button>
-            <button type="button" onClick={() => setShowGifPicker((v) => !v)} className="px-2.5 py-1.5 min-h-8 rounded border border-primary/30 text-primary text-[10px] font-heading hover:bg-primary/10 touch-manipulation">GIF</button>
-            <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="px-2 py-1 rounded border border-zinc-700/50 text-mutedForeground text-[10px] font-heading hover:text-foreground">{showEmojis ? 'Hide emoji' : '😀 Emoji'}</button>
-          </div>
-          {showEmojis && (
-            <div className="flex flex-wrap gap-1">
-              {/* Classic forum smileys first */}
-              {CLASSIC_SMILEYS.map(({ code, img }) => (
-                <button key={code} type="button" onClick={() => insertEmoji(code)} className="hover:scale-110 transition-transform p-0.5" title={code}>
-                  <img src={`/images/smileys/${img}.png`} alt={code} className="object-contain shrink-0" style={{ width: FORUM_INLINE_SMILEY_PX, height: FORUM_INLINE_SMILEY_PX }} />
-                </button>
-              ))}
-              {/* Modern emojis */}
-              {EMOJI_STRIP.map((em) => (
-                <button key={em} type="button" onClick={() => insertEmoji(em)} className="text-base hover:scale-110 transition-transform p-0.5">
-                  {em}
-                </button>
-              ))}
-            </div>
-          )}
-          
-          <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-zinc-700/50 text-foreground text-xs font-heading font-bold uppercase rounded border border-zinc-600/50 hover:bg-zinc-600/50 transition-all">
+          <div className="flex gap-2 p-3 border-t border-primary/20 shrink-0 bg-zinc-950/80">
+            <button type="button" onClick={onClose} className="flex-1 min-h-[44px] sm:min-h-0 px-4 py-2 bg-zinc-700/50 text-foreground text-xs font-heading font-bold uppercase rounded border border-zinc-600/50 hover:bg-zinc-600/50 transition-all touch-manipulation">
               Cancel
             </button>
-            <button type="submit" disabled={submitting} className="flex-1 px-4 py-2 bg-primary/20 text-primary text-xs font-heading font-bold uppercase rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all">
+            <button type="submit" disabled={submitting} className="flex-1 min-h-[44px] sm:min-h-0 px-4 py-2 bg-primary/20 text-primary text-xs font-heading font-bold uppercase rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all touch-manipulation">
               {submitting ? '...' : 'Create'}
             </button>
           </div>
@@ -965,6 +1006,7 @@ const TopicRowDesktop = ({ topic, canStickyImportant, onUpdate, updating, design
 
 // Topic card for mobile. Lock/unlock is handled inside the topic page.
 const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designerCompId, myEntryTopicIds, meUsername, onSubmitToComp, submittingTopicId, censorProfanity }) => {
+  const navigate = useNavigate();
   const showFlagControls = canStickyImportant;
   const isMyTopic = meUsername && topic.author_username === meUsername;
   const showDesignerSubmit = designerCompId && isMyTopic;
@@ -975,18 +1017,30 @@ const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designe
     updateLogUnread > 0 ? 'Update Log' : forumTopicTitleForDisplay(topic),
     { censorProfanity },
   );
+  const activityAt = topic.updated_at || topic.last_reply_at || topic.created_at;
+  const activityLabel = getTimeAgo(activityAt);
+
+  const openTopic = () => navigate(`/social/forum/${topic.id}`);
 
   return (
-  <Link
-    to={`/social/forum/${topic.id}`}
-    className="sm:hidden block px-3 py-2.5 f-row transition-colors active:bg-zinc-800/50"
+  <div
+    role="link"
+    tabIndex={0}
+    className="sm:hidden block px-3 py-2.5 f-row transition-colors active:bg-zinc-800/50 cursor-pointer touch-manipulation"
+    onClick={openTopic}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openTopic();
+      }
+    }}
     onMouseEnter={() => prefetchForumTopic(topic.id)}
     onFocus={() => prefetchForumTopic(topic.id)}
     onPointerDown={() => prefetchForumTopic(topic.id)}
   >
     <div className="flex items-start justify-between gap-2">
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 min-w-0">
           {topic.category === 'crew_oc' && (
             <FamilyEmblem
               emblemPresetId={topic.crew_oc_family_emblem_preset_id}
@@ -999,7 +1053,7 @@ const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designe
           {topic.is_important && <span className="text-amber-400 font-heading shrink-0 text-xs">IMPORTANT:&nbsp;</span>}
           {topic.is_sticky && !topic.is_important && <span className="text-amber-400 font-heading shrink-0 text-xs">STICKY:&nbsp;</span>}
           <span
-            className="text-xs font-heading truncate inline-flex items-baseline gap-1 min-w-0"
+            className="text-xs font-heading truncate inline-flex items-baseline gap-1 min-w-0 flex-1"
             style={forumTopicTitleColorStyle(topic)}
           >
             <span className="truncate" dangerouslySetInnerHTML={{ __html: titleHtml }} />
@@ -1016,19 +1070,19 @@ const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designe
               </span>
             )}
           </span>
-          {topic?.designer_auction && (
-            <span className="inline-flex items-center gap-1 shrink-0">
-              <span className={`text-[9px] px-1 py-0.5 rounded border ${getAuctionStatusChip(topic.designer_auction.status).className}`}>
-                {getAuctionStatusChip(topic.designer_auction.status).label}
-              </span>
-              <span className="text-[9px] px-1 py-0.5 rounded border border-primary/40 bg-primary/15 text-primary">
-                {(Number(topic.designer_auction.current_bid || topic.designer_auction.starting_bid || 0)).toLocaleString()} {topic.designer_auction.currency === 'points' ? 'pts' : '$'}
-                {topic.designer_auction.winner_username ? ` · ${topic.designer_auction.winner_username}` : ''}
-              </span>
-            </span>
-          )}
           {topic.is_locked && <Lock size={10} className="text-mutedForeground shrink-0" />}
         </div>
+        {topic?.designer_auction && (
+          <div className="flex flex-wrap items-center gap-1 mt-1">
+            <span className={`text-[9px] px-1 py-0.5 rounded border ${getAuctionStatusChip(topic.designer_auction.status).className}`}>
+              {getAuctionStatusChip(topic.designer_auction.status).label}
+            </span>
+            <span className="text-[9px] px-1 py-0.5 rounded border border-primary/40 bg-primary/15 text-primary">
+              {(Number(topic.designer_auction.current_bid || topic.designer_auction.starting_bid || 0)).toLocaleString()} {topic.designer_auction.currency === 'points' ? 'pts' : '$'}
+              {topic.designer_auction.winner_username ? ` · ${topic.designer_auction.winner_username}` : ''}
+            </span>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[10px] text-mutedForeground">
           {topic.redeem_code ? (
             <span className="inline-flex flex-col gap-0.5" title="Posted automatically by the game">
@@ -1040,24 +1094,31 @@ const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designe
               )}
             </span>
           ) : (
-            <Link to={`/profile/${encodeURIComponent(topic.author_username || '?')}`} onClick={(e) => e.stopPropagation()} className="hover:text-primary hover:underline" style={topic.author_online_color ? { color: topic.author_online_color } : undefined}>{topic.author_username || '?'}</Link>
+            <Link
+              to={`/profile/${encodeURIComponent(topic.author_username || '?')}`}
+              onClick={(e) => e.stopPropagation()}
+              className="hover:text-primary hover:underline relative z-[1]"
+              style={topic.author_online_color ? { color: topic.author_online_color } : undefined}
+            >
+              {topic.author_username || '?'}
+            </Link>
           )}
           <span className="flex items-center gap-0.5"><MessageCircle size={10} /> {topic.posts}</span>
           <span className="flex items-center gap-0.5"><Eye size={10} /> {topic.views}</span>
+          {activityLabel && <span className="tabular-nums">{activityLabel}</span>}
         </div>
       </div>
       <ChevronRight size={16} className="text-mutedForeground shrink-0 mt-1" />
     </div>
 
-    {/* Staff controls on mobile: mod/admin = sticky and important. */}
     {showFlagControls && (
-      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-700/30" onClick={(e) => e.preventDefault()}>
+      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-700/30" onClick={(e) => e.stopPropagation()}>
         {canStickyImportant && (
           <>
-            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_sticky: !topic.is_sticky }); }} disabled={updating} className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${topic.is_sticky ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
+            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_sticky: !topic.is_sticky }); }} disabled={updating} className={`flex items-center gap-1 px-3 min-h-10 rounded text-[10px] touch-manipulation ${topic.is_sticky ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
               <Pin size={10} /> {topic.is_sticky ? 'Unsticky' : 'Sticky'}
             </button>
-            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_important: !topic.is_important }); }} disabled={updating} className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${topic.is_important ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
+            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_important: !topic.is_important }); }} disabled={updating} className={`flex items-center gap-1 px-3 min-h-10 rounded text-[10px] touch-manipulation ${topic.is_important ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
               <AlertCircle size={10} /> {topic.is_important ? 'Unmark' : 'Important'}
             </button>
           </>
@@ -1065,7 +1126,7 @@ const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designe
       </div>
     )}
     {showDesignerSubmit && (
-      <div className="px-3 py-1.5 border-t border-zinc-700/30" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+      <div className="pt-2 border-t border-zinc-700/30 mt-2" onClick={(e) => e.stopPropagation()}>
         {alreadySubmitted ? (
           <span className="text-[10px] text-emerald-400 font-heading font-bold">Submitted to competition</span>
         ) : (
@@ -1073,23 +1134,23 @@ const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designe
             type="button"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSubmitToComp(designerCompId, topic.id); }}
             disabled={isSubmitting}
-            className="px-2 py-1 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold rounded hover:bg-primary/30 disabled:opacity-50"
+            className="px-3 min-h-10 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold rounded hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
           >
             {isSubmitting ? '...' : 'Submit to competition'}
           </button>
         )}
       </div>
     )}
-  </Link>
+  </div>
   );
 };
 
 const FORUM_TABS = [
-  { id: 'general', label: 'General' },
-  { id: 'entertainer', label: 'Entertainer Forum' },
-  { id: 'designer', label: 'Designer Forum' },
-  { id: 'game_ideas', label: 'Game Ideas' },
-  { id: 'crew_oc', label: 'Crew OC' },
+  { id: 'general', label: 'General', shortLabel: 'General' },
+  { id: 'entertainer', label: 'Entertainer Forum', shortLabel: 'Ent.' },
+  { id: 'designer', label: 'Designer Forum', shortLabel: 'Design' },
+  { id: 'game_ideas', label: 'Game Ideas', shortLabel: 'Ideas' },
+  { id: 'crew_oc', label: 'Crew OC', shortLabel: 'Crew' },
 ];
 
 const FORUM_TOPICS_CACHE_PREFIX = 'forum_topics_cache_v1';
@@ -1923,7 +1984,7 @@ export default function Forum() {
           {activeTab === 'entertainer' && (
             <button
               onClick={() => setGameModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/20 border border-primary/50 text-primary text-xs font-heading font-bold uppercase rounded hover:bg-primary/30 transition-all"
+              className="flex items-center gap-1.5 px-3 min-h-[44px] sm:min-h-0 py-1.5 bg-primary/20 border border-primary/50 text-primary text-xs font-heading font-bold uppercase rounded hover:bg-primary/30 transition-all touch-manipulation"
             >
               <Dice5 size={14} /> New Game
             </button>
@@ -1931,7 +1992,7 @@ export default function Forum() {
           {activeTab !== 'crew_oc' && activeTab !== 'game_ideas' && (
             <button
               onClick={() => setModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/20 text-primary text-xs font-heading font-bold uppercase rounded border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation"
+              className="flex items-center gap-1.5 px-3 min-h-[44px] sm:min-h-0 py-1.5 bg-primary/20 text-primary text-xs font-heading font-bold uppercase rounded border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation"
             >
               <Plus size={14} /> New Topic
             </button>
@@ -1940,15 +2001,16 @@ export default function Forum() {
       </div>
 
       {/* Tabs: General | Entertainer Forum — full width on mobile, scrollable */}
-      <div className="w-full sm:w-fit overflow-x-auto overflow-y-hidden -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-thin">
+      <div className="forum-tabs-sticky w-full sm:w-fit overflow-x-auto overflow-y-hidden -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-thin sticky top-0 z-10 sm:static sm:z-auto bg-[var(--noir-bg,#0a0a0a)]/95 sm:bg-transparent backdrop-blur-sm sm:backdrop-blur-none py-1 sm:py-0">
         <div className="flex gap-1 p-1 bg-zinc-800/50 rounded border border-primary/20 w-max sm:w-full min-w-0">
           {FORUM_TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => { setActiveTab(tab.id); setForumPage(1); setSearchParams(tab.id === 'general' ? {} : { tab: tab.id }, { replace: true }); }}
-              className={`shrink-0 px-3 py-2 min-h-9 text-xs font-heading font-bold uppercase rounded transition-all touch-manipulation ${activeTab === tab.id ? 'bg-primary/30 text-primary border border-primary/50' : 'text-mutedForeground hover:text-foreground border border-transparent'}`}
+              className={`shrink-0 px-3 py-2 min-h-11 sm:min-h-9 text-xs font-heading font-bold uppercase rounded transition-all touch-manipulation ${activeTab === tab.id ? 'bg-primary/30 text-primary border border-primary/50' : 'text-mutedForeground hover:text-foreground border border-transparent'}`}
             >
-              {tab.label}
+              <span className="sm:hidden">{tab.shortLabel || tab.label}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
             </button>
           ))}
         </div>
@@ -2667,11 +2729,11 @@ export default function Forum() {
 
         {/* Mobile Header */}
         <div className="sm:hidden px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
-          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">📋 Topics</span>
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Topics</span>
           {canViewPage2 && (
             <div className="flex gap-1">
-              <button type="button" onClick={() => setForumPage(1)} className={`px-2 py-1 rounded text-[10px] font-heading font-bold ${forumPage === 1 ? 'bg-primary/30 text-primary' : 'text-mutedForeground hover:text-foreground'}`}>Page 1</button>
-              <button type="button" onClick={() => setForumPage(2)} className={`px-2 py-1 rounded text-[10px] font-heading font-bold ${forumPage === 2 ? 'bg-primary/30 text-primary' : 'text-mutedForeground hover:text-foreground'}`}>Page 2</button>
+              <button type="button" onClick={() => setForumPage(1)} className={`px-3 min-h-10 rounded text-[10px] font-heading font-bold touch-manipulation ${forumPage === 1 ? 'bg-primary/30 text-primary' : 'text-mutedForeground hover:text-foreground'}`}>Page 1</button>
+              <button type="button" onClick={() => setForumPage(2)} className={`px-3 min-h-10 rounded text-[10px] font-heading font-bold touch-manipulation ${forumPage === 2 ? 'bg-primary/30 text-primary' : 'text-mutedForeground hover:text-foreground'}`}>Page 2</button>
             </div>
           )}
         </div>
@@ -2681,14 +2743,14 @@ export default function Forum() {
             {activeTab === 'crew_oc' ? 'No Crew OC ads yet.' : 'No topics yet. Create one!'}
           </div>
         ) : (
-          <div className="space-y-2 px-1.5 sm:px-0 sm:space-y-1.5">
+          <div className="divide-y divide-zinc-700/30 sm:divide-y-0 sm:space-y-1.5 sm:px-0">
             {/* Pinned topics first */}
             {pinnedTopics.length > 0 && (
               <>
                 {pinnedTopics.map((t) => (
                   <div
                     key={t.id}
-                    className={`${styles.panel} rounded-md overflow-hidden border border-zinc-800/60 bg-zinc-900/70`}
+                    className="sm:rounded-md sm:overflow-hidden sm:border sm:border-zinc-800/60 sm:bg-zinc-900/70"
                   >
                     <TopicRowDesktop
                       topic={t}
@@ -2717,16 +2779,16 @@ export default function Forum() {
                   </div>
                 ))}
                 {regularTopics.length > 0 && (
-                  <div className="px-3 py-1 bg-zinc-800/30 text-[10px] text-mutedForeground">Regular topics</div>
+                  <div className="px-3 py-1.5 bg-zinc-800/30 text-[10px] text-mutedForeground">Regular topics</div>
                 )}
               </>
             )}
-            
+
             {/* Regular topics */}
             {regularTopics.map((t) => (
               <div
                 key={t.id}
-                className={`${styles.panel} rounded-md overflow-hidden border border-zinc-800/60 bg-zinc-900/70`}
+                className="sm:rounded-md sm:overflow-hidden sm:border sm:border-zinc-800/60 sm:bg-zinc-900/70"
               >
                 <TopicRowDesktop
                   topic={t}

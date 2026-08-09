@@ -136,10 +136,13 @@ const FORUM_FAQ_STYLES = `
     margin: 1.15em 0;
     opacity: 0.9;
   }
-  .forum-faq-content table { border-collapse: collapse; width: 100%; margin-top: 0.35em; border-radius: 4px; overflow: hidden; }
+  .forum-faq-content table { border-collapse: collapse; width: max-content; min-width: 100%; margin-top: 0.35em; border-radius: 4px; }
   .forum-faq-content th, .forum-faq-content td { border: 1px solid var(--noir-border-light); padding: 0.35em 0.6em; text-align: left; color: var(--noir-foreground); font-size: 0.95em; }
   .forum-faq-content th { background: rgba(var(--noir-primary-rgb), 0.08); color: var(--noir-primary); }
   .forum-faq-content tr:nth-child(even) { background: var(--noir-surface); }
+  @media (max-width: 767px) {
+    .forum-faq-content { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  }
 `;
 const FORUM_CONTENT_STYLES = `
   @keyframes f-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -149,6 +152,34 @@ const FORUM_CONTENT_STYLES = `
   .forum-content strong { font-weight: 700; }
   .forum-content em { font-style: italic; }
   .forum-content .forum-content-emoji { font-size: ${FORUM_INLINE_SMILEY_PX}px !important; line-height: 1; display: inline-block; vertical-align: -0.2em; }
+  [id^="forum-comment-"],
+  [id^="forum-topic-"] {
+    scroll-margin-top: 4.5rem;
+    scroll-margin-bottom: 9rem;
+  }
+  .forum-sticky-composer {
+    position: sticky;
+    z-index: 30;
+    bottom: 0;
+  }
+  @media (max-width: 767px) {
+    [id^="forum-comment-"],
+    [id^="forum-topic-"] {
+      scroll-margin-top: 5.25rem;
+      scroll-margin-bottom: 11rem;
+    }
+    .forum-sticky-composer {
+      bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+      box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
+    }
+    body[data-mobile-layout="pocket_deck"] .forum-sticky-composer {
+      bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
+    }
+    body[data-mobile-layout="pocket_deck"] [id^="forum-comment-"],
+    body[data-mobile-layout="pocket_deck"] [id^="forum-topic-"] {
+      scroll-margin-top: 6rem;
+    }
+  }
 `;
 
 function getTimeAgo(iso) {
@@ -167,9 +198,19 @@ function scrollToForumElementById(elementId) {
   if (!elementId) return;
   const run = () => {
     const el = document.getElementById(elementId);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
   requestAnimationFrame(() => requestAnimationFrame(run));
+}
+
+function focusForumComposer(textareaRef) {
+  const composer = document.getElementById('forum-composer');
+  if (composer) {
+    composer.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }
+  window.setTimeout(() => {
+    textareaRef?.current?.focus?.({ preventScroll: true });
+  }, 280);
 }
 
 /** Telegram-style emoji reactions on topic OP or a comment */
@@ -183,6 +224,7 @@ function ForumEmojiReactionBar({
   onShowWho,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerAbove, setPickerAbove] = useState(true);
   const [busy, setBusy] = useState(false);
   const wrapRef = useRef(null);
 
@@ -191,8 +233,14 @@ function ForumEmojiReactionBar({
     const onDoc = (e) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) setPickerOpen(false);
     };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('pointerdown', onDoc);
+    return () => document.removeEventListener('pointerdown', onDoc);
+  }, [pickerOpen]);
+
+  useEffect(() => {
+    if (!pickerOpen || !wrapRef.current) return;
+    const rect = wrapRef.current.getBoundingClientRect();
+    setPickerAbove(rect.top > 220);
   }, [pickerOpen]);
 
   const apply = async (emoji) => {
@@ -287,13 +335,17 @@ function ForumEmojiReactionBar({
             <Plus size={14} strokeWidth={2.5} />
           </button>
           {pickerOpen && (
-            <div className="absolute bottom-full left-0 mb-1 z-40 p-2 rounded-lg border border-zinc-700/80 bg-zinc-950 shadow-xl max-w-[240px]">
-              <div className="flex flex-wrap gap-0.5 max-h-44 overflow-y-auto">
+            <div
+              className={`absolute left-0 z-40 p-2 rounded-lg border border-zinc-700/80 bg-zinc-950 shadow-xl max-w-[min(240px,calc(100vw-2rem))] ${
+                pickerAbove ? 'bottom-full mb-1' : 'top-full mt-1'
+              }`}
+            >
+              <div className="flex flex-wrap gap-0.5 max-h-40 overflow-y-auto overscroll-contain">
                 {EMOJI_STRIP.map((em) => (
                   <button
                     key={em}
                     type="button"
-                    className="text-lg p-0.5 hover:bg-zinc-800 rounded leading-none"
+                    className="text-lg min-w-9 min-h-9 inline-flex items-center justify-center hover:bg-zinc-800 rounded leading-none touch-manipulation"
                     onClick={() => apply(em)}
                   >
                     {em}
@@ -342,6 +394,8 @@ export default function ForumTopic() {
   const [adminBusy, setAdminBusy] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
+  const [showImageUrl, setShowImageUrl] = useState(false);
+  const [imageUrlDraft, setImageUrlDraft] = useState('');
   const [createGameType, setCreateGameType] = useState('dice');
   const [createGameMaxPlayers, setCreateGameMaxPlayers] = useState(10);
   const [createGameManualRoll, setCreateGameManualRoll] = useState(true);
@@ -851,6 +905,26 @@ export default function ForumTopic() {
     }, 0);
   };
 
+  const insertCommentImageFromDraft = () => {
+    const url = imageUrlDraft.trim();
+    if (!url) {
+      toast.error('Enter an image URL');
+      return;
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      toast.error('Image URL must start with http:// or https://');
+      return;
+    }
+    insertCommentMarkup(`[img]${url}[/img]`);
+    setImageUrlDraft('');
+    setShowImageUrl(false);
+  };
+
+  const beginReplyToComment = (comment) => {
+    setReplyToComment({ id: comment.id, author_username: comment.author_username });
+    focusForumComposer(commentTextareaRef);
+  };
+
   const likeComment = async (commentId) => {
     setLikingId(commentId);
     try {
@@ -1020,7 +1094,7 @@ export default function ForumTopic() {
   const forumParseOpts = { censorProfanity: user?.censor_profanity };
 
   return (
-    <div className={`space-y-4 ${styles.pageContent} mobile-page-root f-fade-in`} data-testid="forum-topic-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root f-fade-in ${topic.is_locked ? '' : 'pb-36 sm:pb-0'}`} data-testid="forum-topic-page">
       <style>{FORUM_CONTENT_STYLES}</style>
       <AutoRefreshNote seconds={60}>Topic and comments refresh every 60 seconds in the background.</AutoRefreshNote>
       {/* Header */}
@@ -1274,12 +1348,12 @@ export default function ForumTopic() {
 
       {/* Edit Topic Modal */}
       {showEditTopic && topic && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className={`${styles.panel} w-full max-w-md rounded-lg overflow-hidden border border-primary/20 shadow-2xl`}>
-            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm">
+          <div className={`${styles.panel} w-full sm:max-w-md max-h-[90dvh] flex flex-col rounded-t-lg sm:rounded-lg overflow-hidden border border-primary/20 shadow-2xl pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:pb-0`}>
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 shrink-0">
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Edit topic</h2>
             </div>
-            <form onSubmit={saveEditTopic} className="p-3 space-y-3">
+            <form onSubmit={saveEditTopic} className="p-3 space-y-3 overflow-y-auto overscroll-contain min-h-0">
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <input
@@ -1595,7 +1669,7 @@ export default function ForumTopic() {
                       {getTimeAgo(c.created_at)}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="hidden sm:flex items-center gap-2">
                     {c.likes > 0 && (
                       <button
                         type="button"
@@ -1699,7 +1773,7 @@ export default function ForumTopic() {
                       title="Who liked this"
                       onClick={() => openReactionUsers(c.id, 'like')}
                       disabled={likingId === c.id || dislikingId === c.id}
-                      className={`px-2 py-1.5 min-h-8 shrink-0 transition-colors touch-manipulation ${
+                      className={`px-2 py-1.5 min-h-9 sm:min-h-8 shrink-0 transition-colors touch-manipulation ${
                         c.liked ? 'text-emerald-400 hover:bg-emerald-500/25' : 'text-mutedForeground hover:text-emerald-400 hover:bg-emerald-500/10'
                       } disabled:opacity-50`}
                     >
@@ -1709,11 +1783,12 @@ export default function ForumTopic() {
                       type="button"
                       onClick={() => likeComment(c.id)}
                       disabled={likingId === c.id || dislikingId === c.id}
-                      className={`px-2.5 py-1.5 min-h-8 border-l border-zinc-700/50 transition-colors touch-manipulation ${
+                      className={`px-2.5 py-1.5 min-h-9 sm:min-h-8 border-l border-zinc-700/50 transition-colors touch-manipulation ${
                         c.liked ? 'text-emerald-400 hover:bg-emerald-500/25' : 'text-mutedForeground hover:text-emerald-400 hover:bg-emerald-500/10'
                       } disabled:opacity-50`}
                     >
-                      {c.likes > 0 ? c.likes : ''} {c.liked ? 'Liked' : 'Like'}
+                      <span className="sm:hidden tabular-nums">{c.likes > 0 ? c.likes : (c.liked ? '·' : '')}</span>
+                      <span className="hidden sm:inline">{c.likes > 0 ? c.likes : ''} {c.liked ? 'Liked' : 'Like'}</span>
                     </button>
                   </div>
                   <div
@@ -1726,7 +1801,7 @@ export default function ForumTopic() {
                       title="Who disliked this"
                       onClick={() => openReactionUsers(c.id, 'dislike')}
                       disabled={likingId === c.id || dislikingId === c.id}
-                      className={`px-2 py-1.5 min-h-8 shrink-0 transition-colors touch-manipulation ${
+                      className={`px-2 py-1.5 min-h-9 sm:min-h-8 shrink-0 transition-colors touch-manipulation ${
                         c.disliked ? 'text-red-400 hover:bg-red-500/25' : 'text-mutedForeground hover:text-red-400 hover:bg-red-500/10'
                       } disabled:opacity-50`}
                     >
@@ -1736,20 +1811,18 @@ export default function ForumTopic() {
                       type="button"
                       onClick={() => dislikeComment(c.id)}
                       disabled={likingId === c.id || dislikingId === c.id}
-                      className={`px-2.5 py-1.5 min-h-8 border-l border-zinc-700/50 transition-colors touch-manipulation ${
+                      className={`px-2.5 py-1.5 min-h-9 sm:min-h-8 border-l border-zinc-700/50 transition-colors touch-manipulation ${
                         c.disliked ? 'text-red-400 hover:bg-red-500/25' : 'text-mutedForeground hover:text-red-400 hover:bg-red-500/10'
                       } disabled:opacity-50`}
                     >
-                      {(c.dislikes || 0) > 0 ? c.dislikes : ''} {c.disliked ? 'Disliked' : 'Dislike'}
+                      <span className="sm:hidden tabular-nums">{(c.dislikes || 0) > 0 ? c.dislikes : (c.disliked ? '·' : '')}</span>
+                      <span className="hidden sm:inline">{(c.dislikes || 0) > 0 ? c.dislikes : ''} {c.disliked ? 'Disliked' : 'Dislike'}</span>
                     </button>
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      setReplyToComment({ id: c.id, author_username: c.author_username });
-                      setTimeout(() => commentTextareaRef.current?.focus(), 100);
-                    }}
-                    className="inline-flex items-center gap-1.5 text-[10px] font-heading px-2.5 py-1.5 min-h-8 rounded text-mutedForeground hover:text-primary hover:bg-primary/10 transition-all touch-manipulation"
+                    onClick={() => beginReplyToComment(c)}
+                    className="inline-flex items-center gap-1.5 text-[10px] font-heading px-2.5 py-1.5 min-h-9 sm:min-h-8 rounded text-mutedForeground hover:text-primary hover:bg-primary/10 transition-all touch-manipulation"
                   >
                     <MessageCircle size={11} /> Reply
                   </button>
@@ -1811,20 +1884,23 @@ export default function ForumTopic() {
           </p>
         </div>
       ) : (
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
+        <div
+          id="forum-composer"
+          className={`${styles.panel} forum-sticky-composer rounded-md overflow-hidden border border-primary/20 mobile-panel bg-[var(--noir-content,#161618)]`}
+        >
           <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">✍️ Add Comment</span>
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Add Comment</span>
           </div>
           <div className="p-3 space-y-3">
             {showGifPicker && (
-              <div className="mb-2">
+              <div className="mb-2 max-h-[40vh] overflow-y-auto overscroll-contain">
                 <GifPicker onSelect={handleSendGif} onClose={() => setShowGifPicker(false)} />
               </div>
             )}
             {replyToComment && (
               <div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded bg-primary/10 border border-primary/30 text-xs text-primary">
                 <span>Replying to <Link to={`/profile/${encodeURIComponent(replyToComment.author_username)}`} className="font-bold text-primary hover:underline">{replyToComment.author_username}</Link></span>
-                <button type="button" onClick={() => setReplyToComment(null)} className="text-mutedForeground hover:text-foreground underline">Cancel</button>
+                <button type="button" onClick={() => setReplyToComment(null)} className="min-h-9 px-2 text-mutedForeground hover:text-foreground underline touch-manipulation">Cancel</button>
               </div>
             )}
             <form onSubmit={postComment} className="space-y-2">
@@ -1834,33 +1910,29 @@ export default function ForumTopic() {
                 placeholder="Write a comment…"
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 placeholder:italic focus:border-primary/50 focus:outline-none resize-y"
+                rows={2}
+                className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 placeholder:italic focus:border-primary/50 focus:outline-none resize-y min-h-[4.5rem]"
               />
-              <p className="text-[9px] text-zinc-500 font-heading -mt-1">
+              <p className="hidden sm:block text-[9px] text-zinc-500 font-heading -mt-1">
                 Tips: [b]bold[/b] · [i]italic[/i] · [img]url[/img] · @Username
               </p>
-              
-              {/* Toolbar */}
+
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => insertCommentMarkup('[b]', '[/b]')} className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Bold"><Bold size={14} /></button>
-                <button type="button" onClick={() => insertCommentMarkup('[i]', '[/i]')} className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Italic"><Italic size={14} /></button>
-                <button type="button" onClick={() => insertCommentMarkup('[color=#eab308]', '[/color]')} className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Colour"><Palette size={14} /></button>
+                <button type="button" onClick={() => insertCommentMarkup('[b]', '[/b]')} className="p-1.5 min-h-10 min-w-10 sm:min-h-8 sm:min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Bold"><Bold size={14} /></button>
+                <button type="button" onClick={() => insertCommentMarkup('[i]', '[/i]')} className="p-1.5 min-h-10 min-w-10 sm:min-h-8 sm:min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Italic"><Italic size={14} /></button>
+                <button type="button" onClick={() => insertCommentMarkup('[color=#eab308]', '[/color]')} className="p-1.5 min-h-10 min-w-10 sm:min-h-8 sm:min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Colour"><Palette size={14} /></button>
                 <button
                   type="button"
-                  onClick={() => {
-                    const url = window.prompt('Image URL (must start with http:// or https://):');
-                    if (url && url.trim()) insertCommentMarkup('[img]' + url.trim() + '[/img]');
-                  }}
-                  className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation"
+                  onClick={() => { setShowImageUrl((v) => !v); setShowGifPicker(false); }}
+                  className={`p-1.5 min-h-10 min-w-10 sm:min-h-8 sm:min-w-8 inline-flex items-center justify-center rounded border touch-manipulation ${showImageUrl ? 'border-primary/40 text-primary bg-primary/10' : 'border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10'}`}
                   title="Image"
                 >
                   <Image size={14} />
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowGifPicker((v) => !v)}
-                  className="px-2.5 py-1.5 min-h-8 rounded border border-primary/30 text-primary text-[10px] font-heading hover:bg-primary/10 transition-all touch-manipulation"
+                  onClick={() => { setShowGifPicker((v) => !v); setShowImageUrl(false); }}
+                  className="px-2.5 py-1.5 min-h-10 sm:min-h-8 rounded border border-primary/30 text-primary text-[10px] font-heading hover:bg-primary/10 transition-all touch-manipulation"
                 >
                   GIF
                 </button>
@@ -1868,36 +1940,49 @@ export default function ForumTopic() {
                   <button
                     type="button"
                     onClick={() => setShowEmojis(!showEmojis)}
-                    className="px-2.5 py-1.5 min-h-8 rounded border border-zinc-700/50 text-mutedForeground text-[10px] font-heading hover:text-foreground transition-all touch-manipulation"
+                    className="px-2.5 py-1.5 min-h-10 sm:min-h-8 rounded border border-zinc-700/50 text-mutedForeground text-[10px] font-heading hover:text-foreground transition-all touch-manipulation"
                   >
-                    😀 Emoji
+                    {showEmojis ? 'Hide' : '😀'}
                   </button>
                 )}
-                
-                <div className="flex-1" />
-                
+
+                <div className="flex-1 min-w-2" />
+
                 <button
                   type="submit"
                   disabled={posting}
-                  className="flex items-center gap-1.5 px-4 py-1.5 bg-primary/20 text-primary text-xs font-heading font-bold uppercase rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all touch-manipulation"
+                  className="flex items-center justify-center gap-1.5 px-4 min-h-[44px] sm:min-h-0 py-1.5 bg-primary/20 text-primary text-xs font-heading font-bold uppercase rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all touch-manipulation"
                 >
                   <Send size={12} /> {posting ? '...' : 'Post'}
                 </button>
               </div>
-              
-              {/* Emoji picker (hidden on designer comp topics to avoid emojis in entries) */}
+
+              {showImageUrl && (
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={imageUrlDraft}
+                    onChange={(e) => setImageUrlDraft(e.target.value)}
+                    placeholder="https://… image URL"
+                    className="flex-1 min-w-0 px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 focus:border-primary/50 focus:outline-none"
+                  />
+                  <button type="button" onClick={insertCommentImageFromDraft} className="shrink-0 px-3 min-h-10 sm:min-h-9 rounded border border-primary/40 bg-primary/15 text-primary text-[10px] font-heading font-bold uppercase touch-manipulation">
+                    Insert
+                  </button>
+                </div>
+              )}
+
               {topic?.category !== 'designer' && showEmojis && (
-                <div className="flex flex-wrap gap-1 pt-2 border-t border-zinc-700/30">
-                  {/* Classic forum smileys first */}
+                <div className="flex flex-wrap gap-1 pt-2 border-t border-zinc-700/30 max-h-32 overflow-y-auto overscroll-contain">
                   {CLASSIC_SMILEYS.map(({ code, img }) => (
                     <button
                       key={code}
                       type="button"
                       onClick={() => setCommentText((c) => c + code)}
-                      className="hover:scale-110 transition-transform p-0.5"
+                      className="min-w-10 min-h-10 inline-flex items-center justify-center hover:scale-110 transition-transform touch-manipulation"
                       title={code}
                     >
-                      <img 
+                      <img
                         src={`/images/smileys/${img}.png`}
                         alt={code}
                         className="object-contain shrink-0"
@@ -1905,13 +1990,12 @@ export default function ForumTopic() {
                       />
                     </button>
                   ))}
-                  {/* Modern emojis */}
                   {EMOJI_STRIP.map((em) => (
                     <button
                       key={em}
                       type="button"
                       onClick={() => setCommentText((c) => c + em)}
-                      className="text-lg hover:scale-110 transition-transform p-0.5"
+                      className="min-w-10 min-h-10 inline-flex items-center justify-center text-lg hover:scale-110 transition-transform touch-manipulation"
                     >
                       {em}
                     </button>
@@ -1925,12 +2009,12 @@ export default function ForumTopic() {
 
       {reactionModal && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70"
+          className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70"
           onClick={closeReactionModal}
           role="presentation"
         >
           <div
-            className={`${styles.panel} border border-zinc-700/60 rounded-lg max-w-sm w-full max-h-[min(70vh,420px)] overflow-hidden flex flex-col shadow-xl`}
+            className={`${styles.panel} border border-zinc-700/60 rounded-t-lg sm:rounded-lg max-w-sm w-full max-h-[min(70vh,420px)] overflow-hidden flex flex-col shadow-xl pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:pb-0`}
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"

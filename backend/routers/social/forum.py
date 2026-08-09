@@ -633,11 +633,13 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
     topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
-    await db.forum_topics.update_one(
-        {"id": topic_id},
-        {"$inc": {"views": 1}},
-    )
-    topic["views"] = topic.get("views", 0) + 1
+    # Authors opening their own topic do not inflate the view count.
+    if topic.get("author_id") != current_user.get("id"):
+        await db.forum_topics.update_one(
+            {"id": topic_id},
+            {"$inc": {"views": 1}},
+        )
+        topic["views"] = topic.get("views", 0) + 1
     # Opening the Update Log clears the unread badge.
     if _is_update_log_topic(topic):
         await _resolve_update_log_unread(current_user, mark_seen=True)

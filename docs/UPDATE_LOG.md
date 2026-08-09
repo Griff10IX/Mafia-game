@@ -6,6 +6,18 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-09 00:30 UTC[/color][/b] — [b]Old School theme + Pocket Deck[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] Theme Studio layout mode [b]Old School Mafia[/b] — early-browser navy canvas, gray panels, deep-blue bars, and square chrome. Pick it from Layout mode or Starting looks.[/color]
+[*][color=#888888][b]New:[/b] Mobile layout [b]Pocket Deck[/b] (Theme Studio → [b]Mobile[/b]) — slim Cash/Health/Rank HUD, bottom dock ([b]Home · Actions · Combat · Money · Menu[/b]), and quick sheets for crimes, combat routes, money tabs, and menu tiles. Classic Mobile stays available.[/color]
+[*][color=#888888][b]Improved:[/b] Pocket Deck pages keep bottom buttons clear of the dock (extra scroll clearance).[/color]
+[*][color=#888888][b]Fixed:[/b] Opening your own forum topic no longer counts as a view.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-08 21:31 UTC[/color][/b] — [b]Game Chat returns[/b][/size]
 [quote]
 [list]

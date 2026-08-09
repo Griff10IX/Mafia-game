@@ -301,6 +301,14 @@ def _channel_message_query(
     return {"$and": clauses} if len(clauses) > 1 else clauses[0]
 
 
+def _message_view_count(doc: dict) -> int:
+    """Unique other-player viewers; author IDs are never stored in viewed_by."""
+    viewed = doc.get("viewed_by")
+    if not isinstance(viewed, list):
+        return 0
+    return len({str(uid) for uid in viewed if uid})
+
+
 def _safe_message_payload(doc: dict, current_user_id: str) -> dict:
     """Return the stable public chat shape without internal ownership/family fields."""
     payload = {
@@ -312,6 +320,7 @@ def _safe_message_payload(doc: dict, current_user_id: str) -> dict:
         "created_at": doc.get("created_at"),
         "is_own": bool(doc.get("user_id") and doc.get("user_id") == current_user_id),
         "sender_is_staff": doc.get("sender_is_staff") is True,
+        "view_count": _message_view_count(doc),
     }
     if doc.get("author_online_color"):
         payload["author_online_color"] = doc["author_online_color"]
@@ -326,6 +335,30 @@ def _safe_message_payload(doc: dict, current_user_id: str) -> dict:
     if doc.get("gif_url"):
         payload["gif_url"] = doc["gif_url"]
     return payload
+
+
+async def _record_message_views(messages: list[dict], viewer_user_id: str) -> None:
+    """Mark returned messages as seen by the viewer (excludes own messages)."""
+    if not viewer_user_id or not messages:
+        return
+    ids = [
+        message["id"]
+        for message in messages
+        if message.get("id") and message.get("user_id") and message.get("user_id") != viewer_user_id
+    ]
+    if not ids:
+        return
+    await db.game_chat_messages.update_many(
+        {"id": {"$in": ids}},
+        {"$addToSet": {"viewed_by": viewer_user_id}},
+    )
+    for message in messages:
+        if message.get("user_id") == viewer_user_id:
+            continue
+        viewed = list(message.get("viewed_by") or [])
+        if viewer_user_id not in viewed:
+            viewed.append(viewer_user_id)
+            message["viewed_by"] = viewed
 
 
 def _mention_recipient_allowed(
@@ -395,9 +428,14 @@ def register(router):
         channel: Literal["global", "family"] = Query("global"),
         limit: int = Query(GAME_CHAT_DEFAULT_LIMIT, ge=1, le=GAME_CHAT_MAX_LIMIT),
         before_id: Optional[str] = Query(None),
+        mark_seen: bool = Query(False),
         current_user: dict = Depends(get_current_user),
     ):
-        """List recent messages in one explicit channel, excluding blocked senders."""
+        """List recent messages in one explicit channel, excluding blocked senders.
+
+        Pass mark_seen=true only while the chat panel is open so background unread
+        polls do not inflate view counts.
+        """
         user_id = current_user["id"]
         stored_blocked = current_user.get("game_chat_blocked_user_ids") or []
         blockable_ids = await _filter_blockable_user_ids(stored_blocked)
@@ -441,6 +479,8 @@ def register(router):
         if has_more:
             messages = messages[:limit]
         await _backfill_author_colors(messages)
+        if mark_seen:
+            await _record_message_views(messages, user_id)
         messages = [_safe_message_payload(message, user_id) for message in messages]
         return {"messages": messages, "has_more": has_more}
 
@@ -510,6 +550,7 @@ def register(router):
             "created_at": now.isoformat(),
             "expires_at": now + timedelta(days=GAME_CHAT_RETENTION_DAYS),
             "sender_is_staff": _is_game_chat_staff(current_user),
+            "viewed_by": [],
         }
         if reply_to:
             doc["reply_to"] = reply_to

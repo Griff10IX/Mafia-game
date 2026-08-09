@@ -61,14 +61,17 @@ def test_safe_payload_derives_sender_and_ownership_without_internal_ids():
             "username": "Alice",
             "message": "hello",
             "created_at": "2026-08-08T12:00:00+00:00",
+            "viewed_by": ["user-2", "user-3", "user-2"],
         },
         "user-1",
     )
     assert payload["sender_id"] == "user-1"
     assert payload["is_own"] is True
     assert payload["channel"] == "global"
+    assert payload["view_count"] == 2
     assert "user_id" not in payload
     assert "family_id" not in payload
+    assert "viewed_by" not in payload
 
 
 def test_mention_recipient_rules_cover_self_dead_blocks_and_family():

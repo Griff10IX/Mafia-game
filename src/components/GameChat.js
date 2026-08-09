@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { EyeOff, Image, MessageSquare, Reply, Settings, Send, Smile, UserX, X } from 'lucide-react';
+import { Eye, EyeOff, Image, MessageSquare, Reply, Settings, Send, Smile, UserX, X } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getApiErrorMessage } from '../utils/api';
 import { parseForumContent, FORUM_INLINE_SMILEY_PX } from '../utils/forumContent';
@@ -207,8 +207,14 @@ export default function GameChat({
       if (beforeId) setLoadingOlder(true);
       else if (!initialLoadedRef.current[targetChannel]) setLoading(true);
       try {
+        const markSeen = openRef.current && channelRef.current === targetChannel;
         const { data } = await api.get('/game-chat/messages', {
-          params: { channel: targetChannel, limit: PAGE_SIZE, ...(beforeId ? { before_id: beforeId } : {}) },
+          params: {
+            channel: targetChannel,
+            limit: PAGE_SIZE,
+            ...(beforeId ? { before_id: beforeId } : {}),
+            ...(markSeen ? { mark_seen: true } : {}),
+          },
         });
         const result = normalizeResponse(data);
         if (!beforeId && result.messages.length > 0) {
@@ -366,6 +372,7 @@ export default function GameChat({
       is_own: true,
       created_at: new Date().toISOString(),
       pending: true,
+      view_count: 0,
       reply_to: replyTarget ? {
         id: replyTarget.id,
         username: replyTarget.username,
@@ -678,6 +685,15 @@ export default function GameChat({
                     {row.username || 'Unknown'}
                   </Link>
                   <time className="text-[8px] font-heading" style={{ color: 'var(--noir-muted)' }}>{formatChatTime(row.created_at)}</time>
+                  <span
+                    className="inline-flex items-center gap-0.5 text-[8px] font-heading tabular-nums"
+                    style={{ color: 'var(--noir-muted)' }}
+                    title={`${Number(row.view_count) || 0} seen`}
+                    aria-label={`${Number(row.view_count) || 0} seen`}
+                  >
+                    <Eye size={10} strokeWidth={2} aria-hidden />
+                    ({Number(row.view_count) || 0})
+                  </span>
                   {row.pending && <span className="text-[8px] font-heading" style={{ color: 'var(--noir-muted)' }}>Sending…</span>}
                 </div>
                 {row.reply_to && (
