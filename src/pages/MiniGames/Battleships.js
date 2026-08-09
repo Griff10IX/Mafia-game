@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import api from '../../utils/api';
-import { startMinigameRun } from '../../utils/minigameRunSession';
 import useMinigamePlaysLeft from '../../hooks/useMinigamePlaysLeft';
 import { useMinigameCaptcha } from '../../hooks/useMinigameCaptcha';
 import { toast } from 'sonner';
@@ -11,6 +10,31 @@ import { toast } from 'sonner';
 const GRID = 10;
 // CELL size is now dynamic — computed at runtime via useCellSize()
 const COLS = ["A","B","C","D","E","F","G","H","I","J"];
+
+/** Mulberry32 — must match backend/utils/battleships_sim.py */
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function next() {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let x = t;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seedToU32(seed) {
+  const s = String(seed || "").trim().toLowerCase();
+  if (!s) return 1;
+  const hex = parseInt(s.slice(0, 8), 16);
+  if (Number.isFinite(hex) && hex > 0) return hex >>> 0;
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) || 1;
+}
 
 const SHIP_CATALOGUE = [
   { id:"carrier",      name:"Aircraft Carrier",  size:5, desc:"Fleet flagship — wide flat deck" },
@@ -81,16 +105,28 @@ function placeShip(grid,ship,r,c,horiz) {
   for (let i=0;i<ship.size;i++) { const nr=horiz?r:r+i,nc=horiz?c+i:c; g[nr][nc].ship=ship.id; }
   return g;
 }
-function autoPlaceAll(ships,size=GRID) {
+function autoPlaceAll(ships,size=GRID,rng=Math.random) {
   let grid=emptyGrid(size);
   for (const ship of ships) {
     let placed=false,tries=0;
     while (!placed&&tries++<500) {
-      const h=Math.random()<0.5,r=Math.floor(Math.random()*size),c=Math.floor(Math.random()*size);
+      const h=rng()<0.5,r=Math.floor(rng()*size),c=Math.floor(rng()*size);
       if (canPlace(grid,ship,r,c,h,size)) { grid=placeShip(grid,ship,r,c,h); placed=true; }
     }
   }
   return grid;
+}
+function extractPlacements(grid, ships) {
+  return ships.map((ship) => {
+    const cells = [];
+    for (let r = 0; r < GRID; r++) for (let c = 0; c < GRID; c++) {
+      if (grid[r][c].ship === ship.id) cells.push([r, c]);
+    }
+    if (!cells.length) throw new Error(`Missing ship placement: ${ship.id}`);
+    cells.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const horiz = cells.length < 2 || cells[0][0] === cells[1][0];
+    return { id: ship.id, r: cells[0][0], c: cells[0][1], horiz };
+  });
 }
 function isShipSunk(grid,shipId) { return grid.every(row=>row.every(c=>c.ship!==shipId||c.hit)); }
 function allSunk(grid,ships) { return ships.every(s=>isShipSunk(grid,s.id)); }
@@ -99,7 +135,7 @@ function getShipCells(grid,shipId) { return grid.flatMap(row=>row.filter(c=>c.sh
 // ─────────────────────────────────────────────────────────────────────────────
 // AI — difficulty-aware (easy / normal / hard)
 // ─────────────────────────────────────────────────────────────────────────────
-function aiShot(aiState, playerGrid, difficulty="normal", size=GRID) {
+function aiShot(aiState, playerGrid, difficulty="normal", size=GRID, rng=Math.random) {
   const {mode,targets,direction}=aiState;
 
   // Easy: purely random, no target tracking
@@ -109,7 +145,7 @@ function aiShot(aiState, playerGrid, difficulty="normal", size=GRID) {
       if (!playerGrid[i][j].hit&&!playerGrid[i][j].miss) avail.push([i,j]);
     if (!avail.length) return {r:0,c:0,newTargets:[],newMode:"hunt"};
     // Easy occasionally skips good shots — 25% chance to pick from non-checkerboard
-    const pick=avail[Math.floor(Math.random()*avail.length)];
+    const pick=avail[Math.floor(rng()*avail.length)];
     return {r:pick[0],c:pick[1],newTargets:[],newMode:"hunt"};
   }
 
@@ -141,7 +177,7 @@ function aiShot(aiState, playerGrid, difficulty="normal", size=GRID) {
   if (!avail.length) for (let i=0;i<size;i++) for (let j=0;j<size;j++)
     if (!playerGrid[i][j].hit&&!playerGrid[i][j].miss) avail.push([i,j]);
   if (!avail.length) return {r:0,c:0,newTargets:[],newMode:"hunt"};
-  const [r,c]=avail[Math.floor(Math.random()*avail.length)];
+  const [r,c]=avail[Math.floor(rng()*avail.length)];
   return {r,c,newTargets:[],newMode:"hunt"};
 }
 
@@ -1438,6 +1474,8 @@ export default function Battleships() {
   const [showStats,setShowStats]=useState(false);
   const aiTimerRef=useRef(null);
   const battleshipsSessionRef=useRef(null);
+  const battleRngRef=useRef(null);
+  const actionsRef=useRef([]);
   const bsLostSyncRef=useRef(false);
   const playerFxRef=useRef({add:()=>{}});
   const aiFxRef=useRef({add:()=>{}});
@@ -1487,6 +1525,7 @@ export default function Battleships() {
     battleshipsWinSyncRef.current = "in_flight";
     const timeSeconds=gameStartTime?Math.floor((Date.now()-gameStartTime)/1000):0;
     try {
+      const actions=Array.isArray(actionsRef.current)?actionsRef.current.slice():[];
       const res=await api.post('/battleships/win',{
         shots_fired:shotsFired,
         ships_lost:sunkByAi.length,
@@ -1494,22 +1533,31 @@ export default function Battleships() {
         fleet_size:activeShips.length,
         difficulty:settings.difficulty,
         session_id:battleshipsSessionRef.current,
+        actions,
       });
       if (res.data?.ok) {
-        const shipsSaved=activeShips.length-sunkByAi.length;
+        const authShots=Number(res.data?.shots_fired);
+        const authLost=Number(res.data?.ships_lost);
+        const shipsLost=Number.isFinite(authLost)?authLost:sunkByAi.length;
+        const shipsSaved=activeShips.length-shipsLost;
         const diffMult={easy:0.6,normal:1.0,hard:1.5}[settings.difficulty]||1;
         const fleetMult=activeShips.length/5;
         const estCash=Math.floor((6250+shipsSaved*1250)*diffMult*fleetMult);
         const estResp=Math.floor((25+shipsSaved*5)*diffMult*fleetMult);
         setWinReward({cash:estCash,respect:estResp});
+        if (Number.isFinite(authShots)) setShotsFired(Math.max(0,Math.floor(authShots)));
         toast.success(`Victory! +$${estCash.toLocaleString()} +${estResp} Respect`);
         battleshipsWinSyncRef.current = "done";
+        battleshipsSessionRef.current=null;
+        battleRngRef.current=null;
       }
       if (res.data?.plays_left != null) applyPlaysLeftPayload(res.data);
       else refreshPlays();
     } catch (err) {
       const msg=err?.response?.data?.detail||'Failed to record win';
       if (!msg.includes('limit')) toast.error(msg);
+      battleshipsSessionRef.current=null;
+      battleRngRef.current=null;
       refreshPlays();
     } finally {
       if (battleshipsWinSyncRef.current === "in_flight") battleshipsWinSyncRef.current = "idle";
@@ -1536,12 +1584,14 @@ export default function Battleships() {
   const handleSaveSettings=(s)=>{
     const ships=SHIP_CATALOGUE.filter(sh=>s.ships.includes(sh.id));
     setSettings(s); setActiveShips(ships);
-    setPlayerGrid(emptyGrid()); setAiGrid(autoPlaceAll(ships));
+    setPlayerGrid(emptyGrid()); setAiGrid(emptyGrid());
     setPlacingIdx(0); setHoriz(true); setHoverCell(null); setPlacedShips([]);
     setAiState({mode:"hunt",targets:[],hits:[],firstHit:null}); setPlayerTurn(true);
     setSunkByPlayer([]); setSunkByAi([]); setEvents([]); setCutscene(null);
     setShotsFired(0); setGameStartTime(null);
     battleshipsSessionRef.current=null;
+    battleRngRef.current=null;
+    actionsRef.current=[];
     setBattleTab("enemy"); setConsecutiveHits(0); setBonusShotActive(false);
     setElapsedTime(0); setWinReward(null);
     setAbilities({airRecon:false,sonarPing:false,salvo:false});
@@ -1607,6 +1657,7 @@ export default function Battleships() {
   // Air Recon: reveal a 3×3 area on the AI grid
   const handleAirRecon=(r,c)=>{
     if (abilities.airRecon) return;
+    actionsRef.current.push({t:"recon",r,c});
     setAbilities(a=>({...a,airRecon:true}));
     setAbilityMode(null);
     const ng=aiGrid.map(row=>row.map(cl=>({...cl})));
@@ -1641,6 +1692,7 @@ export default function Battleships() {
   // Sonar Ping: reveal whether ships exist in a 5×5 area
   const handleSonarPing=(r,c)=>{
     if (abilities.sonarPing) return;
+    actionsRef.current.push({t:"sonar",r,c});
     setAbilities(a=>({...a,sonarPing:true}));
     setAbilityMode(null);
     let shipCount=0;
@@ -1663,6 +1715,8 @@ export default function Battleships() {
 
     const res=fireAndProcess(r,c,aiGrid,setAiGrid,true,sunkByPlayer,setSunkByPlayer,aiFxRef,playerGrid,setPlayerGrid,activeShips);
     if (res===false) return;
+    if (abilityMode==="salvo" && salvoShots===0) actionsRef.current.push({t:"salvo"});
+    actionsRef.current.push({t:"shot",r,c});
     setShotsFired(s=>s+1);
 
     // Salvo mode — get 3 shots
@@ -1719,7 +1773,8 @@ export default function Battleships() {
       const _sunkByAi=sunkByAiRef.current;
       const _settings=settingsRef.current;
 
-      const {r,c,newTargets,newMode}=aiShot(_aiState,_playerGrid,_settings.difficulty);
+      const rng=battleRngRef.current||Math.random;
+      const {r,c,newTargets,newMode}=aiShot(_aiState,_playerGrid,_settings.difficulty,GRID,rng);
       const cell=_playerGrid[r][c]; const isHit=!!cell.ship;
       if (_settings.hitDebris) playerFxRef.current.add(isHit?makeHitExplosion(c*CELL+CELL/2,r*CELL+CELL/2,CELL):makeMissExplosion(c*CELL+CELL/2,r*CELL+CELL/2,CELL));
       if (isHit) triggerShake();
@@ -1834,14 +1889,35 @@ export default function Battleships() {
             <button className="nb" disabled={placedShips.length<activeShips.length||!canPlay} onClick={async()=>{
               if(!canPlay){toast.error("Play limit reached for this 2-hour window.");return;}
               let captchaToken=null;
-              try{captchaToken=await getCaptchaToken();}catch(c){if(c?.message==="captcha_cancelled")return;throw c;}
+              try{captchaToken=await getCaptchaToken();}catch(err){if(err?.message==="captcha_cancelled")return;throw err;}
               try{
-                const run=await startMinigameRun("battleships",{difficulty:settings.difficulty,fleet_size:String(activeShips.length)},captchaToken);
-                battleshipsSessionRef.current=run.session_id;
-                updateFromStart(run);
+                let ships;
+                try { ships = extractPlacements(playerGrid, activeShips); }
+                catch (ex) { toast.error(ex.message||"Place your full fleet first."); return; }
+                const resp=await api.post("/battleships/start",{
+                  difficulty:settings.difficulty,
+                  fleet_size:activeShips.length,
+                  ships,
+                  ...(captchaToken?{captcha_token:captchaToken}:{}),
+                });
+                const sid=resp.data?.session_id;
+                const seed=resp.data?.seed;
+                if(!sid||!seed){toast.error("Could not start battle. Try again.");return;}
+                battleshipsSessionRef.current=sid;
+                const rng=mulberry32(seedToU32(seed));
+                battleRngRef.current=rng;
+                actionsRef.current=[];
+                setAiGrid(autoPlaceAll(activeShips,GRID,rng));
+                updateFromStart(resp.data);
                 setScreen("battle");
                 setGameStartTime(Date.now());
                 setShotsFired(0);
+                setPlayerTurn(true);
+                setAiState({mode:"hunt",targets:[],hits:[],firstHit:null});
+                setSunkByPlayer([]); setSunkByAi([]);
+                setConsecutiveHits(0); setBonusShotActive(false);
+                setAbilities({airRecon:false,sonarPing:false,salvo:false});
+                setAbilityMode(null); setSalvoShots(0);
               }catch(e){
                 toast.error(e.response?.data?.detail||e.message||"Could not start battle");
               }
@@ -1918,17 +1994,24 @@ export default function Battleships() {
                   🔊 Sonar Ping
                 </button>
               )}
-              {activeShips.some(s=>s.id==="battleship")&&!abilities.salvo&&(
+              {activeShips.some(s=>s.id==="battleship")&&(!abilities.salvo||abilityMode==="salvo")&&(
                 <button className="nb" onClick={()=>{
-                  if (abilityMode==="salvo") { setAbilityMode(null); setSalvoShots(0); }
-                  else { setAbilityMode("salvo"); setSalvoShots(0); setAbilities(a=>({...a,salvo:true})); pushEvent("💣 SALVO — fire 3 shots!","#ff8c00"); }
+                  if (abilityMode==="salvo") {
+                    setAbilityMode(null); setSalvoShots(0);
+                    if (salvoShots===0) setAbilities(a=>({...a,salvo:false}));
+                  } else {
+                    setAbilityMode("salvo"); setSalvoShots(0); setAbilities(a=>({...a,salvo:true})); pushEvent("💣 SALVO — fire 3 shots!","#ff8c00");
+                  }
                 }}
                   style={{fontSize:9,padding:"6px 10px",background:abilityMode==="salvo"?"rgba(255,140,0,0.15)":"rgba(212,175,55,0.07)",
                     borderColor:abilityMode==="salvo"?"rgba(255,140,0,0.5)":"rgba(212,175,55,0.32)"}}>
                   💣 Salvo {abilityMode==="salvo"?`(${3-salvoShots} left)`:"(×3)"}
                 </button>
               )}
-              {abilityMode&&<button className="nb" onClick={()=>{setAbilityMode(null);setSalvoShots(0);}} style={{fontSize:9,padding:"6px 10px",opacity:0.5}}>✕ Cancel</button>}
+              {abilityMode&&<button className="nb" onClick={()=>{
+                if (abilityMode==="salvo" && salvoShots===0) setAbilities(a=>({...a,salvo:false}));
+                setAbilityMode(null); setSalvoShots(0);
+              }} style={{fontSize:9,padding:"6px 10px",opacity:0.5}}>✕ Cancel</button>}
             </div>
           )}
 

@@ -2,13 +2,38 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Trophy, RefreshCw } from "lucide-react";
 import api from "../../utils/api";
-import { startMinigameRun } from "../../utils/minigameRunSession";
 import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
 import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import { toast } from "sonner";
 import styles from "../../styles/noir.module.css";
 
 const W = 480, H = 600;
+const FIXED_DT = 1 / 60;
+
+/** Mulberry32 — must match backend/utils/family_run_sim.py */
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function next() {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let x = t;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seedToU32(seed) {
+  const s = String(seed || "").trim().toLowerCase();
+  if (!s) return 1;
+  const hex = parseInt(s.slice(0, 8), 16);
+  if (Number.isFinite(hex) && hex > 0) return hex >>> 0;
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) || 1;
+}
 
 const VPY       = 155;
 const FLOOR_Y   = H - 30;
@@ -61,6 +86,9 @@ export default function FamilyRun() {
   const touch     = useRef({ x:0, y:0, t:0 });
   const scoreSubmittedRef = useRef(false);
   const runSessionIdRef = useRef(null);
+  const inputsRef = useRef([]);
+  const accumRef = useRef(0);
+  const lastTsRef = useRef(0);
 
   const [leaderboard, setLeaderboard] = useState([]);
   const [loadingLb, setLoadingLb] = useState(false);
@@ -76,12 +104,15 @@ export default function FamilyRun() {
 
   useEffect(() => { fetchLeaderboard(); }, [fetchLeaderboard]);
 
-  function makeState() {
+  function makeState(seed = null) {
     const hi = G.current?.hi ?? 0;
+    const rng = mulberry32(seedToU32(seed));
     return {
       phase: 'title', frame: 0, score: 0, coins: 0, lives: 3, hi,
       speed: 0.009,
       spawnTimer: 0,
+      seed,
+      rng,
       player: {
         lane: 1, laneF: 1.0,
         jumpH: 0, jumpV: 0, jumping: false,
@@ -113,7 +144,9 @@ export default function FamilyRun() {
 
   function spawn(g) {
     const z0 = 0.02;
-    const r = Math.random();
+    const rng = g.rng || Math.random;
+    const ri = (a, b) => a + Math.floor(rng() * (b - a + 1));
+    const r = rng();
     if (r < 0.22) {
       g.obstacles.push({ type:'barrier',  lane: ri(0,2), z: z0, hit: false });
     } else if (r < 0.42) {
@@ -137,8 +170,6 @@ export default function FamilyRun() {
     }
   }
 
-  function ri(a,b) { return a + Math.floor(Math.random()*(b-a+1)); }
-
   function burst(g, x, y, col, n=10) {
     for (let i=0;i<n;i++) {
       const a=Math.random()*Math.PI*2, s=2+Math.random()*5;
@@ -156,11 +187,23 @@ export default function FamilyRun() {
       return;
     }
     try {
-      const res = await api.post('/family-run/score', { score: Math.floor(score), coins, session_id: sid });
+      const g = G.current;
+      const res = await api.post('/family-run/score', {
+        score: Math.floor(score),
+        coins,
+        session_id: sid,
+        inputs: Array.isArray(inputsRef.current) ? inputsRef.current.slice() : [],
+        ticks: g?.frame || 0,
+      });
       if (runSessionIdRef.current === sid) runSessionIdRef.current = null;
       if (res.data?.ok) {
-        const sc = Math.floor(score);
-        const estCash = Math.min(10000, Math.floor(sc / 100) * 10) + Math.min(2000, Math.floor(coins / 10));
+        const sc = Math.floor(Number(res.data?.score ?? score));
+        const cns = Math.floor(Number(res.data?.coins ?? coins));
+        if (G.current) {
+          G.current.score = sc;
+          G.current.coins = cns;
+        }
+        const estCash = Math.min(10000, Math.floor(sc / 100) * 10) + Math.min(2000, Math.floor(cns / 10));
         const estResp = Math.min(50, Math.floor(sc / 200));
         const parts = [];
         if (estCash > 0) parts.push(`$${estCash.toLocaleString()}`);
@@ -172,25 +215,39 @@ export default function FamilyRun() {
       else refreshPlays();
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'Failed to submit score');
+      if (runSessionIdRef.current === sid) runSessionIdRef.current = null;
       refreshPlays();
     }
   }, [fetchLeaderboard, refreshPlays, applyPlaysLeftPayload]);
 
-  const goLeft  = useCallback(() => { const g=G.current; if(!g||g.phase!=='playing')return; if(g.player.lane>0)g.player.lane--; },[]);
-  const goRight = useCallback(() => { const g=G.current; if(!g||g.phase!=='playing')return; if(g.player.lane<2)g.player.lane++; },[]);
+  const pushInput = useCallback((action) => {
+    const g = G.current;
+    if (!g || g.phase !== 'playing') return;
+    inputsRef.current.push({ f: g.frame, a: action });
+  }, []);
+
+  const goLeft  = useCallback(() => {
+    const g=G.current; if(!g||g.phase!=='playing')return;
+    if(g.player.lane>0){ g.player.lane--; pushInput('L'); }
+  },[pushInput]);
+  const goRight = useCallback(() => {
+    const g=G.current; if(!g||g.phase!=='playing')return;
+    if(g.player.lane<2){ g.player.lane++; pushInput('R'); }
+  },[pushInput]);
   const goJump  = useCallback(() => {
     const g=G.current; if(!g||g.phase!=='playing')return;
     const p=g.player;
     if (!p.jumping) {
       p.sliding=false; p.slideTimer=0;
       p.jumping=true; p.jumpH=0; p.jumpV=16;
+      pushInput('J');
     }
-  },[]);
+  },[pushInput]);
   const goSlide = useCallback(() => {
     const g=G.current; if(!g||g.phase!=='playing')return;
     const p=g.player;
-    if (!p.jumping) { p.sliding=true; p.slideTimer=22; }
-  },[]);
+    if (!p.jumping) { p.sliding=true; p.slideTimer=22; pushInput('S'); }
+  },[pushInput]);
 
   const startGame = useCallback(async () => {
     if (!canPlay) { toast.error("Play limit reached for this 2-hour window."); return; }
@@ -203,10 +260,20 @@ export default function FamilyRun() {
         if (c?.message === 'captcha_cancelled') return;
         throw c;
       }
-      const run = await startMinigameRun('family_run', undefined, captchaToken);
-      runSessionIdRef.current = run.session_id;
-      updateFromStart(run);
-      G.current = makeState();
+      const resp = await api.post('/family-run/start', {
+        ...(captchaToken ? { captcha_token: captchaToken } : {}),
+      });
+      const sid = resp.data?.session_id;
+      const seed = resp.data?.seed;
+      if (!sid || !seed) {
+        toast.error('Could not start run. Try again.');
+        return;
+      }
+      runSessionIdRef.current = sid;
+      inputsRef.current = [];
+      accumRef.current = 0;
+      updateFromStart(resp.data);
+      G.current = makeState(seed);
       G.current.phase = 'playing';
     } catch (e) {
       toast.error(e?.response?.data?.detail || e?.message || 'Could not start run');
@@ -242,9 +309,22 @@ export default function FamilyRun() {
     G.current = makeState();
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
-    const loop = () => {
+    const loop = (now) => {
       const g = G.current;
-      if (g.phase==='playing') tick(g);
+      if (!lastTsRef.current) lastTsRef.current = now;
+      let dt = (now - lastTsRef.current) / 1000;
+      lastTsRef.current = now;
+      if (dt > 0.05) dt = 0.05;
+      if (g.phase === 'playing') {
+        accumRef.current += dt;
+        let steps = 0;
+        while (accumRef.current >= FIXED_DT && steps < 5) {
+          tick(g);
+          accumRef.current -= FIXED_DT;
+          steps++;
+          if (g.phase !== 'playing') break;
+        }
+      }
       render(ctx, g);
       raf.current = requestAnimationFrame(loop);
     };

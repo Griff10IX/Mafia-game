@@ -1,8 +1,11 @@
 /**
- * Whack-A-Copper — game logic (rAF-driven, no per-hole timeout spam).
+ * Whack-A-Copper — game logic (fixed-timestep, seeded waves for server re-sim).
  */
 
 export const STORAGE_KEY = 'whack_a_copper_settings_v2';
+export const FIXED_DT = 1000 / 60;
+export const COUNTDOWN_MS = 3000;
+export const HIT_GRACE_MS = 80;
 
 export const DIFF_PRESETS = {
   easy: {
@@ -54,6 +57,31 @@ export const DEFAULT_SETTINGS = {
   panicEnabled: true,
 };
 
+/** Mulberry32 — must match backend/utils/whack_a_copper_sim.py / gauntlet_sim.py */
+export function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function next() {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let x = t;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function seedToU32(seed) {
+  const s = String(seed || '').trim().toLowerCase();
+  if (!s) return 1;
+  const hex = parseInt(s.slice(0, 8), 16);
+  if (Number.isFinite(hex) && hex > 0) return hex >>> 0;
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) || 1;
+}
+
 export function loadSettings() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -95,21 +123,35 @@ function emptyHole() {
   };
 }
 
-/** True while copper is up and hittable (small grace after frame tick). */
-export function canWhackHole(engine, index, now = performance.now()) {
+function fisherYates(arr, rng) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    let j = Math.floor(rng() * (i + 1));
+    if (j > i) j = i;
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+}
+
+/** True while copper is up and hittable (grace after upUntil on sim clock). */
+export function canWhackHole(engine, index) {
   if (engine.phase !== 'playing') return false;
   const h = engine.holes[index];
   if (!h || h.bonked) return false;
   if (!engine.holesUp[index]) return false;
-  return !!h.upUntil && now <= h.upUntil + 80;
+  const now = engine.clockMs;
+  return !!h.upUntil && now <= h.upUntil + HIT_GRACE_MS;
 }
 
-export function createEngine(settings) {
+export function createEngine(settings, seed = null) {
   const gridSize = settings.gridSize || 9;
+  const rng = seed != null ? mulberry32(seedToU32(seed)) : mulberry32(1);
   return {
     phase: 'idle',
     settings: { ...settings },
     gridSize,
+    seed: seed || null,
+    rng,
     score: 0,
     combo: 1,
     maxCombo: 1,
@@ -120,6 +162,8 @@ export function createEngine(settings) {
     holes: Array.from({ length: gridSize }, emptyHole),
     waveCooldownMs: 0,
     countdownMs: 0,
+    clockMs: 0,
+    playingMs: 0,
     particles: [],
     nextParticleId: 1,
     running: false,
@@ -150,12 +194,20 @@ function maxConcurrent(engine) {
   return Math.min(d.maxUp, 1 + Math.min(2, Math.floor(t / 2)));
 }
 
-export function startEngine(engine, settingsOverride) {
+export function startEngine(engine, settingsOverride, seed = null) {
   const s = settingsOverride || engine.settings;
   engine.settings = { ...s };
   engine.gridSize = s.gridSize || 9;
+  if (seed != null) {
+    engine.seed = seed;
+    engine.rng = mulberry32(seedToU32(seed));
+  } else if (!engine.rng) {
+    engine.rng = mulberry32(1);
+  }
   engine.phase = 'countdown';
-  engine.countdownMs = 3000;
+  engine.countdownMs = COUNTDOWN_MS;
+  engine.clockMs = 0;
+  engine.playingMs = 0;
   engine.score = 0;
   engine.combo = 1;
   engine.maxCombo = 1;
@@ -180,10 +232,11 @@ export function stopEngine(engine) {
   });
 }
 
-function popHole(engine, index, now) {
+function popHole(engine, index) {
   if (!engine.running || engine.holesUp[index]) return;
   const d = DIFF_PRESETS[engine.settings.diff] || DIFF_PRESETS.medium;
   const stay = stayMs(engine);
+  const now = engine.clockMs;
   engine.holesUp[index] = true;
   const h = engine.holes[index];
   h.up = true;
@@ -198,7 +251,8 @@ function popHole(engine, index, now) {
   h.duckUntil = 0;
 }
 
-export function syncFromEngine(engine, now = performance.now()) {
+export function syncFromEngine(engine) {
+  const now = engine.clockMs;
   return {
     phase: engine.phase,
     score: engine.score,
@@ -219,15 +273,16 @@ export function syncFromEngine(engine, now = performance.now()) {
         escaped: h.escaped,
         hitBurst: (h.hitPulseUntil || 0) > now,
         ducking: (h.duckUntil || 0) > now && !h.bonked,
-        hittable: canWhackHole(engine, i, now),
+        hittable: canWhackHole(engine, i),
       };
     }),
     particles: [...engine.particles],
   };
 }
 
-function duckHole(engine, index, now, missed) {
+function duckHole(engine, index, missed) {
   if (!engine.holesUp[index]) return;
+  const now = engine.clockMs;
   engine.holesUp[index] = false;
   const h = engine.holes[index];
   h.up = false;
@@ -250,7 +305,7 @@ function duckHole(engine, index, now, missed) {
   return null;
 }
 
-function scheduleWave(engine, now) {
+function scheduleWave(engine) {
   const size = engine.gridSize;
   const upCount = engine.holesUp.filter(Boolean).length;
   const maxUp = maxConcurrent(engine);
@@ -263,17 +318,23 @@ function scheduleWave(engine, now) {
   }
   if (!avail.length) return;
 
-  avail.sort(() => Math.random() - 0.5);
-  const count = Math.min(slots, avail.length, Math.max(1, Math.floor(Math.random() * 2) + (tier(engine.score) > 2 ? 1 : 0)));
+  const rng = engine.rng || (() => Math.random());
+  fisherYates(avail, rng);
+  const count = Math.min(
+    slots,
+    avail.length,
+    Math.max(1, Math.floor(rng() * 2) + (tier(engine.score) > 2 ? 1 : 0))
+  );
   for (let n = 0; n < count; n++) {
-    popHole(engine, avail[n], now);
+    popHole(engine, avail[n]);
   }
   engine.waveCooldownMs = waveMs(engine);
 }
 
-export function whack(engine, index, now = performance.now()) {
-  if (!canWhackHole(engine, index, now)) return null;
+export function whack(engine, index) {
+  if (!canWhackHole(engine, index)) return null;
 
+  const now = engine.clockMs;
   engine.holesUp[index] = false;
   const h = engine.holes[index];
   h.up = false;
@@ -305,11 +366,20 @@ export function whack(engine, index, now = performance.now()) {
     until: now + 850,
   });
 
-  return { pts, combo: engine.combo, bigHit: engine.combo >= 5, index };
+  return {
+    pts,
+    combo: engine.combo,
+    bigHit: engine.combo >= 5,
+    index,
+    t_ms: Math.floor(engine.playingMs),
+  };
 }
 
-export function tick(engine, dtMs, now = performance.now()) {
+/** Advance one fixed physics step. */
+export function tick(engine, dtMs = FIXED_DT) {
   if (!engine.running) return { ended: engine.phase === 'over' };
+
+  engine.clockMs += dtMs;
 
   if (engine.phase === 'countdown') {
     engine.countdownMs -= dtMs;
@@ -322,6 +392,7 @@ export function tick(engine, dtMs, now = performance.now()) {
 
   if (engine.phase !== 'playing') return { ended: engine.phase === 'over' };
 
+  engine.playingMs += dtMs;
   engine.timeLeftMs -= dtMs;
   if (engine.settings.panicEnabled && engine.timeLeftMs <= 10000) {
     engine.panic = true;
@@ -333,9 +404,10 @@ export function tick(engine, dtMs, now = performance.now()) {
 
   engine.waveCooldownMs -= dtMs;
   if (engine.waveCooldownMs <= 0) {
-    scheduleWave(engine, now);
+    scheduleWave(engine);
   }
 
+  const now = engine.clockMs;
   let missEvent = null;
   for (let i = 0; i < engine.gridSize; i++) {
     const h = engine.holes[i];
@@ -343,7 +415,7 @@ export function tick(engine, dtMs, now = performance.now()) {
       h.warning = true;
     }
     if (h.up && h.upUntil && now >= h.upUntil) {
-      missEvent = duckHole(engine, i, now, true) || missEvent;
+      missEvent = duckHole(engine, i, true) || missEvent;
     }
     if (h.bonkedUntil && now >= h.bonkedUntil) h.bonked = false;
     if (h.flashUntil && now >= h.flashUntil) h.flash = null;

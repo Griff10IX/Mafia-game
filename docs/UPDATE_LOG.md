@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-09 23:02 UTC[/color][/b] — [b]Mini-games: fair score claims[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] More mini-games now use [b]server-verified[/b] scores for rewards and leaderboards — [b]Whack-A-Copper[/b], [b]Package Run[/b], [b]Minesweeper[/b], [b]Rum Runner[/b], [b]Family Run[/b], and [b]The Getaway[/b] (plus the earlier [b]Flappy Gangster[/b] fix). Editing a claim in DevTools / Network no longer lets you submit a score you didn’t earn.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-09 22:04 UTC[/color][/b] — [b]Flappy Gangster: fair score claims[/b][/size]
 [quote]
 [list]

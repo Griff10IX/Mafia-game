@@ -1,41 +1,52 @@
-# The Package Run (Snake) — leaderboard and score submit with server-calculated rewards
+# The Package Run (Snake) — leaderboard and score submit with server-verified re-sim
 from datetime import datetime, timezone
+import secrets
 import uuid
 
-from fastapi import Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from fastapi import Depends, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
+from typing import List, Optional, Union
 
 from server import db, get_current_user, log_activity, log_minigame_payout, log_respect_earned, _get_staff_user_ids, _is_admin
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
+from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 from utils.minigame_security import skip_minigame_session
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
     as_utc_started,
     claim_minigame_run_session,
-    enforce_numeric_score_for_claimed_session,
     get_plays_left,
+    start_minigame_run,
     utc_rate_limit_window,
     RATE_LIMIT_PERIOD_HOURS,
 )
+from utils.snake_sim import MAX_SCORE_SANITY, normalize_dirs, simulate_snake, validate_snake_settings
 
 
-MAX_SCORE_ACCEPTED = 50_000
 MAX_PLAYS_PER_HOUR = 10
-SNAKE_SCORE_RATE_PER_SEC = 15.0
-SNAKE_SCORE_BUFFER = 20
 MIN_PLAY_SECONDS = 3
-SNAKE_MAX_SCORING_SECONDS = 120.0
 SNAKE_GAME = "snake"
 
 SNAKE_BOOZE_ID = "speakeasy_whiskey"
 
 
+class SnakeStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    level: Optional[str] = "classic"
+    difficulty: Optional[str] = "medium"
+    captcha_token: Optional[str] = None
+
+
 class SnakeScoreRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    score: int
+    # Client score is display-only; rewards/leaderboard use server re-sim from dirs.
+    score: Optional[int] = 0
     session_id: Optional[str] = None
+    dirs: List[Union[str, List[int]]] = Field(default_factory=list)
+    level: Optional[str] = None
+    difficulty: Optional[str] = None
 
 
 def _rewards_from_score(score: int) -> dict[str, int]:
@@ -73,7 +84,6 @@ async def _apply_rewards(user_id: str, score: int, user: dict | None = None) -> 
 
 
 def register(router):
-    # Config: rewards key and rules (for frontend display / single source of truth)
     REWARDS_AND_RULES = {
         "rewards": [
             {"key": "cash", "label": "Cash", "desc": "In-game money", "example": "$500 per pickup"},
@@ -90,7 +100,7 @@ def register(router):
             "Cops appear after 100 points. Don't hit them or you're pinched.",
             f"Speed increases as you collect. Max {MAX_PLAYS_PER_HOUR} runs per {RATE_LIMIT_PERIOD_HOURS} hours.",
         ],
-        "max_score_accepted": MAX_SCORE_ACCEPTED,
+        "max_score_accepted": MAX_SCORE_SANITY,
         "max_plays_per_hour": MAX_PLAYS_PER_HOUR,
         "rate_limit_hours": RATE_LIMIT_PERIOD_HOURS,
     }
@@ -121,14 +131,43 @@ def register(router):
             })
         return {"leaderboard": out}
 
+    @router.post("/snake/start")
+    async def snake_start(
+        body: SnakeStartRequest,
+        request: Request,
+        current_user: dict = Depends(get_current_user),
+    ):
+        await require_turnstile_for_minigame_start(
+            db,
+            request=request,
+            current_user=current_user,
+            captcha_token=body.captcha_token,
+            is_admin=_is_admin(current_user),
+        )
+        try:
+            settings = validate_snake_settings(level=body.level, difficulty=body.difficulty)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e) or "Invalid settings.") from e
+
+        seed = secrets.token_hex(16)
+        meta = {
+            "seed": seed,
+            "level": settings["level"],
+            "difficulty": settings["difficulty"],
+        }
+        resp = await start_minigame_run(
+            db,
+            user_id=current_user["id"],
+            game=SNAKE_GAME,
+            meta=meta,
+        )
+        resp["seed"] = seed
+        resp["level"] = settings["level"]
+        resp["difficulty"] = settings["difficulty"]
+        return resp
+
     @router.post("/snake/score")
     async def snake_score(payload: SnakeScoreRequest, current_user: dict = Depends(get_current_user)):
-        score = int(payload.score or 0)
-        if score < 0:
-            raise HTTPException(status_code=400, detail="Invalid score.")
-        if score > MAX_SCORE_ACCEPTED:
-            raise HTTPException(status_code=400, detail="Score too high.")
-
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
         now_iso = now_dt.isoformat().replace("+00:00", "Z")
         hour_start, reset_dt = utc_rate_limit_window(now_dt)
@@ -138,6 +177,12 @@ def register(router):
 
         skip_session = skip_minigame_session(_is_admin(current_user))
         session_id = (payload.session_id or "").strip()
+
+        try:
+            normalize_dirs(payload.dirs or [])
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e) or "Invalid dirs.") from e
+
         if not skip_session:
             if not session_id:
                 raise HTTPException(status_code=400, detail="Start a game before submitting (missing session).")
@@ -154,17 +199,40 @@ def register(router):
             elapsed = max(0.0, (now_dt - started_at).total_seconds())
             if elapsed < MIN_PLAY_SECONDS:
                 raise HTTPException(status_code=400, detail="Game too short.")
-            await enforce_numeric_score_for_claimed_session(
-                db,
-                session_id=session_id,
-                sess=sess,
-                now_dt=now_dt,
-                score=score,
-                max_score_cap=MAX_SCORE_ACCEPTED,
-                rate_per_second=SNAKE_SCORE_RATE_PER_SEC,
-                buffer=SNAKE_SCORE_BUFFER,
-                max_elapsed_seconds=SNAKE_MAX_SCORING_SECONDS,
-            )
+
+            sess_meta = sess.get("meta") if isinstance(sess.get("meta"), dict) else {}
+            seed = str(sess_meta.get("seed") or "").strip()
+            if not seed:
+                raise HTTPException(status_code=400, detail="Run seed missing; start a new run.")
+
+            try:
+                settings = validate_snake_settings(
+                    level=sess_meta.get("level"),
+                    difficulty=sess_meta.get("difficulty"),
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e) or "Invalid run settings.") from e
+
+            if payload.level is not None and str(payload.level).strip() and str(payload.level).strip().lower() != settings["level"]:
+                raise HTTPException(status_code=400, detail="Level does not match this run.")
+            if payload.difficulty is not None and str(payload.difficulty).strip() and str(payload.difficulty).strip().lower() != settings["difficulty"]:
+                raise HTTPException(status_code=400, detail="Difficulty does not match this run.")
+
+            try:
+                sim = simulate_snake(
+                    seed=seed,
+                    dirs=payload.dirs or [],
+                    level=settings["level"],
+                    difficulty=settings["difficulty"],
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e) or "Invalid dirs.") from e
+            score = int(sim.get("score") or 0)
+        else:
+            score = 0
+
+        if score < 0 or score > MAX_SCORE_SANITY:
+            raise HTTPException(status_code=400, detail="Score outside allowed range.")
 
         result = await db.user_meta.update_one(
             {"user_id": uid, "snake_hour_start": hour_start_iso, "snake_hour_count": {"$lt": MAX_PLAYS_PER_HOUR}},

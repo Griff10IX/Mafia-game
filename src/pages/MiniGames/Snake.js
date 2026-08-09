@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
 import api from "../../utils/api";
-import { startMinigameRun } from "../../utils/minigameRunSession";
 import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
 import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import styles from "../../styles/noir.module.css";
@@ -15,6 +14,39 @@ const BASE_SPEED = 115;   // ms per tick (lower = faster; smoother input respons
 const SPEED_STEP = 4;     // ms faster per package collected
 const MIN_SPEED = 55;     // fastest possible
 const CANVAS_SIZE = GRID * CELL;
+
+/** Mulberry32 — must match backend/utils/snake_sim.py */
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function next() {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let x = t;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seedToU32(seed) {
+  const s = String(seed || "").trim().toLowerCase();
+  if (!s) return 1;
+  const hex = parseInt(s.slice(0, 8), 16);
+  if (Number.isFinite(hex) && hex > 0) return hex >>> 0;
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) || 1;
+}
+
+function dirName(dx, dy) {
+  if (dx === 1 && dy === 0) return "RIGHT";
+  if (dx === -1 && dy === 0) return "LEFT";
+  if (dx === 0 && dy === -1) return "UP";
+  if (dx === 0 && dy === 1) return "DOWN";
+  return "RIGHT";
+}
 
 // Level presets: Classic = walls kill; Wrap = walls wrap to other side
 const SNAKE_LEVELS = [
@@ -74,19 +106,19 @@ const MAX_COPS = 6;
 
 const DIR = { UP:[0,-1], DOWN:[0,1], LEFT:[-1,0], RIGHT:[1,0] };
 
-function pickPackage() {
-  let r = Math.random();
+function pickPackage(rng) {
+  let r = rng();
   for (const p of PACKAGES) { r -= p.prob; if (r <= 0) return p; }
   return PACKAGES[0];
 }
 
-function randCell(exclude = []) {
+function randCell(rng, exclude = []) {
   const flat = new Set(exclude.map(([x,y]) => `${x},${y}`));
-  let x, y;
+  let x = 0, y = 0;
   let tries = 0;
   do {
-    x = Math.floor(Math.random() * GRID);
-    y = Math.floor(Math.random() * GRID);
+    x = Math.floor(rng() * GRID);
+    y = Math.floor(rng() * GRID);
     tries++;
   } while (flat.has(`${x},${y}`) && tries < 200);
   return [x, y];
@@ -251,6 +283,9 @@ export default function Snake() {
   const tRef = useRef(0);
   const dirQueueRef = useRef([]); // up to 2 pending directions for smoother WASD
   const snakeSessionRef = useRef(null);
+  const runSeedRef = useRef(null);
+  const dirsRef = useRef([]);
+  const runMetaRef = useRef({ level: "classic", difficulty: "medium" });
   const snakeDeadSyncRef = useRef(false);
 
   const [phase, setPhase] = useState("menu");
@@ -285,15 +320,17 @@ export default function Snake() {
 
   useEffect(() => { fetchLB(); }, [fetchLB]);
 
-  const initState = useCallback((level = "classic", difficulty = "medium") => {
+  const initState = useCallback((level = "classic", difficulty = "medium", seed = null) => {
     const levelConfig = SNAKE_LEVELS.find(l => l.id === level) || SNAKE_LEVELS[0];
     const diffConfig = SNAKE_DIFFICULTIES.find(d => d.id === difficulty) || SNAKE_DIFFICULTIES[1];
     const mid = Math.floor(GRID / 2);
+    const rng = mulberry32(seedToU32(seed));
+    const startSnake = [[mid, mid], [mid - 1, mid], [mid - 2, mid]];
     return {
-      snake: [[mid, mid], [mid - 1, mid], [mid - 2, mid]],
+      snake: startSnake,
       dir: [1, 0],
       nextDir: [1, 0],
-      pkg: { pos: randCell([[mid,mid],[mid-1,mid],[mid-2,mid]]), data: pickPackage() },
+      pkg: { pos: randCell(rng, startSnake), data: pickPackage(rng) },
       cops: [],
       score: 0,
       speed: diffConfig.baseSpeed,
@@ -306,12 +343,15 @@ export default function Snake() {
       wrapWalls: levelConfig.wrapWalls,
       phase: "playing",
       copTimer: 0,
+      rng,
+      seed,
     };
   }, []);
 
   const tick = useCallback(() => {
     const s = stateRef.current;
     if (!s || s.phase !== "playing") return;
+    const rng = s.rng || (() => Math.random());
 
     // Apply queued direction first so rapid WASD applies in order
     const queue = dirQueueRef.current;
@@ -320,6 +360,7 @@ export default function Snake() {
       if (next[0] !== -s.dir[0] || next[1] !== -s.dir[1]) s.nextDir = next;
     }
     s.dir = s.nextDir;
+    dirsRef.current.push(dirName(s.dir[0], s.dir[1]));
     const [dx, dy] = s.dir;
     const head = s.snake[0];
     let newHead = [head[0] + dx, head[1] + dy];
@@ -365,7 +406,7 @@ export default function Snake() {
         setLastPkg({ label: "🔒", points: pts, x: newHead[0], y: newHead[1], isJail: true });
         setPkgFade(1);
         const occupied = [...newSnake, ...s.cops];
-        s.pkg = { pos: randCell(occupied), data: pickPackage() };
+        s.pkg = { pos: randCell(rng, occupied), data: pickPackage(rng) };
         s.snake = newSnake;
         return;
       }
@@ -389,12 +430,12 @@ export default function Snake() {
       setPkgFade(1);
 
       const occupied = [...newSnake, ...s.cops];
-      s.pkg = { pos: randCell(occupied), data: pickPackage() };
+      s.pkg = { pos: randCell(rng, occupied), data: pickPackage(rng) };
 
       s.copTimer += pts;
       if (s.copTimer >= s.copSpawnInterval && s.cops.length < s.maxCops && newScore >= s.copThreshold) {
         s.copTimer = 0;
-        const copPos = randCell([...newSnake, ...s.cops]);
+        const copPos = randCell(rng, [...newSnake, ...s.cops]);
         s.cops = [...s.cops, copPos];
       }
 
@@ -437,10 +478,26 @@ export default function Snake() {
         if (c?.message === "captcha_cancelled") return;
         throw c;
       }
-      const run = await startMinigameRun("snake", undefined, captchaToken);
-      snakeSessionRef.current = run.session_id;
-      updateFromStart(run);
-      const s = initState(levelId, difficultyId);
+      const r = await api.post("/snake/start", {
+        level: levelId,
+        difficulty: difficultyId,
+        ...(captchaToken ? { captcha_token: captchaToken } : {}),
+      });
+      const sid = r.data?.session_id;
+      const seed = r.data?.seed;
+      if (!sid || !seed) {
+        toast.error("Could not start run. Try again.");
+        return;
+      }
+      snakeSessionRef.current = sid;
+      runSeedRef.current = seed;
+      dirsRef.current = [];
+      runMetaRef.current = {
+        level: r.data?.level || levelId,
+        difficulty: r.data?.difficulty || difficultyId,
+      };
+      updateFromStart(r.data);
+      const s = initState(runMetaRef.current.level, runMetaRef.current.difficulty, seed);
       stateRef.current = s;
       dirQueueRef.current = [];
       setScore(0);
@@ -457,8 +514,9 @@ export default function Snake() {
   }, [initState, renderLoop, levelId, difficultyId, canPlay, updateFromStart, getCaptchaToken]);
 
   const submitScore = useCallback(async (finalScore) => {
-    if (finalScore <= 0) return;
     const runSessionId = snakeSessionRef.current;
+    const dirs = Array.isArray(dirsRef.current) ? dirsRef.current.slice() : [];
+    if (!dirs.length && !(finalScore > 0)) return;
     if (!runSessionId) {
       toast.error("Missing run session. Refresh and try again.");
       setPhase("dead");
@@ -466,14 +524,33 @@ export default function Snake() {
     }
     setPhase("submitting");
     try {
-      const res = await api.post("/snake/score", { score: finalScore, session_id: runSessionId });
-      if (snakeSessionRef.current === runSessionId) snakeSessionRef.current = null;
-      toast.success(`Score submitted: ${finalScore} pts`);
+      const res = await api.post("/snake/score", {
+        score: Number(finalScore || 0),
+        session_id: runSessionId,
+        dirs,
+        level: runMetaRef.current?.level,
+        difficulty: runMetaRef.current?.difficulty,
+      });
+      if (snakeSessionRef.current === runSessionId) {
+        snakeSessionRef.current = null;
+        runSeedRef.current = null;
+        dirsRef.current = [];
+      }
+      const authScore = Number(res.data?.score ?? finalScore ?? 0);
+      if (Number.isFinite(authScore)) {
+        setScore(Math.max(0, Math.floor(authScore)));
+        setHiScore((h) => Math.max(h, Math.floor(authScore)));
+      }
+      toast.success(`Score submitted: ${Math.max(0, Math.floor(authScore))} pts`);
       await fetchLB();
       if (res.data?.plays_left != null) applyPlaysLeftPayload(res.data);
       else refreshPlays();
     } catch (e) {
-      if (snakeSessionRef.current === runSessionId) snakeSessionRef.current = null;
+      if (snakeSessionRef.current === runSessionId) {
+        snakeSessionRef.current = null;
+        runSeedRef.current = null;
+        dirsRef.current = [];
+      }
       toast.error(e?.response?.data?.detail || "Failed to submit score");
       refreshPlays();
     } finally {

@@ -3685,6 +3685,15 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 from routers.money.illegal_business import _is_moderately_upgraded
                 moderately_upgraded = _is_moderately_upgraded(victim_biz)
                 business_snapshot = dict(victim_biz)
+                victim_ibm = await db.users.find_one(
+                    {"id": victim_id},
+                    {
+                        "_id": 0,
+                        "illegal_business_mission_completions": 1,
+                        "illegal_business_mission_baselines": 1,
+                        "illegal_business_raid_daily_limit": 1,
+                    },
+                )
                 killer_doc = await db.users.find_one({"id": killer_id}, {"_id": 0, "pending_illegal_business_rewards": 1})
                 pending = list((killer_doc or {}).get("pending_illegal_business_rewards") or [])
                 pending.append({
@@ -3696,6 +3705,15 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     "has_snapshot": True,
                     "business_snapshot": business_snapshot,
                     "guards_snapshot": guards_snapshot,
+                    # Mission progress lives on the user — must travel with the seized rate or the
+                    # killer can re-claim income_mult missions on an already-boosted till.
+                    "mission_completions_snapshot": list(
+                        (victim_ibm or {}).get("illegal_business_mission_completions") or []
+                    ),
+                    "mission_baselines_snapshot": dict(
+                        (victim_ibm or {}).get("illegal_business_mission_baselines") or {}
+                    ),
+                    "raid_daily_limit_snapshot": (victim_ibm or {}).get("illegal_business_raid_daily_limit"),
                 })
                 await db.users.update_one({"id": killer_id}, {"$set": {"pending_illegal_business_rewards": pending}})
         except Exception as e:

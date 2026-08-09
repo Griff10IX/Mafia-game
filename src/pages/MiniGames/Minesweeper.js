@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { Trophy, Clock, Target, ArrowLeft } from "lucide-react";
 import api from "../../utils/api";
 import { toast } from "sonner";
-import { startMinigameRun } from "../../utils/minigameRunSession";
 import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
 import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import styles from "../../styles/noir.module.css";
@@ -16,6 +15,31 @@ const DIFFICULTIES = {
 
 const CELL_COLORS = ["", "var(--noir-primary)", "#a0c4ff", "#e05c5c", "#9b7fd4", "#e08c5c", "#5ccce0", "#e0e0e0", "#888"];
 
+/** Mulberry32 — must match backend/utils/minesweeper_sim.py */
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function next() {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let x = t;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seedToU32(seed) {
+  const s = String(seed || "").trim().toLowerCase();
+  if (!s) return 1;
+  const hex = parseInt(s.slice(0, 8), 16);
+  if (Number.isFinite(hex) && hex > 0) return hex >>> 0;
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) || 1;
+}
+
 function createBoard(rows, cols) {
   return Array.from({ length: rows }, (_, r) =>
     Array.from({ length: cols }, (_, c) => ({
@@ -24,12 +48,12 @@ function createBoard(rows, cols) {
   );
 }
 
-function placeMines(board, rows, cols, mineCount, safeR, safeC) {
+function placeMines(board, rows, cols, mineCount, safeR, safeC, rng) {
   const newBoard = board.map(row => row.map(cell => ({ ...cell })));
   let placed = 0;
   while (placed < mineCount) {
-    const r = Math.floor(Math.random() * rows);
-    const c = Math.floor(Math.random() * cols);
+    const r = Math.floor(rng() * rows);
+    const c = Math.floor(rng() * cols);
     if (!newBoard[r][c].mine && !(Math.abs(r - safeR) <= 1 && Math.abs(c - safeC) <= 1)) {
       newBoard[r][c].mine = true;
       placed++;
@@ -98,6 +122,8 @@ export default function Minesweeper() {
   const timerRef = useRef(null);
   const submittedRef = useRef(false);
   const runSessionRef = useRef(null);
+  const runSeedRef = useRef(null);
+  const clicksRef = useRef([]);
   const firstRevealLockRef = useRef(false);
   const msDeadSyncRef = useRef(false);
   const flagTouchTimerRef = useRef(null);
@@ -159,15 +185,23 @@ export default function Minesweeper() {
   const submitWin = async () => {
     setSubmitError("");
     try {
+      const clicks = Array.isArray(clicksRef.current) ? clicksRef.current.slice() : [];
       const res = await api.post("/minesweeper/win", {
         difficulty,
         time_seconds: elapsed,
         session_id: runSessionRef.current,
+        clicks,
       });
       if (res.data?.ok) {
+        const authTime = Number(res.data?.time_seconds);
+        if (Number.isFinite(authTime) && authTime > 0) setElapsed(Math.floor(authTime));
         const dr = DIFF_REWARDS[difficulty] || { cash: 0, respect: 0 };
         setReward(dr);
         toast.success(`You won! +$${dr.cash.toLocaleString()} cash`);
+      }
+      if (runSessionRef.current) {
+        runSessionRef.current = null;
+        runSeedRef.current = null;
       }
       fetchLeaderboard();
       if (res.data?.plays_left != null) applyPlaysLeftPayload(res.data);
@@ -177,6 +211,10 @@ export default function Minesweeper() {
       const msg = e.response?.data?.detail || e.message || "Could not verify this win.";
       setSubmitError(msg);
       toast.error(msg);
+      if (runSessionRef.current) {
+        runSessionRef.current = null;
+        runSeedRef.current = null;
+      }
       refreshPlays();
     }
   };
@@ -193,6 +231,8 @@ export default function Minesweeper() {
     setSubmitError("");
     submittedRef.current = false;
     runSessionRef.current = null;
+    runSeedRef.current = null;
+    clicksRef.current = [];
     firstRevealLockRef.current = false;
     suppressRevealRef.current = false;
     clearTimeout(flagTouchTimerRef.current);
@@ -212,26 +252,42 @@ export default function Minesweeper() {
       let captchaToken = null;
       try {
         captchaToken = await getCaptchaToken();
-      } catch (c) {
-        if (c?.message === "captcha_cancelled") return;
-        throw c;
+      } catch (err) {
+        if (err?.message === "captcha_cancelled") return;
+        throw err;
       }
       firstRevealLockRef.current = true;
       try {
-        const run = await startMinigameRun("minesweeper", { difficulty }, captchaToken);
-        runSessionRef.current = run.session_id;
-        updateFromStart(run);
+        const resp = await api.post("/minesweeper/start", {
+          difficulty,
+          first_r: r,
+          first_c: c,
+          ...(captchaToken ? { captcha_token: captchaToken } : {}),
+        });
+        const sid = resp.data?.session_id;
+        const seed = resp.data?.seed;
+        if (!sid || !seed) {
+          firstRevealLockRef.current = false;
+          toast.error("Could not start game. Try again.");
+          return;
+        }
+        runSessionRef.current = sid;
+        runSeedRef.current = seed;
+        clicksRef.current = [];
+        updateFromStart(resp.data);
+        const rng = mulberry32(seedToU32(seed));
+        b = placeMines(board, cfg.rows, cfg.cols, cfg.mines, r, c, rng);
+        setMinesReady(true);
+        setPhase("playing");
       } catch (e) {
         firstRevealLockRef.current = false;
         toast.error(e.response?.data?.detail || e.message || "Could not start game");
         return;
       }
-      b = placeMines(board, cfg.rows, cfg.cols, cfg.mines, r, c);
-      setMinesReady(true);
-      setPhase("playing");
     }
     const cell = b[r][c];
     if (cell.revealed || cell.flagged) return;
+    clicksRef.current.push({ r, c });
     if (cell.mine) {
       const revealed = b.map(row => row.map(cl => cl.mine ? { ...cl, revealed: true } : cl));
       setBoard(revealed);

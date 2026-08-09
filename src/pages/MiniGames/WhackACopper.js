@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import api from "../../utils/api";
-import { startMinigameRun } from "../../utils/minigameRunSession";
 import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
 import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import { toast } from "sonner";
 import styles from "./WhackACopper.module.css";
 import {
   DIFF_PRESETS,
+  FIXED_DT,
   loadSettings,
   saveSettings,
   gridLayout,
@@ -157,8 +157,12 @@ export default function WhackACopper() {
   const engineRef = useRef(createEngine(initial));
   const submittedRef = useRef(false);
   const whackSessionRef = useRef(null);
+  const runSeedRef = useRef(null);
+  const hitsRef = useRef([]);
+  const runSettingsRef = useRef(null);
   const rafRef = useRef(null);
   const lastFrameRef = useRef(0);
+  const accumRef = useRef(0);
 
   const { cols, rows } = gridLayout(settings.gridSize);
   const gridSize = settings.gridSize;
@@ -198,19 +202,44 @@ export default function WhackACopper() {
     async (finalScore) => {
       if (submittedRef.current) return;
       submittedRef.current = true;
+      const runSessionId = whackSessionRef.current;
+      const hits = Array.isArray(hitsRef.current) ? hitsRef.current.slice() : [];
+      const runSettings = runSettingsRef.current || {};
       try {
         const res = await api.post("/whack-a-copper/score", {
-          score: finalScore,
-          session_id: whackSessionRef.current,
+          score: Number(finalScore || 0),
+          session_id: runSessionId,
+          hits,
+          diff: runSettings.diff,
+          duration: runSettings.duration,
+          gridSize: runSettings.gridSize,
+          livesMode: runSettings.livesMode,
         });
+        if (whackSessionRef.current === runSessionId) {
+          whackSessionRef.current = null;
+          runSeedRef.current = null;
+          hitsRef.current = [];
+        }
+        const authScore = Number(res.data?.score ?? finalScore ?? 0);
+        if (Number.isFinite(authScore)) {
+          setScore(Math.max(0, Math.floor(authScore)));
+          setBestScore((b) => Math.max(b, Math.floor(authScore)));
+        }
         if (res.data?.ok) {
-          const estCash = finalScore >= 100 ? Math.min(5000, Math.floor(finalScore / 10)) : 0;
-          if (estCash > 0) toast.success(`Score submitted! +$${estCash.toLocaleString()} cash`);
+          const cash = res.data?.cash != null
+            ? Number(res.data.cash)
+            : (authScore >= 100 ? Math.min(5000, Math.floor(authScore / 10)) : 0);
+          if (cash > 0) toast.success(`Score submitted! +$${cash.toLocaleString()} cash`);
           else toast.success("Score submitted!");
         }
         if (res.data?.plays_left != null) applyPlaysLeftPayload(res.data);
         else refreshPlays();
       } catch (e) {
+        if (whackSessionRef.current === runSessionId) {
+          whackSessionRef.current = null;
+          runSeedRef.current = null;
+          hitsRef.current = [];
+        }
         toast.error(e.response?.data?.detail || "Failed to submit score");
         refreshPlays();
       } finally {
@@ -235,15 +264,24 @@ export default function WhackACopper() {
       if (!engine.running) return;
 
       const last = lastFrameRef.current || now;
-      const dt = Math.min(50, now - last);
+      let elapsed = now - last;
       lastFrameRef.current = now;
+      if (elapsed > 100) elapsed = 100;
+      accumRef.current += elapsed;
 
-      const result = tick(engine, dt, now);
-      applySync(syncFromEngine(engine, now));
+      let miss = false;
+      let ended = false;
+      while (accumRef.current >= FIXED_DT && !ended) {
+        accumRef.current -= FIXED_DT;
+        const result = tick(engine, FIXED_DT);
+        if (result.miss) miss = true;
+        if (result.ended) ended = true;
+      }
 
-      if (result.miss) triggerShake();
+      applySync(syncFromEngine(engine));
+      if (miss) triggerShake();
 
-      if (result.ended) {
+      if (ended) {
         endGame();
         return;
       }
@@ -267,31 +305,55 @@ export default function WhackACopper() {
       throw c;
     }
     try {
-      const run = await startMinigameRun("whack_a_copper", undefined, captchaToken);
-      whackSessionRef.current = run.session_id;
-      updateFromStart(run);
+      const r = await api.post("/whack-a-copper/start", {
+        diff: settings.diff,
+        duration: settings.duration,
+        gridSize: settings.gridSize,
+        livesMode: settings.livesMode,
+        ...(captchaToken ? { captcha_token: captchaToken } : {}),
+      });
+      const sid = r.data?.session_id;
+      const seed = r.data?.seed;
+      if (!sid || !seed) {
+        toast.error("Could not start run. Try again.");
+        return;
+      }
+      whackSessionRef.current = sid;
+      runSeedRef.current = seed;
+      hitsRef.current = [];
+      runSettingsRef.current = {
+        diff: r.data?.diff || settings.diff,
+        duration: Number(r.data?.duration ?? settings.duration),
+        gridSize: Number(r.data?.gridSize ?? settings.gridSize),
+        livesMode: Number(r.data?.livesMode ?? settings.livesMode),
+      };
+      updateFromStart(r.data);
     } catch (e) {
       toast.error(e.response?.data?.detail || e.message || "Could not start run");
       return;
     }
 
     submittedRef.current = false;
-    const engine = createEngine(settings);
+    const locked = runSettingsRef.current || settings;
+    const engine = createEngine({ ...settings, ...locked }, runSeedRef.current);
     engineRef.current = engine;
-    startEngine(engine, settings);
+    startEngine(engine, { ...settings, ...locked }, runSeedRef.current);
     setSettingsOpen(false);
     lastFrameRef.current = performance.now();
-    applySync(syncFromEngine(engine, lastFrameRef.current));
+    accumRef.current = 0;
+    applySync(syncFromEngine(engine));
     rafRef.current = requestAnimationFrame(gameLoop);
   }, [canPlay, settings, getCaptchaToken, updateFromStart, gameLoop, applySync]);
 
   const handleWhack = useCallback(
     (index) => {
-      const now = performance.now();
       const engine = engineRef.current;
-      const result = whack(engine, index, now);
+      const result = whack(engine, index);
       if (!result) return;
-      applySync(syncFromEngine(engine, now));
+      if (result.t_ms != null && Number.isFinite(result.t_ms)) {
+        hitsRef.current.push({ t_ms: result.t_ms, hole: index });
+      }
+      applySync(syncFromEngine(engine));
       if (result.bigHit && settings.shakeEnabled) triggerShake();
     },
     [applySync, settings.shakeEnabled, triggerShake]

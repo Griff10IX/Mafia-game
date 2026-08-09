@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
 import api from "../../utils/api";
-import { startMinigameRun } from "../../utils/minigameRunSession";
 import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
 import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import styles from "../../styles/noir.module.css";
@@ -31,6 +30,33 @@ import {
   saveHighScore,
   freezeRunSpeed,
 } from "./theGetawayEngine";
+
+const FIXED_DT = 1 / 60;
+
+/** Mulberry32 — must match backend/utils/getaway_sim.py */
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function next() {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let x = t;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seedToU32(seed) {
+  const s = String(seed || "").trim().toLowerCase();
+  if (!s) return 1;
+  const hex = parseInt(s.slice(0, 8), 16);
+  if (Number.isFinite(hex) && hex > 0) return hex >>> 0;
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) || 1;
+}
 
 const RULES = [
   "Temple Run-style: three lanes, swipe or arrow keys to dodge",
@@ -63,6 +89,9 @@ export default function TheGetaway() {
   const animRef = useRef(null);
   const touchStartRef = useRef({ x: 0, y: 0 });
   const getawaySessionRef = useRef(null);
+  const inputsRef = useRef([]);
+  const accumRef = useRef(0);
+  const lastTsRef = useRef(0);
 
   const [gameState, setGameState] = useState("title");
   const [displayScore, setDisplayScore] = useState(0);
@@ -86,10 +115,14 @@ export default function TheGetaway() {
     }
   }, []);
 
-  const resetGame = useCallback(() => {
+  const resetGame = useCallback((seed = null) => {
     const s = stateRef.current;
     s.speedPresetId = speedPresetId;
     resetWorldEntities(s);
+    s.rng = seed ? mulberry32(seedToU32(seed)) : null;
+    s.seed = seed || null;
+    inputsRef.current = [];
+    accumRef.current = 0;
     setDisplayScore(0);
     setDisplayCoins(0);
     setDisplayLives(3);
@@ -114,11 +147,18 @@ export default function TheGetaway() {
         coins_collected: s.coins,
         time_seconds: timeSeconds,
         session_id: sid,
+        inputs: Array.isArray(inputsRef.current) ? inputsRef.current.slice() : [],
+        ticks: s.frame || 0,
+        speed_preset: s.speedPresetId,
       });
       getawaySessionRef.current = null;
       if (res.data?.ok) {
-        const dist = Math.floor(stateRef.current?.score || 0);
-        const coins = stateRef.current?.coins || 0;
+        const dist = Math.floor(Number(res.data?.distance ?? s.score) || 0);
+        const coins = Math.floor(Number(res.data?.coins_collected ?? s.coins) || 0);
+        s.score = dist;
+        s.coins = coins;
+        setDisplayScore(dist);
+        setDisplayCoins(coins);
         const estCash = 3750 + Math.floor(dist / 100) * 500 + coins * 25;
         const estResp = 15 + Math.floor(dist / 100) * 2;
         toast.success(`Clean getaway! +$${estCash.toLocaleString()} +${estResp} respect`);
@@ -127,10 +167,17 @@ export default function TheGetaway() {
       else refreshPlays();
     } catch (err) {
       setSubmitted(false);
+      getawaySessionRef.current = null;
       toast.error(err?.response?.data?.detail || "Failed to submit run");
       refreshPlays();
     }
   }, [submitted, refreshPlays, applyPlaysLeftPayload]);
+
+  const pushInput = useCallback((action) => {
+    const s = stateRef.current;
+    if (s.state !== "playing") return;
+    inputsRef.current.push({ f: s.frame, a: action });
+  }, []);
 
   const jump = useCallback(() => {
     const p = stateRef.current.player;
@@ -138,8 +185,9 @@ export default function TheGetaway() {
       lightHaptic(8);
       p.jumping = true;
       p.vy = -13;
+      pushInput("J");
     }
-  }, []);
+  }, [pushInput]);
 
   const slide = useCallback(() => {
     const p = stateRef.current.player;
@@ -147,8 +195,9 @@ export default function TheGetaway() {
       lightHaptic(8);
       p.sliding = true;
       p.slideTimer = 42;
+      pushInput("S");
     }
-  }, []);
+  }, [pushInput]);
 
   const moveLeft = useCallback(() => {
     const p = stateRef.current.player;
@@ -156,8 +205,9 @@ export default function TheGetaway() {
       lightHaptic(6);
       p.targetLane--;
       p.laneT = 0;
+      pushInput("L");
     }
-  }, []);
+  }, [pushInput]);
 
   const moveRight = useCallback(() => {
     const p = stateRef.current.player;
@@ -165,8 +215,9 @@ export default function TheGetaway() {
       lightHaptic(6);
       p.targetLane++;
       p.laneT = 0;
+      pushInput("R");
     }
-  }, []);
+  }, [pushInput]);
 
   const handleStart = useCallback(async () => {
     if (!canPlay) {
@@ -184,18 +235,31 @@ export default function TheGetaway() {
         throw c;
       }
       try {
-        const run = await startMinigameRun("the_getaway", undefined, captchaToken);
-        getawaySessionRef.current = run.session_id;
-        updateFromStart(run);
+        const resp = await api.post("/the-getaway/start", {
+          speed_preset: speedPresetId,
+          ...(captchaToken ? { captcha_token: captchaToken } : {}),
+        });
+        const sid = resp.data?.session_id;
+        const seed = resp.data?.seed;
+        const lockedPreset = resp.data?.speed_preset || speedPresetId;
+        if (!sid || !seed) {
+          toast.error("Could not start run. Try again.");
+          return;
+        }
+        getawaySessionRef.current = sid;
+        if (SPEED_PRESETS[lockedPreset]) {
+          s.speedPresetId = lockedPreset;
+          setSpeedPresetId(lockedPreset);
+        }
+        updateFromStart(resp.data);
+        resetGame(seed);
+        s.state = "playing";
+        setGameState("playing");
       } catch (err) {
         toast.error(err?.response?.data?.detail || err?.message || "Could not start run");
-        return;
       }
-      resetGame();
-      s.state = "playing";
-      setGameState("playing");
     }
-  }, [resetGame, submitRun, canPlay, updateFromStart, getCaptchaToken]);
+  }, [resetGame, submitRun, canPlay, updateFromStart, getCaptchaToken, speedPresetId]);
 
   const drawSky = useCallback((ctx) => {
     const grad = ctx.createLinearGradient(0, 0, 0, H * 0.7);
@@ -564,11 +628,16 @@ export default function TheGetaway() {
     setDisplayScore(Math.floor(s.score));
   }, []);
 
-  const gameLoop = useCallback(() => {
+  const gameLoop = useCallback((now) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     const s = stateRef.current;
+
+    if (!lastTsRef.current) lastTsRef.current = now || performance.now();
+    let dt = ((now || performance.now()) - lastTsRef.current) / 1000;
+    lastTsRef.current = now || performance.now();
+    if (dt > 0.05) dt = 0.05;
 
     ctx.clearRect(0, 0, W, H);
     ctx.save();
@@ -582,14 +651,21 @@ export default function TheGetaway() {
     s.buildings.forEach((b) => drawBuilding(ctx, b));
 
     if (s.state === "playing") {
-      tickPlaying(s);
+      accumRef.current += dt;
+      let steps = 0;
+      while (accumRef.current >= FIXED_DT && steps < 5) {
+        tickPlaying(s);
+        checkCollisions(s, onLifeLost, onCoin);
+        accumRef.current -= FIXED_DT;
+        steps++;
+        if (s.state !== "playing") break;
+      }
       setDisplayScore(Math.floor(s.score));
       const mph = mphDisplay(s.speed);
       if (mph !== s._lastHudMph) {
         s._lastHudMph = mph;
         setDisplayMph(mph);
       }
-      checkCollisions(s, onLifeLost, onCoin);
     }
 
     drawPath(ctx);

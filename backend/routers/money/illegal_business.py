@@ -347,6 +347,87 @@ KILL_TAKEOVER_INCOME_MULT = 1.05
 KILL_REWARD_LIQUIDATION_HOURS = 168
 
 
+async def _apply_victim_ibm_progress_on_takeover(
+    *,
+    killer_id: str,
+    victim_id: str,
+    reward_entry: dict,
+) -> int:
+    """
+    Copy victim IBM mission progress onto the killer so income_mult missions
+    already baked into the seized income_per_hour cannot be claimed again.
+    Returns how many mission ids were newly added for the killer.
+    """
+    from utils.ibm_takeover_merge import merge_ibm_baseline_maps, merge_ibm_completion_rows
+
+    snap_completions = reward_entry.get("mission_completions_snapshot")
+    snap_baselines = reward_entry.get("mission_baselines_snapshot")
+    raid_limit_snap = reward_entry.get("raid_daily_limit_snapshot")
+
+    if snap_completions is None or snap_baselines is None:
+        victim = await db.users.find_one(
+            {"id": victim_id},
+            {
+                "_id": 0,
+                "illegal_business_mission_completions": 1,
+                "illegal_business_mission_baselines": 1,
+                "illegal_business_raid_daily_limit": 1,
+            },
+        )
+        if snap_completions is None:
+            snap_completions = list((victim or {}).get("illegal_business_mission_completions") or [])
+        if snap_baselines is None:
+            snap_baselines = dict((victim or {}).get("illegal_business_mission_baselines") or {})
+        if raid_limit_snap is None and victim is not None:
+            raid_limit_snap = victim.get("illegal_business_raid_daily_limit")
+
+    killer = await db.users.find_one(
+        {"id": killer_id},
+        {
+            "_id": 0,
+            "illegal_business_mission_completions": 1,
+            "illegal_business_mission_baselines": 1,
+            "illegal_business_raid_daily_limit": 1,
+        },
+    )
+    before_ids = {
+        c.get("mission_id")
+        for c in ((killer or {}).get("illegal_business_mission_completions") or [])
+        if c.get("mission_id")
+    }
+    merged_completions = merge_ibm_completion_rows(
+        (killer or {}).get("illegal_business_mission_completions"),
+        snap_completions,
+    )
+    merged_baselines = merge_ibm_baseline_maps(
+        (killer or {}).get("illegal_business_mission_baselines"),
+        snap_baselines if isinstance(snap_baselines, dict) else {},
+    )
+    after_ids = {c.get("mission_id") for c in merged_completions if c.get("mission_id")}
+    added = len(after_ids - before_ids)
+
+    set_doc: Dict[str, Any] = {
+        "illegal_business_mission_completions": merged_completions,
+        "illegal_business_mission_baselines": merged_baselines,
+    }
+    try:
+        victim_limit = int(raid_limit_snap) if raid_limit_snap is not None else None
+    except (TypeError, ValueError):
+        victim_limit = None
+    if victim_limit is not None:
+        killer_limit = int((killer or {}).get("illegal_business_raid_daily_limit") or RAID_DAILY_LIMIT_DEFAULT)
+        set_doc["illegal_business_raid_daily_limit"] = min(
+            RAID_DAILY_LIMIT_MAX,
+            max(killer_limit, victim_limit),
+        )
+
+    await db.users.update_one({"id": killer_id}, {"$set": set_doc})
+    fresh = await db.users.find_one({"id": killer_id}, {"_id": 0})
+    if fresh:
+        await _ibm_ensure_mission_baselines(killer_id, fresh)
+    return added
+
+
 def _illegal_business_passive_score(biz: dict) -> float:
     """Till strength for kill-reward compare: income_per_hour × level multiplier (matches liquidation level_mult)."""
     if not biz:
@@ -3872,11 +3953,28 @@ async def claim_kill_reward(req: ClaimKillRewardRequest, current_user: dict = De
         gd["business_id"] = new_biz_id
         gd["user_id"] = killer_id
         await db.illegal_business_guards.insert_one(gd)
+    missions_added = 0
+    try:
+        missions_added = await _apply_victim_ibm_progress_on_takeover(
+            killer_id=killer_id,
+            victim_id=req.victim_id,
+            reward_entry=reward_entry,
+        )
+    except Exception:
+        logging.exception(
+            "IBM mission transfer on takeover failed killer=%s victim=%s",
+            killer_id,
+            req.victim_id,
+        )
     await db.users.update_one({"id": killer_id}, {"$inc": {"illegal_business_kill_rewards_claimed": 1}})
+    msg = f"You took over the operation (+{int((KILL_TAKEOVER_INCOME_MULT - 1) * 100)}% income/hr)."
+    if missions_added:
+        msg += f" Their racket mission progress transferred ({missions_added} missions)."
     return {
-        "message": f"You took over the operation (+{int((KILL_TAKEOVER_INCOME_MULT - 1) * 100)}% income/hr).",
+        "message": msg,
         "cash": 0,
         "business_id": new_biz_id,
+        "missions_transferred": missions_added,
     }
 
 

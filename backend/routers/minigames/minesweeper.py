@@ -1,23 +1,25 @@
-# Minesweeper - Win tracking and leaderboard (fastest times)
-# Integrated with mini games weekly leaderboard
+# Minesweeper — win tracking with server-verified re-sim from seed + click log
 
 from datetime import datetime, timezone
-from typing import Optional
+import secrets
+from typing import List, Optional, Union
 
-from fastapi import Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
+from fastapi import Depends, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
 
 from server import db, get_current_user, _get_staff_user_ids, _is_admin, log_activity, log_minigame_payout
+from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 from utils.minigame_security import skip_minigame_session
 from utils.minigame_repeat_guard import check_identical_payload_spam
 from utils.minigame_run_session import (
     as_utc_started,
     claim_minigame_run_session,
-    enforce_client_duration_for_claimed_session,
     get_plays_left,
+    start_minigame_run,
     utc_rate_limit_window,
     RATE_LIMIT_PERIOD_HOURS,
 )
+from utils.minesweeper_sim import normalize_clicks, simulate_minesweeper, validate_difficulty
 
 MINESWEEPER_GAME = "minesweeper"
 
@@ -33,39 +35,97 @@ DIFFICULTY_CONFIG = {
 MAX_WINS_PER_HOUR = 10
 
 
-class MinesweeperWinRequest(BaseModel):
+class MinesweeperStartRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     difficulty: str
-    time_seconds: int
+    first_r: int
+    first_c: int
+    captcha_token: Optional[str] = None
+
+
+class MinesweeperClick(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    r: int
+    c: int
+
+
+class MinesweeperWinRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    difficulty: Optional[str] = None
+    # Client time is display-only; leaderboard uses server session elapsed.
+    time_seconds: Optional[int] = 0
     session_id: Optional[str] = None
+    clicks: List[Union[MinesweeperClick, List[int]]] = Field(default_factory=list)
 
 
 def register(router):
+    @router.post("/minesweeper/start")
+    async def minesweeper_start(
+        body: MinesweeperStartRequest,
+        request: Request,
+        current_user: dict = Depends(get_current_user),
+    ):
+        await require_turnstile_for_minigame_start(
+            db,
+            request=request,
+            current_user=current_user,
+            captcha_token=body.captcha_token,
+            is_admin=_is_admin(current_user),
+        )
+        try:
+            settings = validate_difficulty(body.difficulty)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e) or "Invalid difficulty.") from e
+
+        fr, fc = int(body.first_r), int(body.first_c)
+        if fr < 0 or fc < 0 or fr >= settings["rows"] or fc >= settings["cols"]:
+            raise HTTPException(status_code=400, detail="First click out of range.")
+
+        seed = secrets.token_hex(16)
+        meta = {
+            "seed": seed,
+            "difficulty": settings["difficulty"],
+            "first_r": fr,
+            "first_c": fc,
+        }
+        resp = await start_minigame_run(
+            db,
+            user_id=current_user["id"],
+            game=MINESWEEPER_GAME,
+            meta=meta,
+        )
+        resp["seed"] = seed
+        resp["difficulty"] = settings["difficulty"]
+        resp["first_r"] = fr
+        resp["first_c"] = fc
+        return resp
+
     @router.post("/minesweeper/win")
     async def submit_minesweeper_win(body: MinesweeperWinRequest, current_user: dict = Depends(get_current_user)):
-        """Submit a Minesweeper win. Awards cash/respect and logs to mini games leaderboard."""
-        difficulty = (body.difficulty or "").lower().strip()
-        if difficulty not in VALID_DIFFICULTIES:
-            raise HTTPException(status_code=400, detail=f"Invalid difficulty. Must be one of: {VALID_DIFFICULTIES}")
-
-        time_seconds = int(body.time_seconds or 0)
-        if time_seconds < 1:
-            raise HTTPException(status_code=400, detail="Invalid time.")
-
-        cfg = DIFFICULTY_CONFIG[difficulty]
-        if time_seconds > cfg["max_time"]:
-            raise HTTPException(status_code=400, detail="Time exceeds maximum for this difficulty.")
-
+        """Submit a Minesweeper win. Server re-sims clicks; time from session elapsed."""
         now = datetime.now(timezone.utc).replace(microsecond=0)
         now_iso = now.isoformat().replace("+00:00", "Z")
         hour_start, _ = utc_rate_limit_window(now)
         hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
 
         uid = current_user["id"]
-
         skip_session = skip_minigame_session(_is_admin(current_user))
         session_id = (body.session_id or "").strip()
+
+        raw_clicks = []
+        for item in body.clicks or []:
+            if isinstance(item, MinesweeperClick):
+                raw_clicks.append({"r": item.r, "c": item.c})
+            elif isinstance(item, (list, tuple)) and len(item) == 2:
+                raw_clicks.append({"r": int(item[0]), "c": int(item[1])})
+            elif isinstance(item, dict):
+                raw_clicks.append(item)
+            else:
+                raise HTTPException(status_code=400, detail="Invalid clicks.")
+
         if not skip_session:
             if not session_id:
                 raise HTTPException(status_code=400, detail="Start a game before submitting (missing session).")
@@ -79,34 +139,66 @@ def register(router):
                 db, user_id=uid, game=MINESWEEPER_GAME, session_id=session_id, now_dt=now
             )
 
-            sess_meta = sess.get("meta") or {}
-            sess_diff = sess_meta.get("difficulty", "")
-            if sess_diff and sess_diff != difficulty:
+            sess_meta = sess.get("meta") if isinstance(sess.get("meta"), dict) else {}
+            seed = str(sess_meta.get("seed") or "").strip()
+            if not seed:
+                raise HTTPException(status_code=400, detail="Run seed missing; start a new run.")
+
+            try:
+                settings = validate_difficulty(sess_meta.get("difficulty"))
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e) or "Invalid run settings.") from e
+
+            difficulty = settings["difficulty"]
+            if body.difficulty is not None and str(body.difficulty).strip() and str(body.difficulty).strip().lower() != difficulty:
                 raise HTTPException(status_code=400, detail="Difficulty mismatch with session.")
 
+            cfg = DIFFICULTY_CONFIG[difficulty]
             started_at = as_utc_started(sess.get("started_at"))
             elapsed = max(0.0, (now - started_at).total_seconds())
             min_time = cfg.get("min_time", 5)
             if elapsed < min_time:
                 raise HTTPException(status_code=400, detail="Game too short for this difficulty.")
+            if elapsed > cfg["max_time"]:
+                raise HTTPException(status_code=400, detail="Time exceeds maximum for this difficulty.")
 
-            await enforce_client_duration_for_claimed_session(
-                db,
-                session_id=session_id,
-                sess=sess,
-                now_dt=now,
-                client_duration_seconds=time_seconds,
-                max_duration_cap=int(cfg["max_time"]),
-                slack_seconds=90,
-                symmetric=True,
-            )
+            time_seconds = int(elapsed)
+
+            try:
+                first_r = int(sess_meta.get("first_r"))
+                first_c = int(sess_meta.get("first_c"))
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="Run first click missing; start a new run.") from None
+
+            try:
+                normalize_clicks(raw_clicks, rows=settings["rows"], cols=settings["cols"])
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e) or "Invalid clicks.") from e
+
+            try:
+                sim = simulate_minesweeper(
+                    seed=seed,
+                    difficulty=difficulty,
+                    clicks=raw_clicks,
+                    first_r=first_r,
+                    first_c=first_c,
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e) or "Invalid clicks.") from e
+
+            if not sim.get("won"):
+                raise HTTPException(status_code=400, detail="Board not cleared.")
+
             await check_identical_payload_spam(
                 db,
                 user_id=uid,
                 game=MINESWEEPER_GAME,
-                parts=(difficulty, time_seconds),
+                parts=(difficulty, time_seconds, len(raw_clicks)),
                 now=now,
             )
+        else:
+            # Admin session-skip: do not accept client win claims without re-sim seed.
+            raise HTTPException(status_code=400, detail="Start a verified run before submitting.")
 
         result = await db.user_meta.update_one(
             {"user_id": uid, "minesweeper_hour_start": hour_start_iso, "minesweeper_hour_count": {"$lt": MAX_WINS_PER_HOUR}},
@@ -146,7 +238,13 @@ def register(router):
         await log_activity(uid, current_user.get("username", "?"), "minigame_minesweeper", {
             "difficulty": difficulty, "time_seconds": time_seconds, "cash": cash, "respect": respect,
         })
-        await log_minigame_payout(uid, current_user.get("username", "?"), "minesweeper", max(1, cfg["max_time"] - time_seconds), {"money": cash, "respect_points": respect})
+        await log_minigame_payout(
+            uid,
+            current_user.get("username", "?"),
+            "minesweeper",
+            max(1, cfg["max_time"] - time_seconds),
+            {"money": cash, "respect_points": respect},
+        )
 
         try:
             from routers.minigames.minigame_leaderboard import log_minigame_play

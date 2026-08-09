@@ -337,6 +337,7 @@ function lanesBlocked(s, spawnY) {
 
 export function spawnObstacle(s) {
   const preset = getPreset(s);
+  const rng = s.rng || Math.random;
   const alive = s.obstacles.filter((o) => !o.dead).length;
   if (alive >= (preset.maxObstacles ?? 5)) return;
 
@@ -346,18 +347,18 @@ export function spawnObstacle(s) {
   const free = [0, 1, 2].filter((l) => !blocked.has(l));
   if (free.length === 0) return;
 
-  const roll = Math.random();
+  const roll = rng();
   if (roll < 0.1 && free.length >= 2 && s.frame > (preset.graceFrames ?? 90) * 2) {
-    const l1 = free[Math.floor(Math.random() * free.length)];
+    const l1 = free[Math.floor(rng() * free.length)];
     const rest = free.filter((l) => l !== l1);
-    const l2 = rest[Math.floor(Math.random() * rest.length)];
+    const l2 = rest[Math.floor(rng() * rest.length)];
     s.obstacles.push({ lane: l1, y: spawnY, w: 48, h: 50, type: 'barrier', dead: false });
     s.obstacles.push({ lane: l2, y: spawnY, w: 52, h: 40, type: 'lowbar', dead: false });
     return;
   }
 
-  const lane = free[Math.floor(Math.random() * free.length)];
-  const t = Math.random();
+  const lane = free[Math.floor(rng() * free.length)];
+  const t = rng();
   const grace = preset.graceFrames ?? 90;
   const copRate = s.frame < grace * 2.5 ? 0.12 : 0.22;
   if (t < copRate) {
@@ -370,8 +371,9 @@ export function spawnObstacle(s) {
 }
 
 export function spawnCoins(s) {
-  const lane = Math.floor(Math.random() * 3);
-  const count = 4 + Math.floor(Math.random() * 3);
+  const rng = s.rng || Math.random;
+  const lane = Math.floor(rng() * 3);
+  const count = 4 + Math.floor(rng() * 3);
   const baseY = HORIZON_Y - 45;
   for (let i = 0; i < count; i++) {
     s.coinItems.push({
@@ -379,7 +381,7 @@ export function spawnCoins(s) {
       y: baseY - i * 42,
       r: 11,
       collected: false,
-      spin: Math.random() * Math.PI * 2,
+      spin: rng() * Math.PI * 2,
     });
   }
 }
