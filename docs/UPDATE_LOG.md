@@ -9,7 +9,7 @@
 [size=1.5][b][color=#2ECC71]2026-08-09 02:10 UTC[/color][/b] — [b]Old School Mafia chrome polish[/b][/size]
 [quote]
 [list]
-[*][color=#888888][b]Improved:[/b] [b]Old School Mafia[/b] now matches classic early-browser chrome: damask navy canvas, silver beveled panels, metal tab headers ([b]Main Menu[/b] / [b]Playerstats[/b]), and blue underlined category labels.[/color]
+[*][color=#888888][b]Improved:[/b] [b]Old School Mafia[/b] now matches classic early-browser chrome: flat navy canvas, silver beveled panels, metal tab headers ([b]Main Menu[/b] / [b]Playerstats[/b]), and blue underlined category labels.[/color]
 [*][color=#888888][b]Changed:[/b] Starting look accents lean chrome/steel-blue instead of flat deep-navy bars so boxes read as gun-metal plates.[/color]
 [/list]
 [/quote]

@@ -981,9 +981,9 @@ export function ThemeProvider({ children }) {
         localStorage.setItem(STORAGE_KEY_TEXTURE, 'modern-soft');
       } catch (_) {}
     } else if (v === 'old_school') {
-      setTextureIdState('crosshatch');
+      setTextureIdState('none');
       try {
-        localStorage.setItem(STORAGE_KEY_TEXTURE, 'crosshatch');
+        localStorage.setItem(STORAGE_KEY_TEXTURE, 'none');
       } catch (_) {}
     }
     try {
@@ -1020,7 +1020,7 @@ export function ThemeProvider({ children }) {
     const sidebarLayout = p.sidebarLayout || 'categorized_classic';
     const resolvedTexture = variant === 'modern'
       ? 'modern-soft'
-      : (variant === 'old_school' ? (texture || 'crosshatch') : texture);
+      : (variant === 'old_school' ? (texture || 'none') : texture);
 
     setColourIdState(colour);
     setTextureIdState(resolvedTexture);
