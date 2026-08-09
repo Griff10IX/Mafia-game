@@ -777,6 +777,16 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         pass
     if _jailbust_bonus_active(current_user):
         player_success_rate = min(0.95, player_success_rate + 0.10)
+    try:
+        from utils.loot_reclaimable_passives import BUFF_JAILBUST, get_reclaimable_passive_mults_from_user
+
+        player_success_rate = min(
+            0.95,
+            player_success_rate
+            + float(get_reclaimable_passive_mults_from_user(current_user).get(BUFF_JAILBUST) or 0.0),
+        )
+    except Exception:
+        pass
 
     _climate = get_location_climate()
     _state = current_user.get("current_state")

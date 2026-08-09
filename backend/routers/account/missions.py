@@ -238,7 +238,23 @@ def _get_user_progress_value(user: dict, req_key: str) -> int:
 
 def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[str, Any]]:
     """Return (met: bool, progress: dict with current/target/description)."""
-    req = mission.get("requirements") or {}
+    req = dict(mission.get("requirements") or {})
+    try:
+        from utils.loot_reclaimable_passives import BUFF_MISSION_REQ, get_reclaimable_passive_mults_from_user
+
+        rmult = float(get_reclaimable_passive_mults_from_user(user).get(BUFF_MISSION_REQ) or 1.0)
+        if rmult < 0.999:
+            eased = {}
+            for k, v in req.items():
+                if k in ("in_state", "complete_missions") or isinstance(v, (str, list, bool)):
+                    eased[k] = v
+                elif isinstance(v, (int, float)):
+                    eased[k] = max(1, int(round(int(v) * rmult)))
+                else:
+                    eased[k] = v
+            req = eased
+    except Exception:
+        pass
     comp = _user_completed_mission_ids(user)
     progress = {}
 
@@ -439,6 +455,17 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
         mission_unlocked = _mission_unlocked_by_previous(m, completed_ids)
         requirements_met_final = met and mission_unlocked
         prev = _previous_mission(m)
+        tribute_cash_mult = 1.0
+        try:
+            from utils.loot_reclaimable_passives import BUFF_TRIBUTE_CASH, get_reclaimable_passive_mults_from_user
+
+            tribute_cash_mult = float(
+                get_reclaimable_passive_mults_from_user(current_user).get(BUFF_TRIBUTE_CASH) or 1.0
+            )
+        except Exception:
+            pass
+        reward_tribute_daily_out = int(round(int(m.get("reward_tribute_daily") or 0) * tribute_cash_mult))
+        reward_tribute_out = int(round(int(m.get("reward_tribute") or 0) * tribute_cash_mult))
         missions_out.append({
             "id": m["id"],
             "city": m["city"],
@@ -449,11 +476,11 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
             "description": m["description"],
             "reward_money": m.get("reward_money", 0),
             "reward_cash_immediate": m.get("reward_cash_immediate", 0),
-            "reward_tribute_daily": m.get("reward_tribute_daily", 0),
+            "reward_tribute_daily": reward_tribute_daily_out,
             "reward_respect_daily": m.get("reward_respect_daily", 0),
             "reward_points": m.get("reward_points", 0),
             "reward_respect": m.get("reward_respect", 0),
-            "reward_tribute": m.get("reward_tribute", 0),
+            "reward_tribute": reward_tribute_out,
             "reward_car_id": m.get("reward_car_id"),
             "reward_car_ids": m.get("reward_car_ids") or [],
             "reward_booze": m.get("reward_booze"),
@@ -551,6 +578,15 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         mission_unlocked = _mission_unlocked_by_previous(m, completed_ids)
         requirements_met_final = met and mission_unlocked
         prev = _previous_mission(m)
+        tribute_cash_mult = 1.0
+        try:
+            from utils.loot_reclaimable_passives import BUFF_TRIBUTE_CASH, get_reclaimable_passive_mults_from_user
+
+            tribute_cash_mult = float(
+                get_reclaimable_passive_mults_from_user(current_user).get(BUFF_TRIBUTE_CASH) or 1.0
+            )
+        except Exception:
+            pass
         entry = {
             "id": m["id"],
             "area": m["area"],
@@ -560,11 +596,11 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
             "description": m["description"],
             "reward_money": m.get("reward_money", 0),
             "reward_cash_immediate": m.get("reward_cash_immediate", 0),
-            "reward_tribute_daily": m.get("reward_tribute_daily", 0),
+            "reward_tribute_daily": int(round(int(m.get("reward_tribute_daily") or 0) * tribute_cash_mult)),
             "reward_respect_daily": m.get("reward_respect_daily", 0),
             "reward_points": m.get("reward_points", 0),
             "reward_respect": m.get("reward_respect", 0),
-            "reward_tribute": m.get("reward_tribute", 0),
+            "reward_tribute": int(round(int(m.get("reward_tribute") or 0) * tribute_cash_mult)),
             "reward_car_id": m.get("reward_car_id"),
             "reward_car_ids": m.get("reward_car_ids") or [],
             "reward_booze": m.get("reward_booze"),
@@ -687,6 +723,17 @@ def _build_mission_completion_reward_update(
     reward_points = int((mission.get("reward_points") or 0) * mult)
     reward_respect = int((mission.get("reward_respect") or 0) * mult)
     reward_tribute = int((mission.get("reward_tribute") or 0) * mult)
+    try:
+        from utils.loot_reclaimable_passives import BUFF_TRIBUTE_CASH, get_reclaimable_passive_mults_from_user
+
+        reward_tribute = int(
+            round(
+                reward_tribute
+                * float(get_reclaimable_passive_mults_from_user(current_user).get(BUFF_TRIBUTE_CASH) or 1.0)
+            )
+        )
+    except Exception:
+        pass
     reward_car_id = (mission.get("reward_car_id") or "").strip() or None
     reward_car_ids = mission.get("reward_car_ids") or []
     reward_booze = mission.get("reward_booze")
@@ -1064,26 +1111,43 @@ async def run_daily_tribute_deposit():
         loot = int(m.get("reward_tribute_loot_box_pieces_daily") or 0)
         tokens = int(m.get("reward_tribute_tokens_daily") or 0)
         auto_rank_tokens = int(m.get("reward_tribute_auto_rank_2h_daily") or 0)
-        inc = {}
-        if cash:
-            inc["tribute_bank"] = cash
+        inc_shared = {}
         if respect:
-            inc["tribute_respect"] = respect
+            inc_shared["tribute_respect"] = respect
         if bullets:
-            inc["tribute_bullets"] = bullets
+            inc_shared["tribute_bullets"] = bullets
         if loot:
-            inc["tribute_loot_box_pieces"] = loot
+            inc_shared["tribute_loot_box_pieces"] = loot
         if tokens:
-            inc["tribute_tokens"] = tokens
+            inc_shared["tribute_tokens"] = tokens
         if auto_rank_tokens:
-            inc["auto_rank_2h_tokens"] = auto_rank_tokens
-        if not inc:
+            inc_shared["auto_rank_2h_tokens"] = auto_rank_tokens
+        if not cash and not inc_shared:
             continue
-        r = await db.users.update_many(
-            {"mission_completions": {"$elemMatch": {"mission_id": mid}}},
-            {"$inc": inc},
-        )
-        counts[mid] = r.modified_count
+        completed_filter = {"mission_completions": {"$elemMatch": {"mission_id": mid}}}
+        modified = 0
+        if cash:
+            # Tribute Medallion: +10% daily tribute cash for holders only
+            cash_boosted = int(round(cash * 1.10))
+            r_plain = await db.users.update_many(
+                {
+                    **completed_filter,
+                    "loot_reclaimable_passive_ids": {"$nin": ["tribute_medallion"]},
+                },
+                {"$inc": {**inc_shared, "tribute_bank": cash}},
+            )
+            r_medal = await db.users.update_many(
+                {
+                    **completed_filter,
+                    "loot_reclaimable_passive_ids": "tribute_medallion",
+                },
+                {"$inc": {**inc_shared, "tribute_bank": cash_boosted}},
+            )
+            modified = int(r_plain.modified_count or 0) + int(r_medal.modified_count or 0)
+        else:
+            r = await db.users.update_many(completed_filter, {"$inc": inc_shared})
+            modified = int(r.modified_count or 0)
+        counts[mid] = modified
     
     # "Completed it" perk: Award 5 of each token type daily
     completed_it_token_inc = {

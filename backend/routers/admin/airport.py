@@ -238,6 +238,14 @@ def _effective_airport_points(
             p = max(1, round(p * 0.9))
     if _travel_token_active(user, now_utc):
         p = max(1, round(p * 0.9))
+    try:
+        from utils.loot_reclaimable_passives import BUFF_TRAVEL_COST, get_reclaimable_passive_mults_from_user
+
+        tmult = float(get_reclaimable_passive_mults_from_user(user).get(BUFF_TRAVEL_COST) or 1.0)
+        if tmult < 0.999:
+            p = max(1, round(p * tmult))
+    except Exception:
+        pass
     return p
 
 

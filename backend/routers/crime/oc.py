@@ -642,9 +642,21 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
             pass
     # Prestige bonus: boost OC cash payout for the initiating user
     from server import get_prestige_bonus
-    _prestige_user = await db.users.find_one({"id": uid}, {"_id": 0, "prestige_level": 1})
+    _prestige_user = await db.users.find_one(
+        {"id": uid},
+        {"_id": 0, "prestige_level": 1, "loot_reclaimable_passive_ids": 1},
+    )
     _oc_mult = get_prestige_bonus(_prestige_user or {})["oc_mult"]
     cash_pool = int(cash_pool * _oc_mult)
+    try:
+        from utils.loot_reclaimable_passives import BUFF_OC_PAYOUT, get_reclaimable_passive_mults_from_user
+
+        cash_pool = int(
+            cash_pool
+            * float(get_reclaimable_passive_mults_from_user(_prestige_user or {}).get(BUFF_OC_PAYOUT) or 1.0)
+        )
+    except Exception:
+        pass
     # Badge bonus: 0.1% per OC heists badge; prestige: 0.5% boost per level
     try:
         from routers.game.achievements import get_badge_bonuses

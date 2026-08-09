@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Gift, X, Package, Swords, Car, Shield, Building2, Coins, Zap, Save, Puzzle, Leaf } from 'lucide-react';
+import { Gift, X, Package, Swords, Car, Shield, Building2, Coins, Zap, Save, Puzzle, Leaf, Gem } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import {
@@ -349,6 +349,7 @@ function RewardIcon({ type, rarity, animLevel = 0 }) {
     property: Building2, cash: Coins,
     points: Zap, rank_points: Zap, perk: Zap,
     bullets: Package, cars: Car, token: Gift, loot_pieces: Puzzle,
+    weed_strain: Leaf, reclaimable_passive: Gem,
   };
   const Icon = iconMap[type] || Gift;
   let wrap = 'bg-primary/10 border-primary/30';
@@ -387,6 +388,10 @@ function rewardLabel(reward) {
     case 'armour':    return reward.name || 'Exclusive armour';
     case 'property':  return reward.name || 'Speakeasy';
     case 'weed_strain': return reward.name || 'Exclusive weed strain';
+    case 'reclaimable_passive': {
+      const buff = reward.buff_label ? ` — ${reward.buff_label}` : '';
+      return `${reward.name || 'Vault relic'}${buff}`;
+    }
     case 'points': {
       const amt = reward.amount ?? reward.points ?? reward.value;
       return `${fmtInt(amt)} points`;
@@ -1091,6 +1096,13 @@ export default function LootBox() {
   const tierTheme = LOOT_TIER_THEME[selectedTier] || LOOT_TIER_THEME.common;
   const claimed = status?.claimed_counts ?? { weapon: 0, car: 0, car_sj: 0, armour: 0, property: 0, weed_strain: 0 };
   const exclusiveCaps = status?.exclusive_caps ?? { weapon: 1, car: 1, car_sj: 1, armour: 1, property: 1, weed_strain: 5 };
+  const reclaimableCatalog = status?.reclaimable_passives_catalog ?? [];
+  const reclaimableLive = status?.reclaimable_passives ?? [];
+  const reclaimableById = Object.fromEntries(
+    (Array.isArray(reclaimableLive) ? reclaimableLive : []).map((r) => [r.id, r]),
+  );
+  const ownedRelicIds = new Set(status?.owned_reclaimable_passive_ids || []);
+  const ownedRelics = reclaimableCatalog.filter((r) => ownedRelicIds.has(r.id));
   const canUseFreeRare = selectedTier === 'rare' && freeRareOpens > 0;
   const canOpen = (pieces >= tierCost || canUseFreeRare) && phase === 'idle';
 
@@ -1235,6 +1247,46 @@ export default function LootBox() {
                   <ScarcityRow icon={Building2} label="Speakeasy" claimed={claimed.property} cap={exclusiveCaps.property} />
                   <ScarcityRow icon={Leaf} label="Weed Empire specials" claimed={claimed.weed_strain} cap={exclusiveCaps.weed_strain} />
                 </ul>
+                {reclaimableCatalog.length > 0 && (
+                  <div className="mt-1.5 pt-1.5 border-t border-primary/15">
+                    <p className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em] text-center mb-0.5">
+                      Vault Relics
+                    </p>
+                    <p className="text-[9px] text-mutedForeground font-heading italic text-center mb-1 leading-snug">
+                      Globally unique passives (cap 1 each). Returns to vaults if the holder is killed — not transferred.
+                    </p>
+                    <ul className="list-none p-0 m-0 flex flex-col gap-0.5">
+                      {reclaimableCatalog.map((item) => {
+                        const live = reclaimableById[item.id] || {};
+                        const label = item.buff_label
+                          ? `${item.name} (${item.buff_label})`
+                          : item.name;
+                        return (
+                          <ScarcityRow
+                            key={item.id}
+                            icon={Gem}
+                            label={label}
+                            claimed={Number(live.claimed ?? 0)}
+                            cap={Number(live.cap ?? item.cap ?? 1)}
+                          />
+                        );
+                      })}
+                    </ul>
+                    {ownedRelics.length > 0 && (
+                      <div className="mt-1.5 px-2 py-1 rounded border border-amber-500/25 bg-amber-500/5">
+                        <p className="text-[9px] font-heading font-bold text-amber-200/90 uppercase tracking-[0.08em] mb-0.5">
+                          Your vault relic
+                        </p>
+                        {ownedRelics.map((r) => (
+                          <p key={r.id} className="text-[10px] font-heading text-foreground leading-snug">
+                            {r.name}
+                            {r.buff_label ? ` — ${r.buff_label}` : ''}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="lb-art-line text-primary mx-2.5" />
             </div>

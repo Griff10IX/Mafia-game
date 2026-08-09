@@ -179,6 +179,17 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     now = datetime.now(timezone.utc)
     matures = now + timedelta(hours=hours)
     interest = int(round(amount * rate))
+    try:
+        from utils.loot_reclaimable_passives import BUFF_BANK_INTEREST, get_reclaimable_passive_mults_from_user
+
+        interest = int(
+            round(
+                interest
+                * float(get_reclaimable_passive_mults_from_user(current_user).get(BUFF_BANK_INTEREST) or 1.0)
+            )
+        )
+    except Exception:
+        pass
 
     deposit_id = str(uuid.uuid4())
     result = await db.users.update_one(

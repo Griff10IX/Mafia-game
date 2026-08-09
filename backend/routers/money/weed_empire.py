@@ -285,13 +285,21 @@ async def _attach_exclusive_owned(farm: dict) -> dict:
     try:
         u = await db.users.find_one(
             {"id": uid},
-            {"_id": 0, "game_pass_weed_strain_ids": 1, "rank_xp_pass_rewards_granted": 1, "rank_xp_pass_token_expires_at": 1},
+            {
+                "_id": 0,
+                "game_pass_weed_strain_ids": 1,
+                "rank_xp_pass_rewards_granted": 1,
+                "rank_xp_pass_token_expires_at": 1,
+                "loot_reclaimable_passive_ids": 1,
+            },
         )
         farm["_gp_owned_ids"] = owned_game_pass_strain_ids(u)
         farm["_gp_active_vip"] = vip_game_pass_entitlement_active(u or {})
+        farm["_loot_reclaimable_passive_ids"] = list((u or {}).get("loot_reclaimable_passive_ids") or [])
     except Exception:
         farm["_gp_owned_ids"] = set()
         farm["_gp_active_vip"] = False
+        farm["_loot_reclaimable_passive_ids"] = []
     return farm
 
 
@@ -1275,13 +1283,22 @@ def _ensure_daily_cap(farm: dict) -> dict:
 
 
 def _daily_withdraw_cap(farm: dict) -> int:
-    """Effective daily withdraw cap (Wedding Cake Game Pass strain)."""
+    """Effective daily withdraw cap (Wedding Cake Game Pass strain + Distributor's Badge)."""
     base = int(DAILY_WITHDRAW_CAP_USD)
     gp = set(farm.get("_gp_owned_ids") or [])
-    if GP_WEDDING_CAKE not in gp:
-        return base
-    mult = GP_WITHDRAW_MULT_ACTIVE_VIP if farm.get("_gp_active_vip") else GP_WITHDRAW_MULT_PERMANENT
-    return int(round(base * mult))
+    if GP_WEDDING_CAKE in gp:
+        mult = GP_WITHDRAW_MULT_ACTIVE_VIP if farm.get("_gp_active_vip") else GP_WITHDRAW_MULT_PERMANENT
+        base = int(round(base * mult))
+    try:
+        from utils.loot_reclaimable_passives import BUFF_WEED_WITHDRAW, get_reclaimable_passive_mults_from_user
+
+        user_stub = {"loot_reclaimable_passive_ids": farm.get("_loot_reclaimable_passive_ids") or []}
+        wmult = float(get_reclaimable_passive_mults_from_user(user_stub).get(BUFF_WEED_WITHDRAW) or 1.0)
+        if wmult > 1.001:
+            base = int(round(base * wmult))
+    except Exception:
+        pass
+    return base
 
 
 def _upgrade_cost_mult(farm: dict) -> float:

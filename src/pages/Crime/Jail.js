@@ -6,6 +6,13 @@ import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 import { warmProfilePrefetchFromUsername } from '../../utils/profileNavPrefetch';
+import { useAuthUser } from '../../context/AuthContext';
+import {
+  jailStatusFromAuthUser,
+  prefetchJailPageData,
+  readJailBootstrap,
+  writeJailBootstrap,
+} from '../../utils/jailPageWarm';
 const DEFAULT_MOD_COLOR = '#1e3a5f';
 
 const JAIL_STYLES = `
@@ -19,9 +26,6 @@ const JAIL_FADE_STYLES = `
   .j-fade-in { animation: j-fade-in 0.4s ease-out both; }
 `;
 let _jailIntroPlayed = false;
-// In-memory bootstrap (no TTL) so route revisits paint instantly even after the
-// sessionStorage cache expires; a fresh fetch always follows on mount.
-let _memJailBoot = null;
 
 // Card background (jail cell). Override: REACT_APP_JAIL_BACKGROUND_IMAGE in .env
 const JAIL_BACKGROUND_IMAGE =
@@ -33,8 +37,15 @@ const JAIL_BUST_MIN_INTERVAL_SEC = 3;
 
 /** While the Jail page is visible — polling is collapsed into one /jail/players call that also returns status. */
 const JAIL_PLAYERS_POLL_MS = 6000;
-const JAIL_BOOTSTRAP_CACHE_KEY = 'jail_bootstrap_cache_v1';
-const JAIL_BOOTSTRAP_CACHE_MAX_AGE_MS = 30 * 1000;
+
+// Warm jail cell art so the status card does not flash empty/default chrome.
+try {
+  if (typeof Image !== 'undefined' && JAIL_BACKGROUND_IMAGE) {
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = JAIL_BACKGROUND_IMAGE;
+  }
+} catch (_e) { /* ignore */ }
 
 function parseBustWaitSecondsFromDetail(detail) {
   const s =
@@ -47,31 +58,6 @@ function parseBustWaitSecondsFromDetail(detail) {
   if (!m) return null;
   const n = parseInt(m[1], 10);
   return Number.isFinite(n) && n >= 1 ? n : null;
-}
-
-function readCachedJailBootstrap() {
-  try {
-    if (typeof window === 'undefined') return null;
-    const raw = window.sessionStorage.getItem(JAIL_BOOTSTRAP_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || !parsed.data) return null;
-    if (typeof parsed.savedAt !== 'number' || Date.now() - parsed.savedAt > JAIL_BOOTSTRAP_CACHE_MAX_AGE_MS) return null;
-    return parsed.data;
-  } catch (_e) {
-    return null;
-  }
-}
-
-function writeCachedJailBootstrap(data) {
-  if (data) _memJailBoot = data;
-  try {
-    if (typeof window === 'undefined' || !data) return;
-    window.sessionStorage.setItem(
-      JAIL_BOOTSTRAP_CACHE_KEY,
-      JSON.stringify({ savedAt: Date.now(), data }),
-    );
-  } catch (_e) { /* storage disabled/quota is non-fatal */ }
 }
 
 const JailStatusCard = ({ 
@@ -89,7 +75,22 @@ const JailStatusCard = ({
   currentReward,
   onSnitchClick,
   snitching,
+  statusPending,
 }) => {
+  // Avoid Free ↔ Jail layout flip while bootstrap is still resolving.
+  if (statusPending && !inJail) {
+    return (
+      <div className="relative border border-primary/30 rounded-md overflow-hidden w-full max-w-sm mx-auto min-h-[88px]">
+        <div className="absolute inset-0 bg-zinc-950/80" aria-hidden />
+        <div className="relative z-10 p-3 flex flex-col items-center justify-center gap-1.5">
+          <div className="h-3 w-28 rounded bg-zinc-700/60" />
+          <div className="h-6 w-16 rounded bg-zinc-700/40" />
+          <div className="h-2.5 w-40 rounded bg-zinc-800/50" />
+        </div>
+      </div>
+    );
+  }
+
   if (inJail) {
     return (
       <div className="relative border-2 border-red-500/60 rounded-md overflow-hidden w-full max-w-sm mx-auto">
@@ -380,11 +381,13 @@ const InfoSection = () => (
 
 // Main component
 export default function Jail() {
-  const cachedBoot = readCachedJailBootstrap() || _memJailBoot;
+  const authUser = useAuthUser();
+  const cachedBoot = readJailBootstrap();
   const animateIn = useRef(!_jailIntroPlayed).current;
   useEffect(() => { _jailIntroPlayed = true; }, []);
   const cachedPlayers = cachedBoot?.players || {};
-  const [jailStatus, setJailStatus] = useState(cachedBoot?.status || { in_jail: false });
+  const seededStatus = cachedBoot?.status || jailStatusFromAuthUser(authUser);
+  const [jailStatus, setJailStatus] = useState(seededStatus || { in_jail: false });
   const [jailedPlayers, setJailedPlayers] = useState(() => (
     Array.isArray(cachedPlayers.players) ? cachedPlayers.players : []
   ));
@@ -455,14 +458,15 @@ export default function Jail() {
 
   const fetchJailData = async () => {
     try {
-      const bootRes = await api.get('/jail/bootstrap');
-      const boot = bootRes?.data || {};
-      applyJailBootstrap(boot);
-      writeCachedJailBootstrap(boot);
+      const boot = (await prefetchJailPageData({ force: true })) || {};
+      if (boot && (boot.status || boot.players || boot.stats)) {
+        applyJailBootstrap(boot);
+        writeJailBootstrap(boot);
+      }
       setInitialLoading(false);
     } catch (error) {
       console.error('Failed to load jail data:', error);
-      if (!cachedBoot) {
+      if (!cachedBoot && !authUser?.in_jail) {
         toast.error('Failed to load jail data');
         setJailStatus({ in_jail: false });
         setJailedPlayers([]);
@@ -562,6 +566,27 @@ export default function Jail() {
       setBustRewardInput(String(jailStatus.bust_reward_cash));
     }
   }, [jailStatus.bust_reward_cash, bustRewardInput]);
+
+  // Local countdown so seeded auth jail_until stays live between polls.
+  useEffect(() => {
+    if (!jailStatus.in_jail) return undefined;
+    const id = window.setInterval(() => {
+      setJailStatus((s) => {
+        if (!s?.in_jail) return s;
+        const until = s.jail_until;
+        if (until) {
+          const left = Math.max(0, Math.ceil((new Date(until).getTime() - Date.now()) / 1000));
+          if (left === (s.seconds_remaining ?? 0)) return s;
+          if (left <= 0) return { ...s, in_jail: false, seconds_remaining: 0 };
+          return { ...s, seconds_remaining: left };
+        }
+        const cur = Math.max(0, Number(s.seconds_remaining) || 0);
+        if (cur <= 0) return { ...s, in_jail: false, seconds_remaining: 0 };
+        return { ...s, seconds_remaining: cur - 1 };
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [jailStatus.in_jail]);
 
   const leaveJail = async () => {
     setLeavingJail(true);
@@ -750,7 +775,7 @@ export default function Jail() {
       </div>
 
       <JailStatusCard
-        inJail={jailStatus.in_jail}
+        inJail={!!jailStatus.in_jail}
         secondsRemaining={jailStatus.seconds_remaining}
         bustRewardInput={bustRewardInput}
         onBustRewardChange={setBustRewardInput}
@@ -760,10 +785,11 @@ export default function Jail() {
         leavingJail={leavingJail}
         onBailoutToken={bailoutWithToken}
         bailingOut={bailingOut}
-        bailoutTokens={Number(user?.jail_bailout_tokens || 0)}
+        bailoutTokens={Number(user?.jail_bailout_tokens || authUser?.jail_bailout_tokens || 0)}
         currentReward={jailStatus.bust_reward_cash ?? 0}
         onSnitchClick={() => setShowSnitchModal(true)}
         snitching={snitching}
+        statusPending={initialLoading && !jailStatus.in_jail && !cachedBoot}
       />
 
       {/* Snitch modal (when in jail) */}

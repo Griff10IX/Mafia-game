@@ -317,6 +317,12 @@ async def ensure_all_indexes(db):
             await ensure_exclusive_weed_strain_indexes(db)
         except Exception as e:
             logger.warning("exclusive_weed_strains indexes: %s", e)
+        try:
+            from utils.loot_reclaimable_passives import ensure_indexes as ensure_loot_reclaimable_indexes
+
+            await ensure_loot_reclaimable_indexes(db)
+        except Exception as e:
+            logger.warning("loot_reclaimable_passives indexes: %s", e)
         await db.bullet_factory.create_index("owner_id")
         await db.bullet_factory.create_index("state")
         await db.garage_dealership.create_index("owner_id", unique=True, sparse=True)

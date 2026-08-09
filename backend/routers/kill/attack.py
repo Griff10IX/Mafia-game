@@ -2302,6 +2302,14 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     loot_exclusive_weapon_bullet_discount = equipped_id == LOOT_EXCLUSIVE_WEAPON_ID
     if loot_exclusive_weapon_bullet_discount:
         bullets_required = max(1, int(round(bullets_required * LOOT_EXCLUSIVE_WEAPON_ATTACK_BULLET_MULT)))
+    try:
+        from utils.loot_reclaimable_passives import BUFF_KILL_BULLETS, get_reclaimable_passive_mults_from_user
+
+        kmult = float(get_reclaimable_passive_mults_from_user(current_user).get(BUFF_KILL_BULLETS) or 1.0)
+        if kmult < 0.999:
+            bullets_required = max(1, int(round(bullets_required * kmult)))
+    except Exception:
+        pass
     # "Completed it" perk: 65% fewer bullets needed when attacking
     completed_it_discount = bool(current_user.get("completed_it_bullet_reduction"))
     if completed_it_discount:
@@ -2748,6 +2756,14 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         bullets_required = int(math.ceil(bullets_required * exclusive_car_bullet_mult))
     if equipped_weapon_id == LOOT_EXCLUSIVE_WEAPON_ID:
         bullets_required = max(1, int(round(bullets_required * LOOT_EXCLUSIVE_WEAPON_ATTACK_BULLET_MULT)))
+    try:
+        from utils.loot_reclaimable_passives import BUFF_KILL_BULLETS, get_reclaimable_passive_mults_from_user
+
+        kmult = float(get_reclaimable_passive_mults_from_user(current_user).get(BUFF_KILL_BULLETS) or 1.0)
+        if kmult < 0.999:
+            bullets_required = max(1, int(round(bullets_required * kmult)))
+    except Exception:
+        pass
     # "Completed it" perk: 65% fewer bullets needed when attacking
     if current_user.get("completed_it_bullet_reduction"):
         bullets_required = max(1, int(bullets_required * 0.35))
@@ -3632,6 +3648,23 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         except Exception:
             logger.exception(
                 "exclusive weed strain kill transfer failed victim=%s killer=%s",
+                victim_id,
+                killer_id,
+            )
+        # Vault relics (reclaimable passives): return to loot pool — do not transfer to killer
+        try:
+            from utils.loot_reclaimable_passives import reclaim_on_kill
+
+            await reclaim_on_kill(
+                db,
+                victim_id=victim_id,
+                victim_username=target_name,
+                killer_id=killer_id,
+                send_notification=send_notification,
+            )
+        except Exception:
+            logger.exception(
+                "reclaimable vault relic kill reclaim failed victim=%s killer=%s",
                 victim_id,
                 killer_id,
             )

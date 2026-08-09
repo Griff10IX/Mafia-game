@@ -10,6 +10,7 @@ import api, {
   apiGetWithResumeRetries,
   shouldSuppressResumeNetworkToast,
   STAFF_ADMIN_API_FORBIDDEN_EVENT,
+  APP_NAVIGATE_EVENT,
 } from '../utils/api';
 import { setToastMutedPages } from '../utils/toastPageMutes';
 import { clearStaffPortalSession, isStaffPortalTokenValid } from '../utils/staffPortalSession';
@@ -21,6 +22,7 @@ import { preloadRoute, preloadRouteHandlers } from '../utils/routePreload';
 import { prefetchTravelPageData } from '../utils/travelPageWarm';
 import { prefetchStatsAndObjectivesData } from '../utils/statsObjectivesWarm';
 import { prefetchMissionsPageData } from '../utils/missionsPageWarm';
+import { prefetchJailPageData } from '../utils/jailPageWarm';
 import { scheduleMobileLightPrewarm } from '../utils/mobileLightPrewarm';
 import { AuthContext } from '../context/AuthContext';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
@@ -348,11 +350,13 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown,
   const warmMyStats = path === '/account/stats' || path === '/my-stats';
   const warmMissions = path === '/account/missions' || path === '/missions';
   const warmCrimes = path === '/crime/crimes';
+  const warmJail = path === '/crime/jail';
   const warmPointer = () => {
     preload.onPointerDown();
     if (warmTravel) prefetchTravelPageData({ force: false }).catch(() => {});
     if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
     if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
+    if (warmJail) prefetchJailPageData({ force: false }).catch(() => {});
     if (warmCrimes && !getCrimesPrefetch()) {
       api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {});
     }
@@ -362,6 +366,7 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown,
     preloadRoute(path);
     if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
     if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
+    if (warmJail) prefetchJailPageData({ force: false }).catch(() => {});
     if (location.pathname === path && (location.search || '') === search) {
       e.preventDefault();
       window.dispatchEvent(new CustomEvent(SAME_ROUTE_NAV_CLICK, { detail: { pathname: path, search } }));
@@ -386,6 +391,7 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown,
         if (warmTravel) prefetchTravelPageData({ force: false }).catch(() => {});
         if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
         if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
+        if (warmJail) prefetchJailPageData({ force: false }).catch(() => {});
         if (onMouseEnter) onMouseEnter(e);
       }}
       onFocus={(e) => {
@@ -393,6 +399,7 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown,
         if (warmTravel) prefetchTravelPageData({ force: false }).catch(() => {});
         if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
         if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
+        if (warmJail) prefetchJailPageData({ force: false }).catch(() => {});
         if (onFocus) onFocus(e);
       }}
     />
@@ -999,6 +1006,30 @@ export default function Layout({ children }) {
     };
   }, []); // eslint-disable-line
 
+  // Soft SPA navigate from axios / non-React helpers (e.g. jail 403) — avoid full reload theme flash.
+  useEffect(() => {
+    const onAppNavigate = (event) => {
+      const detail = event?.detail || {};
+      const to = detail.to;
+      if (!to) return;
+      try {
+        if (typeof detail.markHandled === 'function') detail.markHandled();
+        if (detail.replace) navigate(to, { replace: true });
+        else navigate(to);
+      } catch (_) { /* fall through to navigateApp hard fallback */ }
+    };
+    window.addEventListener(APP_NAVIGATE_EVENT, onAppNavigate);
+    return () => window.removeEventListener(APP_NAVIGATE_EVENT, onAppNavigate);
+  }, [navigate]);
+
+  // When jailed, warm Jail chunk + bootstrap so opening /crime/jail does not flash Free layout.
+  useEffect(() => {
+    if (!user?.in_jail) return undefined;
+    preloadRoute('/crime/jail');
+    prefetchJailPageData({ force: false }).catch(() => {});
+    return undefined;
+  }, [user?.in_jail]);
+
   const refreshUserDebounceRef = useRef(null);
   useEffect(() => {
     const runRefresh = async ({ light = false } = {}) => {
@@ -1022,6 +1053,11 @@ export default function Layout({ children }) {
       const detail = event.detail || {};
       if (detail.money != null) {
         setUser((prev) => (prev ? { ...prev, money: Number(detail.money) } : null));
+      }
+      if (detail.in_jail === true) {
+        setUser((prev) => (prev ? { ...prev, in_jail: true } : null));
+      } else if (detail.in_jail === false) {
+        setUser((prev) => (prev ? { ...prev, in_jail: false, jail_until: null } : null));
       }
       if (detail.points != null) {
         setUser((prev) => (prev ? { ...prev, points: Number(detail.points) } : null));

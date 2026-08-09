@@ -467,9 +467,17 @@ def _active_rewards_from_user(user: dict) -> List[Dict[str, Any]]:
 
 
 async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
+    from utils.loot_reclaimable_passives import (
+        catalog_public,
+        claimed_counts_live,
+        user_owned_item_ids,
+    )
+
     pieces = int(current_user.get("loot_box_pieces") or 0)
     claimed = await _get_claimed_counts()
     claimed["car_sj"] = await _model_sj_claimed_live()
+    reclaimable = await claimed_counts_live(db)
+    owned_relics = sorted(await user_owned_item_ids(db, current_user.get("id") or ""))
     active_rewards = _active_rewards_from_user(current_user)
     last_10_wins = list(current_user.get("loot_box_recent") or [])[-10:]
     last_10_wins.reverse()  # newest first for display
@@ -487,6 +495,9 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
             "property": _exclusive_cap("property"),
             "weed_strain": _exclusive_cap("weed_strain"),
         },
+        "reclaimable_passives": list(reclaimable.values()),
+        "reclaimable_passives_catalog": catalog_public(),
+        "owned_reclaimable_passive_ids": owned_relics,
         "active_rewards": active_rewards,
         "last_10_wins": last_10_wins,
         "reward_info": _loot_public_reward_info(),
@@ -1036,6 +1047,11 @@ async def open_loot_box(
                         grant_exclusive_weed_strain,
                         list_unowned_exclusive_strain_ids,
                     )
+                    from utils.loot_reclaimable_passives import (
+                        grant_to_user as grant_reclaimable_passive,
+                        list_unowned_item_ids as list_unowned_reclaimable_ids,
+                        user_owns_any as user_owns_reclaimable_passive,
+                    )
 
                     available = []
                     if claimed["weapon"] < _exclusive_cap("weapon") and not await _user_has_loot_exclusive_weapon(user_id):
@@ -1054,6 +1070,10 @@ async def open_loot_box(
                         and claimed.get("weed_strain", 0) < _exclusive_cap("weed_strain")
                     ):
                         available.append("weed_strain")
+                    unowned_relics = await list_unowned_reclaimable_ids(db)
+                    user_owns_relic = await user_owns_reclaimable_passive(db, user_id)
+                    if unowned_relics and not user_owns_relic:
+                        available.append("reclaimable_passive")
                     # Admin at 100% exclusive: if nothing available (cap or already have), still grant an exclusive for testing (skip property if user already has one to avoid duplicate key)
                     if is_admin_test and exclusive_chance >= 1.0 and not available:
                         available = ["weapon", "armour"]
@@ -1061,6 +1081,8 @@ async def open_loot_box(
                             available.append("property")
                         if unowned_weed and not user_owns_weed:
                             available.append("weed_strain")
+                        if unowned_relics and not user_owns_relic:
+                            available.append("reclaimable_passive")
                     if available:
                         typ = _rng.choice(available)
                         if typ == "weapon":
@@ -1157,6 +1179,31 @@ async def open_loot_box(
                                 "rarity": "loot_exclusive",
                                 "reward_tier": "loot_exclusive",
                             })
+                            continue
+                        if typ == "reclaimable_passive":
+                            if await user_owns_reclaimable_passive(db, user_id):
+                                continue
+                            pool = unowned_relics or await list_unowned_reclaimable_ids(db)
+                            if not pool:
+                                continue
+                            rid = _rng.choice(pool)
+                            reward = await grant_reclaimable_passive(
+                                db,
+                                user_id=user_id,
+                                item_id=rid,
+                                username=current_user.get("username"),
+                                source="loot_box",
+                            )
+                            if not reward:
+                                continue
+                            await send_notification(
+                                user_id,
+                                "Vault relic",
+                                f"You claimed {reward['name']} — {reward.get('buff_label') or 'passive bonus'}. "
+                                "Returns to the vaults if you are killed.",
+                                "reward",
+                            )
+                            rewards.append(reward)
                             continue
 
             force_rare_plus = prize_idx in rare_plus_slots

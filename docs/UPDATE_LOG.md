@@ -6,6 +6,18 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-09 15:00 UTC[/color][/b] — [b]Vault relics (exclusive passives)[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] 10 globally unique vault relics (cap [b]1[/b] each) from the Exclusive loot roll — passive bonuses for crime, OC, car sell value, jailbust, racket income, travel cost, Weed Empire daily withdraw-to-wallet, kill defence, bank interest, and missions.[/color]
+[*][color=#888888][b]Tribute Medallion:[/b] +10% mission tribute cash and [b]15% easier[/b] mission requirements for the holder.[/color]
+[*][color=#888888][b]Distributor’s Badge:[/b] +20% Weed Empire daily withdraw-to-wallet cap.[/color]
+[*][color=#888888][b]Changed:[/b] If the holder is killed, these relics [b]return to the vaults[/b] (not transferred). Existing exclusives (weapon, armour, Speakeasy, Model SJ, weed strains) still transfer as before.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-09 14:20 UTC[/color][/b] — [b]Missions ~15% easier[/b][/size]
 [quote]
 [list]

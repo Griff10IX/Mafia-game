@@ -6,6 +6,7 @@ import { prefetchTravelPageData } from './travelPageWarm';
 import { prefetchStatsAndObjectivesData } from './statsObjectivesWarm';
 import { prefetchMissionsPageData } from './missionsPageWarm';
 import { prefetchUsersOnlineData } from './usersOnlineWarm';
+import { prefetchJailPageData } from './jailPageWarm';
 
 const ROUTE_PRELOADERS = {
   '/account/dashboard': () => import('../pages/Account/Dashboard'),
@@ -36,7 +37,11 @@ const ROUTE_PRELOADERS = {
   '/organised-crime': () => import('../pages/Crime/OrganisedCrime'),
   '/crime/crimes': () => import('../pages/Crime/Crimes'),
   '/crime/gta': () => import('../pages/Crime/GTA'),
-  '/crime/jail': () => import('../pages/Crime/Jail'),
+  '/crime/jail': () =>
+    Promise.all([
+      import('../pages/Crime/Jail'),
+      prefetchJailPageData({ force: false }).catch(() => null),
+    ]),
   '/social/image-host': () => import('../pages/Social/ImageHost'),
   '/social/inbox': () => import('../pages/Social/Inbox'),
   '/social/forum': () => import('../pages/Social/Forum'),

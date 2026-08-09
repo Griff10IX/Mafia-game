@@ -1621,7 +1621,20 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                         car_bullets = (int(car_bullets) * 125) // 100
                     total_bullets += car_bullets
                 else:
-                    total_value += int(catalog_value * 0.5)
+                    car_cash = int(catalog_value * 0.5)
+                    try:
+                        from utils.loot_reclaimable_passives import (
+                            BUFF_CAR_SELL,
+                            get_reclaimable_passive_mults_from_user,
+                        )
+
+                        car_cash = int(
+                            car_cash
+                            * float(get_reclaimable_passive_mults_from_user(user).get(BUFF_CAR_SELL) or 1.0)
+                        )
+                    except Exception:
+                        pass
+                    total_value += car_cash
                 deleted_count += 1
                 processed += 1
             else:

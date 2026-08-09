@@ -2118,6 +2118,15 @@ def _illegal_business_pending_take_and_hours_sync(
     income = round(_illegal_business_base_pending_take(business, user, now), 2)
     prestige = get_prestige_bonus(user)
     income = round(income * float(prestige.get("illegal_business_mult", 1.0)), 2)
+    try:
+        from utils.loot_reclaimable_passives import BUFF_IBM_INCOME, get_reclaimable_passive_mults_from_user
+
+        income = round(
+            income * float(get_reclaimable_passive_mults_from_user(user).get(BUFF_IBM_INCOME) or 1.0),
+            2,
+        )
+    except Exception:
+        pass
     income = round(income * _racket_token_income_mult(user, now), 2)
     return income, hours
 

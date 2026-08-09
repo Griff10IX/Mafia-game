@@ -23,6 +23,38 @@ const api = axios.create({
 /** Fired when an /admin/* request returns 403: re-fetch staff flags so UI cannot stay spoofed via devtools. */
 export const STAFF_ADMIN_API_FORBIDDEN_EVENT = 'staff-admin-api-forbidden';
 
+/** SPA navigate from non-React code (axios interceptors). Layout listens with useNavigate. */
+export const APP_NAVIGATE_EVENT = 'app:navigate';
+
+/**
+ * Client-side route change without a full document reload (avoids theme/layout flash).
+ * Falls back to location.assign if no listener is mounted.
+ */
+export function navigateApp(path, { replace = false } = {}) {
+  if (typeof window === 'undefined' || !path) return;
+  try {
+    const cur = (window.location.pathname || '').replace(/\/+/g, '/') || '/';
+    const target = String(path).split('?')[0].replace(/\/+/g, '/') || '/';
+    if (cur === target) return;
+    let handled = false;
+    const markHandled = () => { handled = true; };
+    window.dispatchEvent(
+      new CustomEvent(APP_NAVIGATE_EVENT, {
+        detail: { to: path, replace: !!replace, markHandled },
+      }),
+    );
+    if (!handled) {
+      if (replace) window.location.replace(path);
+      else window.location.assign(path);
+    }
+  } catch (_) {
+    try {
+      if (replace) window.location.replace(path);
+      else window.location.assign(path);
+    } catch (_e) { /* ignore */ }
+  }
+}
+
 let _staffAdminForbiddenDispatchAt = 0;
 
 const _rawGet = api.get.bind(api);
@@ -306,7 +338,7 @@ function _scheduleBoozeRunJailRedirect() {
         cur.startsWith('/money/booze-run/') ||
         cur === '/booze-run' ||
         cur.startsWith('/booze-run/');
-      if (onBooze) window.location.replace('/crime/jail');
+      if (onBooze) navigateApp('/crime/jail', { replace: true });
     } catch (_) { /* ignore */ }
   }, 4000);
 }
@@ -431,10 +463,18 @@ api.interceptors.response.use(
             p.startsWith('/money/booze-run/') ||
             p === '/booze-run' ||
             p.startsWith('/booze-run/');
+          // Seed auth in_jail so Jail paints the locked card immediately (no Free flash).
+          try {
+            window.dispatchEvent(
+              new CustomEvent('app:refresh-user', {
+                detail: { in_jail: true },
+              }),
+            );
+          } catch (_) { /* ignore */ }
           if (onBooze) {
             _scheduleBoozeRunJailRedirect();
           } else {
-            window.location.replace('/crime/jail');
+            navigateApp('/crime/jail', { replace: true });
           }
         }
         return Promise.reject(error);

@@ -940,6 +940,12 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             reward = int(reward * (1 + (bb or {}).get("crimes", 0) * 0.001) * (bb or {}).get("prestige_badge_mult", 1))
         except Exception:
             pass
+        try:
+            from utils.loot_reclaimable_passives import BUFF_CRIME_CASH, get_reclaimable_passive_mults_from_user
+
+            reward = int(reward * float(get_reclaimable_passive_mults_from_user(current_user).get(BUFF_CRIME_CASH) or 1.0))
+        except Exception:
+            pass
         _fm_cr = founding_member_income_mult(current_user)
         reward = int(reward * _fm_cr)
         rank_points = int(rank_points * _fm_cr)
