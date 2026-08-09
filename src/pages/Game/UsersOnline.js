@@ -38,15 +38,10 @@ const UO_STYLES = `
   @keyframes uo-preview-shimmer { 0% { opacity: 0.35; } 50% { opacity: 0.85; } 100% { opacity: 0.35; } }
   .uo-preview-shimmer { animation: uo-preview-shimmer 1.1s ease-in-out infinite; }
   .uo-users-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.375rem;
-  }
-  @media (min-width: 640px) {
-    .uo-users-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
-  }
-  @media (min-width: 1024px) {
-    .uo-users-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.35rem;
+    align-items: center;
   }
   .uo-info details summary { list-style: none; cursor: pointer; }
   .uo-info details summary::-webkit-details-marker { display: none; }
@@ -329,7 +324,7 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
   const profileTo = selfFromRoster
     ? `/profile/${encodeURIComponent(user.username)}?view=public`
     : `/profile/${encodeURIComponent(user.username)}`;
-  const linkClass = `relative z-10 min-w-0 flex-1 truncate text-[11px] sm:text-[12px] font-heading font-bold transition-colors ${displayColor ? '' : 'text-foreground hover:text-primary'}`;
+  const linkClass = `relative z-10 max-w-[7.5rem] sm:max-w-[9rem] truncate text-[11px] font-heading font-bold transition-colors ${displayColor ? '' : 'text-foreground hover:text-primary'}`;
   const prefetchFullProfile = () => warmProfilePrefetchFromUsername(user.username);
 
   const profileLink = (extra = {}) => (
@@ -361,7 +356,7 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
     ) : null;
 
   const hoverPreview = (
-    <div className="flex items-center gap-1 min-w-0 flex-1">
+    <div className="flex items-center gap-0.5 min-w-0">
       {profileHoverEnabled ? (
         <HoverCard
           openDelay={0}
@@ -404,28 +399,25 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
 
   return (
     <div
-      className={`relative z-10 ${styles.panel} rounded-md border px-2 sm:px-2.5 min-h-10 flex items-center uo-row uo-card uo-fade-in ${user.on_hitlist ? 'uo-hitlist border-red-500/40' : 'border-primary/20 bg-black/20'}`}
+      className={`relative z-10 inline-flex items-center gap-1 rounded border px-1.5 h-7 max-w-full uo-row uo-card uo-fade-in ${user.on_hitlist ? 'uo-hitlist border-red-500/40' : 'border-primary/20 bg-black/25'}`}
       data-testid="user-card"
     >
-      <div className="flex items-center gap-1.5 w-full min-w-0 py-1.5">
-        <span
-          className={`w-2 h-2 rounded-full shrink-0 ${userStatus === 'idle' ? 'bg-amber-500' : 'bg-emerald-500'}`}
-          title={userStatus === 'idle' ? 'Idle' : 'Online'}
-          aria-hidden
-        />
-        {hoverPreview}
-
-        {user.in_jail && (
-          <span className="shrink-0 inline-flex items-center px-1 py-0.5 rounded text-[8px] font-heading font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/30 leading-none">
-            Jail
-          </span>
-        )}
-        {user.on_hitlist && (
-          <span className="shrink-0 inline-flex items-center text-red-400" title="On the hitlist">
-            <Target size={12} className="drop-shadow-[0_0_6px_rgba(220,38,38,0.8)]" aria-hidden />
-          </span>
-        )}
-      </div>
+      <span
+        className={`w-1.5 h-1.5 rounded-full shrink-0 ${userStatus === 'idle' ? 'bg-amber-500' : 'bg-emerald-500'}`}
+        title={userStatus === 'idle' ? 'Idle' : 'Online'}
+        aria-hidden
+      />
+      {hoverPreview}
+      {user.in_jail && (
+        <span className="shrink-0 inline-flex items-center px-1 py-px rounded text-[8px] font-heading font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/30 leading-none">
+          Jail
+        </span>
+      )}
+      {user.on_hitlist && (
+        <span className="shrink-0 inline-flex items-center text-red-400" title="On the hitlist">
+          <Target size={11} className="drop-shadow-[0_0_6px_rgba(220,38,38,0.8)]" aria-hidden />
+        </span>
+      )}
     </div>
   );
 };
@@ -731,7 +723,7 @@ export default function UsersOnline() {
             hdoKeyColors={hdoKeyColors}
             entertainerKeyColors={entertainerKeyColors}
           />
-          <div className="p-2 sm:p-2.5">
+          <div className="p-1.5 sm:p-2">
             <div className="uo-users-grid" data-testid="users-grid">
               {users.map((user, idx) => (
                 <UserCard
