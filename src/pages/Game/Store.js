@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package, Copy, Swords, Award, Gauge } from 'lucide-react';
+import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package, Copy, Swords, Award, Gauge, Coins, Sparkles, Search } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { copyTextToClipboard } from '../../utils/copyToClipboard';
 import { toast } from 'sonner';
@@ -25,7 +25,243 @@ const STORE_STYLES = `
   .store-fade-in { animation: store-fade-in 0.4s ease-out both; }
   @keyframes store-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .store-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+  .store-chrome {
+    position: sticky;
+    top: 0;
+    z-index: 25;
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
+    padding: 0.5rem 0.75rem 0.65rem;
+    background: linear-gradient(180deg, rgba(12,12,14,0.97) 0%, rgba(12,12,14,0.92) 70%, rgba(12,12,14,0.78) 100%);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(234, 179, 8, 0.18);
+  }
+  @media (min-width: 640px) {
+    .store-chrome {
+      position: static;
+      margin-left: 0;
+      margin-right: 0;
+      padding: 0;
+      background: transparent;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      border-bottom: none;
+    }
+  }
+  .store-tab-scroll {
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 1px;
+  }
+  .store-tab-scroll::-webkit-scrollbar { display: none; }
+  .store-chip-scroll {
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .store-chip-scroll::-webkit-scrollbar { display: none; }
+  .store-rec-scroll {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 2px;
+  }
+  .store-rec-scroll::-webkit-scrollbar { display: none; }
+  .store-rec-card {
+    scroll-snap-align: start;
+    flex: 0 0 min(78%, 17.5rem);
+  }
+  @media (min-width: 640px) {
+    .store-rec-scroll { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: visible; scroll-snap-type: none; }
+    .store-rec-card { flex: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .store-fade-in { animation: none !important; }
+  }
 `;
+
+const STORE_TAB_META = [
+  { id: 'points', label: 'Points', Icon: Coins },
+  { id: 'upgrades', label: 'Upgrades', Icon: Shield },
+  { id: 'tokens', label: 'Tokens', Icon: Package },
+  { id: 'bullets', label: 'Bullets', Icon: Crosshair },
+  { id: 'sendpts', label: 'Send', Icon: Send },
+];
+
+const UPGRADE_FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'essentials', label: 'Essentials' },
+  { id: 'combat', label: 'Combat' },
+  { id: 'income', label: 'Income' },
+  { id: 'automation', label: 'Auto' },
+  { id: 'looks', label: 'Looks' },
+];
+
+const UPGRADE_CATEGORY_BY_ID = {
+  health: 'essentials',
+  'rank-bar': 'essentials',
+  'founding-member': 'essentials',
+  'auto-rank': 'automation',
+  'robot-bg-auto-search': 'automation',
+  'bodyguard-find-time': 'combat',
+  'slow-kill-inflation': 'combat',
+  'slow-bodyguard-hire-inflation': 'combat',
+  'raid-capacity': 'combat',
+  'raid-reset': 'combat',
+  'armour-tier-6': 'combat',
+  weapon11: 'combat',
+  silencer: 'combat',
+  'anti-snitch': 'combat',
+  'hitlist-npc-cap': 'combat',
+  'oc-timer': 'income',
+  'crew-oc-timer': 'income',
+  garage: 'income',
+  booze: 'income',
+  'weed-daily-cap': 'income',
+  'weed-safety-deposit': 'income',
+  'family-safe-deposit-tier': 'income',
+  'family-event-token': 'income',
+  'custom-profile-badge': 'looks',
+  'profile-glow-7d': 'looks',
+  'profile-glow-permanent': 'looks',
+};
+
+const TOKEN_FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'grind', label: 'Grind' },
+  { id: 'income', label: 'Income' },
+  { id: 'utility', label: 'Utility' },
+  { id: 'skip', label: 'Skips' },
+];
+
+const TOKEN_CATEGORY_BY_TYPE = {
+  xp_crimes: 'grind',
+  xp_gta: 'grind',
+  melt: 'grind',
+  oc_reduced: 'income',
+  booze: 'income',
+  racket: 'income',
+  properties: 'income',
+  travel: 'income',
+  jailbust_bonus: 'utility',
+  auto_rank_2h: 'utility',
+  crew_oc_auto_3h: 'utility',
+  auto_collect_12h: 'utility',
+  auto_collect_24h: 'utility',
+  jail_bailout: 'utility',
+  cooldown_skip_crime: 'skip',
+  cooldown_skip_gta: 'skip',
+  cooldown_skip_booze: 'skip',
+  cooldown_skip_properties: 'skip',
+};
+
+function buildStoreRecommendations(user, { pointsTabLocked, storePointsEvent } = {}) {
+  if (!user) return [];
+  const recs = [];
+  const health = Number(user.health ?? 100);
+  const bullets = Number(user.bullets ?? 0);
+  const pts = Number(user.points ?? 0);
+  const hasAutoRank = !!(
+    user.auto_rank_email_entitlement
+    || user.auto_rank_permanent
+    || (user.auto_rank_purchased && !user.auto_rank_trial)
+  );
+
+  if (health < 70) {
+    recs.push({
+      id: 'rec-health',
+      title: 'Full Health',
+      reason: `You're at ${Math.round(health)}% — restore for 15 pts.`,
+      tab: 'upgrades',
+      hash: 'store-health',
+      price: '15 pts',
+      Icon: Heart,
+    });
+  }
+  if (!hasAutoRank) {
+    recs.push({
+      id: 'rec-auto-rank',
+      title: 'Auto Rank',
+      reason: 'Crimes, GTA & busts while offline — biggest QoL buy.',
+      tab: 'upgrades',
+      hash: 'store-auto-rank',
+      price: '5,000 pts / £',
+      Icon: Bot,
+    });
+  }
+  if (bullets < 5000) {
+    recs.push({
+      id: 'rec-bullets',
+      title: '5k Bullets',
+      reason: 'Low ammo — restock before you need it.',
+      tab: 'bullets',
+      price: '100 pts',
+      Icon: Crosshair,
+    });
+  }
+  if (!pointsTabLocked && storePointsEvent?.active) {
+    recs.push({
+      id: 'rec-points-event',
+      title: 'Points bonus live',
+      reason: `+${Math.round(Number(storePointsEvent.bonus_rate ?? 0.75) * 100)}% on card point buys right now.`,
+      tab: 'points',
+      price: 'Sale',
+      Icon: Sparkles,
+    });
+  } else if (!pointsTabLocked && pts < 100) {
+    recs.push({
+      id: 'rec-buy-points',
+      title: 'Buy Points',
+      reason: 'Top up to unlock upgrades, tokens, and ammo packs.',
+      tab: 'points',
+      price: 'Card / cash',
+      Icon: Coins,
+    });
+  }
+  if (!user.has_silencer && pts >= 150) {
+    recs.push({
+      id: 'rec-silencer',
+      title: 'Silencer',
+      reason: 'Fewer witness statements on kills.',
+      tab: 'upgrades',
+      hash: 'store-silencer',
+      price: '150 pts',
+      Icon: VolumeX,
+    });
+  }
+  if (!user.founding_member && pts >= 1000) {
+    recs.push({
+      id: 'rec-founding',
+      title: 'Founding Member',
+      reason: '+15% across core income — strong long-term boost.',
+      tab: 'upgrades',
+      hash: 'store-founding-member',
+      price: '5,000 pts',
+      Icon: Award,
+    });
+  }
+  if (Number(user.xp_crimes_tokens || 0) + Number(user.xp_gta_tokens || 0) === 0) {
+    recs.push({
+      id: 'rec-grind-tokens',
+      title: 'Grind tokens',
+      reason: '2× XP hours for crimes / GTA — cheap progression.',
+      tab: 'tokens',
+      price: 'From 42 pts',
+      Icon: Package,
+    });
+  }
+  return recs.slice(0, 4);
+}
 
 const CUSTOM_POINTS_PACKAGE = 'custom';
 
@@ -293,39 +529,76 @@ function StorePointsTransferRow({ t, compact }) {
   );
 }
 
-const Tab = ({ active, onClick, children, disabled, className = '' }) => (
+const Tab = ({ active, onClick, children, disabled, className = '', icon: Icon }) => (
   <button
     type="button"
     onClick={disabled ? undefined : onClick}
     disabled={disabled}
-    className={`flex-1 min-w-0 min-h-[44px] py-2.5 px-3 rounded-md text-[10px] sm:text-[9px] font-heading font-bold uppercase tracking-wider transition-all border touch-manipulation ${
+    className={`shrink-0 min-w-[4.35rem] sm:flex-1 sm:min-w-0 min-h-[48px] sm:min-h-[44px] px-2.5 sm:px-3 rounded-md text-[9px] sm:text-[9px] font-heading font-bold uppercase tracking-wider transition-all border touch-manipulation flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 ${
       active
-        ? 'text-primary bg-primary/10 border-primary/20'
-        : 'text-zinc-500 hover:text-zinc-300 border-transparent'
+        ? 'text-primary bg-primary/15 border-primary/35 shadow-[inset_0_0_0_1px_rgba(234,179,8,0.12)]'
+        : 'text-zinc-500 hover:text-zinc-300 border-transparent bg-zinc-900/35'
     } ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`.trim()}
   >
-    {children}
+    {Icon ? <Icon size={14} className={active ? 'text-primary' : 'text-zinc-500'} /> : null}
+    <span className="leading-none">{children}</span>
   </button>
 );
 
 function StorePayWithSelect({ value, onChange, showCash = false }) {
+  const opts = [
+    { id: 'points', label: 'Points' },
+    { id: 'respect', label: 'Respect' },
+    ...(showCash ? [{ id: 'cash', label: 'Cash' }] : []),
+  ];
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-[9px] text-zinc-500 font-heading uppercase tracking-wider">Pay with</span>
-      <select
-        value={value}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (v === 'cash' && showCash) onChange('cash');
-          else if (v === 'respect') onChange('respect');
-          else onChange('points');
-        }}
-        className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-[10px] text-foreground focus:border-primary/50 focus:outline-none"
-      >
-        <option value="points">Points</option>
-        <option value="respect">Respect points</option>
-        {showCash && <option value="cash">Cash ($)</option>}
-      </select>
+    <div className="flex items-center gap-2 min-w-0">
+      <span className="text-[9px] text-zinc-500 font-heading uppercase tracking-wider shrink-0 hidden sm:inline">Pay with</span>
+      <div className="flex flex-1 sm:flex-none rounded-md border border-primary/25 bg-zinc-950/60 p-0.5 gap-0.5" role="group" aria-label="Pay with">
+        {opts.map((o) => {
+          const active = value === o.id;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => onChange(o.id)}
+              className={`flex-1 sm:flex-none min-h-[36px] px-2.5 rounded text-[9px] font-heading font-bold uppercase tracking-wider touch-manipulation transition-colors ${
+                active
+                  ? 'bg-primary/20 text-primary border border-primary/35'
+                  : 'text-zinc-500 border border-transparent hover:text-zinc-300'
+              }`}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StoreFilterChips({ options, value, onChange, ariaLabel }) {
+  return (
+    <div className="store-chip-scroll" role="tablist" aria-label={ariaLabel}>
+      {options.map((opt) => {
+        const active = value === opt.id;
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(opt.id)}
+            className={`shrink-0 min-h-[34px] px-2.5 rounded-full text-[9px] font-heading font-bold uppercase tracking-wider border touch-manipulation ${
+              active
+                ? 'bg-primary/20 text-primary border-primary/40'
+                : 'bg-zinc-900/50 text-zinc-500 border-zinc-700/50'
+            }`}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -342,7 +615,7 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, 
       </div>
     </div>
     <div className="p-2.5">
-      <p className="text-[10px] text-mutedForeground font-heading mb-1.5">{desc}</p>
+      <p className="text-[10px] text-mutedForeground font-heading mb-1.5 leading-snug sm:leading-normal line-clamp-3 sm:line-clamp-none">{desc}</p>
       {children}
       {owned ? (
         <div className="py-1.5 text-center text-[10px] font-heading font-bold text-primary uppercase">{ownedLabel || 'Owned'}</div>
@@ -454,6 +727,9 @@ export default function Store() {
   const [pendingPoints, setPendingPoints] = useState(() => storeBoot?.pendingPoints ?? 0);
   const [claimingPending, setClaimingPending] = useState(false);
   const [storePayWith, setStorePayWith] = useState('points');
+  const [upgradeFilter, setUpgradeFilter] = useState('all');
+  const [tokenFilter, setTokenFilter] = useState('all');
+  const [storeQuery, setStoreQuery] = useState('');
   const [cashPricePerPoint, setCashPricePerPoint] = useState(0);
   const [cashPriceAvailable, setCashPriceAvailable] = useState(false);
   const [cashPriceUsesQtAvg, setCashPriceUsesQtAvg] = useState(false);
@@ -1028,27 +1304,145 @@ export default function Store() {
     );
   }
 
+  const goStoreTab = (tab, hash) => {
+    setActiveTab(tab);
+    setSearchParams(tab === 'points' ? {} : { tab });
+    if (tab !== 'upgrades' && tab !== 'tokens') setStoreQuery('');
+    if (hash) {
+      window.setTimeout(() => {
+        document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 80);
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const storeRecs = buildStoreRecommendations(user, { pointsTabLocked, storePointsEvent });
+  const storeQueryNorm = storeQuery.trim().toLowerCase();
+  const showStoreCars =
+    (upgradeFilter === 'all' || upgradeFilter === 'income' || upgradeFilter === 'looks')
+    && (!storeQueryNorm || ['vip', 'pass', 'car', 'travel', 'custom'].some((k) => storeQueryNorm.includes(k)));
+
+  const upgradeIsListed = (u) => {
+    if (u.id === 'auto-rank') {
+      if (user?.auto_rank_email_entitlement) return false;
+    } else {
+      const owned = u.ownedKey && user?.[u.ownedKey];
+      if (owned) return false;
+    }
+    if (u.id === 'garage' && (user?.garage_batch_limit ?? 0) >= 100) return false;
+    if (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) return false;
+    if (u.id === 'hitlist-npc-cap' && (Number(user?.hitlist_npc_bonus_slots) || 0) >= 3) return false;
+    if (u.id === 'weed-daily-cap' && weedEmpireSummary?.at_max_sell_cap) return false;
+    if (u.id === 'family-safe-deposit-tier' && familySafeDepositSummary?.at_max) return false;
+    if (u.ownedCheck?.(user)) return false;
+    if (upgradeFilter !== 'all' && (UPGRADE_CATEGORY_BY_ID[u.id] || 'essentials') !== upgradeFilter) return false;
+    if (storeQueryNorm) {
+      const hay = `${u.title} ${u.desc}`.toLowerCase();
+      if (!hay.includes(storeQueryNorm)) return false;
+    }
+    return true;
+  };
+
+  const tokenMatchesFilter = (t) => {
+    if (tokenFilter !== 'all' && (TOKEN_CATEGORY_BY_TYPE[t.tokenType] || 'utility') !== tokenFilter) return false;
+    if (storeQueryNorm) {
+      const hay = `${t.title} ${t.desc}`.toLowerCase();
+      if (!hay.includes(storeQueryNorm)) return false;
+    }
+    return true;
+  };
+
   return (
-    <div className={`space-y-4 sm:space-y-6 ${styles.pageContent} mobile-page-root px-3 sm:px-4 pb-6`} data-testid="store-page" data-page="store">
+    <div className={`space-y-3 sm:space-y-6 ${styles.pageContent} mobile-page-root px-3 sm:px-4 pb-24 sm:pb-6`} data-testid="store-page" data-page="store">
       <style>{STORE_STYLES}</style>
-      <div className="relative store-fade-in flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-[10px] text-zinc-500 font-heading italic">Points, upgrades & bullets</p>
+
+      <div className="store-chrome store-fade-in space-y-2">
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] sm:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.18em]">Point Store</p>
+            <p className="text-[10px] text-zinc-500 font-heading italic truncate">Buy points · upgrades · tokens · bullets</p>
+          </div>
+          {user != null && (
+            <div className="shrink-0 text-right">
+              <p className="text-sm font-heading font-bold text-primary tabular-nums leading-none">
+                {Number(user.points ?? 0).toLocaleString()} <span className="text-[10px] font-semibold">pts</span>
+              </p>
+              <p className="text-[10px] text-mutedForeground font-heading tabular-nums mt-0.5">
+                {Number(user.respect_points ?? 0).toLocaleString()} respect
+                <span className="text-zinc-600"> · </span>
+                {Number(user.bullets ?? 0).toLocaleString()} bullets
+              </p>
+            </div>
+          )}
         </div>
-        {user != null && (
-          <span className="text-sm font-heading font-bold text-primary">
-            {Number(user.points ?? 0).toLocaleString()} pts
-            <span className="text-mutedForeground font-normal ml-2">· Respect: {Number(user.respect_points ?? 0).toLocaleString()}</span>
-          </span>
+
+        <div className="relative rounded-lg border border-primary/20 bg-primary/5 p-1 store-tab-scroll">
+          <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent rounded-t-lg pointer-events-none" aria-hidden />
+          {STORE_TAB_META.map((t) => (
+            <Tab
+              key={t.id}
+              icon={t.Icon}
+              active={activeTab === t.id}
+              disabled={t.id === 'points' && pointsTabLocked}
+              onClick={() => goStoreTab(t.id)}
+            >
+              {t.label}
+            </Tab>
+          ))}
+        </div>
+
+        {['upgrades', 'tokens', 'bullets'].includes(activeTab) && (
+          <StorePayWithSelect
+            value={storePayWith}
+            onChange={setStorePayWith}
+            showCash={activeTab === 'tokens'}
+          />
         )}
       </div>
 
+      {storeRecs.length > 0 && (
+        <div className="space-y-1.5 store-fade-in">
+          <div className="flex items-center gap-1.5 px-0.5">
+            <Sparkles size={12} className="text-primary shrink-0" />
+            <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.14em]">For you</p>
+          </div>
+          <div className="store-rec-scroll">
+            {storeRecs.map((rec) => {
+              const RecIcon = rec.Icon || Sparkles;
+              return (
+                <button
+                  key={rec.id}
+                  type="button"
+                  onClick={() => goStoreTab(rec.tab, rec.hash)}
+                  className={`store-rec-card text-left rounded-lg border border-primary/25 bg-gradient-to-br from-primary/10 via-zinc-950/80 to-zinc-950/40 p-2.5 touch-manipulation active:scale-[0.99] transition-transform ${styles.panel}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider truncate">{rec.title}</p>
+                      <p className="text-[9px] text-zinc-400 font-heading mt-0.5 leading-snug line-clamp-2">{rec.reason}</p>
+                    </div>
+                    <RecIcon size={14} className="text-primary/80 shrink-0 mt-0.5" />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="text-[9px] font-heading text-amber-200/90">{rec.price}</span>
+                    <span className="text-[8px] font-heading uppercase tracking-wider text-zinc-500">Open →</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {!storePointsAutoCredit && (
-        <div className="relative rounded-lg border border-sky-500/30 overflow-hidden bg-sky-500/5">
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-sky-500/50 to-transparent" />
-          <div className="px-4 py-3">
-            <p className="text-[10px] font-heading font-bold text-sky-400 uppercase tracking-[0.15em]">Pre-order point crediting</p>
-            <p className="text-[10px] text-zinc-400 font-heading mt-1">
+        <details className="relative rounded-lg border border-sky-500/30 overflow-hidden bg-sky-500/5 group">
+          <summary className="px-3 py-2.5 cursor-pointer list-none flex items-center justify-between gap-2">
+            <span className="text-[10px] font-heading font-bold text-sky-400 uppercase tracking-[0.15em]">Pre-order point crediting</span>
+            <ChevronDown size={14} className="text-sky-400/80 shrink-0 group-open:rotate-180 transition-transform" />
+          </summary>
+          <div className="px-3 pb-3">
+            <p className="text-[10px] text-zinc-400 font-heading">
               This applies only to <span className="text-zinc-300">pre-order</span> point purchases: your payment is recorded and staff add points to your account manually.
               {manualCreditEta ? (
                 <>
@@ -1081,16 +1475,17 @@ export default function Store() {
               </p>
             )}
           </div>
-          <div className="h-px bg-sky-500/20 mx-3" />
-        </div>
+        </details>
       )}
 
       {storePointsAutoCredit && preorderActive && (
-        <div className="relative rounded-lg border border-amber-500/30 overflow-hidden bg-amber-500/5">
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
-          <div className="px-4 py-3">
-            <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em]">Pre-Order Mode Active</p>
-            <p className="text-[10px] text-zinc-400 font-heading mt-1">
+        <details className="relative rounded-lg border border-amber-500/30 overflow-hidden bg-amber-500/5 group" open={pendingPoints > 0}>
+          <summary className="px-3 py-2.5 cursor-pointer list-none flex items-center justify-between gap-2">
+            <span className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em]">Pre-Order Mode Active</span>
+            <ChevronDown size={14} className="text-amber-400/80 shrink-0 group-open:rotate-180 transition-transform" />
+          </summary>
+          <div className="px-3 pb-3">
+            <p className="text-[10px] text-zinc-400 font-heading">
               Points purchased now will be credited on{' '}
               <span className="text-amber-400 font-bold">
                 {preorderReleaseDate ? formatGameDateTimeShort(preorderReleaseDate) : 'launch date'}
@@ -1105,8 +1500,7 @@ export default function Store() {
               </p>
             )}
           </div>
-          <div className="h-px bg-amber-500/20 mx-3" />
-        </div>
+        </details>
       )}
 
       {storePointsAutoCredit && !preorderActive && pendingPoints > 0 && (
@@ -1121,30 +1515,12 @@ export default function Store() {
               type="button"
               onClick={handleClaimPendingPoints}
               disabled={claimingPending}
-              className="mt-2 px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50"
+              className="mt-2 min-h-[40px] px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50 touch-manipulation"
             >
               {claimingPending ? 'Releasing...' : 'Claim Pending Points'}
             </button>
           </div>
           <div className="h-px bg-green-500/20 mx-3" />
-        </div>
-      )}
-
-      <div className="relative flex gap-1 p-1.5 sm:p-1 rounded-lg overflow-x-auto store-fade-in border border-primary/20 bg-primary/5 scrollbar-thin">
-        <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent rounded-t-lg pointer-events-none" aria-hidden />
-        <Tab
-          active={activeTab === 'points'}
-          onClick={() => { setActiveTab('points'); setSearchParams({ tab: 'points' }); }}
-          disabled={pointsTabLocked}
-        >Points</Tab>
-        <Tab active={activeTab === 'sendpts'} onClick={() => { setActiveTab('sendpts'); setSearchParams({ tab: 'sendpts' }); }}>Send pts</Tab>
-        <Tab active={activeTab === 'upgrades'} onClick={() => { setActiveTab('upgrades'); setSearchParams({ tab: 'upgrades' }); }}>Upgrades</Tab>
-        <Tab active={activeTab === 'tokens'} onClick={() => { setActiveTab('tokens'); setSearchParams({ tab: 'tokens' }); }}>Tokens</Tab>
-        <Tab active={activeTab === 'bullets'} onClick={() => { setActiveTab('bullets'); setSearchParams({ tab: 'bullets' }); }}>Bullets</Tab>
-      </div>
-      {['upgrades', 'tokens', 'bullets'].includes(activeTab) && (
-        <div className="mb-2">
-          <StorePayWithSelect value={storePayWith} onChange={setStorePayWith} showCash={activeTab === 'tokens'} />
         </div>
       )}
 
@@ -1498,34 +1874,34 @@ export default function Store() {
       )}
 
       {activeTab === 'upgrades' && (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           <div className="space-y-2" id="store-permanent-upgrades">
-            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Permanent upgrades & QoL</h2>
-            <p className="text-[9px] text-zinc-500 font-heading leading-snug max-w-2xl">
-              Includes <span className="text-primary font-bold">Auto Rank</span> for{' '}
-              <span className="text-foreground font-semibold">£{AUTO_RANK_STRIPE_PRICE_GBP}</span> (email-tied, permanent) or{' '}
-              <span className="text-foreground font-semibold">5,000 pts</span> (account-only).
-              {' '}The email-tied card option hides once that email owns permanent Auto Rank.
-            </p>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Upgrades & QoL</h2>
+                <p className="text-[9px] text-zinc-500 font-heading leading-snug max-w-2xl mt-0.5">
+                  Filter by type, or search. Auto Rank: £{AUTO_RANK_STRIPE_PRICE_GBP} email-tied or 5,000 pts account-only.
+                </p>
+              </div>
+            </div>
+            <div className="relative">
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+              <input
+                type="search"
+                value={storeQuery}
+                onChange={(e) => setStoreQuery(e.target.value)}
+                placeholder="Search upgrades…"
+                className="w-full min-h-[40px] pl-8 pr-3 rounded-md border border-primary/20 bg-zinc-950/70 text-[11px] font-heading text-foreground placeholder:text-zinc-600 focus:border-primary/45 focus:outline-none"
+              />
+            </div>
+            <StoreFilterChips
+              options={UPGRADE_FILTERS}
+              value={upgradeFilter}
+              onChange={setUpgradeFilter}
+              ariaLabel="Upgrade categories"
+            />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
-          {UPGRADES.filter((u) => {
-            if (u.id === 'auto-rank') {
-              if (user?.auto_rank_email_entitlement) return false;
-            } else {
-              const owned = u.ownedKey && user?.[u.ownedKey];
-              if (owned) return false;
-            }
-            // Hide Garage Batch when already at max (100)
-            if (u.id === 'garage' && (user?.garage_batch_limit ?? 0) >= 100) return false;
-            // Hide Booze Capacity when already at max
-            if (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) return false;
-            // Hide Practice Targets when already at max (base 3 + bonus 3)
-            if (u.id === 'hitlist-npc-cap' && (Number(user?.hitlist_npc_bonus_slots) || 0) >= 3) return false;
-            if (u.id === 'weed-daily-cap' && weedEmpireSummary?.at_max_sell_cap) return false;
-            if (u.id === 'family-safe-deposit-tier' && familySafeDepositSummary?.at_max) return false;
-            if (u.ownedCheck?.(user)) return false;
-            return true;
-          }).map((u) => {
+          {UPGRADES.filter(upgradeIsListed).map((u) => {
             const extra = u.extra?.(user, boozeConfig, weedEmpireSummary, familySafeDepositSummary);
             const priceVal = typeof u.price === 'function' ? Number(u.price(user, boozeConfig)) : Number(u.price);
             const hasAccountOnlyAutoRank = Boolean(
@@ -1640,16 +2016,19 @@ export default function Store() {
             );
           })}
             </div>
+            {UPGRADES.filter(upgradeIsListed).length === 0 && (
+              <p className="text-[10px] text-zinc-500 font-heading italic px-1">No upgrades match this filter.</p>
+            )}
           </div>
 
           {/* VIP Pass Car — limited game-wide stock (stock from GET /store/vip-pass-car-stock, not /me) */}
-          {(() => {
+          {showStoreCars && (() => {
             const vipInGame = Number(vipPassCarStock?.vip_pass_car_in_game ?? user?.vip_pass_car_in_game ?? 0);
             const vipLimit = Number(vipPassCarStock?.vip_pass_car_purchase_limit ?? user?.vip_pass_car_purchase_limit ?? 5);
             const vipOwned = Number(vipPassCarStock?.vip_pass_car_count ?? user?.vip_pass_car_count ?? 0);
             const vipSoldOut = vipInGame >= vipLimit;
             return (
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div key="vip-pass-car" className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
               <div className="h-0.5 bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
               <div className="px-3 py-2.5 bg-cyan-500/8 border-b border-cyan-500/20 flex items-center justify-between gap-2">
                 <span className="text-[10px] font-heading font-bold text-cyan-400 uppercase tracking-[0.15em]">VIP Pass Car</span>
@@ -1708,6 +2087,7 @@ export default function Store() {
           })()}
 
           {/* Custom Car — always show (can buy multiple) */}
+          {showStoreCars && (
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
               <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
@@ -1722,7 +2102,7 @@ export default function Store() {
                   value={customCarName}
                   onChange={(e) => setCustomCarName(e.target.value)}
                   maxLength={30}
-                  className="w-full px-2 py-1.5 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded mb-1.5 focus:border-primary/50 focus:outline-none"
+                  className="w-full min-h-[40px] px-2 py-1.5 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded mb-1.5 focus:border-primary/50 focus:outline-none"
                 />
                 <div className="flex gap-1.5">
                   <button
@@ -1756,11 +2136,12 @@ export default function Store() {
               </div>
               <div className="store-art-line text-primary mx-3" />
             </div>
+          )}
         </div>
       )}
 
       {activeTab === 'tokens' && (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {user && (Number(user.token_points_spent || 0) > 0 || Number(user.token_respect_spent || 0) > 0 || Number(user.token_cash_spent || 0) > 0) && (
             <div className="flex flex-wrap items-center gap-3 px-3 py-2 rounded border border-primary/20 bg-primary/5">
               <span className="text-[9px] font-heading text-zinc-400 uppercase tracking-wider">Spent on tokens:</span>
@@ -1782,7 +2163,7 @@ export default function Store() {
             </div>
           )}
           {storePayWith === 'cash' && (
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3 px-1">
               {cashPriceAvailable ? (
                 <>
                   <span className="text-[9px] font-heading text-zinc-500">
@@ -1806,10 +2187,26 @@ export default function Store() {
           <div className="space-y-2">
             <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Consumable tokens</h2>
             <p className="text-[9px] text-zinc-500 font-heading italic max-w-2xl">
-              Buy unactivated tokens. Activate from My Inventory. Also tradable via Quick Trade — store prices are a points sink for convenience.
+              Buy here, activate in My Inventory. Filter to cut the list down on mobile.
             </p>
+            <div className="relative">
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+              <input
+                type="search"
+                value={storeQuery}
+                onChange={(e) => setStoreQuery(e.target.value)}
+                placeholder="Search tokens…"
+                className="w-full min-h-[40px] pl-8 pr-3 rounded-md border border-primary/20 bg-zinc-950/70 text-[11px] font-heading text-foreground placeholder:text-zinc-600 focus:border-primary/45 focus:outline-none"
+              />
+            </div>
+            <StoreFilterChips
+              options={TOKEN_FILTERS}
+              value={tokenFilter}
+              onChange={setTokenFilter}
+              ariaLabel="Token categories"
+            />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
-              {TOKEN_STORE_ITEMS.map((t) => {
+              {TOKEN_STORE_ITEMS.filter(tokenMatchesFilter).map((t) => {
                 const held = Number(user?.[t.userKey] ?? 0);
                 const maxQty = tokenBuyMaxQty(t.tokenType);
                 const bigStep = maxQty >= 1000 ? 100 : 10;
@@ -1908,14 +2305,26 @@ export default function Store() {
                 );
               })}
             </div>
+            {TOKEN_STORE_ITEMS.filter(tokenMatchesFilter).length === 0 && (
+              <p className="text-[10px] text-zinc-500 font-heading italic px-1">No tokens match this filter.</p>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Build your bundle (up to {SELECTABLE_BUNDLE_SIZE})</h2>
-            <p className="text-[9px] text-zinc-500 font-heading italic max-w-2xl">
-              Pick 1–{SELECTABLE_BUNDLE_SIZE} eligible tokens (duplicates allowed). {SELECTABLE_BUNDLE_DISCOUNT_PCT}% off the subtotal. Game Pass token is excluded.
+          <details className="space-y-2 rounded-lg border border-primary/20 bg-primary/[0.03] p-2.5 group" open={selectableBundlePickedTotal > 0}>
+            <summary className="list-none cursor-pointer flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Build a bundle</h2>
+                <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">
+                  Up to {SELECTABLE_BUNDLE_SIZE} tokens · {SELECTABLE_BUNDLE_DISCOUNT_PCT}% off
+                  {selectableBundlePickedTotal > 0 ? ` · ${selectableBundlePickedTotal} selected` : ''}
+                </p>
+              </div>
+              <ChevronDown size={14} className="text-primary/80 shrink-0 group-open:rotate-180 transition-transform" />
+            </summary>
+            <p className="text-[9px] text-zinc-500 font-heading italic max-w-2xl mt-2">
+              Pick 1–{SELECTABLE_BUNDLE_SIZE} eligible tokens (duplicates allowed). Game Pass token is excluded.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2 mt-2">
               {SELECTABLE_BUNDLE_ITEMS.map((t) => {
                 const held = Number(user?.[t.userKey] ?? 0);
                 const picked = Number(selectableBundleQtyByToken[t.tokenType] || 0);
@@ -2052,10 +2461,10 @@ export default function Store() {
                 </button>
               </div>
             </div>
-          </div>
+          </details>
 
           <div className="space-y-2">
-            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Token bundles</h2>
+            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Quick bundles</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-2">
               {TOKEN_BUNDLES.map((b) => {
                 const bundleCashPrice = cashPriceAvailable ? Math.round(b.price * cashPricePerPoint) : 0;
@@ -2092,7 +2501,10 @@ export default function Store() {
 
       {activeTab === 'bullets' && (
         <div className="space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-2">
+          <p className="text-[9px] text-zinc-500 font-heading px-0.5">
+            Packs first — or enter a custom amount below (max {CUSTOM_BULLETS_MAX.toLocaleString()}).
+          </p>
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-2">
             {BULLET_PACKS.map((pack) => {
               const respectCost = storeRespectForPoints(pack.cost);
               const canAfford =
@@ -2103,21 +2515,22 @@ export default function Store() {
               return (
                 <div key={pack.bullets} className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden mobile-panel`}>
                   <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-                  <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1.5">
+                  <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1.5">
                     <Crosshair size={14} className="text-primary shrink-0" />
-                    <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{(pack.bullets / 1000).toFixed(0)}k bullets</span>
+                    <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">{(pack.bullets / 1000).toFixed(0)}k</span>
                   </div>
                   <div className="p-2.5 text-center">
-                    <p className="text-[10px] text-zinc-500 font-heading mb-2">
+                    <p className="text-[11px] text-foreground font-heading font-bold tabular-nums mb-0.5">
                       {storePayWith === 'points' ? `${pack.cost} pts` : `${respectCost} resp`}
                     </p>
+                    <p className="text-[8px] text-zinc-500 font-heading mb-2">{pack.bullets.toLocaleString()} bullets</p>
                     <button
                       type="button"
                       onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}&pay_with=${encodeURIComponent(storePayWith)}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`)}
                       disabled={!canAfford}
                       className="w-full min-h-[44px] py-2.5 sm:py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                     >
-                      {storePayWith === 'points' ? `Buy · ${pack.cost} pts` : `Buy · ${respectCost} resp`}
+                      Buy
                     </button>
                   </div>
                   <div className="store-art-line text-primary mx-3" />
@@ -2172,11 +2585,14 @@ export default function Store() {
         </div>
       )}
 
-      <div className="relative rounded-lg border border-primary/20 overflow-hidden">
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-3 sm:px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-          <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Payments</p>
-        </div>
+      {activeTab === 'points' && (
+      <details className="relative rounded-lg border border-primary/20 overflow-hidden group">
+        <summary className="px-3 sm:px-4 py-2.5 bg-primary/8 border-b border-primary/20 cursor-pointer list-none flex items-center justify-between gap-2">
+          <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+            Payments{paymentTransactions.length > 0 ? ` · ${Math.min(15, paymentTransactions.length)}` : ''}
+          </p>
+          <ChevronDown size={14} className="text-primary/80 shrink-0 group-open:rotate-180 transition-transform" />
+        </summary>
         <div className="px-3 sm:px-4 py-3 space-y-2">
           <p className="text-[10px] text-zinc-500 font-heading italic">
             Payments via Stripe.{' '}
@@ -2188,7 +2604,7 @@ export default function Store() {
           </p>
           {paymentTransactions.length > 0 ? (
             <div className="rounded border border-primary/20 bg-zinc-900/50 overflow-hidden">
-              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-2 py-1.5 text-[9px] font-heading font-bold text-primary uppercase tracking-wider border-b border-primary/20">
+              <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto] gap-2 px-2 py-1.5 text-[9px] font-heading font-bold text-primary uppercase tracking-wider border-b border-primary/20">
                 <span>Date</span>
                 <span>Package</span>
                 <span className="text-right">Points</span>
@@ -2219,11 +2635,13 @@ export default function Store() {
                           ? 'Manual credit'
                           : t.payment_status || 'Pending';
                 return (
-                  <div key={t.session_id || i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-2 py-1.5 text-[10px] font-heading border-b border-zinc-800/50 last:border-0">
+                  <div key={t.session_id || i} className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-1 sm:gap-2 px-2 py-2 sm:py-1.5 text-[10px] font-heading border-b border-zinc-800/50 last:border-0">
                     <span className="text-mutedForeground truncate" title={t.created_at}>{t.created_at ? formatGameDateTime(t.created_at) : '—'}</span>
-                    <span className="capitalize">{t.package_id || '—'}</span>
-                    <span className="text-right font-mono">+{Number(t.points || 0).toLocaleString()}</span>
-                    <span className={statusClass}>{statusText}</span>
+                    <div className="flex items-center justify-between gap-2 sm:contents">
+                      <span className="capitalize">{t.package_id || '—'}</span>
+                      <span className="text-right font-mono">+{Number(t.points || 0).toLocaleString()}</span>
+                      <span className={statusClass}>{statusText}</span>
+                    </div>
                   </div>
                 );
               })}
@@ -2233,7 +2651,8 @@ export default function Store() {
           )}
         </div>
         <div className="store-art-line text-primary mx-3" />
-      </div>
+      </details>
+      )}
     </div>
   );
 }
