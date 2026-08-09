@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-09 14:20 UTC[/color][/b] — [b]Missions ~15% easier[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Mission Ladder requirement targets are about [b]15% lower[/b] across the board (crimes, busts, melts, cars, deposits, and other countable goals). In-progress missions use the new targets immediately.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-09 14:00 UTC[/color][/b] — [b]Prestige level point rewards[/b][/size]
 [quote]
 [list]

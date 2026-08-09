@@ -53,9 +53,9 @@ TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY = 200
 WEIGHT_P = 1.6
 WEIGHT_BASE = 12.0
 
-# 15% easier than the prior 0.75 ease pass (overall ≈ 36.25% below raw targets; min 1).
+# Another 15% easier than the prior 0.6375 ease pass (overall ≈ 45.8125% below raw targets; min 1).
 # Changing this scales every mission target live — including each player's current mission.
-MISSION_REQUIREMENT_MULT = 0.6375
+MISSION_REQUIREMENT_MULT = 0.541875
 
 
 def _ease_amount(v: int) -> int:
