@@ -6,6 +6,65 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-09 20:57 UTC[/color][/b] — [b]Multiplayer Poker: mobile + sync polish[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Improved:[/b] Poker Room lobby and live cash tables match the casino felt pass — larger cards, clearer Folded / All-In / Turn badges, sticky [b]Fold[/b] / [b]Check|Call[/b] / [b]All-In[/b] with raise controls and the turn timer above the bottom nav on phones.[/color]
+[*][color=#888888][b]Improved:[/b] Showdown and all-in runouts show [b]Showdown…[/b] / [b]Running it out…[/b]; waiting turns stay visible. Create-table form stacks cleanly; Open Tables Buy In / Open targets are larger.[/color]
+[*][color=#888888][b]Fixed:[/b] Polling no longer flashes an old street/stack after you act; start/timeout spam is debounced; win effects still fire if your id loads a moment late. Chat and showdown panels are more readable.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-09 20:48 UTC[/color][/b] — [b]Multiplayer Blackjack: mobile + sync polish[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Improved:[/b] Lobby and table match the casino felt language — larger cards, your seat first/full-width on phones, clearer Bust/Stand/Out badges, and sticky full-width [b]Hit[/b] / [b]Stand[/b] with the turn timer above the bottom nav.[/color]
+[*][color=#888888][b]Improved:[/b] Settling hands shows [b]Revealing hands…[/b]; waiting turns stay visible under the table. Create-game form stacks cleanly on narrow screens.[/color]
+[*][color=#888888][b]Fixed:[/b] Polling no longer flashes an old hand after you hit/stand; start/timeout spam is debounced; win effects still fire if your id loads a moment late.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-09 20:25 UTC[/color][/b] — [b]Video Poker: mobile polish[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Improved:[/b] Felt table, cards, HOLD/HELD pills, quick-bet chips, and Deal/Draw/Play Again are easier to read and tap on phones (safe-area padding, pay-table collapses during a hand, clearer history rows).[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-09 20:05 UTC[/color][/b] — [b]£10 revive: airport, armoury, casinos & Game Pass prestige[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Paying [b]£10[/b] to revive (sacrifice alt → live character) now moves that alt’s [b]Airport[/b], [b]Armoury[/b], and [b]casino[/b] ownership (Dice / Roulette / Blackjack / Horse Racing / Video Poker) plus [b]Game Pass prestige[/b] onto the revived account.[/color]
+[*][color=#888888][b]Note:[/b] Normal accounts still only keep [b]1 casino[/b]. If the revived character already holds one, the sacrifice alt’s table is released unowned instead of stacking.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-09 17:05 UTC[/color][/b] — [b]Weed Empire: grow-room visuals[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Improved:[/b] Grow-room / Weed Empire 3D visuals cleaned up for phones and desktop — clearer plants, lighting, and room readability without changing grow rules.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-09 16:55 UTC[/color][/b] — [b]Users Online: denser mobile layout[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Improved:[/b] [b]Game → Users Online[/b] packs names tighter on mobile (less endless scroll), with clearer cards and role colour key.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-09 16:50 UTC[/color][/b] — [b]Weed Empire: stolen gear auto-equips[/b][/size]
 [quote]
 [list]
@@ -31,6 +90,15 @@
 [*][color=#888888][b]Changed:[/b] Dice, Roulette, Blackjack, Horse Racing, and Video Poker tables with [b]no owner[/b] can be claimed for [b]free[/b] (Capo+ / prestige rules unchanged). Airport and Armoury claim costs are unchanged.[/color]
 [*][color=#888888][b]Changed:[/b] [b]Money → Properties[/b] first buy of each unlocked building is [b]free[/b]. Upgrades still cost cash as before.[/color]
 [*][color=#888888][b]Note:[/b] Buying an [b]owned[/b] casino table on Quick Trade / buy-back still costs whatever the seller set.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-09 15:50 UTC[/color][/b] — [b]Vault relics: show current holders[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] Exclusive vault relics on [b]Money → Loot Box[/b] now show [b]Held by …[/b] when claimed so you can see who has each unique passive.[/color]
 [/list]
 [/quote]
 
@@ -95,11 +163,38 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-09 12:55 UTC[/color][/b] — [b]New-account protection: confirm before revoke[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Actions that [b]end[/b] new-account (civilian) protection now ask for an explicit confirm first (Attack search, Hitlist, crew join, casino claim/reject buyback, exclusive car, Dashboard terminate). Cancel keeps your protection.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-09 02:20 UTC[/color][/b] — [b]Distillery: clearer mobile layout[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Improved:[/b] [b]Money → Distillery[/b] is split into [b]Ops · Upgrades · Cellar · Auto[/b] on phones, with a sticky Collect / heat / vault bar, simpler upgrade buttons, Cellar above automation, and less wall-of-text heat rules.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-09 02:10 UTC[/color][/b] — [b]Old School Mafia chrome polish[/b][/size]
 [quote]
 [list]
 [*][color=#888888][b]Improved:[/b] [b]Old School Mafia[/b] now matches classic early-browser chrome: flat navy canvas, silver beveled panels, metal tab headers ([b]Main Menu[/b] / [b]Playerstats[/b]), and blue underlined category labels.[/color]
 [*][color=#888888][b]Changed:[/b] Starting look accents lean chrome/steel-blue instead of flat deep-navy bars so boxes read as gun-metal plates.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-09 01:40 UTC[/color][/b] — [b]Forum: mobile list + reply composer[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Improved:[/b] Forum topic list is denser on phones (cleaner rows, activity time, larger tabs/CTAs). Topic reply composer sticks above the bottom dock / keyboard so [b]Post[/b] stays reachable; image insert no longer uses a raw browser prompt.[/color]
 [/list]
 [/quote]
 

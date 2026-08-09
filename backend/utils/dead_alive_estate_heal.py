@@ -569,6 +569,255 @@ async def heal_game_pass_weed_from_revive_sacrifice(db, *, dry_run: bool = True)
     return out
 
 
+def _revive_casino_collections(db) -> List[tuple]:
+    return [
+        ("dice", "casino_dice", db.dice_ownership),
+        ("roulette", "casino_rlt", db.roulette_ownership),
+        ("blackjack", "casino_blackjack", db.blackjack_ownership),
+        ("horseracing", "casino_horseracing", db.horseracing_ownership),
+        ("videopoker", "casino_videopoker", db.videopoker_ownership),
+        ("slots", "casino_slots", db.slots_ownership),
+    ]
+
+
+async def _clear_revive_casino_buyback_escrow(db, owner_id: str) -> None:
+    """Release buy-back escrow held against casinos owned by the sacrificing alt."""
+    try:
+        from server import adjust_casino_buy_back_escrow
+    except Exception:
+        return
+    for _gt, _pt, coll in _revive_casino_collections(db):
+        async for doc in coll.find({"owner_id": owner_id}, {"_id": 1, "buy_back_points_held": 1}):
+            held = int(doc.get("buy_back_points_held") or 0)
+            if held > 0:
+                try:
+                    await adjust_casino_buy_back_escrow(
+                        owner_id,
+                        held,
+                        0,
+                        event_type="revive_sacrifice_buyback_release",
+                        meta={"reason": "revive_sacrifice_casino_transfer", "collection": coll.name},
+                    )
+                except Exception:
+                    logger.exception(
+                        "revive sacrifice buyback release owner=%s coll=%s", owner_id, coll.name
+                    )
+            try:
+                await coll.update_one(
+                    {"_id": doc["_id"]},
+                    {"$set": {"buy_back_points_held": 0, "buy_back_reward": 0}},
+                )
+            except Exception:
+                logger.exception(
+                    "revive sacrifice buyback zero owner=%s coll=%s", owner_id, coll.name
+                )
+
+
+async def _invalidate_revive_casino_caches(user_ids: List[str]) -> None:
+    import importlib
+
+    casino_modules = (
+        "routers.casinos.dice",
+        "routers.casinos.roulette",
+        "routers.casinos.blackjack",
+        "routers.casinos.horseracing",
+        "routers.casinos.video_poker",
+        "routers.casinos.slots",
+    )
+    for uid in user_ids:
+        if not uid:
+            continue
+        for mod_path in casino_modules:
+            try:
+                mod = importlib.import_module(mod_path)
+                inv = getattr(mod, "_invalidate_ownership_cache", None)
+                if callable(inv):
+                    inv(uid)
+            except Exception:
+                pass
+
+
+async def transfer_casinos_reviver_to_revived(
+    db,
+    *,
+    from_user_id: str,
+    to_user: dict,
+    transfer_source: str = "revive_sacrifice_transfer",
+) -> Dict[str, Any]:
+    """
+    Move casino ownership from sacrificing reviver → revived character.
+    Honours the single-casino cap: if the revived account already holds a casino
+    (and is not staff), sacrifice casinos are released unowned instead of stacking.
+    """
+    from server import (
+        _user_owns_any_casino,
+        casino_ownership_write_below_capo_ops,
+        get_rank_info,
+        user_bypasses_single_casino_cap,
+        user_prestige_rank_mult,
+    )
+
+    to_uid = str(to_user.get("id") or "")
+    to_un = (to_user.get("username") or "").strip() or "?"
+    if not from_user_id or not to_uid or from_user_id == to_uid:
+        return {"casinos": 0, "released_unowned": 0, "details": []}
+
+    colls = _revive_casino_collections(db)
+    has_any = False
+    for _gt, _pt, coll in colls:
+        if await coll.find_one({"owner_id": from_user_id}, {"_id": 1}):
+            has_any = True
+            break
+    if not has_any:
+        return {"casinos": 0, "released_unowned": 0, "details": []}
+
+    await _clear_revive_casino_buyback_escrow(db, from_user_id)
+
+    rank_id, _ = get_rank_info(int(to_user.get("rank_points") or 0), user_prestige_rank_mult(to_user))
+    receiver_blocked = (await _user_owns_any_casino(to_uid)) and not user_bypasses_single_casino_cap(
+        to_user
+    )
+    bypass_cap = user_bypasses_single_casino_cap(to_user)
+
+    details: List[dict] = []
+    casinos = 0
+    released = 0
+    qt_locs: List[tuple] = []
+    null_owner = {"$set": {"owner_id": None, "owner_username": None}}
+
+    async def _note_and_qt(game_type: str, prop_type: str, city, *, released_unowned: bool, reason: str = ""):
+        nonlocal released
+        entry = {
+            "kind": "casino",
+            "game_type": game_type,
+            "city": city,
+            "transfer_source": transfer_source,
+        }
+        if released_unowned:
+            entry["released_unowned"] = True
+            if reason:
+                entry["reason"] = reason
+            released += 1
+        details.append(entry)
+        if city and prop_type:
+            qt_locs.append((prop_type, str(city)))
+
+    if receiver_blocked:
+        for game_type, prop_type, coll in colls:
+            docs = await coll.find({"owner_id": from_user_id}, {"_id": 0, "city": 1, "state": 1}).to_list(20)
+            if not docs:
+                continue
+            res = await coll.update_many({"owner_id": from_user_id}, null_owner)
+            if res.modified_count:
+                for doc in docs:
+                    await _note_and_qt(
+                        game_type,
+                        prop_type,
+                        doc.get("city") or doc.get("state"),
+                        released_unowned=True,
+                        reason="recipient_already_owns_casino",
+                    )
+    else:
+        transferred_one = False
+        for game_type, prop_type, coll in colls:
+            docs = await coll.find({"owner_id": from_user_id}, {"_id": 0}).to_list(20)
+            if not docs:
+                continue
+            if transferred_one and not bypass_cap:
+                res = await coll.update_many({"owner_id": from_user_id}, null_owner)
+                if res.modified_count:
+                    for doc in docs:
+                        await _note_and_qt(
+                            game_type,
+                            prop_type,
+                            doc.get("city") or doc.get("state"),
+                            released_unowned=True,
+                            reason="single_casino_cap_extra",
+                        )
+                continue
+
+            owner_set = {"owner_id": to_uid, "owner_username": to_un}
+            update_op = casino_ownership_write_below_capo_ops(owner_set, new_owner_rank_id=rank_id)
+
+            if bypass_cap:
+                for doc in docs:
+                    q: Dict[str, Any] = {"owner_id": from_user_id}
+                    if doc.get("city") is not None:
+                        q["city"] = doc["city"]
+                    elif doc.get("state") is not None:
+                        q["state"] = doc["state"]
+                    res = await coll.update_one(q, update_op)
+                    if res.modified_count:
+                        casinos += 1
+                        await _note_and_qt(
+                            game_type,
+                            prop_type,
+                            doc.get("city") or doc.get("state"),
+                            released_unowned=False,
+                        )
+                transferred_one = casinos > 0
+            else:
+                first = docs[0]
+                q = {"owner_id": from_user_id}
+                if first.get("city") is not None:
+                    q["city"] = first["city"]
+                elif first.get("state") is not None:
+                    q["state"] = first["state"]
+                res = await coll.update_one(q, update_op)
+                if res.modified_count:
+                    casinos += 1
+                    transferred_one = True
+                    await _note_and_qt(
+                        game_type,
+                        prop_type,
+                        first.get("city") or first.get("state"),
+                        released_unowned=False,
+                    )
+                # Clear any remaining tables still on the sacrifice alt
+                leftovers = await coll.find(
+                    {"owner_id": from_user_id}, {"_id": 0, "city": 1, "state": 1}
+                ).to_list(20)
+                if leftovers:
+                    await coll.update_many({"owner_id": from_user_id}, null_owner)
+                    for doc in leftovers:
+                        await _note_and_qt(
+                            game_type,
+                            prop_type,
+                            doc.get("city") or doc.get("state"),
+                            released_unowned=True,
+                            reason="single_casino_cap_extra",
+                        )
+
+        if transferred_one and not bypass_cap:
+            for game_type, prop_type, coll in colls:
+                leftovers = await coll.find(
+                    {"owner_id": from_user_id}, {"_id": 0, "city": 1, "state": 1}
+                ).to_list(20)
+                if not leftovers:
+                    continue
+                await coll.update_many({"owner_id": from_user_id}, null_owner)
+                for doc in leftovers:
+                    await _note_and_qt(
+                        game_type,
+                        prop_type,
+                        doc.get("city") or doc.get("state"),
+                        released_unowned=True,
+                        reason="single_casino_cap_extra",
+                    )
+
+    if qt_locs:
+        try:
+            from utils.quicktrade_casino_cleanup import cancel_quicktrade_casino_listings_by_locations
+
+            for pt, loc in qt_locs:
+                await cancel_quicktrade_casino_listings_by_locations(pt, loc, loc)
+        except Exception:
+            logger.exception("revive sacrifice casino quicktrade cleanup")
+
+    await _invalidate_revive_casino_caches([from_user_id, to_uid])
+    return {"casinos": casinos, "released_unowned": released, "details": details}
+
+
 async def transfer_armoury_airport_reviver_to_revived(
     db,
     *,
@@ -700,6 +949,81 @@ async def transfer_game_pass_prestige_reviver_to_revived(
         "prestige_pending": carried_pending,
         "prestiged_at": set_to.get("game_pass_prestiged_at"),
     }
+
+
+async def heal_casinos_from_revive_sacrifice(db, *, dry_run: bool = True) -> dict:
+    """Move casinos stuck on £10 revive sacrifice alts onto the revived recipient."""
+    out: Dict[str, Any] = {
+        "checked": 0,
+        "healed": 0,
+        "casinos": 0,
+        "released_unowned": 0,
+        "actions": [],
+    }
+    sacrificers = await db.users.find(
+        {
+            "is_dead": True,
+            "revive_sacrifice_for_user_id": {"$exists": True, "$nin": [None, ""]},
+        },
+        {"_id": 0, "id": 1, "username": 1, "revive_sacrifice_for_user_id": 1},
+    ).to_list(2000)
+
+    for sac in sacrificers:
+        out["checked"] += 1
+        recipient_id = str(sac.get("revive_sacrifice_for_user_id") or "")
+        if not recipient_id:
+            continue
+        casino_n = 0
+        for _gt, _pt, coll in _revive_casino_collections(db):
+            casino_n += await coll.count_documents({"owner_id": sac["id"]})
+        if casino_n <= 0:
+            continue
+        recip = await db.users.find_one(
+            {"id": recipient_id},
+            {
+                "_id": 0,
+                "id": 1,
+                "username": 1,
+                "is_dead": 1,
+                "rank_points": 1,
+                "prestige_level": 1,
+                "is_admin": 1,
+                "is_moderator": 1,
+                "role": 1,
+            },
+        )
+        if not recip or recip.get("is_dead"):
+            continue
+        action = {
+            "kind": "casinos_from_revive_sacrifice",
+            "dead_username": sac.get("username"),
+            "recipient_username": recip.get("username"),
+            "casinos": int(casino_n),
+        }
+        if dry_run:
+            action["would_apply"] = True
+            out["actions"].append(action)
+            out["healed"] += 1
+            out["casinos"] += int(casino_n)
+            continue
+        result = await transfer_casinos_reviver_to_revived(
+            db,
+            from_user_id=sac["id"],
+            to_user=recip,
+            transfer_source="revive_sacrifice_heal",
+        )
+        moved = int((result or {}).get("casinos") or 0)
+        released = int((result or {}).get("released_unowned") or 0)
+        action["applied"] = (moved + released) > 0
+        action["casinos"] = moved
+        action["released_unowned"] = released
+        out["actions"].append(action)
+        if moved or released:
+            out["healed"] += 1
+            out["casinos"] += moved
+            out["released_unowned"] += released
+
+    return out
 
 
 async def heal_airport_armoury_from_revive_sacrifice(db, *, dry_run: bool = True) -> dict:
@@ -1685,6 +2009,7 @@ async def run_dead_alive_estate_heal(db, *, dry_run: bool = True) -> dict:
     gp_weed_sac = await heal_game_pass_weed_from_revive_sacrifice(db, dry_run=dry_run)
     vip = await heal_vip_pass_car_gaps(db, dry_run=dry_run)
     airport_sac = await heal_airport_armoury_from_revive_sacrifice(db, dry_run=dry_run)
+    casino_sac = await heal_casinos_from_revive_sacrifice(db, dry_run=dry_run)
     prestige_sac = await heal_game_pass_prestige_from_revive_sacrifice(db, dry_run=dry_run)
     return {
         "dry_run": bool(dry_run),
@@ -1699,6 +2024,7 @@ async def run_dead_alive_estate_heal(db, *, dry_run: bool = True) -> dict:
         "game_pass_weed_from_sacrifice": gp_weed_sac,
         "vip_pass_car": vip,
         "airport_armoury_from_sacrifice": airport_sac,
+        "casinos_from_sacrifice": casino_sac,
         "game_pass_prestige_from_sacrifice": prestige_sac,
         "totals": {
             "biz_healed": int(biz.get("healed") or 0),
@@ -1721,6 +2047,8 @@ async def run_dead_alive_estate_heal(db, *, dry_run: bool = True) -> dict:
             "airport_sacrifice_healed": int(airport_sac.get("healed") or 0),
             "airport_sacrifice_airports": int(airport_sac.get("airports") or 0),
             "airport_sacrifice_armouries": int(airport_sac.get("armouries") or 0),
+            "casino_sacrifice_healed": int(casino_sac.get("healed") or 0),
+            "casino_sacrifice_casinos": int(casino_sac.get("casinos") or 0),
             "game_pass_prestige_sacrifice_healed": int(prestige_sac.get("healed") or 0),
         },
     }

@@ -317,10 +317,11 @@ async def execute_paid_revive(
                 reviver.get("id"),
                 dead_user.get("id"),
             )
-        # Airport / armoury + Game Pass prestige entitlement from sacrificing alt → revived.
+        # Airport / armoury / casinos + Game Pass prestige from sacrificing alt → revived.
         try:
             from utils.dead_alive_estate_heal import (
                 transfer_armoury_airport_reviver_to_revived,
+                transfer_casinos_reviver_to_revived,
                 transfer_game_pass_prestige_reviver_to_revived,
             )
 
@@ -335,6 +336,19 @@ async def execute_paid_revive(
                     restore_summary["airports_from_reviver"] = int(prop_xfer["airports"])
                 if int(prop_xfer.get("armouries") or 0) > 0:
                     restore_summary["armouries_from_reviver"] = int(prop_xfer["armouries"])
+            casino_xfer = await transfer_casinos_reviver_to_revived(
+                db,
+                from_user_id=reviver["id"],
+                to_user=dead_user,
+                transfer_source="revive_sacrifice_transfer",
+            )
+            if restore_summary is not None and casino_xfer:
+                if int(casino_xfer.get("casinos") or 0) > 0:
+                    restore_summary["casinos_from_reviver"] = int(casino_xfer["casinos"])
+                if int(casino_xfer.get("released_unowned") or 0) > 0:
+                    restore_summary["casinos_released_unowned"] = int(
+                        casino_xfer["released_unowned"]
+                    )
             prestige_xfer = await transfer_game_pass_prestige_reviver_to_revived(
                 db, from_user=reviver, to_user=dead_user
             )
@@ -344,7 +358,7 @@ async def execute_paid_revive(
                 )
         except Exception:
             logging.getLogger(__name__).exception(
-                "airport/prestige transfer reviver→revived reviver=%s revived=%s",
+                "airport/casino/prestige transfer reviver→revived reviver=%s revived=%s",
                 reviver.get("id"),
                 dead_user.get("id"),
             )

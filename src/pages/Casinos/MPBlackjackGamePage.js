@@ -61,19 +61,29 @@ function WinParticles({ active }) {
 }
 
 /* ─── Playing Card ─── */
-function PlayingCard({ card, hidden, index = 0, total }) {
+function PlayingCard({ card, hidden, index = 0, total, large = false }) {
   const fan = total > 1 ? (index - (total - 1) / 2) * 3 : 0;
   const offsetX = total > 1 ? (index - (total - 1) / 2) * 2 : 0;
+  const sizeClass = large
+    ? 'w-[56px] h-[80px] sm:w-[64px] sm:h-[92px]'
+    : 'w-[48px] h-[68px] sm:w-[56px] sm:h-[80px]';
 
   if (hidden) {
     return (
-      <div className="relative w-[44px] h-[62px] sm:w-[52px] sm:h-[74px] rounded-lg overflow-hidden animate-card-deal flex-shrink-0"
-        style={{ transform: `rotate(${fan}deg) translateX(${offsetX}px)`, animationDelay: `${index * 0.1}s`, boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}>
+      <div
+        className={`relative ${sizeClass} rounded-lg overflow-hidden animate-card-deal flex-shrink-0`}
+        style={{ transform: `rotate(${fan}deg) translateX(${offsetX}px)`, animationDelay: `${index * 0.08}s`, boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}
+      >
         <div className="absolute inset-0 rounded-lg" style={{ background: 'linear-gradient(135deg,#1a3a7a,#0d2255)', border: '2px solid #2a4a9a' }}>
-          <div className="absolute inset-1 rounded border border-white/10"
-            style={{ backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.03) 4px,rgba(255,255,255,0.03) 8px),repeating-linear-gradient(-45deg,transparent,transparent 4px,rgba(255,255,255,0.03) 4px,rgba(255,255,255,0.03) 8px)' }}>
+          <div
+            className="absolute inset-1 rounded border border-white/10"
+            style={{
+              backgroundImage:
+                'repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.03) 4px,rgba(255,255,255,0.03) 8px),repeating-linear-gradient(-45deg,transparent,transparent 4px,rgba(255,255,255,0.03) 4px,rgba(255,255,255,0.03) 8px)',
+            }}
+          >
             <div className="absolute inset-2 rounded border border-yellow-500/20 flex items-center justify-center">
-              <span className="text-yellow-500/30 text-base">♠</span>
+              <span className="text-yellow-500/30 text-lg">♠</span>
             </div>
           </div>
         </div>
@@ -81,22 +91,29 @@ function PlayingCard({ card, hidden, index = 0, total }) {
     );
   }
 
-  const s = SUITS[card.suit] || { sym: '?', color: '#666' };
-  const isRed = card.suit === 'H' || card.suit === 'D';
+  const s = SUITS[card?.suit] || { sym: '?', color: '#666' };
+  const isRed = card?.suit === 'H' || card?.suit === 'D';
   return (
-    <div className="relative w-[44px] h-[62px] sm:w-[52px] sm:h-[74px] rounded-lg overflow-hidden animate-card-deal flex-shrink-0"
-      style={{ transform: `rotate(${fan}deg) translateX(${offsetX}px)`, animationDelay: `${index * 0.1}s`, boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}>
-      <div className="absolute inset-0 rounded-lg" style={{ background: 'linear-gradient(180deg,#fff,#f8f8f8,#f0f0f0)', border: `2px solid ${isRed ? '#fca5a5' : '#d4d4d8'}` }}>
+    <div
+      className={`relative ${sizeClass} rounded-lg overflow-hidden animate-card-deal flex-shrink-0`}
+      style={{ transform: `rotate(${fan}deg) translateX(${offsetX}px)`, animationDelay: `${index * 0.08}s`, boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}
+    >
+      <div
+        className="absolute inset-0 rounded-lg"
+        style={{ background: 'linear-gradient(180deg,#fff,#f8f8f8,#f0f0f0)', border: `2px solid ${isRed ? '#fca5a5' : '#d4d4d8'}` }}
+      >
         <div className="absolute top-1 left-1.5 leading-none" style={{ color: s.color }}>
-          <div className="text-[10px] font-bold">{card.value}</div>
-          <div className="text-[9px] -mt-0.5">{s.sym}</div>
+          <div className="text-[10px] sm:text-[11px] font-bold">{card?.value}</div>
+          <div className="text-[9px] sm:text-[10px] -mt-0.5">{s.sym}</div>
         </div>
         <div className="absolute inset-0 flex items-center justify-center" style={{ color: s.color }}>
-          <span className="text-xl opacity-90" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,.1))' }}>{s.sym}</span>
+          <span className={`${large ? 'text-2xl sm:text-3xl' : 'text-xl sm:text-2xl'} opacity-90`} style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,.1))' }}>
+            {s.sym}
+          </span>
         </div>
         <div className="absolute bottom-1 right-1.5 leading-none rotate-180" style={{ color: s.color }}>
-          <div className="text-[10px] font-bold">{card.value}</div>
-          <div className="text-[9px] -mt-0.5">{s.sym}</div>
+          <div className="text-[10px] sm:text-[11px] font-bold">{card?.value}</div>
+          <div className="text-[9px] sm:text-[10px] -mt-0.5">{s.sym}</div>
         </div>
       </div>
     </div>
@@ -104,7 +121,7 @@ function PlayingCard({ card, hidden, index = 0, total }) {
 }
 
 /* ─── Player Seat ─── */
-function PlayerSeat({ p, isMe, isCurrent, showCards, isWinner }) {
+function PlayerSeat({ p, isMe, isCurrent, showCards, isWinner, large = false }) {
   const hand = p.hand || [];
   const total = handTotal(hand);
   const isBust = p.status === 'bust';
@@ -117,54 +134,78 @@ function PlayerSeat({ p, isMe, isCurrent, showCards, isWinner }) {
   let badgeLabel = '—';
   let badgeStyle = { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)' };
 
-  if (isWinner)       { badgeLabel = '🏆 Win';  badgeStyle = { background: 'rgba(52,211,153,0.25)', color: '#34d399' }; }
-  else if (isEliminated)   { badgeLabel = 'Out';     badgeStyle = { background: 'rgba(239,68,68,0.2)', color: '#ef4444' }; }
-  else if (isBust)    { badgeLabel = 'Bust';    badgeStyle = { background: 'rgba(248,113,113,0.2)', color: '#f87171' }; }
-  else if (isStood)   { badgeLabel = 'Stand';   badgeStyle = { background: 'rgba(161,161,170,0.2)', color: '#a1a1aa' }; }
+  if (isWinner) { badgeLabel = 'Win'; badgeStyle = { background: 'rgba(52,211,153,0.25)', color: '#34d399' }; }
+  else if (isEliminated) { badgeLabel = 'Out'; badgeStyle = { background: 'rgba(239,68,68,0.2)', color: '#ef4444' }; }
+  else if (isBust) { badgeLabel = 'Bust'; badgeStyle = { background: 'rgba(248,113,113,0.2)', color: '#f87171' }; }
+  else if (isStood) { badgeLabel = 'Stand'; badgeStyle = { background: 'rgba(161,161,170,0.2)', color: '#a1a1aa' }; }
   else if (isCurrent) { badgeLabel = 'Playing'; badgeStyle = { background: 'rgba(212,175,55,0.2)', color: 'var(--noir-primary)' }; }
   else if (maskPeek && hand.length) {
-    badgeLabel = 'Waiting';
+    badgeLabel = 'Hidden';
     badgeStyle = { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)' };
   }
-  else if (isReady)   { badgeLabel = '✓ Ready'; badgeStyle = { background: 'rgba(52,211,153,0.2)', color: '#34d399' }; }
+  else if (isReady) { badgeLabel = 'Ready'; badgeStyle = { background: 'rgba(52,211,153,0.2)', color: '#34d399' }; }
   else if (isWaiting) { badgeLabel = 'Waiting'; badgeStyle = { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)' }; }
   else if (hand.length && showCards) { badgeLabel = String(total); }
-  else if (hand.length) { badgeLabel = `${hand.length}cd`; }
+  else if (hand.length) { badgeLabel = `${hand.length} cd`; }
 
   return (
-    <div className="rounded-xl overflow-hidden border-2 transition-all duration-300"
+    <div
+      className={`rounded-xl overflow-hidden border-2 transition-all duration-300 ${large ? 'w-full' : ''}`}
       style={{
-        borderColor: isWinner ? '#34d399' : isEliminated ? 'rgba(239,68,68,0.3)' : isCurrent ? 'var(--noir-primary-bright)' : isMe ? 'rgba(212,175,55,0.35)' : 'rgba(90,62,27,0.5)',
-        background: isWinner ? 'linear-gradient(180deg,rgba(52,211,153,0.08),rgba(0,0,0,0.35))' : isEliminated ? 'rgba(239,68,68,0.04)' : isCurrent ? 'linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.3))' : 'rgba(0,0,0,0.28)',
-        boxShadow: isWinner ? '0 0 28px rgba(52,211,153,0.35), 0 0 14px rgba(52,211,153,0.2), inset 0 0 20px rgba(0,0,0,0.2)' : isCurrent ? '0 0 24px rgba(212,175,55,0.18),inset 0 0 20px rgba(0,0,0,0.2)' : 'none',
+        borderColor: isWinner
+          ? '#34d399'
+          : isEliminated
+            ? 'rgba(239,68,68,0.3)'
+            : isCurrent
+              ? 'var(--noir-primary-bright)'
+              : isMe
+                ? 'rgba(212,175,55,0.45)'
+                : 'rgba(90,62,27,0.5)',
+        background: isWinner
+          ? 'linear-gradient(180deg,rgba(52,211,153,0.08),rgba(0,0,0,0.35))'
+          : isEliminated
+            ? 'rgba(239,68,68,0.04)'
+            : isCurrent
+              ? 'linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.3))'
+              : 'rgba(0,0,0,0.28)',
+        boxShadow: isWinner
+          ? '0 0 28px rgba(52,211,153,0.35), 0 0 14px rgba(52,211,153,0.2), inset 0 0 20px rgba(0,0,0,0.2)'
+          : isCurrent
+            ? '0 0 24px rgba(212,175,55,0.18),inset 0 0 20px rgba(0,0,0,0.2)'
+            : 'none',
         opacity: isEliminated ? 0.5 : 1,
-      }}>
-      <div className="px-2.5 py-1.5 flex items-center justify-between gap-1"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.22)' }}>
-        <span className="text-[9px] font-heading font-bold truncate"
-          style={{ color: isMe ? 'var(--noir-primary)' : 'rgba(255,255,255,0.75)', maxWidth: 72 }}>
-          {isEliminated && <Skull size={8} className="inline mr-0.5 opacity-50" />}
+      }}
+    >
+      <div
+        className="px-2.5 py-1.5 flex items-center justify-between gap-2"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.22)' }}
+      >
+        <span
+          className={`font-heading font-bold truncate min-w-0 ${large ? 'text-xs sm:text-sm' : 'text-[11px]'}`}
+          style={{ color: isMe ? 'var(--noir-primary)' : 'rgba(255,255,255,0.75)' }}
+        >
+          {isEliminated && <Skull size={10} className="inline mr-0.5 opacity-50" />}
           {p.username}{isMe ? ' (You)' : ''}
         </span>
-        <span className="text-[8px] font-heading px-1.5 py-0.5 rounded-full flex-shrink-0" style={badgeStyle}>
+        <span className="text-[10px] font-heading px-1.5 py-0.5 rounded-full flex-shrink-0 uppercase tracking-wide" style={badgeStyle}>
           {badgeLabel}
         </span>
       </div>
-      <div className="p-2 min-h-[84px] flex items-center justify-center flex-wrap gap-0.5">
+      <div className={`p-2 ${large ? 'min-h-[96px] sm:min-h-[110px]' : 'min-h-[88px]'} flex items-center justify-center flex-wrap gap-1`}>
         {isEliminated
-          ? <span className="text-2xl opacity-20">💀</span>
+          ? <span className="text-[11px] font-heading uppercase tracking-wider text-red-400/50">Eliminated</span>
           : hand.length === 0
-          ? <span className="text-[8px] font-heading" style={{ color: 'rgba(255,255,255,0.1)' }}>waiting…</span>
-          : hand.map((card, i) => (
-              <PlayingCard
-                key={i}
-                card={card}
-                hidden={!showCards || card?.hidden === true || card?.value === '?'}
-                index={i}
-                total={hand.length}
-              />
-            ))
-        }
+            ? <span className="text-[10px] font-heading" style={{ color: 'rgba(255,255,255,0.15)' }}>waiting…</span>
+            : hand.map((card, i) => (
+                <PlayingCard
+                  key={`${card?.suit || 'x'}-${card?.value || '?'}-${i}`}
+                  card={card}
+                  hidden={!showCards || card?.hidden === true || card?.value === '?'}
+                  index={i}
+                  total={hand.length}
+                  large={large}
+                />
+              ))}
       </div>
     </div>
   );
@@ -241,12 +282,22 @@ export default function MPBlackjackGamePage() {
   const [isModerator, setIsModerator] = useState(false);
   const chatEndRef = useRef(null);
   const timeoutTriggeredRef = useRef(null);
+  const timeoutInFlightRef = useRef(false);
   const startTriggeredRef = useRef(false);
+  const startInFlightRef = useRef(false);
   const prevRoundRef = useRef(null);
   const prevRoundEliminatedRef = useRef([]);
+  const pollSeqRef = useRef(0);
+  const actionSeqRef = useRef(0);
+  const myUserIdRef = useRef(null);
+  const pendingWinCheckRef = useRef(null);
 
   useEffect(() => {
-    api.get('/auth/me').then((r) => setMyUserId(r.data?.id ?? null)).catch(() => setMyUserId(null));
+    api.get('/auth/me').then((r) => {
+      const id = r.data?.id ?? null;
+      myUserIdRef.current = id;
+      setMyUserId(id);
+    }).catch(() => setMyUserId(null));
   }, []);
 
   useEffect(() => {
@@ -256,40 +307,74 @@ export default function MPBlackjackGamePage() {
     }).catch(() => {});
   }, []);
 
+  const applyGameUpdate = useCallback((g, { fromAction = false } = {}) => {
+    if (!g) {
+      setGame(null);
+      return;
+    }
+    setGame((prev) => {
+      const uid = myUserIdRef.current;
+      if (g?.status === 'completed') {
+        const myResult = g?.results?.find((res) => res.user_id === uid);
+        if (myResult?.result === 'win' && prev?.status !== 'completed') {
+          setShowWin(true);
+          setTimeout(() => setShowWin(false), 3500);
+          pendingWinCheckRef.current = null;
+        } else if (!uid && prev?.status !== 'completed') {
+          // myUserId not loaded yet — re-check when it arrives
+          pendingWinCheckRef.current = g;
+        }
+      }
+      const newRound = g?.current_round;
+      if (newRound && prevRoundRef.current && newRound > prevRoundRef.current) {
+        const roundElim = g?.round_eliminated || [];
+        if (roundElim.length) {
+          const elimNames = (g?.players || [])
+            .filter((p) => roundElim.includes(p.user_id))
+            .map((p) => p.username);
+          toast.message(`Round ${prevRoundRef.current} over — eliminated: ${elimNames.join(', ')}`);
+        }
+      }
+      prevRoundRef.current = newRound;
+      setPrevStatus(g?.status);
+      setPrevPhase(g?.phase);
+      return g;
+    });
+    if (fromAction) {
+      actionSeqRef.current += 1;
+    }
+  }, []);
+
+  // Fire win particles if completed state arrived before myUserId
+  useEffect(() => {
+    if (!myUserId || !pendingWinCheckRef.current) return;
+    const g = pendingWinCheckRef.current;
+    pendingWinCheckRef.current = null;
+    const myResult = g?.results?.find((res) => res.user_id === myUserId);
+    if (myResult?.result === 'win') {
+      setShowWin(true);
+      setTimeout(() => setShowWin(false), 3500);
+    }
+  }, [myUserId]);
+
   const fetchGame = useCallback(() => {
     if (!gameId) return;
+    const seq = ++pollSeqRef.current;
+    const actionAtStart = actionSeqRef.current;
     api.get(`/casino/mp-blackjack/games/${gameId}`)
       .then((r) => {
-        const g = r.data?.game ?? null;
-        setGame((prev) => {
-          // Detect win
-          if (g?.status === 'completed' && prev?.status !== 'completed') {
-            const myResult = g?.results?.find((res) => res.user_id === myUserId);
-            if (myResult?.result === 'win') {
-              setShowWin(true);
-              setTimeout(() => setShowWin(false), 3500);
-            }
-          }
-          // Detect new round starting (elimination)
-          const newRound = g?.current_round;
-          if (newRound && prevRoundRef.current && newRound > prevRoundRef.current) {
-            const roundElim = g?.round_eliminated || [];
-            if (roundElim.length) {
-              const elimNames = (g?.players || [])
-                .filter((p) => roundElim.includes(p.user_id))
-                .map((p) => p.username);
-              toast.message(`Round ${prevRoundRef.current} over — eliminated: ${elimNames.join(', ')}`, { icon: '💀' });
-            }
-          }
-          prevRoundRef.current = newRound;
-          setPrevStatus(g?.status);
-          setPrevPhase(g?.phase);
-          return g;
-        });
+        // Ignore stale GETs that finished after a newer poll or after a POST applied state
+        if (seq !== pollSeqRef.current || actionSeqRef.current !== actionAtStart) return;
+        applyGameUpdate(r.data?.game ?? null);
       })
-      .catch(() => setGame(null))
-      .finally(() => setHasLoaded(true));
-  }, [gameId, myUserId]);
+      .catch(() => {
+        if (seq !== pollSeqRef.current) return;
+        setGame(null);
+      })
+      .finally(() => {
+        if (seq === pollSeqRef.current) setHasLoaded(true);
+      });
+  }, [gameId, applyGameUpdate]);
 
   useEffect(() => {
     fetchGame();
@@ -310,7 +395,7 @@ export default function MPBlackjackGamePage() {
     setActionLoading(true);
     try {
       const res = await api.post(`/casino/mp-blackjack/games/${gameId}/hit`);
-      setGame(res.data?.game ?? null);
+      applyGameUpdate(res.data?.game ?? null, { fromAction: true });
       await refreshUser();
     } catch (e) { toast.error(getApiErrorMessage(e) || 'Failed'); }
     finally { setActionLoading(false); }
@@ -321,7 +406,7 @@ export default function MPBlackjackGamePage() {
     setActionLoading(true);
     try {
       const res = await api.post(`/casino/mp-blackjack/games/${gameId}/stand`);
-      setGame(res.data?.game ?? null);
+      applyGameUpdate(res.data?.game ?? null, { fromAction: true });
       await refreshUser();
     } catch (e) { toast.error(getApiErrorMessage(e) || 'Failed'); }
     finally { setActionLoading(false); }
@@ -332,7 +417,7 @@ export default function MPBlackjackGamePage() {
     setReadyLoading(true);
     try {
       const res = await api.post(`/casino/mp-blackjack/games/${gameId}/ready`);
-      setGame(res.data?.game ?? null);
+      applyGameUpdate(res.data?.game ?? null, { fromAction: true });
       toast.success("You're ready!");
     } catch (e) { toast.error(getApiErrorMessage(e) || 'Failed'); }
     finally { setReadyLoading(false); }
@@ -379,24 +464,34 @@ export default function MPBlackjackGamePage() {
   };
 
   const triggerStart = useCallback(async () => {
-    if (!gameId || startTriggeredRef.current) return;
+    if (!gameId || startTriggeredRef.current || startInFlightRef.current) return;
     startTriggeredRef.current = true;
+    startInFlightRef.current = true;
     try {
       const res = await api.post(`/casino/mp-blackjack/games/${gameId}/start`);
-      setGame(res.data?.game ?? null);
-      toast.success('Cards are dealt — good luck!', { icon: '🃏' });
+      applyGameUpdate(res.data?.game ?? null, { fromAction: true });
+      toast.success('Cards are dealt — good luck!');
     } catch (_) {
+      // Allow one retry if start failed (countdown already hit 0)
       startTriggeredRef.current = false;
+    } finally {
+      startInFlightRef.current = false;
     }
-  }, [gameId]);
+  }, [gameId, applyGameUpdate]);
 
   const triggerTimeout = useCallback(async () => {
-    if (!gameId) return;
+    if (!gameId || timeoutInFlightRef.current) return;
+    timeoutInFlightRef.current = true;
     try {
       const res = await api.post(`/casino/mp-blackjack/games/${gameId}/timeout`);
-      setGame(res.data?.game ?? null);
-    } catch (_) {}
-  }, [gameId]);
+      applyGameUpdate(res.data?.game ?? null, { fromAction: true });
+    } catch (_) {
+      // Allow retry on next tick if request failed
+      timeoutTriggeredRef.current = null;
+    } finally {
+      timeoutInFlightRef.current = false;
+    }
+  }, [gameId, applyGameUpdate]);
 
   const sendChat = async (e) => {
     e?.preventDefault();
@@ -405,7 +500,7 @@ export default function MPBlackjackGamePage() {
     setSendingChat(true);
     try {
       const res = await api.post(`/casino/mp-blackjack/games/${gameId}/chat`, { message: msg });
-      setGame(res.data?.game ?? null);
+      applyGameUpdate(res.data?.game ?? null, { fromAction: true });
       setChatInput('');
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     } catch (e) { toast.error(getApiErrorMessage(e) || 'Send failed'); }
@@ -455,7 +550,7 @@ export default function MPBlackjackGamePage() {
   const prevIsMyTurnRef = useRef(false);
   useEffect(() => {
     if (isMyTurn && !prevIsMyTurnRef.current) {
-      toast.success("Your turn! Hit or stand.", { icon: '🎴' });
+      toast.success('Your turn — hit or stand.');
       if (typeof Notification !== 'undefined' && document.hidden) {
         if (Notification.permission === 'granted') {
           try {
@@ -504,20 +599,20 @@ export default function MPBlackjackGamePage() {
   // Only show "not found" after the first fetch settles — until then paint lobby chrome with safe defaults.
   if (hasLoaded && !game) {
     return (
-      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
-        <p className="text-[10px] text-mutedForeground font-heading">Game not found.</p>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0`}>
+        <p className="text-[11px] text-mutedForeground font-heading">Game not found.</p>
         <Link to="/casino/mp-blackjack" className="text-primary font-heading text-sm hover:underline">← Back to Multiplayer Blackjack</Link>
       </div>
     );
   }
   if (status === 'cancelled') {
     return (
-      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0`}>
         <div className="rounded-xl border p-6 text-center space-y-3" style={{ borderColor: 'rgba(248,113,113,0.25)', background: 'rgba(248,113,113,0.05)' }}>
           <p className="text-sm font-heading font-bold text-red-400 uppercase tracking-wider">Game Cancelled</p>
-          <p className="text-[10px] text-mutedForeground font-heading">All bets have been refunded.</p>
+          <p className="text-[11px] text-mutedForeground font-heading">All bets have been refunded.</p>
           <Link to="/casino/mp-blackjack"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-primary/40 bg-primary/10 text-primary font-heading text-[10px] uppercase hover:bg-primary/20">
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-primary/40 bg-primary/10 text-primary font-heading text-[11px] uppercase hover:bg-primary/20">
             ← Back to games
           </Link>
         </div>
@@ -530,13 +625,19 @@ export default function MPBlackjackGamePage() {
     boxShadow: '0 4px 24px rgba(0,0,0,0.5),inset 0 0 60px rgba(0,0,0,0.2)',
   };
   const goldBar = { height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' };
+  const mySeatPlayer = amIPlayer ? players[myIndex] : null;
+  const otherPlayers = players.filter((p) => p.user_id !== myUserId);
+  const isSettling = phase === 'dealer' || (status === 'playing' && phase === 'settled' && !(game?.results || []).length);
 
   return (
-    <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="mp-blackjack-game-page">
+    <div
+      className={`space-y-3 ${styles.pageContent} mobile-page-root pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0`}
+      data-testid="mp-blackjack-game-page"
+    >
       <style>{`
         @keyframes card-deal {
           0%   { transform: translateY(-28px) rotate(-5deg) scale(0.8); opacity: 0; }
-          100% { opacity: 1; }
+          100% { transform: translateY(0) rotate(0) scale(1); opacity: 1; }
         }
         @keyframes bj-particle {
           0%   { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
@@ -560,6 +661,24 @@ export default function MPBlackjackGamePage() {
         .animate-result-slide { animation: result-slide 0.35s ease-out both; }
         .animate-turn-pulse   { animation: turn-pulse 1.4s ease-in-out infinite; }
         .animate-ready-pulse  { animation: ready-pulse 2s ease-in-out infinite; }
+        .mpbj-sticky-actions {
+          position: sticky;
+          bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+          z-index: 30;
+        }
+        .mpbj-action-chrome {
+          background: linear-gradient(180deg, rgba(12,61,26,0.96), rgba(10,94,42,0.98));
+          border: 1px solid rgba(212,175,55,0.25);
+          box-shadow: 0 -4px 20px rgba(0,0,0,0.35);
+        }
+        @media (min-width: 768px) {
+          .mpbj-sticky-actions { position: static; bottom: auto; }
+          .mpbj-action-chrome {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+          }
+        }
       `}</style>
 
       <WinParticles active={showWin} />
@@ -608,35 +727,35 @@ export default function MPBlackjackGamePage() {
 
       {/* ══ LOBBY (waiting for 2+ players) ══ */}
       {status === 'open' && phase !== 'ready' && (
-        <div className="rounded-xl overflow-hidden border-2" style={{ borderColor: '#5a3e1b', ...tableBackground }}>
+        <div className="mobile-panel rounded-xl overflow-hidden border-2" style={{ borderColor: '#5a3e1b', ...tableBackground }}>
           <div style={goldBar} />
-          <div className="p-6 text-center space-y-4">
+          <div className="p-5 sm:p-6 text-center space-y-4">
             <p className="text-sm font-heading font-bold uppercase tracking-[0.2em]"
               style={{ background: 'linear-gradient(180deg,#ffd700,var(--noir-primary-bright))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               Waiting for Players
             </p>
-            <p className="text-[9px] font-heading uppercase tracking-wider" style={{ color: 'rgba(110,231,183,0.4)' }}>
+            <p className="text-[11px] font-heading uppercase tracking-wider" style={{ color: 'rgba(110,231,183,0.4)' }}>
               {players.length} / {game?.max_players ?? 6} seated
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               {players.map((p) => (
-                <span key={p.user_id} className="px-3 py-1 rounded-full text-[9px] font-heading font-bold"
+                <span key={p.user_id} className="px-3 py-1.5 rounded-full text-[11px] font-heading font-bold"
                   style={{ background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.3)', color: 'var(--noir-primary)' }}>
                   {p.username}
                 </span>
               ))}
             </div>
-            <div className="flex justify-center gap-2 mt-2">
+            <div className="flex flex-col sm:flex-row justify-center gap-2 mt-2">
               {canCancelGame && (
                 <button type="button" disabled={cancelLoading} onClick={cancelGame}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase disabled:opacity-50 transition-colors"
+                  className="inline-flex items-center justify-center gap-1.5 px-4 min-h-10 py-2 rounded-lg border text-[11px] font-heading font-bold uppercase disabled:opacity-50 transition-colors"
                   style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)', color: '#f87171' }}>
                   <XCircle size={11} />{cancelLoading ? 'Cancelling…' : 'Cancel Game'}
                 </button>
               )}
               {canLeaveGame && (
                 <button type="button" disabled={leaveLoading} onClick={leaveGame}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase disabled:opacity-50 transition-colors"
+                  className="inline-flex items-center justify-center gap-1.5 px-4 min-h-10 py-2 rounded-lg border text-[11px] font-heading font-bold uppercase disabled:opacity-50 transition-colors"
                   style={{ borderColor: 'rgba(161,161,170,0.4)', background: 'rgba(39,39,42,0.85)', color: '#e4e4e7' }}>
                   <XCircle size={11} />{leaveLoading ? 'Leaving…' : 'Leave Game'}
                 </button>
@@ -649,9 +768,9 @@ export default function MPBlackjackGamePage() {
 
       {/* ══ READY PHASE ══ */}
       {(status === 'playing' || status === 'open') && phase === 'ready' && (
-        <div className="rounded-xl overflow-hidden border-2" style={{ borderColor: '#5a3e1b', ...tableBackground }}>
+        <div className="mobile-panel rounded-xl overflow-hidden border-2" style={{ borderColor: '#5a3e1b', ...tableBackground }}>
           <div style={goldBar} />
-          <div className="p-5 space-y-5">
+          <div className="p-4 sm:p-5 space-y-5">
             {/* Header */}
             <div className="text-center space-y-1">
               {eliminationRounds && currentRound > 1 ? (
@@ -660,7 +779,7 @@ export default function MPBlackjackGamePage() {
                     style={{ background: 'linear-gradient(180deg,#fb7185,#e11d48)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                     Round {currentRound}
                   </p>
-                  <p className="text-[9px] font-heading text-mutedForeground">
+                  <p className="text-[11px] font-heading text-mutedForeground">
                     {activePlayers.length} players remain — lowest hand will be eliminated
                   </p>
                 </>
@@ -670,7 +789,7 @@ export default function MPBlackjackGamePage() {
                     style={{ background: 'linear-gradient(180deg,#ffd700,var(--noir-primary-bright))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                     {activePlayers.length >= (game?.max_players ?? 6) ? 'Table Full — Ready Up!' : 'Ready Up!'}
                   </p>
-                  <p className="text-[9px] font-heading" style={{ color: 'rgba(110,231,183,0.5)' }}>
+                  <p className="text-[11px] font-heading" style={{ color: 'rgba(110,231,183,0.5)' }}>
                     {activePlayers.length >= 2 ? 'All seated players must ready — then deal' : 'Need at least 2 players'}
                   </p>
                 </>
@@ -684,15 +803,15 @@ export default function MPBlackjackGamePage() {
               </div>
             ) : (
               amIPlayer && !amIEliminated && (
-                <div className="flex flex-col items-center gap-2">
+                <div className="flex flex-col items-center gap-2 w-full max-w-sm mx-auto">
                   {amIReady ? (
-                    <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-heading font-bold text-[10px] uppercase tracking-wider"
+                    <div className="inline-flex items-center gap-2 w-full justify-center px-5 py-3 rounded-xl font-heading font-bold text-[11px] uppercase tracking-wider"
                       style={{ background: 'rgba(52,211,153,0.1)', border: '2px solid rgba(52,211,153,0.35)', color: '#34d399' }}>
                       <CheckCircle2 size={14} /> You're Ready
                     </div>
                   ) : (
                     <button type="button" disabled={readyLoading} onClick={markReady}
-                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 font-heading font-bold text-[11px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 animate-ready-pulse"
+                      className="inline-flex items-center justify-center gap-2 w-full px-6 py-3.5 rounded-xl border-2 font-heading font-bold text-sm uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 animate-ready-pulse"
                       style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200', boxShadow: '0 4px 16px rgba(212,175,55,0.3)' }}>
                       <CheckCircle2 size={15} />
                       {readyLoading ? 'Readying…' : "I'm Ready"}
@@ -700,7 +819,7 @@ export default function MPBlackjackGamePage() {
                   )}
                   {canLeaveGame && (
                     <button type="button" disabled={leaveLoading} onClick={leaveGame}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase disabled:opacity-50 transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-[11px] font-heading font-bold uppercase disabled:opacity-50 transition-colors"
                       style={{ borderColor: 'rgba(161,161,170,0.4)', background: 'rgba(39,39,42,0.85)', color: '#e4e4e7' }}>
                       <XCircle size={11} />{leaveLoading ? 'Leaving…' : 'Leave Game'}
                     </button>
@@ -712,30 +831,30 @@ export default function MPBlackjackGamePage() {
             {/* Player ready list */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {activePlayers.map((p) => (
-                <div key={p.user_id} className="flex items-center gap-2 px-2.5 py-2 rounded-lg"
+                <div key={p.user_id} className="flex items-center gap-2 px-2.5 py-2.5 rounded-lg"
                   style={{
                     background: p.ready ? 'rgba(52,211,153,0.07)' : 'rgba(0,0,0,0.25)',
                     border: p.ready ? '1px solid rgba(52,211,153,0.25)' : '1px solid rgba(255,255,255,0.06)',
                   }}>
                   <div className="w-2 h-2 rounded-full flex-shrink-0 transition-all"
                     style={{ background: p.ready ? '#34d399' : 'rgba(255,255,255,0.12)', boxShadow: p.ready ? '0 0 6px rgba(52,211,153,0.5)' : 'none' }} />
-                  <span className="text-[9px] font-heading font-bold truncate"
+                  <span className="text-[11px] font-heading font-bold truncate min-w-0"
                     style={{ color: p.user_id === myUserId ? 'var(--noir-primary)' : 'rgba(255,255,255,0.7)' }}>
                     {p.username}
                     {p.user_id === myUserId ? ' (You)' : ''}
                   </span>
-                  {p.ready && <CheckCircle2 size={10} className="ml-auto flex-shrink-0" style={{ color: '#34d399' }} />}
+                  {p.ready && <CheckCircle2 size={12} className="ml-auto flex-shrink-0" style={{ color: '#34d399' }} />}
                 </div>
               ))}
             </div>
 
             {/* Progress */}
             <div className="space-y-1.5">
-              <div className="flex justify-between text-[8px] font-heading text-mutedForeground">
+              <div className="flex justify-between text-[10px] font-heading text-mutedForeground">
                 <span>{activePlayers.filter((p) => p.ready).length} / {activePlayers.length} ready</span>
                 {!allReady && <span className="animate-turn-pulse">Waiting for others…</span>}
               </div>
-              <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
                 <div className="h-full rounded-full transition-all duration-500"
                   style={{
                     width: `${activePlayers.length ? (activePlayers.filter((p) => p.ready).length / activePlayers.length) * 100 : 0}%`,
@@ -747,7 +866,7 @@ export default function MPBlackjackGamePage() {
             {canCancelGame && (
               <div className="flex justify-center">
                 <button type="button" disabled={cancelLoading} onClick={cancelGame}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-[11px] font-heading font-bold uppercase disabled:opacity-50"
                   style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)', color: '#f87171' }}>
                   <XCircle size={11} />{cancelLoading ? 'Cancelling…' : 'Cancel Game'}
                 </button>
@@ -760,22 +879,32 @@ export default function MPBlackjackGamePage() {
 
       {/* ══ PLAYING / COMPLETED TABLE ══ */}
       {(status === 'playing' || status === 'completed') && phase !== 'ready' && (
-        <div className="rounded-xl overflow-hidden border-2" style={{ borderColor: '#5a3e1b', ...tableBackground }}>
+        <div className="mobile-panel rounded-xl overflow-hidden border-2" style={{ borderColor: '#5a3e1b', ...tableBackground }}>
           <div style={goldBar} />
-          <div className="p-4 space-y-4">
+          <div className="p-3 sm:p-4 space-y-3 sm:space-y-4">
 
             {/* Round badge for elimination */}
             {eliminationRounds && status === 'playing' && (
               <div className="flex justify-center">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-heading font-bold uppercase"
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-heading font-bold uppercase"
                   style={{ background: 'rgba(251,113,133,0.1)', border: '1px solid rgba(251,113,133,0.25)', color: '#fb7185' }}>
                   <Swords size={10} /> Round {currentRound}
                 </span>
               </div>
             )}
 
+            {/* Settling banner */}
+            {isSettling && (
+              <div className="text-center px-3 py-2 rounded-lg border animate-turn-pulse"
+                style={{ background: 'rgba(212,175,55,0.1)', borderColor: 'rgba(212,175,55,0.35)' }}>
+                <p className="text-[11px] sm:text-xs font-heading font-bold uppercase tracking-wider text-primary">
+                  Revealing hands…
+                </p>
+              </div>
+            )}
+
             {/* Game info: pot, buy-in, rules */}
-            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 px-2 py-2 rounded-lg text-[9px] font-heading"
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 px-2 py-2 rounded-lg text-[11px] font-heading"
               style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(212,175,55,0.12)' }}>
               <span className="text-mutedForeground">Pot <span className="text-primary font-bold">{formatMoney(pot)}</span></span>
               <span className="text-mutedForeground">Buy-in <span className="text-primary">{formatMoney(game?.buy_in ?? 0)}</span></span>
@@ -803,9 +932,9 @@ export default function MPBlackjackGamePage() {
 
             {/* Last 5 rounds / games */}
             {(game?.round_history?.length > 0) && (
-              <div className="px-2 py-2 rounded-lg text-[9px] font-heading space-y-1"
+              <div className="px-2 py-2 rounded-lg text-[11px] font-heading space-y-1"
                 style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(212,175,55,0.1)' }}>
-                <p className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground text-center mb-1.5">Last 5 rounds</p>
+                <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground text-center mb-1.5">Last 5 rounds</p>
                 <div className="flex flex-wrap justify-center gap-x-3 gap-y-1">
                   {(game.round_history.slice(-5)).reverse().map((entry, i) => (
                     <div key={i} className="flex items-center gap-1.5">
@@ -823,65 +952,110 @@ export default function MPBlackjackGamePage() {
               </div>
             )}
 
-            {/* Turn indicator + timer */}
-            {status === 'playing' && phase === 'playing' && currentTurnIndex >= 0 && (
+            {/* Turn indicator + timer (desktop / when not sticky bar) */}
+            {status === 'playing' && phase === 'playing' && currentTurnIndex >= 0 && !isMyTurn && (
               <div className="flex items-center justify-center gap-3">
                 {turnSecondsLeft != null && (
-                  <TurnTimer seconds={turnSecondsLeft} isMyTurn={isMyTurn} />
+                  <TurnTimer seconds={turnSecondsLeft} isMyTurn={false} />
                 )}
-                <span className="text-[10px] font-heading font-bold uppercase tracking-wider animate-turn-pulse"
-                  style={{
-                    color: isMyTurn ? 'var(--noir-primary)' : 'rgba(255,255,255,0.45)',
-                    textShadow: isMyTurn ? '0 0 12px rgba(212,175,55,0.4)' : 'none',
-                  }}>
-                  {isMyTurn ? '🎴 Your Turn' : `${players[currentTurnIndex]?.username ?? 'Player'}'s Turn`}
+                <span className="text-[11px] font-heading font-bold uppercase tracking-wider animate-turn-pulse"
+                  style={{ color: 'rgba(255,255,255,0.55)' }}>
+                  {players[currentTurnIndex]?.username ?? 'Player'}&apos;s turn
                 </span>
               </div>
             )}
 
-            {/* Player seats */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-              {players.map((p, idx) => {
-                const isMe = p.user_id === myUserId;
-                const isCurrent = idx === currentTurnIndex;
-                const everyoneResolved = status === 'completed' || phase === 'settled' || phase === 'dealer';
-                // Opponents stay face-down until the round resolves — API also redacts hands mid-round.
-                const showOpponentCards = isMe || everyoneResolved;
-                const winnerIds = game?.winner_ids || [];
-                const isWinner = (status === 'completed' || phase === 'settled') && winnerIds.includes(p.user_id);
-                return (
+            {/* Your seat — full width on mobile */}
+            {mySeatPlayer && (() => {
+              const everyoneResolved = status === 'completed' || phase === 'settled' || phase === 'dealer';
+              const winnerIds = game?.winner_ids || [];
+              const isWinner = (status === 'completed' || phase === 'settled') && winnerIds.includes(mySeatPlayer.user_id);
+              return (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-heading uppercase tracking-wider text-primary/70 text-center sm:text-left">Your hand</p>
                   <PlayerSeat
-                    key={p.user_id}
-                    p={p}
-                    isMe={isMe}
-                    isCurrent={isCurrent}
-                    showCards={showOpponentCards}
+                    p={mySeatPlayer}
+                    isMe
+                    isCurrent={myIndex === currentTurnIndex}
+                    showCards
                     isWinner={isWinner}
+                    large
                   />
-                );
-              })}
-            </div>
+                </div>
+              );
+            })()}
 
-            {/* Actions */}
+            {/* Opponent seats */}
+            {otherPlayers.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground text-center sm:text-left sm:hidden">Table</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {otherPlayers.map((p) => {
+                    const idx = players.findIndex((x) => x.user_id === p.user_id);
+                    const isCurrent = idx === currentTurnIndex;
+                    const everyoneResolved = status === 'completed' || phase === 'settled' || phase === 'dealer';
+                    const showOpponentCards = everyoneResolved;
+                    const winnerIds = game?.winner_ids || [];
+                    const isWinner = (status === 'completed' || phase === 'settled') && winnerIds.includes(p.user_id);
+                    return (
+                      <PlayerSeat
+                        key={p.user_id}
+                        p={p}
+                        isMe={false}
+                        isCurrent={isCurrent}
+                        showCards={showOpponentCards}
+                        isWinner={isWinner}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Sticky Hit / Stand on mobile */}
             {status === 'playing' && phase === 'playing' && isMyTurn && (
-              <div className="flex flex-col items-center gap-1 pt-1">
-                <div className="flex items-center justify-center gap-3">
-                  <button type="button" disabled={hitDisabled} onClick={hit}
+              <div className="mpbj-sticky-actions mpbj-action-chrome flex flex-col gap-2 pt-1 rounded-xl p-2.5 sm:p-0">
+                <div className="flex items-center justify-center gap-2 sm:hidden">
+                  {turnSecondsLeft != null && (
+                    <TurnTimer seconds={turnSecondsLeft} isMyTurn />
+                  )}
+                  <span className="text-[11px] font-heading font-bold uppercase tracking-wider text-primary">
+                    Your turn
+                  </span>
+                </div>
+                <div className="hidden sm:flex items-center justify-center gap-3 pb-1">
+                  {turnSecondsLeft != null && (
+                    <TurnTimer seconds={turnSecondsLeft} isMyTurn />
+                  )}
+                  <span className="text-[11px] font-heading font-bold uppercase tracking-wider text-primary animate-turn-pulse">
+                    Your turn
+                  </span>
+                </div>
+                <div className="flex items-stretch gap-2 w-full max-w-md mx-auto">
+                  <button
+                    type="button"
+                    disabled={hitDisabled}
+                    onClick={hit}
                     title={cardLimit != null && myHandLength >= cardLimit
                       ? (cardLimit === 2 ? 'No hits allowed' : `Hit limit reached (${cardLimit - 2} hit${cardLimit - 2 > 1 ? 's' : ''})`)
                       : ''}
-                    className="w-28 sm:w-32 rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 active:scale-[0.97] transition-all"
-                    style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020,#8a6e18)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200', boxShadow: '0 4px 12px rgba(212,175,55,0.25)' }}>
+                    className="flex-1 rounded-lg py-3.5 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 active:scale-[0.97] transition-all"
+                    style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020,#8a6e18)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200', boxShadow: '0 4px 12px rgba(212,175,55,0.25)' }}
+                  >
                     {actionLoading ? '…' : 'Hit'}
                   </button>
-                  <button type="button" disabled={actionLoading} onClick={stand}
-                    className="w-28 sm:w-32 rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border disabled:opacity-40 active:scale-[0.97] transition-all"
-                    style={{ background: '#27272a', borderColor: '#52525b', color: '#fff' }}>
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={stand}
+                    className="flex-1 rounded-lg py-3.5 text-sm font-heading font-bold uppercase tracking-wider border disabled:opacity-40 active:scale-[0.97] transition-all"
+                    style={{ background: '#27272a', borderColor: '#52525b', color: '#fff' }}
+                  >
                     {actionLoading ? '…' : 'Stand'}
                   </button>
                 </div>
                 {hitDisabled && cardLimit != null && myHandLength >= cardLimit && (
-                  <p className="text-[8px] font-heading text-mutedForeground">
+                  <p className="text-[10px] font-heading text-mutedForeground text-center">
                     {cardLimit === 2 ? 'No hits in this game' : `Hit limit reached (${cardLimit - 2} hit${cardLimit - 2 > 1 ? 's' : ''})`}
                   </p>
                 )}
@@ -889,16 +1063,15 @@ export default function MPBlackjackGamePage() {
             )}
 
             {status === 'playing' && phase === 'playing' && !isMyTurn && amIPlayer && !amIEliminated && (
-              <p className="text-center text-[9px] font-heading" style={{ color: 'rgba(110,231,183,0.3)' }}>
+              <p className="text-center text-[11px] font-heading" style={{ color: 'rgba(110,231,183,0.45)' }}>
                 Waiting for {players[currentTurnIndex]?.username ?? 'player'}…
               </p>
             )}
 
             {amIEliminated && status === 'playing' && (
               <div className="text-center py-2 space-y-1">
-                <p className="text-2xl">💀</p>
-                <p className="text-[9px] font-heading font-bold text-red-400 uppercase tracking-wider">You've been eliminated</p>
-                <p className="text-[8px] font-heading text-mutedForeground">Watch the rest of the game unfold…</p>
+                <p className="text-[11px] font-heading font-bold text-red-400 uppercase tracking-wider">You&apos;ve been eliminated</p>
+                <p className="text-[10px] font-heading text-mutedForeground">Watch the rest of the game unfold…</p>
               </div>
             )}
           </div>
@@ -911,16 +1084,16 @@ export default function MPBlackjackGamePage() {
         <div className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20`}>
           <div className="px-3 py-2 border-b border-primary/20 flex items-center gap-1.5"
             style={{ background: 'rgba(251,113,133,0.05)' }}>
-            <Skull size={11} style={{ color: '#fb7185' }} />
-            <span className="text-[9px] font-heading font-bold uppercase tracking-wider" style={{ color: '#fb7185' }}>Elimination Log</span>
+            <Skull size={12} style={{ color: '#fb7185' }} />
+            <span className="text-[11px] font-heading font-bold uppercase tracking-wider" style={{ color: '#fb7185' }}>Elimination Log</span>
           </div>
           <div className="p-2.5 space-y-1">
             {(game.eliminated || []).map((e, i) => (
-              <div key={i} className="flex items-center justify-between text-[8px] font-heading px-2 py-1.5 rounded"
+              <div key={i} className="flex items-center justify-between gap-2 text-[11px] font-heading px-2 py-1.5 rounded"
                 style={{ background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.1)' }}>
-                <span className="text-red-400/70">Round {e.round}</span>
-                <span className="text-foreground font-bold">{e.username}</span>
-                <span className="text-mutedForeground">Total: {e.hand_total > 21 ? `Bust (${e.hand_total})` : e.hand_total}</span>
+                <span className="text-red-400/70 shrink-0">R{e.round}</span>
+                <span className="text-foreground font-bold truncate">{e.username}</span>
+                <span className="text-mutedForeground shrink-0">{e.hand_total > 21 ? `Bust (${e.hand_total})` : e.hand_total}</span>
               </div>
             ))}
           </div>
@@ -929,17 +1102,17 @@ export default function MPBlackjackGamePage() {
 
       {/* ══ CHAT ══ */}
       {(status === 'open' || status === 'playing' || status === 'completed') && amIPlayer && (
-        <div data-chat-surface="table" data-chat-game="blackjack" className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20`}>
+        <div data-chat-surface="table" data-chat-game="blackjack" className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20 mb-2`}>
           <div data-chat-part="header" className="px-3 py-2 border-b border-primary/20 flex items-center gap-1.5"
             style={{ background: 'rgba(234,179,8,0.06)' }}>
-            <MessageSquare size={11} className="text-primary" />
-            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">Table Chat</span>
+            <MessageSquare size={12} className="text-primary" />
+            <span className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Table Chat</span>
           </div>
           <div data-chat-part="messages" className="max-h-[130px] overflow-y-auto p-2.5 space-y-1.5" style={{ background: 'rgba(0,0,0,0.2)' }}>
             {(game.chat || []).length === 0
-              ? <p className="text-[9px] font-heading text-center py-2" style={{ color: 'rgba(255,255,255,0.15)' }}>No messages yet…</p>
+              ? <p className="text-[11px] font-heading text-center py-2" style={{ color: 'rgba(255,255,255,0.15)' }}>No messages yet…</p>
               : (game.chat || []).map((c, i) => (
-                  <div key={i} data-chat-part="message-row" className="text-[9px] font-heading leading-relaxed">
+                  <div key={i} data-chat-part="message-row" className="text-[11px] font-heading leading-relaxed">
                     <span className="font-semibold" style={{ color: 'var(--noir-primary-bright)' }}>{c.username}:</span>{' '}
                     <span data-chat-part="message-text" className="text-foreground break-words">{c.message}</span>
                   </div>
@@ -951,10 +1124,10 @@ export default function MPBlackjackGamePage() {
             <form onSubmit={sendChat} data-chat-part="composer" className="p-2 border-t border-primary/20 flex gap-1.5">
               <input type="text" data-chat-part="input" value={chatInput} onChange={(e) => setChatInput(e.target.value)}
                 placeholder="Say something…" maxLength={500}
-                className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg text-[11px] font-heading placeholder:text-mutedForeground focus:outline-none"
+                className="flex-1 min-w-0 px-2.5 py-2 rounded-lg text-[11px] font-heading placeholder:text-mutedForeground focus:outline-none"
                 style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(234,179,8,0.15)', color: 'inherit' }} />
               <button type="submit" data-chat-part="send" disabled={sendingChat || !chatInput.trim()}
-                className="px-3 py-1.5 rounded-lg text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-40 transition-colors">
+                className="px-3 py-2 rounded-lg text-[11px] font-heading font-bold uppercase border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-40 transition-colors">
                 {sendingChat ? '…' : 'Send'}
               </button>
             </form>
@@ -969,9 +1142,9 @@ export default function MPBlackjackGamePage() {
         return (
           <div className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20`}>
             <div className="px-3 py-2 border-b border-primary/20" style={{ background: 'rgba(234,179,8,0.06)' }}>
-              <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest">Results</span>
+              <span className="text-[11px] font-heading font-bold text-primary uppercase tracking-widest">Results</span>
               {noWinner && (
-                <p className="text-[9px] font-heading text-mutedForeground mt-1">
+                <p className="text-[11px] font-heading text-mutedForeground mt-1">
                   No winner — refunds issued. Play again?
                 </p>
               )}
@@ -983,24 +1156,24 @@ export default function MPBlackjackGamePage() {
                 const isElim = r.result === 'eliminated';
                 const isRefund = r.result === 'refund';
                 return (
-                  <div key={i} className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-[9px] font-heading animate-result-slide"
+                  <div key={i} className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-[11px] font-heading animate-result-slide"
                     style={{ animationDelay: `${i * 0.06}s`, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                    <span className="text-foreground font-bold">{r.username}</span>
-                    <span style={{ color: isWin ? '#34d399' : isElim ? '#fb7185' : isLose ? '#f87171' : isRefund ? '#94a3b8' : '#a1a1aa' }}>
-                      {isWin ? '🏆 Winner' : isElim ? '💀 Eliminated' : r.result.charAt(0).toUpperCase() + r.result.slice(1)}
+                    <span className="text-foreground font-bold truncate">{r.username}</span>
+                    <span className="shrink-0" style={{ color: isWin ? '#34d399' : isElim ? '#fb7185' : isLose ? '#f87171' : isRefund ? '#94a3b8' : '#a1a1aa' }}>
+                      {isWin ? 'Winner' : isElim ? 'Eliminated' : r.result.charAt(0).toUpperCase() + r.result.slice(1)}
                     </span>
                     {isWin && (
-                      <span className="tabular-nums font-bold" style={{ color: '#34d399' }}>
+                      <span className="tabular-nums font-bold shrink-0" style={{ color: '#34d399' }}>
                         +{formatMoney(r.payout ?? 0)}
                       </span>
                     )}
                     {isElim && (
-                      <span className="tabular-nums" style={{ color: '#fb7185' }}>
+                      <span className="tabular-nums shrink-0" style={{ color: '#fb7185' }}>
                         −{formatMoney(game.buy_in ?? 0)}
                       </span>
                     )}
                     {(isLose || isRefund) && !isElim && (
-                      <span className="tabular-nums font-bold" style={{ color: isRefund ? '#94a3b8' : '#f87171' }}>
+                      <span className="tabular-nums font-bold shrink-0" style={{ color: isRefund ? '#94a3b8' : '#f87171' }}>
                         {isRefund ? `Refund ${formatMoney(r.payout)}` : `−${formatMoney(game.buy_in ?? 0)}`}
                       </span>
                     )}
@@ -1010,7 +1183,7 @@ export default function MPBlackjackGamePage() {
             </div>
             <div className="px-3 py-2.5 border-t border-primary/20">
               <Link to="/casino/mp-blackjack"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-2 text-[9px] font-heading font-bold uppercase tracking-wider active:scale-[0.97] transition-all"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg border-2 text-[11px] font-heading font-bold uppercase tracking-wider active:scale-[0.97] transition-all"
                 style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200', boxShadow: '0 3px 10px rgba(212,175,55,0.2)' }}>
                 <Spade size={11} /> {noWinner ? 'Play Again' : 'New Game'}
               </Link>

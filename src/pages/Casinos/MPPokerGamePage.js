@@ -119,12 +119,17 @@ function pokerCardAccessibleTitle(card) {
 }
 
 /* ─── Playing Card ─── */
+function cardKey(card, index) {
+  return `${card?.suit || 'x'}-${card?.value || '?'}-${index}`;
+}
+
 function Card({ card, hidden, index = 0, total = 1, small = false, medium = false, straight = false }) {
+  // Floors raised for mobile: small ≥48×68, hero/default ≥56×80
   const w = small
-    ? 'w-[36px] h-[52px] sm:w-[38px] sm:h-[54px]'
+    ? 'w-[48px] h-[68px] sm:w-[56px] sm:h-[80px]'
     : medium
-    ? 'w-[44px] h-[62px] sm:w-[48px] sm:h-[68px]'
-    : 'w-[54px] h-[76px] sm:w-[60px] sm:h-[84px]';
+    ? 'w-[52px] h-[74px] sm:w-[58px] sm:h-[82px]'
+    : 'w-[56px] h-[80px] sm:w-[64px] sm:h-[92px]';
   const fan = straight || total <= 1 ? 0 : (index - (total - 1) / 2) * 3;
   const offsetX = straight || total <= 1 ? 0 : (index - (total - 1) / 2) * 2;
   const style = {
@@ -133,9 +138,9 @@ function Card({ card, hidden, index = 0, total = 1, small = false, medium = fals
     boxShadow: '0 4px 16px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.12) inset',
     flexShrink: 0,
   };
-  const textSz = small ? 'text-[11px] sm:text-[12px]' : medium ? 'text-[12px] sm:text-[13px]' : 'text-[14px] sm:text-[16px]';
-  const symSz = small ? 'text-[9px] sm:text-[10px]' : medium ? 'text-[10px] sm:text-[11px]' : 'text-[12px] sm:text-[13px]';
-  const iconSz = small ? 'text-[17px] sm:text-[19px]' : medium ? 'text-[22px] sm:text-2xl' : 'text-[28px] sm:text-3xl';
+  const textSz = small ? 'text-[10px] sm:text-[11px]' : medium ? 'text-[11px] sm:text-[12px]' : 'text-[12px] sm:text-[14px]';
+  const symSz = small ? 'text-[9px] sm:text-[10px]' : medium ? 'text-[10px] sm:text-[11px]' : 'text-[11px] sm:text-[12px]';
+  const iconSz = small ? 'text-xl sm:text-2xl' : medium ? 'text-2xl sm:text-[26px]' : 'text-[28px] sm:text-3xl';
 
   if (hidden) {
     return (
@@ -390,10 +395,10 @@ function MpPokerHandOutcomePanel({
 
         {board.length > 0 && (
           <div className="pt-2 border-t border-white/5">
-            <p className="text-[8px] font-heading uppercase tracking-wider text-white/35 mb-1.5">Board</p>
+            <p className="text-[10px] font-heading uppercase tracking-wider text-white/35 mb-1.5">Board</p>
             <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
               {board.map((c, i) => (
-                <Card key={i} card={c} hidden={false} index={i} total={board.length} small straight />
+                <Card key={cardKey(c, i)} card={c} hidden={false} index={i} total={board.length} small straight />
               ))}
             </div>
           </div>
@@ -401,7 +406,7 @@ function MpPokerHandOutcomePanel({
 
         {showdownRows.length > 0 && (
           <div className="pt-2 border-t border-white/5 space-y-2">
-            <p className="text-[7px] sm:text-[8px] font-heading uppercase tracking-wider text-white/35 text-center px-1">
+            <p className="text-[10px] sm:text-[11px] font-heading uppercase tracking-wider text-white/35 text-center px-1">
               Everyone at showdown — cards and hand
             </p>
             <div className="flex flex-col gap-2 max-h-[min(48vh,280px)] sm:max-h-[min(52vh,340px)] overflow-y-auto pr-0.5 touch-pan-y">
@@ -423,18 +428,18 @@ function MpPokerHandOutcomePanel({
                   >
                     <div className="flex gap-1 shrink-0">
                       {hc.length > 0 ? (
-                        hc.map((c, i) => <Card key={i} card={c} hidden={false} index={i} total={2} small />)
+                        hc.map((c, i) => <Card key={cardKey(c, i)} card={c} hidden={false} index={i} total={2} small />)
                       ) : (
-                        <span className="text-[8px] font-heading text-white/25 px-1 self-center">—</span>
+                        <span className="text-[10px] font-heading text-white/25 px-1 self-center">—</span>
                       )}
                     </div>
                     <div className="min-w-0 flex-1 text-left">
-                      <p className="text-[9px] font-heading font-bold leading-tight" style={{ color: pWon ? 'var(--noir-primary)' : 'rgba(255,255,255,0.48)' }}>
+                      <p className="text-[11px] font-heading font-bold leading-tight" style={{ color: pWon ? 'var(--noir-primary)' : 'rgba(255,255,255,0.48)' }}>
                         {pName}
                         {isPrimary ? ' · pot' : ''}
-                        {pWon ? ' ✓' : ' ✗'}
+                        {pWon ? ' Win' : ' Out'}
                         {payout > 0 && (
-                          <span className="text-[7px] font-semibold ml-1" style={{ color: 'rgba(110,231,183,0.85)' }}>
+                          <span className="text-[10px] font-semibold ml-1" style={{ color: 'rgba(110,231,183,0.85)' }}>
                             +
                             {payoutPoints
                               ? `${Math.trunc(payout).toLocaleString()} pts`
@@ -442,8 +447,8 @@ function MpPokerHandOutcomePanel({
                           </span>
                         )}
                       </p>
-                      <p className="text-[8px] font-heading mt-0.5 leading-snug" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                        <span className="text-white/30 uppercase tracking-wider text-[7px] mr-1">Hand</span>
+                      <p className="text-[10px] font-heading mt-0.5 leading-snug" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                        <span className="text-white/30 uppercase tracking-wider text-[10px] mr-1">Hand</span>
                         <span style={{ color: pWon ? 'rgba(212,175,55,0.75)' : 'rgba(255,255,255,0.35)' }}>{r.hand || '—'}</span>
                       </p>
                     </div>
@@ -564,7 +569,7 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible, compact }) {
           <p
             className={`text-center font-heading font-bold mt-1 px-1 leading-snug text-white/85 ${compact ? 'text-[12px]' : 'text-[11px]'}`}
           >
-            <span className="block text-white/35 uppercase tracking-[0.18em] text-[8px]">Winning hand</span>
+            <span className="block text-white/35 uppercase tracking-[0.18em] text-[10px]">Winning hand</span>
             {primary[0].hand}
           </p>
         )
@@ -572,16 +577,16 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible, compact }) {
       {brd.length > 0 && (
         <div className="flex justify-center gap-1 sm:gap-1.5 mt-0.5 flex-wrap">
           {brd.map((c, i) => (
-            <Card key={`b-${i}`} card={c} hidden={false} index={i} total={brd.length} small straight />
+            <Card key={cardKey(c, i)} card={c} hidden={false} index={i} total={brd.length} small straight />
           ))}
         </div>
       )}
-      {pot > 0 && (
-        <p className={`font-heading text-center mt-0.5 ${compact ? 'text-[6px]' : 'text-[7px]'}`} style={{ color: 'rgba(110,231,183,0.8)' }}>
+        {pot > 0 && (
+        <p className="font-heading text-center mt-0.5 text-[10px]" style={{ color: 'rgba(110,231,183,0.8)' }}>
           Pot <span className="font-bold text-emerald-400">{formatMoneyFull(pot)}</span>
         </p>
       )}
-      <p className={`font-heading uppercase tracking-wider text-center text-white/30 ${compact ? 'text-[7px] mt-1' : 'text-[7px] mt-1'}`}>Showdown cards</p>
+      <p className="font-heading uppercase tracking-wider text-center text-white/30 text-[10px] mt-1">Showdown cards</p>
       <div className={`mt-1 space-y-1 overflow-y-auto pr-0.5 min-h-0 touch-pan-y ${compact ? 'max-h-[150px]' : 'max-h-[200px]'}`}>
         {showdownRows.map(({ uid, r, pl }) => {
           const payout = Number(r.payout) || 0;
@@ -601,19 +606,19 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible, compact }) {
             >
               <div className="flex gap-0.5 shrink-0">
                 {hc.length > 0 ? (
-                  hc.map((c, i) => <Card key={i} card={c} hidden={false} index={i} total={2} small />)
+                  hc.map((c, i) => <Card key={cardKey(c, i)} card={c} hidden={false} index={i} total={2} small />)
                 ) : (
-                  <span className={`font-heading text-white/25 px-0.5 ${compact ? 'text-[6px]' : 'text-[7px]'}`}>—</span>
+                  <span className="font-heading text-white/25 px-0.5 text-[10px]">—</span>
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className={`font-heading font-bold truncate leading-tight ${compact ? 'text-[7px]' : 'text-[8px]'}`} style={{ color: pWon ? 'var(--noir-primary-bright)' : 'rgba(255,255,255,0.5)' }}>
+                <p className="font-heading font-bold truncate leading-tight text-[10px]" style={{ color: pWon ? 'var(--noir-primary-bright)' : 'rgba(255,255,255,0.5)' }}>
                   {pName}
                   {isPrimary ? ' · pot' : ''}
-                  {pWon ? ' ✓' : ' ✗'}
+                  {pWon ? ' Win' : ' Out'}
                 </p>
-                <p className={`font-heading leading-snug text-white/45 ${compact ? 'text-[6px] mt-px' : 'text-[7px] mt-0.5'}`}>
-                  <span className={`text-white/30 uppercase mr-0.5 ${compact ? 'text-[5px]' : 'text-[6px]'}`}>Hand</span>
+                <p className="font-heading leading-snug text-white/45 text-[10px] mt-0.5">
+                  <span className="text-white/30 uppercase mr-0.5 text-[10px]">Hand</span>
                   {r.hand || '—'}
                 </p>
               </div>
@@ -701,7 +706,7 @@ function MpPokerLastHandWinnerBanner({ snapshot, myUserId, payoutPoints = false 
               <span className="text-[9px] font-heading uppercase tracking-wider text-white/35">Board</span>
               <div className="flex justify-center gap-1">
                 {brd.map((c, i) => (
-                  <Card key={`lb-${i}`} card={c} hidden={false} index={i} total={brd.length} small straight />
+                  <Card key={cardKey(c, i)} card={c} hidden={false} index={i} total={brd.length} small straight />
                 ))}
               </div>
             </div>
@@ -752,7 +757,7 @@ function ChipStack({ amount, small = false }) {
           }} />
       ))}
       {amount > 0 && (
-        <span className="text-[7px] font-heading font-bold text-yellow-300 mt-0.5" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
+        <span className="text-[10px] font-heading font-bold text-yellow-300 mt-0.5" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
           {formatMoney(amount)}
         </span>
       )}
@@ -829,32 +834,34 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
   if (folded) statusBadge = { label: 'Folded', color: '#6b7280' };
   else if (allIn) statusBadge = { label: 'All-In', color: '#f59e0b' };
   else if (isCurrent) statusBadge = { label: 'Turn', color: 'var(--noir-primary)' };
-  else if (waiting && ready) statusBadge = { label: '✓ Ready', color: '#34d399' };
+  else if (waiting && ready) statusBadge = { label: 'Ready', color: '#34d399' };
   else if (waiting) statusBadge = { label: 'Waiting', color: '#6b7280' };
 
-  const cardMedium = !compact && hole.length > 0;
+  // Opponents: medium/small floor; never 36×52. Hero uses larger default when not compact.
+  const useSmall = compact;
+  const useMedium = !compact && !isMe;
   return (
     <div className={`flex flex-col items-center ${compact ? 'gap-0.5' : 'gap-1'}`} style={{ opacity: folded ? 0.45 : 1, transition: 'opacity 0.3s' }}>
       {/* Cards above/beside seat */}
-      <div className="flex items-center gap-0.5 mb-0.5" style={{ minHeight: compact ? 52 : 68 }}>
+      <div className="flex items-center gap-0.5 mb-0.5" style={{ minHeight: compact ? 68 : 80 }}>
         {omitHoleOnFelt && hole.length > 0 ? (
           <div
             className="shrink-0 opacity-0 pointer-events-none"
-            style={{ width: compact ? 78 : 102, height: compact ? 52 : 68 }}
+            style={{ width: compact ? 100 : 118, height: compact ? 68 : 80 }}
             aria-hidden
           />
         ) : hole.length === 0 ? (
-          <div className={`rounded-[6px] border border-white/10 ${compact ? 'w-[36px] h-[52px] sm:w-[38px] sm:h-[54px]' : 'w-[44px] h-[62px] sm:w-[48px] sm:h-[68px]'}`} style={{ background: 'rgba(0,0,0,0.28)' }} />
+          <div className={`rounded-[6px] border border-white/10 ${compact ? 'w-[48px] h-[68px] sm:w-[56px] sm:h-[80px]' : 'w-[52px] h-[74px] sm:w-[58px] sm:h-[82px]'}`} style={{ background: 'rgba(0,0,0,0.28)' }} />
         ) : (
           hole.map((c, i) => (
             <Card
-              key={i}
+              key={cardKey(c, i)}
               card={c}
               hidden={!showHole || c?.hidden === true}
               index={i}
               total={hole.length}
-              small={compact || !cardMedium}
-              medium={cardMedium}
+              small={useSmall}
+              medium={useMedium}
             />
           ))
         )}
@@ -864,33 +871,37 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
       <div className={`relative rounded-xl border-2 transition-all duration-300 ${compact ? 'px-1.5 py-1' : 'px-2 py-1.5'}`}
         style={{
           borderColor,
-          boxShadow: glow === 'none' ? '0 4px 14px rgba(0,0,0,0.35)' : `${glow}, 0 4px 14px rgba(0,0,0,0.35)`,
+          boxShadow: glow === 'none'
+            ? '0 4px 14px rgba(0,0,0,0.35)'
+            : isCurrent
+              ? '0 0 24px rgba(212,175,55,0.4), 0 4px 14px rgba(0,0,0,0.35)'
+              : `${glow}, 0 4px 14px rgba(0,0,0,0.35)`,
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
           background: isCurrent
             ? 'linear-gradient(180deg,rgba(212,175,55,0.16),rgba(0,0,0,0.55))'
             : 'linear-gradient(180deg,rgba(0,0,0,0.5),rgba(0,0,0,0.38))',
-          minWidth: compact ? 62 : 70, maxWidth: compact ? 78 : 90,
+          minWidth: compact ? 72 : 80, maxWidth: compact ? 96 : 110,
         }}>
         {isDealer && (
-          <div className={`absolute rounded-full flex items-center justify-center font-black z-10 ${compact ? '-top-1 -right-1 w-4 h-4 text-[6px]' : '-top-2 -right-2 w-5 h-5 text-[7px]'}`}
+          <div className={`absolute rounded-full flex items-center justify-center font-black z-10 ${compact ? '-top-1 -right-1 w-4 h-4 text-[9px]' : '-top-2 -right-2 w-5 h-5 text-[10px]'}`}
             style={{ background: 'var(--noir-primary)', color: '#1a1200', border: '1.5px solid #1a1200' }}>D</div>
         )}
-        <div className="text-center">
-          <div className={`font-heading font-bold truncate ${compact ? 'text-[8px]' : 'text-[9px]'}`}
-            style={{ color: isMe ? 'var(--noir-primary)' : 'rgba(255,255,255,0.85)', maxWidth: compact ? 72 : 80 }}>
-            {p.username}{isMe ? ' ★' : ''}
+        <div className="text-center min-w-0">
+          <div className={`font-heading font-bold truncate ${compact ? 'text-[10px]' : 'text-[11px]'}`}
+            style={{ color: isMe ? 'var(--noir-primary)' : 'rgba(255,255,255,0.85)' }}>
+            {p.username}{isMe ? ' (You)' : ''}
           </div>
-          <div className={`font-heading ${compact ? 'text-[7px]' : 'text-[8px]'}`} style={{ color: 'rgba(110,231,183,0.6)' }}>
+          <div className={`font-heading ${compact ? 'text-[10px]' : 'text-[11px]'}`} style={{ color: 'rgba(110,231,183,0.7)' }}>
             {formatMoney(stack)}
           </div>
           {statusBadge && (
-            <div className={`font-heading font-bold mt-0.5 ${compact ? 'text-[6px]' : 'text-[7px]'}`} style={{ color: statusBadge.color }}>
+            <div className={`font-heading font-bold mt-0.5 uppercase tracking-wide ${compact ? 'text-[10px]' : 'text-[10px]'}`} style={{ color: statusBadge.color }}>
               {statusBadge.label}
             </div>
           )}
           {lastActionText && !compact && (
-            <div className="text-[7px] font-heading mt-0.5 italic" style={{ color: 'rgba(255,255,255,0.5)' }}>
+            <div className="text-[10px] font-heading mt-0.5 italic" style={{ color: 'rgba(255,255,255,0.5)' }}>
               {lastActionText}
             </div>
           )}
@@ -904,7 +915,7 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
         </div>
       )}
       {isMe && p.current_hand_name && !compact && (
-        <div className="text-[8px] font-heading font-bold mt-0.5" style={{ color: 'var(--noir-primary)' }}>
+        <div className="text-[10px] font-heading font-bold mt-0.5" style={{ color: 'var(--noir-primary)' }}>
           {p.current_hand_name}
         </div>
       )}
@@ -966,9 +977,14 @@ export default function MPPokerGamePage() {
   const [tournamentToast, setTournamentToast] = useState({ visible: false, snap: null });
   const toastShownHandsRef = useRef(new Set());
   const startTriggeredRef = useRef(false);
+  const startInFlightRef = useRef(false);
   const timeoutTriggeredRef = useRef(null);
+  const timeoutInFlightRef = useRef(false);
   const chatEndRef = useRef(null);
   const myUserIdRef = useRef(null);
+  const pollSeqRef = useRef(0);
+  const actionSeqRef = useRef(0);
+  const pendingWinCheckRef = useRef(null);
 
   // Track mode in a ref so fetchGame stays stable
   const isModeVsDealerRef = useRef(false);
@@ -982,6 +998,41 @@ export default function MPPokerGamePage() {
       myUserIdRef.current = id;
     }).catch(() => {});
   }, []);
+
+  const applyGameUpdate = useCallback((g, { fromAction = false } = {}) => {
+    if (!g) {
+      setGame(null);
+      return;
+    }
+    setGame((prev) => {
+      // Never replace a completed hand with a non-completed state
+      if (prev?.status === 'completed' && g?.status !== 'completed') return prev;
+      const uid = myUserIdRef.current;
+      if (g?.status === 'completed' && prev?.status !== 'completed') {
+        const myResult = (g?.results || []).find((res) => res.user_id === uid);
+        if ((Number(myResult?.payout) || 0) > 0) {
+          setShowWin(true);
+          setTimeout(() => setShowWin(false), 4500);
+          pendingWinCheckRef.current = null;
+        } else if (!uid) {
+          pendingWinCheckRef.current = g;
+        }
+      }
+      return g;
+    });
+    if (fromAction) actionSeqRef.current += 1;
+  }, []);
+
+  useEffect(() => {
+    if (!myUserId || !pendingWinCheckRef.current) return;
+    const g = pendingWinCheckRef.current;
+    pendingWinCheckRef.current = null;
+    const myResult = (g?.results || []).find((res) => res.user_id === myUserId);
+    if ((Number(myResult?.payout) || 0) > 0) {
+      setShowWin(true);
+      setTimeout(() => setShowWin(false), 4500);
+    }
+  }, [myUserId]);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 640px)');
@@ -1029,12 +1080,15 @@ export default function MPPokerGamePage() {
   }, [game?.inactive_reminder_sent_at]);
 
   const fetchGame = useCallback(() => {
+    const seq = ++pollSeqRef.current;
+    const actionAtStart = actionSeqRef.current;
     // Always start with the generic games endpoint; if vs-dealer use that endpoint
     const endpoint = isModeVsDealerRef.current
       ? '/casino/mp-poker/vs-dealer/game'
       : `/casino/mp-poker/games/${gameId}`;
     api.get(endpoint)
       .then((r) => {
+        if (seq !== pollSeqRef.current || actionSeqRef.current !== actionAtStart) return;
         const g = isModeVsDealerRef.current
           ? (r.data?.game ?? r.data ?? null)
           : (r.data ?? null);
@@ -1043,38 +1097,32 @@ export default function MPPokerGamePage() {
           isModeVsDealerRef.current = true;
           setIsVsDealer(true);
           setFetchError(false);
-          setGame(g);
+          applyGameUpdate(g);
           setTimeout(() => {
+            const seq2 = ++pollSeqRef.current;
+            const actionAt2 = actionSeqRef.current;
             api.get('/casino/mp-poker/vs-dealer/game').then((r2) => {
+              if (seq2 !== pollSeqRef.current || actionSeqRef.current !== actionAt2) return;
               const g2 = r2.data?.game ?? r2.data ?? null;
-              if (g2) setGame(g2);
+              if (g2) applyGameUpdate(g2);
             }).catch(() => {});
           }, 50);
           return;
         }
         setFetchError(false);
-        setGame((prev) => {
-          // Never replace a completed hand with a non-completed state (avoids poll overwriting results)
-          if (prev?.status === 'completed' && g?.status !== 'completed') return prev;
-          if (g?.status === 'completed' && prev?.status !== 'completed') {
-            const uid = myUserIdRef.current;
-            const myResult = (g?.results || []).find((res) => res.user_id === uid);
-            if ((Number(myResult?.payout) || 0) > 0) {
-              setShowWin(true);
-              setTimeout(() => setShowWin(false), 4500);
-            }
-          }
-          return g;
-        });
+        applyGameUpdate(g);
       })
       .catch(() => {
+        if (seq !== pollSeqRef.current) return;
         setGame((prev) => {
           if (prev === null) setFetchError(true);
           return prev;
         });
       })
-      .finally(() => setHasLoaded(true));
-  }, [gameId]);
+      .finally(() => {
+        if (seq === pollSeqRef.current) setHasLoaded(true);
+      });
+  }, [gameId, applyGameUpdate]);
 
   // Keep vs-dealer ref in sync with current game (e.g. from location.state or any fetch)
   useEffect(() => {
@@ -1084,25 +1132,12 @@ export default function MPPokerGamePage() {
     }
   }, [game?.mode]);
 
-  // Stable poll — only restart when fetchGame itself changes (i.e. gameId/mode changes)
-  // Interval speed is managed via ref to avoid restarting the whole interval
-  const pollSpeedRef = useRef(3000);
+  // Single 3s poll + one-shot refetch after act (no dead pollSpeedRef)
   useEffect(() => {
     fetchGame();
-    const t = setInterval(() => {
-      fetchGame();
-    }, pollSpeedRef.current);
+    const t = setInterval(fetchGame, 3000);
     return () => clearInterval(t);
   }, [fetchGame]);
-
-  // Update poll speed based on game state without restarting interval
-  useEffect(() => {
-    if (!game) return;
-    const allInActive = game.status === 'playing' && (game.players || []).some((p) => p.status === 'all_in');
-    const botTurn = isVsDealer && game.current_turn_index === 1 && game.status === 'playing';
-    const myAllIn = (game.players || []).find(p => !p.is_bot)?.status === 'all_in';
-    pollSpeedRef.current = myAllIn ? 800 : (allInActive || botTurn) ? 1200 : 3000;
-  }, [game, isVsDealer]);
 
   // Start countdown timer
   useEffect(() => {
@@ -1117,15 +1152,17 @@ export default function MPPokerGamePage() {
     return () => clearInterval(t);
   }, [game?.all_ready_at, game?.phase]);
 
-  // Auto-trigger start
+  // Auto-trigger start (debounced; allow one retry on failure)
   useEffect(() => {
     if (startSecondsLeft !== 0 || game?.phase !== 'ready' || !game?.all_ready_at) return;
-    if (startTriggeredRef.current) return;
+    if (startTriggeredRef.current || startInFlightRef.current) return;
     startTriggeredRef.current = true;
+    startInFlightRef.current = true;
     api.post(`/casino/mp-poker/games/${gameId}/start`)
-      .then((r) => setGame(r.data ?? null))
-      .catch(() => { startTriggeredRef.current = false; });
-  }, [startSecondsLeft, game?.phase, game?.all_ready_at, gameId]);
+      .then((r) => applyGameUpdate(r.data ?? null, { fromAction: true }))
+      .catch(() => { startTriggeredRef.current = false; })
+      .finally(() => { startInFlightRef.current = false; });
+  }, [startSecondsLeft, game?.phase, game?.all_ready_at, gameId, applyGameUpdate]);
 
   // Turn timer
   useEffect(() => {
@@ -1145,17 +1182,23 @@ export default function MPPokerGamePage() {
     const currentP = players[game?.current_turn_index];
     if (currentP?.status === 'all_in') return; // all-in: no timeout, wait for run-out
     const key = `${game?.current_turn_index}-${game?.turn_started_at}`;
-    if (timeoutTriggeredRef.current === key) return;
+    if (timeoutTriggeredRef.current === key || timeoutInFlightRef.current) return;
     if (players[game?.current_turn_index]?.user_id !== myUserId) return;
     timeoutTriggeredRef.current = key;
-    api.post(`/casino/mp-poker/games/${gameId}/timeout`).then((r) => setGame(r.data ?? null)).catch(() => {});
-  }, [turnSecondsLeft, game, myUserId, gameId]);
+    timeoutInFlightRef.current = true;
+    api.post(`/casino/mp-poker/games/${gameId}/timeout`)
+      .then((r) => applyGameUpdate(r.data ?? null, { fromAction: true }))
+      .catch(() => { timeoutTriggeredRef.current = null; })
+      .finally(() => { timeoutInFlightRef.current = false; });
+  }, [turnSecondsLeft, game, myUserId, gameId, applyGameUpdate]);
 
   // Ready notification
+  const prevPhaseRef = useRef(null);
   useEffect(() => {
-    if (game?.phase === 'ready' && game?.all_ready_at) {
+    if (game?.phase === 'ready' && game?.all_ready_at && prevPhaseRef.current !== 'ready') {
       toast.success('All players ready — game starting!', { duration: 4000 });
     }
+    prevPhaseRef.current = game?.phase;
   }, [game?.phase, game?.all_ready_at]);
 
   const act = async (action, amount) => {
@@ -1171,36 +1214,14 @@ export default function MPPokerGamePage() {
       const res = await api.post(endpoint, body);
       // Vs dealer: use response game immediately so check on river → showdown updates UI without getting stuck
       if (isModeVsDealerRef.current && res?.data?.game) {
-        const g = res.data.game;
-        setGame((prev) => {
-          if (g?.status === 'completed' && prev?.status !== 'completed') {
-            const uid = myUserIdRef.current;
-            const myResult = (g?.results || []).find((r) => r.user_id === uid);
-            if ((Number(myResult?.payout) || 0) > 0) {
-              setShowWin(true);
-              setTimeout(() => setShowWin(false), 4500);
-            }
-          }
-          return g;
-        });
+        applyGameUpdate(res.data.game, { fromAction: true });
         await refreshUser();
         setActionLoading(false);
         return;
       }
       // Multiplayer: use response game immediately so check on river → showdown updates UI without getting stuck
       if (!isModeVsDealerRef.current && res?.data?.id && Array.isArray(res?.data?.players)) {
-        const g = res.data;
-        setGame((prev) => {
-          if (g?.status === 'completed' && prev?.status !== 'completed') {
-            const uid = myUserIdRef.current;
-            const myResult = (g?.results || []).find((r) => r.user_id === uid);
-            if ((Number(myResult?.payout) || 0) > 0) {
-              setShowWin(true);
-              setTimeout(() => setShowWin(false), 4500);
-            }
-          }
-          return g;
-        });
+        applyGameUpdate(res.data, { fromAction: true });
         await refreshUser();
         setActionLoading(false);
         return;
@@ -1215,7 +1236,7 @@ export default function MPPokerGamePage() {
       const g = isModeVsDealerRef.current
         ? (fresh.data?.game ?? fresh.data ?? null)
         : (fresh.data ?? null);
-      if (g) setGame(g);
+      if (g) applyGameUpdate(g, { fromAction: true });
       await refreshUser();
     } catch (e) { toast.error(getApiErrorMessage(e) || 'Action failed'); }
     finally { setActionLoading(false); }
@@ -1226,7 +1247,7 @@ export default function MPPokerGamePage() {
     setReadyLoading(true);
     try {
       const res = await api.post(`/casino/mp-poker/games/${gameId}/ready`);
-      setGame(res.data ?? null);
+      applyGameUpdate(res.data ?? null, { fromAction: true });
       toast.success("You're ready!");
     } catch (e) { toast.error(getApiErrorMessage(e) || 'Failed'); }
     finally { setReadyLoading(false); }
@@ -1260,7 +1281,7 @@ export default function MPPokerGamePage() {
     setKickLoadingUserId(targetUserId);
     try {
       const res = await api.post(`/casino/mp-poker/games/${gameId}/kick`, { user_id: targetUserId });
-      setGame(res.data ?? null);
+      applyGameUpdate(res.data ?? null, { fromAction: true });
       await refreshUser();
       toast.success('Player removed; buy-in refunded');
     } catch (e) {
@@ -1291,7 +1312,7 @@ export default function MPPokerGamePage() {
     if (!msg || sendingChat) return;
     setSendingChat(true);
     api.post(`/casino/mp-poker/games/${gameId}/chat`, { message: msg })
-      .then((r) => { setGame(r.data ?? null); setChatInput(''); chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); })
+      .then((r) => { applyGameUpdate(r.data ?? null, { fromAction: true }); setChatInput(''); chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); })
       .catch(() => {})
       .finally(() => setSendingChat(false));
   };
@@ -1412,7 +1433,7 @@ export default function MPPokerGamePage() {
 
   if (!hasLoaded && !game) {
     return (
-      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0`}>
         <div className="flex items-center gap-2">
           <Link to="/casino/mp-poker" className="p-1.5 rounded border border-primary/20 text-primary hover:bg-primary/10 transition-colors">
             <ArrowLeft size={16} />
@@ -1423,7 +1444,7 @@ export default function MPPokerGamePage() {
   }
   if (fetchError || (hasLoaded && !game)) {
     return (
-      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0`}>
         <div className="rounded-xl border p-6 text-center space-y-3" style={{ borderColor: 'rgba(248,113,113,0.25)', background: 'rgba(248,113,113,0.05)' }}>
           <p className="text-sm font-heading font-bold text-red-400 uppercase tracking-wider">Table Not Found</p>
           <p className="text-[10px] text-mutedForeground font-heading">This game may have ended or the link is invalid.</p>
@@ -1441,7 +1462,7 @@ export default function MPPokerGamePage() {
   }
   if (status === 'cancelled') {
     return (
-      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0`}>
         <div className="rounded-xl border p-6 text-center space-y-3" style={{ borderColor: 'rgba(248,113,113,0.25)', background: 'rgba(248,113,113,0.05)' }}>
           <p className="text-sm font-heading font-bold text-red-400 uppercase tracking-wider">Table Cancelled</p>
           <p className="text-[10px] text-mutedForeground font-heading">All buy-ins have been refunded.</p>
@@ -1461,7 +1482,7 @@ export default function MPPokerGamePage() {
   };
 
   return (
-    <div className={`pkr-mp-root space-y-2 sm:space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="mp-poker-game-page">
+    <div className={`pkr-mp-root space-y-2 sm:space-y-3 ${styles.pageContent} mobile-page-root pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0`} data-testid="mp-poker-game-page">
       <style>{`
         @keyframes pkr-deal {
           0%   { opacity: 0; }
@@ -1494,11 +1515,28 @@ export default function MPPokerGamePage() {
         .animate-pkr-ready   { animation: pkr-ready-pulse 2s ease-in-out infinite; }
         .animate-pkr-chip    { animation: pkr-chip-bounce 1.2s ease-in-out infinite; }
         .pkr-mp-root {
-          padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
           background:
             radial-gradient(ellipse 100% 70% at 50% -15%, rgba(212,175,55,0.09), transparent 55%),
             radial-gradient(ellipse 80% 50% at 100% 50%, rgba(34,197,94,0.04), transparent 45%),
             radial-gradient(ellipse 80% 50% at 0% 50%, rgba(34,197,94,0.04), transparent 45%);
+        }
+        .mppkr-sticky-actions {
+          position: sticky;
+          bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+          z-index: 30;
+        }
+        .mppkr-action-chrome {
+          background: linear-gradient(180deg, rgba(12,61,26,0.96), rgba(10,94,42,0.98));
+          border: 1px solid rgba(212,175,55,0.25);
+          box-shadow: 0 -4px 20px rgba(0,0,0,0.35);
+        }
+        @media (min-width: 640px) {
+          .mppkr-sticky-actions { position: static; bottom: auto; }
+          .mppkr-action-chrome {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+          }
         }
       `}</style>
 
@@ -1561,9 +1599,9 @@ export default function MPPokerGamePage() {
               boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
             }}
           >
-            <span className="text-[8px] font-heading text-primary/60 mr-1">You</span>
+            <span className="text-[10px] font-heading text-primary/60 mr-1">You</span>
             {(myPlayer.hole_cards || []).map((c, i) => (
-              <Card key={i} card={c} hidden={c?.hidden === true} index={i} total={2} small />
+              <Card key={cardKey(c, i)} card={c} hidden={c?.hidden === true} index={i} total={2} small />
             ))}
           </div>
         )}
@@ -1779,7 +1817,7 @@ export default function MPPokerGamePage() {
       {/* ══ LIVE TABLE (playing + completed) ══ */}
       {(status === 'playing' || status === 'completed') && phase !== 'ready' && (
         <div
-          className="rounded-xl border-2 animate-pkr-fade"
+          className="mobile-panel rounded-xl border-2 animate-pkr-fade"
           style={{
             borderColor: '#5a3e1b',
             overflow: 'visible',
@@ -1824,7 +1862,7 @@ export default function MPPokerGamePage() {
                   <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-center scale-[0.96] sm:scale-100 origin-center">
                     {board.map((c, i) => (
                       <Card
-                        key={i}
+                        key={cardKey(c, i)}
                         card={c}
                         hidden={false}
                         index={i}
@@ -1837,7 +1875,7 @@ export default function MPPokerGamePage() {
                   </div>
                 )}
                 <div
-                  className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-heading font-bold text-center whitespace-normal ${compactUi ? 'text-[8px] max-w-[min(100%,200px)] leading-tight' : 'text-[9px]'}`}
+                  className="px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-heading font-bold text-center whitespace-normal text-[10px] sm:text-[11px] max-w-[min(100%,220px)] leading-tight"
                   style={PKR_TABLE_HUD_PILL_STYLE}
                 >
                   {compactUi && street ? (
@@ -1853,13 +1891,21 @@ export default function MPPokerGamePage() {
                 </div>
                 {myPlayer?.current_hand_name && board.length >= 3 && myPlayer?.status !== 'folded' && (
                   <div
-                    className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-heading font-bold text-center max-w-[min(100%,260px)] leading-tight ${compactUi ? 'text-[8px]' : 'text-[9px]'}`}
+                    className="px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-heading font-bold text-center max-w-[min(100%,260px)] leading-tight text-[10px] sm:text-[11px]"
                     style={PKR_TABLE_HUD_PILL_STYLE}
                   >
                     Your hand: {myPlayer.current_hand_name}
                   </div>
                 )}
-                {status === 'playing' && (phase === 'playing' || isVsDealer) && currentTurnIndex >= 0 && (
+                {street === 'showdown' && (
+                  <div
+                    className="px-3 py-1.5 rounded-lg border animate-pkr-pulse mt-0.5"
+                    style={{ background: 'rgba(212,175,55,0.12)', borderColor: 'rgba(212,175,55,0.35)' }}
+                  >
+                    <p className="text-[11px] font-heading font-bold uppercase tracking-wider text-primary text-center">Showdown…</p>
+                  </div>
+                )}
+                {status === 'playing' && (phase === 'playing' || isVsDealer) && currentTurnIndex >= 0 && street !== 'showdown' && !isMyTurn && (
                   <div
                     className={`relative flex flex-col items-center gap-0.5 mt-0.5 sm:mt-1 rounded-xl ${compactUi ? 'px-2 py-1' : 'px-3 py-2'}`}
                     style={{
@@ -1872,13 +1918,13 @@ export default function MPPokerGamePage() {
                   >
                     <div className="flex items-center gap-1.5 sm:gap-2">
                       {turnSecondsLeft != null && currentTurnPlayer?.status !== 'all_in' && (
-                        <TurnTimer seconds={turnSecondsLeft} isMyTurn={isMyTurn} compact={compactUi} />
+                        <TurnTimer seconds={turnSecondsLeft} isMyTurn={false} compact={compactUi} />
                       )}
                       <span
-                        className={`font-heading font-bold animate-pkr-pulse text-center leading-tight ${compactUi ? 'text-[8px] max-w-[140px]' : 'text-[9px]'}`}
-                        style={{ color: isMyTurn ? 'var(--noir-primary)' : 'rgba(255,255,255,0.55)' }}
+                        className="font-heading font-bold animate-pkr-pulse text-center leading-tight text-[11px] max-w-[160px]"
+                        style={{ color: 'rgba(255,255,255,0.55)' }}
                       >
-                        {isMyTurn ? '🎴 Your turn' : `${currentTurnPlayer?.is_bot ? 'Dealer' : (currentTurnPlayer?.username ?? '?')}'s turn`}
+                        Waiting for {currentTurnPlayer?.is_bot ? 'Dealer' : (currentTurnPlayer?.username ?? 'player')}…
                       </span>
                     </div>
                   </div>
@@ -1936,7 +1982,7 @@ export default function MPPokerGamePage() {
           }}
         >
           <p
-            className="text-[8px] sm:text-[9px] font-heading leading-snug line-clamp-4 sm:line-clamp-none"
+            className="text-[11px] font-heading leading-snug line-clamp-4 sm:line-clamp-none"
             style={{ color: 'rgba(212,175,55,0.88)' }}
           >
             {turnStatusMessage}
@@ -1947,48 +1993,56 @@ export default function MPPokerGamePage() {
       {/* ══ ACTION BAR ══ */}
       {status === 'playing' && (phase === 'playing' || isVsDealer) && isMyTurn && myPlayer?.status !== 'folded' && myPlayer?.status !== 'all_in' && (
         <div
-          className="sticky bottom-2 z-40 rounded-xl overflow-hidden border-2 animate-pkr-fade sm:static"
+          className="mppkr-sticky-actions mppkr-action-chrome rounded-xl overflow-hidden border-2 animate-pkr-fade"
           style={{ borderColor: '#5a3e1b', boxShadow: '0 12px 34px rgba(0,0,0,0.55), 0 0 0 1px rgba(212,175,55,0.12)' }}
         >
           <div style={PKR_GOLD_BAR} />
-          <div
-            className="p-2.5 sm:p-3 space-y-2 sm:space-y-3"
-            style={{
-              background: 'linear-gradient(180deg,rgba(0,0,0,0.58),rgba(0,0,0,0.46))',
-              backdropFilter: 'blur(6px)',
-              WebkitBackdropFilter: 'blur(6px)',
-            }}
-          >
-            <div className="flex flex-wrap items-center justify-between gap-1.5">
-              <span className="text-[9px] font-heading text-primary/60 uppercase tracking-wider">Your Action</span>
-              <span className="text-[9px] font-heading text-mutedForeground">
+          <div className="p-2.5 sm:p-3 space-y-2 sm:space-y-3">
+            <div className="flex items-center justify-center gap-2 sm:hidden">
+              {turnSecondsLeft != null && myPlayer?.status !== 'all_in' && (
+                <TurnTimer seconds={turnSecondsLeft} isMyTurn compact />
+              )}
+              <span className="text-[11px] font-heading font-bold uppercase tracking-wider text-primary">Your turn</span>
+            </div>
+            <div className="hidden sm:flex flex-wrap items-center justify-between gap-1.5">
+              <div className="flex items-center gap-2">
+                {turnSecondsLeft != null && myPlayer?.status !== 'all_in' && (
+                  <TurnTimer seconds={turnSecondsLeft} isMyTurn />
+                )}
+                <span className="text-[11px] font-heading text-primary uppercase tracking-wider font-bold">Your turn</span>
+              </div>
+              <span className="text-[11px] font-heading text-mutedForeground">
                 Stack <span className={`font-bold ${myStack === 0 ? 'text-red-400' : 'text-primary'}`}>{formatMoneyFull(myStack)}</span>
                 {needToCall > 0 && myStack > 0 && <span className="text-yellow-400 ml-2">· To call {formatMoneyFull(Math.min(needToCall, myStack))}</span>}
               </span>
             </div>
+            <p className="text-[10px] font-heading text-mutedForeground text-center sm:hidden">
+              Stack <span className={`font-bold ${myStack === 0 ? 'text-red-400' : 'text-primary'}`}>{formatMoneyFull(myStack)}</span>
+              {needToCall > 0 && myStack > 0 && <span className="text-yellow-400"> · Call {formatMoneyFull(Math.min(needToCall, myStack))}</span>}
+            </p>
 
             {/* Stack = 0 special case: only option is fold or go all-in (already committed) */}
             {myStack === 0 ? (
               <div className="space-y-2">
-                <p className="text-[9px] font-heading text-yellow-400/70 text-center">
+                <p className="text-[11px] font-heading text-yellow-400/70 text-center">
                   {needToCall > 0 ? 'You have no chips left to call — go all-in or fold.' : 'No chips remaining — check to continue.'}
                 </p>
                 <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-center">
                   <button type="button" disabled={actionLoading} onClick={() => act('fold')}
-                    className="px-4 py-3 sm:py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[44px] sm:min-h-0"
+                    className="flex-1 px-4 py-3.5 sm:py-2 rounded-lg border font-heading font-bold text-[11px] sm:text-sm uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[48px] sm:min-h-0"
                     style={{ borderColor: 'rgba(248,113,113,0.5)', background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>
                     Fold
                   </button>
                   {needToCall > 0 ? (
                     <button type="button" disabled={actionLoading} onClick={() => act('all_in')}
-                      className="px-5 py-3 sm:py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[44px] sm:min-h-0"
+                      className="flex-1 px-5 py-3.5 sm:py-2 rounded-lg border-2 font-heading font-bold text-[11px] sm:text-sm uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[48px] sm:min-h-0"
                       style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
-                      All-In (committed)
+                      All-In
                     </button>
                   ) : (
                     <button type="button" disabled={actionLoading} onClick={() => act('check')}
-                      className="px-4 py-3 sm:py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[44px] sm:min-h-0"
-                      style={{ borderColor: 'rgba(161,161,170,0.4)', background: 'rgba(161,161,170,0.08)', color: '#a1a1aa' }}>
+                      className="flex-1 px-4 py-3.5 sm:py-2 rounded-lg border font-heading font-bold text-[11px] sm:text-sm uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[48px] sm:min-h-0"
+                      style={{ background: '#27272a', borderColor: '#52525b', color: '#fff' }}>
                       Check
                     </button>
                   )}
@@ -1997,60 +2051,64 @@ export default function MPPokerGamePage() {
             ) : (
               <>
                 {/* Primary actions */}
-                <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center sm:flex-wrap">
+                <div className="grid grid-cols-3 gap-2 w-full max-w-lg mx-auto">
                   <button type="button" disabled={actionLoading} onClick={() => act('fold')}
-                    className="px-3 py-3 sm:px-4 sm:py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[44px] sm:min-h-0"
+                    className="px-2 py-3.5 sm:py-2.5 rounded-lg border font-heading font-bold text-[11px] sm:text-sm uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[48px] sm:min-h-0"
                     style={{ borderColor: 'rgba(248,113,113,0.5)', background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>
                     Fold
                   </button>
                   {needToCall <= 0 ? (
                     <button type="button" disabled={actionLoading} onClick={() => act('check')}
-                      className="px-3 py-3 sm:px-4 sm:py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[44px] sm:min-h-0"
-                      style={{ borderColor: 'rgba(161,161,170,0.4)', background: 'rgba(161,161,170,0.08)', color: '#a1a1aa' }}>
+                      className="px-2 py-3.5 sm:py-2.5 rounded-lg border font-heading font-bold text-[11px] sm:text-sm uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[48px] sm:min-h-0"
+                      style={{ background: '#27272a', borderColor: '#52525b', color: '#fff' }}>
                       Check
                     </button>
                   ) : (
                     <button type="button" disabled={actionLoading} onClick={() => act('call')}
-                      className="px-3 py-3 sm:px-4 sm:py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[44px] sm:min-h-0"
-                      style={{ borderColor: 'var(--noir-primary-bright)', background: 'rgba(212,175,55,0.12)', color: 'var(--noir-primary)' }}>
+                      className="px-2 py-3.5 sm:py-2.5 rounded-lg border-2 font-heading font-bold text-[11px] sm:text-sm uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[48px] sm:min-h-0"
+                      style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
                       Call {formatMoneyFull(Math.min(needToCall, myStack))}
                     </button>
                   )}
                   <button type="button" disabled={actionLoading} onClick={() => act('all_in')}
-                    className="px-3 py-3 sm:px-4 sm:py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[44px] sm:min-h-0"
+                    className="px-2 py-3.5 sm:py-2.5 rounded-lg border font-heading font-bold text-[11px] sm:text-sm uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[48px] sm:min-h-0"
                     style={{ borderColor: 'rgba(251,113,133,0.5)', background: 'rgba(251,113,133,0.1)', color: '#fb7185' }}>
-                    All-In {formatMoney(myStack)}
+                    All-In
                   </button>
                 </div>
 
-                {/* Raise row */}
-                <div className="grid grid-cols-4 gap-2 sm:flex sm:items-center sm:flex-wrap">
-                  <input
-                    type="number"
-                    min={minRaise}
-                    max={myStack}
-                    value={raiseAmount}
-                    onChange={(e) => setRaiseAmount(e.target.value)}
-                    placeholder={`Min ${formatMoneyFull(minRaise)}`}
-                    className="col-span-2 flex-1 min-w-0 px-2.5 py-2.5 sm:py-1.5 rounded-lg font-heading text-[10px] focus:outline-none"
-                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit', minWidth: 80 }}
-                  />
-                  <button type="button" disabled={actionLoading || !raiseAmount}
-                    onClick={() => { act(needToCall > 0 ? 'raise' : 'bet', parseInt(raiseAmount, 10) || minRaise); setRaiseAmount(''); }}
-                    className="px-3 py-2.5 sm:px-4 sm:py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
-                    style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
-                    {needToCall > 0 ? 'Raise' : 'Bet'}
-                  </button>
-                  {[0.5, 0.75, 1].map((f) => {
-                    const amt = Math.min(myStack, Math.max(minRaise, Math.floor(pot * f)));
-                    return (
-                      <button key={f} type="button"
-                        onClick={() => setRaiseAmount(String(amt))}
-                        className="px-2 py-2 sm:py-1.5 rounded font-heading text-[8px] uppercase tracking-wider border border-primary/20 text-primary/60 hover:text-primary hover:border-primary/40 transition-colors">
-                        {f === 1 ? 'Pot' : `${f * 100}%`}
-                      </button>
-                    );
-                  })}
+                {/* Raise row — stacked under on mobile */}
+                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 w-full max-w-lg mx-auto">
+                  <div className="flex gap-2 w-full sm:flex-1 sm:min-w-0">
+                    <input
+                      type="number"
+                      min={minRaise}
+                      max={myStack}
+                      value={raiseAmount}
+                      onChange={(e) => setRaiseAmount(e.target.value)}
+                      placeholder={`Min ${formatMoneyFull(minRaise)}`}
+                      className="flex-1 min-w-0 px-2.5 py-3 sm:py-2 rounded-lg font-heading text-[11px] focus:outline-none"
+                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit' }}
+                    />
+                    <button type="button" disabled={actionLoading || !raiseAmount}
+                      onClick={() => { act(needToCall > 0 ? 'raise' : 'bet', parseInt(raiseAmount, 10) || minRaise); setRaiseAmount(''); }}
+                      className="px-4 py-3 sm:py-2 rounded-lg border-2 font-heading font-bold text-[11px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 shrink-0"
+                      style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
+                      {needToCall > 0 ? 'Raise' : 'Bet'}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex">
+                    {[0.5, 0.75, 1].map((f) => {
+                      const amt = Math.min(myStack, Math.max(minRaise, Math.floor(pot * f)));
+                      return (
+                        <button key={f} type="button"
+                          onClick={() => setRaiseAmount(String(amt))}
+                          className="px-2 py-2.5 sm:py-1.5 rounded font-heading text-[10px] uppercase tracking-wider border border-primary/20 text-primary/70 hover:text-primary hover:border-primary/40 transition-colors">
+                          {f === 1 ? 'Pot' : `${f * 100}%`}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </>
             )}
@@ -2062,7 +2120,7 @@ export default function MPPokerGamePage() {
       {/* ══ ALL-IN WAITING STATE ══ */}
       {status === 'playing' && myPlayer?.status === 'all_in' && street !== 'showdown' && street !== 'completed' && (
         <div
-          className="rounded-xl overflow-hidden border-2 animate-pkr-fade"
+          className="rounded-xl overflow-hidden border-2 animate-pkr-fade mobile-panel"
           style={{ borderColor: '#5a3e1b', boxShadow: '0 8px 28px rgba(0,0,0,0.35)' }}
         >
           <div style={PKR_GOLD_BAR} />
@@ -2074,27 +2132,16 @@ export default function MPPokerGamePage() {
               WebkitBackdropFilter: 'blur(8px)',
             }}
           >
-            <div className="flex justify-center">
-              <div className="w-10 h-10 rounded-full border-2 border-primary/40 flex items-center justify-center animate-pkr-pulse"
-                style={{ background: 'rgba(212,175,55,0.1)' }}>
-                <span className="text-xl">♠</span>
-              </div>
-            </div>
-            <div>
-              <p className="text-sm font-heading font-bold uppercase tracking-[0.2em]"
-                style={{ background: 'linear-gradient(180deg,#ffd700,var(--noir-primary-bright))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                All In — Running It Out
-              </p>
-              <p className="text-[9px] font-heading mt-1 animate-pkr-pulse" style={{ color: 'rgba(110,231,183,0.5)' }}>
-                Dealing remaining streets…
-              </p>
-            </div>
+            <p className="text-[11px] font-heading font-bold uppercase tracking-wider text-primary">Running it out…</p>
+            <p className="text-[11px] font-heading animate-pkr-pulse" style={{ color: 'rgba(110,231,183,0.55)' }}>
+              Dealing remaining streets…
+            </p>
             {board.length > 0 && (
               <div>
-                <p className="text-[8px] font-heading uppercase tracking-wider text-white/35 mb-1">Community cards</p>
+                <p className="text-[10px] font-heading uppercase tracking-wider text-white/35 mb-1">Community cards</p>
                 <div className="flex justify-center gap-1.5 flex-wrap">
                   {board.map((c, i) => (
-                    <Card key={`allin-board-${i}`} card={c} hidden={false} index={i} total={board.length} small straight />
+                    <Card key={cardKey(c, i)} card={c} hidden={false} index={i} total={board.length} small straight />
                   ))}
                 </div>
               </div>
@@ -2102,16 +2149,16 @@ export default function MPPokerGamePage() {
             {/* Manual advance fallback for vs-dealer all-in */}
             {isVsDealer && (
               <button type="button" onClick={fetchGame}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border font-heading font-bold text-[11px] uppercase tracking-wider active:scale-[0.97] transition-all"
                 style={{ borderColor: 'rgba(212,175,55,0.35)', background: 'rgba(212,175,55,0.08)', color: 'var(--noir-primary)' }}>
-                ↻ Check Result
+                Check Result
               </button>
             )}
             {myPlayer?.hole_cards?.length > 0 && (
               <div className="flex justify-center items-end gap-1.5 pt-1">
-                <span className="text-[8px] font-heading text-primary/50 self-center mr-1">Your cards</span>
+                <span className="text-[10px] font-heading text-primary/50 self-center mr-1">Your cards</span>
                 {myPlayer.hole_cards.map((c, i) => (
-                  <Card key={i} card={c} hidden={false} index={i} total={2} />
+                  <Card key={cardKey(c, i)} card={c} hidden={false} index={i} total={2} />
                 ))}
               </div>
             )}
@@ -2237,19 +2284,19 @@ export default function MPPokerGamePage() {
 
       {/* ══ CHAT (seated players may send; spectators read-only) ══ */}
       {!isVsDealer && (
-        <div data-chat-surface="table" data-chat-game="poker" className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20 animate-pkr-fade`}>
+        <div data-chat-surface="table" data-chat-game="poker" className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20 animate-pkr-fade mb-2`}>
           <div data-chat-part="header" className="px-3 py-2 border-b border-primary/20 flex items-center gap-1.5" style={{ background: 'rgba(234,179,8,0.06)' }}>
-            <MessageSquare size={11} className="text-primary" />
-            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">Table Chat</span>
+            <MessageSquare size={12} className="text-primary" />
+            <span className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Table Chat</span>
             {isSpectating && (
-              <span className="text-[8px] font-heading text-mutedForeground ml-auto">View only</span>
+              <span className="text-[10px] font-heading text-mutedForeground ml-auto">View only</span>
             )}
           </div>
-          <div data-chat-part="messages" className="max-h-[72px] sm:max-h-[120px] overflow-y-auto p-2 sm:p-2.5 space-y-1.5" style={{ background: 'rgba(0,0,0,0.2)' }}>
+          <div data-chat-part="messages" className="max-h-[120px] overflow-y-auto p-2.5 space-y-1.5" style={{ background: 'rgba(0,0,0,0.2)' }}>
             {(game.chat || []).length === 0
-              ? <p className="text-[9px] font-heading text-center py-2" style={{ color: 'rgba(255,255,255,0.15)' }}>No messages yet…</p>
+              ? <p className="text-[11px] font-heading text-center py-2" style={{ color: 'rgba(255,255,255,0.15)' }}>No messages yet…</p>
               : (game.chat || []).slice(-30).map((c, i) => (
-                  <div key={c.at || i} data-chat-part="message-row" className="text-[9px] font-heading leading-relaxed">
+                  <div key={c.at || i} data-chat-part="message-row" className="text-[11px] font-heading leading-relaxed">
                     <span className="font-semibold" style={{ color: 'var(--noir-primary-bright)' }}>{c.username}:</span>{' '}
                     <span data-chat-part="message-text" className="text-foreground break-words">{c.message}</span>
                   </div>
@@ -2261,10 +2308,10 @@ export default function MPPokerGamePage() {
             <form onSubmit={sendChat} data-chat-part="composer" className="p-2 border-t border-primary/20 flex gap-1.5">
               <input type="text" data-chat-part="input" value={chatInput} onChange={(e) => setChatInput(e.target.value)}
                 placeholder="Say something…" maxLength={200}
-                className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg text-[11px] font-heading focus:outline-none"
+                className="flex-1 min-w-0 px-2.5 py-2 rounded-lg text-[11px] font-heading focus:outline-none"
                 style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(234,179,8,0.15)', color: 'inherit' }} />
               <button type="submit" data-chat-part="send" disabled={sendingChat || !chatInput.trim()}
-                className="px-3 py-1.5 rounded-lg text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-40 transition-colors">
+                className="px-3 py-2 rounded-lg text-[11px] font-heading font-bold uppercase border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-40 transition-colors">
                 {sendingChat ? '…' : 'Send'}
               </button>
             </form>

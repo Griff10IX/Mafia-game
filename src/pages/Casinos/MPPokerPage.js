@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PlusCircle, User, Users, Clock, DollarSign, Trophy, ShieldCheck, Eye, Mic2 } from 'lucide-react';
+import { PlusCircle, User, Users, Trophy, ShieldCheck, Eye, Mic2 } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -453,7 +453,7 @@ export default function MPPokerPage() {
     previewTourDebitPoints > entFund.points;
 
   return (
-    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mp-poker-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0`} data-testid="mp-poker-page">
       <style>{`
         @keyframes pkr-lobby-fade { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
         .pkr-lobby-fade { animation: pkr-lobby-fade 0.4s ease-out both; }
@@ -465,9 +465,9 @@ export default function MPPokerPage() {
 
       {/* ── Header ── */}
       <div className="pkr-lobby-fade">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-0.5">Texas Hold'em · Casino</p>
+        <p className="text-[10px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-0.5">Texas Hold'em · Casino</p>
         <h1 className="text-xl font-heading font-bold text-primary tracking-wider uppercase">Poker Room</h1>
-        <p className="text-[10px] text-mutedForeground font-heading italic mt-1">
+        <p className="text-[11px] text-mutedForeground font-heading italic mt-1">
           1v1 vs the house · or seat yourself at a live multiplayer table
         </p>
       </div>
@@ -484,14 +484,14 @@ export default function MPPokerPage() {
               </div>
               <div>
                 <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Vs Dealer</h2>
-                <p className="text-[8px] text-mutedForeground font-heading">1-on-1 · House bot</p>
+                <p className="text-[10px] text-mutedForeground font-heading">1-on-1 · House bot</p>
               </div>
             </div>
-            <p className="text-[9px] text-mutedForeground font-heading mb-3 leading-relaxed">
+            <p className="text-[11px] text-mutedForeground font-heading mb-3 leading-relaxed">
               Private hand against the house. Full Hold'em — blinds, flop, turn, river.
             </p>
             <button type="button" onClick={() => setVsDealerOpen((o) => !o)}
-              className="w-full py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider transition-all active:scale-[0.97]"
+              className="w-full py-2.5 rounded-lg border-2 font-heading font-bold text-[11px] uppercase tracking-wider transition-all active:scale-[0.97]"
               style={{
                 background: vsDealerOpen ? 'linear-gradient(180deg,var(--noir-primary),#a08020)' : 'rgba(212,175,55,0.1)',
                 borderColor: 'var(--noir-primary-bright)', color: vsDealerOpen ? '#1a1200' : 'var(--noir-primary)',
@@ -524,17 +524,17 @@ export default function MPPokerPage() {
               </div>
               <div>
                 <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Multiplayer</h2>
-                <p className="text-[8px] text-mutedForeground font-heading">2–9 players · Live table</p>
+                <p className="text-[10px] text-mutedForeground font-heading">2–9 players · Live table</p>
               </div>
             </div>
-            <p className="text-[9px] text-mutedForeground font-heading mb-3 leading-relaxed">
+            <p className="text-[11px] text-mutedForeground font-heading mb-3 leading-relaxed">
               Create or join a live Hold&apos;em table. Buy in, compete for the pot.
               {entFund.is_entertainer ? (
                 <> As an Entertainer, opening a table charges <strong className="text-violet-300/95">buy-in + bonus prize</strong> to your Entertainer fund cash — not your main wallet.</>
               ) : null}
             </p>
             <button type="button" onClick={() => setCreateOpen((o) => !o)}
-              className="w-full py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider transition-all active:scale-[0.97] flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 rounded-lg border-2 font-heading font-bold text-[11px] uppercase tracking-wider transition-all active:scale-[0.97] flex items-center justify-center gap-1.5"
               style={{
                 background: createOpen ? 'linear-gradient(180deg,var(--noir-primary),#a08020)' : 'rgba(212,175,55,0.1)',
                 borderColor: 'var(--noir-primary-bright)', color: createOpen ? '#1a1200' : 'var(--noir-primary)',
@@ -558,11 +558,11 @@ export default function MPPokerPage() {
                         Fund pts: <strong className="text-sky-400/90 tabular-nums">{Math.trunc(entFund.points).toLocaleString()}</strong>
                       </span>
                     </div>
-                    <p className="text-[8px] text-zinc-400 font-heading leading-snug">
+                    <p className="text-[10px] text-zinc-400 font-heading leading-snug">
                       Server debits entertainer fund <strong className="text-zinc-300">cash</strong> = buy-in + bonus prize. Other players buy in from their normal balances.
                     </p>
                     {previewCashTableDebit > 0 && (
-                      <p className="text-[9px] font-heading border-t border-violet-500/20 pt-1.5 text-zinc-300">
+                      <p className="text-[11px] font-heading border-t border-violet-500/20 pt-1.5 text-zinc-300">
                         <span className="text-zinc-500 uppercase mr-1">Debit at create</span>
                         <span className="tabular-nums text-foreground">{formatMoney(previewCashTableDebit)}</span>
                         {cashTableFundInsufficient && (
@@ -574,30 +574,30 @@ export default function MPPokerPage() {
                     )}
                   </div>
                 )}
-                <div className="flex items-center gap-2">
-                  <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Max Players</label>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
+                  <label className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider sm:w-24 shrink-0">Max Players</label>
                   <select value={createMaxPlayers} onChange={(e) => setCreateMaxPlayers(Number(e.target.value))}
-                    className="mp-poker-select flex-1 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={selectStyle}>
+                    className="mp-poker-select w-full sm:flex-1 px-2.5 py-2 rounded-lg font-heading text-sm focus:outline-none" style={selectStyle}>
                     {[2,3,4,5,6,7,8,9].map((n) => <option key={n} value={n}>{n} players</option>)}
                   </select>
                 </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Buy-in ($)</label>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
+                  <label className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider sm:w-24 shrink-0">Buy-in ($)</label>
                   <FormattedNumberInput value={createBuyIn} onChange={setCreateBuyIn} placeholder="100,000"
-                    className="flex-1 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
+                    className="w-full sm:flex-1 px-2.5 py-2 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
                 </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Small Blind</label>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
+                  <label className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider sm:w-24 shrink-0">Small Blind</label>
                   <FormattedNumberInput value={createSmallBlind} onChange={setCreateSmallBlind} placeholder="Auto (buy-in/100)"
-                    className="flex-1 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
+                    className="w-full sm:flex-1 px-2.5 py-2 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
                 </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Bonus Prize</label>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
+                  <label className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider sm:w-24 shrink-0">Bonus Prize</label>
                   <FormattedNumberInput value={createExtraPrize} onChange={setCreateExtraPrize} placeholder="0 (optional)"
-                    className="flex-1 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
+                    className="w-full sm:flex-1 px-2.5 py-2 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
                 </div>
                 <button type="button" onClick={handleCreate} disabled={creating}
-                  className="w-full py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase disabled:opacity-50 active:scale-[0.97] transition-all mt-1"
+                  className="w-full py-2.5 rounded-lg border-2 font-heading font-bold text-[11px] uppercase disabled:opacity-50 active:scale-[0.97] transition-all mt-1"
                   style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
                   {creating ? 'Creating…' : 'Open Table'}
                 </button>
@@ -612,16 +612,16 @@ export default function MPPokerPage() {
       <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 pkr-lobby-fade`} style={{ animationDelay: '0.08s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Open Tables</h2>
-          <p className="text-[9px] text-mutedForeground font-heading mt-0.5">Buy a seat before the cards are dealt</p>
+          <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Open Tables</h2>
+          <p className="text-[11px] text-mutedForeground font-heading mt-0.5">Buy a seat before the cards are dealt</p>
         </div>
         <div className="divide-y divide-primary/10">
           {loading ? (
-            <p className="text-[10px] text-mutedForeground font-heading py-5 text-center animate-pulse">Checking the room…</p>
+            <p className="text-[11px] text-mutedForeground font-heading py-5 text-center animate-pulse">Checking the room…</p>
           ) : games.length === 0 ? (
             <div className="py-8 text-center space-y-1">
               <p className="text-2xl opacity-20">♠</p>
-              <p className="text-[10px] text-mutedForeground font-heading">No open tables. Be the first to sit down.</p>
+              <p className="text-[11px] text-mutedForeground font-heading">No open tables. Be the first to sit down.</p>
             </div>
           ) : (
             games.map((g, idx) => {
@@ -637,8 +637,8 @@ export default function MPPokerPage() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0 flex-1 space-y-1.5">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] font-heading font-bold text-foreground">{g.creator_username ?? '—'}</span>
-                        <span className="text-[8px] font-heading font-bold px-1.5 py-0.5 rounded-full uppercase"
+                        <span className="text-xs font-heading font-bold text-foreground">{g.creator_username ?? '—'}</span>
+                        <span className="text-[10px] font-heading font-bold px-1.5 py-0.5 rounded-full uppercase"
                           style={isPlaying
                             ? { background: 'rgba(212,175,55,0.15)', color: 'var(--noir-primary)', border: '1px solid rgba(212,175,55,0.3)' }
                             : isReady
@@ -649,44 +649,44 @@ export default function MPPokerPage() {
                         </span>
                       </div>
                       <div className="flex items-center gap-3 flex-wrap">
-                        <span className="text-[9px] font-heading text-mutedForeground">
+                        <span className="text-xs font-heading text-mutedForeground">
                           Buy-in <span className="text-primary font-bold">{formatMoney(g.buy_in)}</span>
                         </span>
-                        <span className="text-[9px] font-heading text-mutedForeground">
+                        <span className="text-xs font-heading text-mutedForeground">
                           Pot <span className="text-primary font-bold">{formatMoney(g.pot)}</span>
                         </span>
                         {g.big_blind && (
-                          <span className="text-[9px] font-heading text-mutedForeground">
+                          <span className="text-xs font-heading text-mutedForeground">
                             Blinds <span className="text-primary/70 font-bold">{formatMoney(g.small_blind)}/{formatMoney(g.big_blind)}</span>
                           </span>
                         )}
                       </div>
                       <div className="flex items-center gap-1">
                         {pips.map((filled, i) => (
-                          <div key={i} className="w-2 h-2 rounded-full"
+                          <div key={i} className="w-2.5 h-2.5 rounded-full"
                             style={{ background: filled ? 'var(--noir-primary)' : 'rgba(255,255,255,0.1)', border: filled ? '1px solid rgba(212,175,55,0.6)' : '1px solid rgba(255,255,255,0.1)' }} />
                         ))}
-                        <span className="text-[8px] font-heading text-mutedForeground ml-1">{g.player_count}/{g.max_players}</span>
+                        <span className="text-[10px] font-heading text-mutedForeground ml-1">{g.player_count}/{g.max_players}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-stretch sm:items-center gap-1.5 shrink-0 w-full sm:w-auto">
                       {(isCreator || isIn) && !full && (
                         <button type="button" disabled={cancellingId !== null} onClick={() => handleCancelGame(g.id)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border font-heading font-bold text-[9px] uppercase disabled:opacity-50"
+                          className="inline-flex items-center justify-center gap-1 flex-1 sm:flex-none px-3 py-2.5 rounded-lg border font-heading font-bold text-[11px] uppercase disabled:opacity-50"
                           style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)', color: '#f87171' }}>
                           {cancellingId === g.id ? '…' : 'Cancel'}
                         </button>
                       )}
                       {!isIn && !full && (
                         <button type="button" disabled={joiningId !== null} onClick={() => handleJoin(g.id)}
-                          className="rounded-lg border-2 px-3 py-1.5 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                          className="rounded-lg border-2 flex-1 sm:flex-none px-4 py-2.5 font-heading font-bold text-[11px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
                           style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
                           {joiningId === g.id ? '…' : 'Buy In'}
                         </button>
                       )}
                       {(isIn || isCreator) && (
                         <button type="button" onClick={() => navigate(`/casino/mp-poker/game/${g.id}`)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase tracking-wider hover:bg-primary/20 active:scale-[0.97] transition-all text-primary">
+                          className="inline-flex items-center justify-center gap-1 flex-1 sm:flex-none rounded-lg border border-primary/30 bg-primary/10 px-3 py-2.5 font-heading font-bold text-[11px] uppercase tracking-wider hover:bg-primary/20 active:scale-[0.97] transition-all text-primary">
                           Open
                         </button>
                       )}

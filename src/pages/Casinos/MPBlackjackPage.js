@@ -151,7 +151,10 @@ export default function MPBlackjackPage() {
   const rowClass = animateIn ? 'mpbj-row' : '';
 
   return (
-    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mp-blackjack-page">
+    <div
+      className={`space-y-4 ${styles.pageContent} mobile-page-root pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0`}
+      data-testid="mp-blackjack-page"
+    >
       <style>{`
         @keyframes mpbj-fade { from { transform:translateY(6px); } to { transform:translateY(0); } }
         .mpbj-fade { animation: mpbj-fade 0.35s ease-out both; }
@@ -162,9 +165,9 @@ export default function MPBlackjackPage() {
 
       {/* ── Page header ── */}
       <div className={fadeClass}>
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-0.5">Pot game · Casino</p>
+        <p className="text-[10px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-0.5">Pot game · Casino</p>
         <h1 className="text-xl font-heading font-bold text-primary tracking-wider uppercase">Multiplayer Blackjack</h1>
-        <p className="text-[10px] text-mutedForeground font-heading italic mt-1">
+        <p className="text-[11px] text-mutedForeground font-heading italic mt-1">
           2–8 players · buy-in goes to the pot · best hand wins · no table owner
         </p>
       </div>
@@ -178,38 +181,38 @@ export default function MPBlackjackPage() {
           <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' }} />
 
           <div className="px-3 py-2.5 border-b border-primary/20" style={{ background: 'rgba(212,175,55,0.06)' }}>
-            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Deal New Game</h2>
-            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">
+            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Deal New Game</h2>
+            <p className="text-[11px] text-mutedForeground font-heading mt-0.5">
               You pay the buy-in and become the first player. Optional bonus prize added to the pot.
             </p>
           </div>
 
           <div className="p-3 space-y-3">
-            <div className="flex items-center gap-3">
-              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Max Players</label>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+              <label className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider sm:w-24 shrink-0">Max Players</label>
               <select value={createMaxPlayers} onChange={(e) => setCreateMaxPlayers(Number(e.target.value))}
-                className="mp-blackjack-select flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={selectStyle}>
+                className="mp-blackjack-select w-full sm:flex-1 px-2.5 py-2 rounded-lg font-heading text-sm focus:outline-none" style={selectStyle}>
                 {[2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n} players</option>)}
               </select>
             </div>
 
-            <div className="flex items-center gap-3">
-              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Buy-in ($)</label>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+              <label className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider sm:w-24 shrink-0">Buy-in ($)</label>
               <FormattedNumberInput value={createBuyIn} onChange={setCreateBuyIn} placeholder="100,000"
-                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
+                className="w-full sm:flex-1 px-2.5 py-2 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
             </div>
 
-            <div className="flex items-center gap-3">
-              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Bonus Prize</label>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+              <label className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider sm:w-24 shrink-0">Bonus Prize</label>
               <FormattedNumberInput value={createExtraPrize} onChange={setCreateExtraPrize} placeholder="0 (optional)"
-                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
+                className="w-full sm:flex-1 px-2.5 py-2 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
             </div>
 
             <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-3">
-                <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Hit limit</label>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+                <label className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider sm:w-24 shrink-0">Hit limit</label>
                 <select value={createCardLimit} onChange={(e) => setCreateCardLimit(e.target.value)}
-                  className="mp-blackjack-select flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={selectStyle}>
+                  className="mp-blackjack-select w-full sm:flex-1 px-2.5 py-2 rounded-lg font-heading text-sm focus:outline-none" style={selectStyle}>
                   <option value="no_limit">No limit (hit until bust or stand)</option>
                   <option value="3">1 hit only (e.g. elimination)</option>
                   <option value="4">2 hits</option>
@@ -217,33 +220,33 @@ export default function MPBlackjackPage() {
                   <option value="2">No hits (2 cards only)</option>
                 </select>
               </div>
-              <p className="text-[8px] font-heading text-mutedForeground ml-24">
+              <p className="text-[10px] font-heading text-mutedForeground sm:pl-24">
                 In elimination rounds, 1 hit is often used.
               </p>
             </div>
 
             {/* Toggles */}
             <div className="pt-2 border-t border-primary/15 space-y-2">
-              <p className="text-[8px] font-heading text-mutedForeground uppercase tracking-widest">House Rules</p>
+              <p className="text-[10px] font-heading text-mutedForeground uppercase tracking-widest">House Rules</p>
 
               {/* Elimination rounds gets its own highlighted row */}
               <label className="flex items-start gap-2.5 cursor-pointer group p-2 rounded-lg transition-colors"
                 style={{ background: createEliminationRounds ? 'rgba(251,113,133,0.06)' : 'transparent', border: createEliminationRounds ? '1px solid rgba(251,113,133,0.2)' : '1px solid transparent' }}>
                 <div onClick={() => setCreateEliminationRounds((v) => !v)}
-                  className="relative w-8 h-4 rounded-full transition-all flex-shrink-0 mt-0.5"
+                  className="relative w-10 h-5 rounded-full transition-all flex-shrink-0 mt-0.5"
                   style={{
                     background: createEliminationRounds ? 'linear-gradient(90deg,#fb7185,#e11d48)' : 'rgba(255,255,255,0.1)',
                     border: createEliminationRounds ? '1px solid #fb7185' : '1px solid rgba(255,255,255,0.15)',
                     cursor: 'pointer',
                   }}>
-                  <div className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
-                    style={{ left: createEliminationRounds ? '17px' : '2px', background: createEliminationRounds ? '#fff' : 'rgba(255,255,255,0.4)' }} />
+                  <div className="absolute top-0.5 w-3.5 h-3.5 rounded-full transition-all"
+                    style={{ left: createEliminationRounds ? '20px' : '2px', background: createEliminationRounds ? '#fff' : 'rgba(255,255,255,0.4)' }} />
                 </div>
                 <div>
-                  <span className="text-[9px] font-heading font-bold" style={{ color: createEliminationRounds ? '#fb7185' : 'inherit' }}>
+                  <span className="text-[11px] font-heading font-bold" style={{ color: createEliminationRounds ? '#fb7185' : 'inherit' }}>
                     Elimination Rounds
                   </span>
-                  <p className="text-[8px] font-heading text-mutedForeground mt-0.5">
+                  <p className="text-[10px] font-heading text-mutedForeground mt-0.5">
                     Each round, player with the lowest hand is knocked out. Last one standing wins the pot.
                   </p>
                 </div>
@@ -254,31 +257,31 @@ export default function MPBlackjackPage() {
                 { label: 'Anonymous game (hide creator)', val: createAnonymous, set: setCreateAnonymous },
                 { label: 'Twenty-one only (only 21 wins)', val: createTwentyOneOnly, set: setCreateTwentyOneOnly },
               ].map(({ label, val, set }) => (
-                <label key={label} className="flex items-center gap-2.5 cursor-pointer group">
+                <label key={label} className="flex items-center gap-2.5 cursor-pointer group min-h-8">
                   <div onClick={() => set((v) => !v)}
-                    className="relative w-8 h-4 rounded-full transition-all flex-shrink-0"
+                    className="relative w-10 h-5 rounded-full transition-all flex-shrink-0"
                     style={{
                       background: val ? 'linear-gradient(90deg,var(--noir-primary),#a08020)' : 'rgba(255,255,255,0.1)',
                       border: val ? '1px solid var(--noir-primary-bright)' : '1px solid rgba(255,255,255,0.15)',
                       cursor: 'pointer',
                     }}>
-                    <div className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
-                      style={{ left: val ? '17px' : '2px', background: val ? '#1a1200' : 'rgba(255,255,255,0.4)' }} />
+                    <div className="absolute top-0.5 w-3.5 h-3.5 rounded-full transition-all"
+                      style={{ left: val ? '20px' : '2px', background: val ? '#1a1200' : 'rgba(255,255,255,0.4)' }} />
                   </div>
-                  <span className="text-[9px] font-heading text-foreground group-hover:text-primary/80 transition-colors">{label}</span>
+                  <span className="text-[11px] font-heading text-foreground group-hover:text-primary/80 transition-colors">{label}</span>
                 </label>
               ))}
             </div>
 
-            <div className="flex items-center gap-2 pt-1">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
               <button type="button" disabled={creating} onClick={handleCreate}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-3 sm:py-2 rounded-lg border-2 font-heading font-bold text-[11px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
                 style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200', boxShadow: '0 3px 10px rgba(212,175,55,0.2)' }}>
                 <Spade size={13} />
                 {creating ? 'Dealing…' : 'Deal Cards'}
               </button>
               <button type="button" onClick={() => setCreateOpen(false)}
-                className="px-3 py-2 rounded-lg border border-primary/20 text-mutedForeground font-heading text-[9px] uppercase hover:bg-primary/8 transition-colors">
+                className="px-3 py-3 sm:py-2 rounded-lg border border-primary/20 text-mutedForeground font-heading text-[11px] uppercase hover:bg-primary/8 transition-colors">
                 Cancel
               </button>
             </div>
@@ -294,13 +297,13 @@ export default function MPBlackjackPage() {
 
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between flex-wrap gap-2">
           <div>
-            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Open Tables</h2>
-            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">Join a waiting game or deal your own</p>
+            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Open Tables</h2>
+            <p className="text-[11px] text-mutedForeground font-heading mt-0.5">Join a waiting game or deal your own</p>
           </div>
           <button
             type="button"
             onClick={() => setCreateOpen((o) => !o)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all"
+            className="inline-flex items-center gap-1.5 px-3 min-h-9 py-2 rounded-lg border-2 font-heading font-bold text-[11px] uppercase tracking-wider active:scale-[0.97] transition-all"
             style={{
               background: createOpen ? 'linear-gradient(180deg,var(--noir-primary),#a08020)' : 'rgba(212,175,55,0.12)',
               borderColor: 'var(--noir-primary-bright)',
@@ -342,9 +345,9 @@ export default function MPBlackjackPage() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0 flex-1 space-y-1.5">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] font-heading font-bold text-foreground">{g.creator_username ?? '—'}</span>
+                        <span className="text-xs font-heading font-bold text-foreground">{g.creator_username ?? '—'}</span>
                         <span
-                          className="text-[8px] font-heading font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider"
+                          className="text-[10px] font-heading font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider"
                           style={
                             isReady
                               ? { background: 'rgba(139,92,246,0.15)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)' }
@@ -358,23 +361,23 @@ export default function MPBlackjackPage() {
                           {isReady ? 'Ready Up' : isPlaying ? `Round ${g.current_round ?? 1}` : isCompleted ? 'Finished' : 'Open'}
                         </span>
                         {g.elimination_rounds && (
-                          <span className="inline-flex items-center gap-0.5 text-[8px] font-heading px-1.5 py-0.5 rounded-full"
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-heading px-1.5 py-0.5 rounded-full"
                             style={{ background: 'rgba(251,113,133,0.12)', color: '#fb7185', border: '1px solid rgba(251,113,133,0.25)' }}>
-                            <Swords size={8} /> Elimination
+                            <Swords size={9} /> Elimination
                           </span>
                         )}
-                        {g.anonymous && <span className="text-[8px] font-heading text-mutedForeground italic">anon</span>}
+                        {g.anonymous && <span className="text-[10px] font-heading text-mutedForeground italic">anon</span>}
                       </div>
 
                       <div className="flex items-center gap-3 flex-wrap">
-                        <span className="text-[9px] font-heading text-mutedForeground">
+                        <span className="text-xs font-heading text-mutedForeground">
                           Buy-in <span className="text-primary font-bold">{formatMoney(g.buy_in)}</span>
                         </span>
-                        <span className="text-[9px] font-heading text-mutedForeground">
+                        <span className="text-xs font-heading text-mutedForeground">
                           Pot <span className="text-primary font-bold">{formatMoney(g.pot)}</span>
                         </span>
                         {g.extra_prize > 0 && (
-                          <span className="text-[9px] font-heading text-mutedForeground">
+                          <span className="text-xs font-heading text-mutedForeground">
                             Bonus <span className="text-emerald-400 font-bold">{formatMoney(g.extra_prize)}</span>
                           </span>
                         )}
@@ -389,11 +392,11 @@ export default function MPBlackjackPage() {
                             }}
                           />
                         ))}
-                        <span className="text-[8px] font-heading text-mutedForeground ml-1">{playerCount}/{maxPlayers}</span>
+                        <span className="text-[10px] font-heading text-mutedForeground ml-1">{playerCount}/{maxPlayers}</span>
                       </div>
 
                       {isPlaying && g.phase === 'playing' && (g.current_turn_username != null || g.turn_seconds_left != null) && (
-                        <div className="text-[9px] font-heading flex items-center gap-1.5 mt-0.5">
+                        <div className="text-[11px] font-heading flex items-center gap-1.5 mt-0.5">
                           <span className="text-mutedForeground">Turn:</span>
                           <span style={{ color: g.current_turn_is_you ? 'var(--noir-primary)' : 'inherit', fontWeight: g.current_turn_is_you ? 700 : 400 }}>
                             {g.current_turn_is_you ? 'You' : (g.current_turn_username ?? '—')}
@@ -405,13 +408,13 @@ export default function MPBlackjackPage() {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto">
                       {canCancelOpen && (
                         <button
                           type="button"
                           disabled={cancellingId !== null}
                           onClick={() => handleCancelGame(g.id)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border font-heading font-bold text-[9px] uppercase disabled:opacity-50 transition-colors"
+                          className="inline-flex items-center justify-center gap-1 px-3 min-h-9 py-2 rounded-lg border font-heading font-bold text-[11px] uppercase disabled:opacity-50 transition-colors"
                           style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)', color: '#f87171' }}
                         >
                           <XCircle size={11} />
@@ -423,7 +426,7 @@ export default function MPBlackjackPage() {
                           type="button"
                           disabled={joiningId !== null}
                           onClick={() => handleJoin(g.id)}
-                          className="rounded-lg border-2 px-3 py-1.5 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                          className="flex-1 sm:flex-none rounded-lg border-2 px-4 min-h-9 py-2 font-heading font-bold text-[11px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
                           style={{
                             background: 'linear-gradient(180deg,var(--noir-primary),#a08020)',
                             borderColor: 'var(--noir-primary-bright)',
@@ -438,7 +441,7 @@ export default function MPBlackjackPage() {
                         <button
                           type="button"
                           onClick={() => handleOpenGame(g.id)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase tracking-wider hover:bg-primary/20 active:scale-[0.97] transition-all text-primary"
+                          className="inline-flex items-center justify-center gap-1 rounded-lg border border-primary/30 bg-primary/10 px-3 min-h-9 py-2 font-heading font-bold text-[11px] uppercase tracking-wider hover:bg-primary/20 active:scale-[0.97] transition-all text-primary"
                         >
                           <Spade size={11} />
                           {isCompleted ? 'View' : 'Open'}
@@ -456,24 +459,24 @@ export default function MPBlackjackPage() {
       {/* ── Last 5 games ── */}
       <div className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20 ${fadeClass}`} style={{ animationDelay: '0.04s' }}>
         <div className="px-3 py-2 border-b border-primary/20" style={{ background: 'rgba(234,179,8,0.06)' }}>
-          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest">Last 5 Games</span>
+          <span className="text-[11px] font-heading font-bold text-primary uppercase tracking-widest">Last 5 Games</span>
         </div>
         <div className="p-2.5 space-y-1.5">
           {recentGames.length === 0 ? (
-            <p className="text-[9px] font-heading text-mutedForeground px-2.5 py-2">No completed games yet.</p>
+            <p className="text-[11px] font-heading text-mutedForeground px-2.5 py-2">No completed games yet.</p>
           ) : (
             recentGames.map((g) => (
               <div
                 key={g.id}
-                className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-[9px] font-heading"
+                className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-[11px] font-heading"
                 style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
               >
                 <div className="flex flex-col gap-0.5 min-w-0">
                   <span className="text-foreground font-bold truncate">{g.creator_username}</span>
-                  <span className="text-mutedForeground">Buy-in {formatMoney(g.buy_in)} · Pot {formatMoney(g.pot)}</span>
+                  <span className="text-mutedForeground text-[10px]">Buy-in {formatMoney(g.buy_in)} · Pot {formatMoney(g.pot)}</span>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="font-bold" style={{ color: '#34d399' }}>🏆 {g.winner_username ?? '—'}</span>
+                <div className="flex flex-col sm:flex-row items-end sm:items-center gap-0.5 sm:gap-2 shrink-0">
+                  <span className="font-bold" style={{ color: '#34d399' }}>Win · {g.winner_username ?? '—'}</span>
                   <span className="tabular-nums font-bold" style={{ color: '#34d399' }}>+{formatMoney(g.pot)}</span>
                 </div>
               </div>
@@ -485,7 +488,7 @@ export default function MPBlackjackPage() {
       {/* ── Rules ── */}
       <div className={`${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 ${fadeClass}`} style={{ animationDelay: '0.1s' }}>
         <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
-          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest">How It Works</span>
+          <span className="text-[11px] font-heading font-bold text-primary uppercase tracking-widest">How It Works</span>
         </div>
         <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
           {[
@@ -496,7 +499,7 @@ export default function MPBlackjackPage() {
             'Elimination mode: lowest hand is knocked out each round',
             'Card limits and 21-only rules set per table',
           ].map((rule) => (
-            <div key={rule} className="flex items-start gap-1.5 text-[9px] font-heading text-mutedForeground">
+            <div key={rule} className="flex items-start gap-1.5 text-[11px] font-heading text-mutedForeground">
               <span className="text-primary mt-0.5 shrink-0">♠</span>
               {rule}
             </div>
