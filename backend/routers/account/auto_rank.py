@@ -186,7 +186,12 @@ async def _resolve_permanent_auto_rank(db, user: dict, *, heal: bool = False) ->
         return False, user
     uid = user.get("id")
     if _user_has_permanent_auto_rank(user):
-        if heal and uid and (user.get("auto_rank_trial") or user.get("auto_rank_trial_until")):
+        if heal and uid and (
+            user.get("auto_rank_trial")
+            or user.get("auto_rank_trial_until")
+            or not user.get("auto_rank_purchased")
+            or not user.get("auto_rank_permanent")
+        ):
             await db.users.update_one(
                 {"id": uid},
                 {
@@ -194,10 +199,13 @@ async def _resolve_permanent_auto_rank(db, user: dict, *, heal: bool = False) ->
                     "$unset": {"auto_rank_trial_until": ""},
                 },
             )
-            user = {**user, "auto_rank_permanent": True, "auto_rank_trial": False, "auto_rank_trial_until": None}
-        elif heal and uid and not user.get("auto_rank_permanent"):
-            await db.users.update_one({"id": uid}, {"$set": {"auto_rank_permanent": True}})
-            user = {**user, "auto_rank_permanent": True}
+            user = {
+                **user,
+                "auto_rank_permanent": True,
+                "auto_rank_trial": False,
+                "auto_rank_purchased": True,
+                "auto_rank_trial_until": None,
+            }
         return True, user
     if user.get("auto_rank_purchased") and user.get("auto_rank_trial") and uid:
         if await _detect_store_permanent_auto_rank(db, uid):
@@ -267,6 +275,8 @@ async def _expire_auto_rank_trials(db, *, force: bool = False):
         "auto_rank_scrap": False,
     }
     # Equality on auto_rank_trial first so partial index (trial:true, until) can be used.
+    # Never expire permanent unlocks (store / email / admin) — including broken docs that have
+    # auto_rank_permanent=true but auto_rank_purchased=false (legacy heal gap).
     result = await db.users.update_many(
         {"auto_rank_trial": True, "auto_rank_trial_until": {"$lte": now_iso}, "auto_rank_permanent": {"$ne": True}},
         {"$set": {**_trial_off, "auto_rank_purchased": False}, "$unset": {"auto_rank_trial_until": ""}},
@@ -275,9 +285,19 @@ async def _expire_auto_rank_trials(db, *, force: bool = False):
         {
             "auto_rank_trial_until": {"$lte": now_iso, "$exists": True, "$nin": [None, ""]},
             "auto_rank_purchased": {"$ne": True},
+            "auto_rank_permanent": {"$ne": True},
+            "auto_rank_email_entitlement": {"$ne": True},
             "auto_rank_trial": {"$ne": True},
         },
         {"$set": _trial_off, "$unset": {"auto_rank_trial_until": ""}},
+    )
+    # Heal permanent-but-not-purchased docs so token/trial paths and UI stay consistent.
+    await db.users.update_many(
+        {"auto_rank_permanent": True, "auto_rank_purchased": {"$ne": True}},
+        {
+            "$set": {"auto_rank_purchased": True, "auto_rank_trial": False},
+            "$unset": {"auto_rank_trial_until": ""},
+        },
     )
     modified = int(result.modified_count or 0) + int(legacy.modified_count or 0)
     if modified:
