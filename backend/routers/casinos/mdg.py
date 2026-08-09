@@ -9,6 +9,7 @@ _rng = secrets.SystemRandom()
 import uuid
 
 from bson import ObjectId
+from pymongo import ReturnDocument
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException, Request
 
@@ -512,6 +513,9 @@ def register(router):
                     points=-total_pts,
                     event_type="entertainer_mdg_fund",
                     event_ref=f"create:{game_id}",
+                    source="casino_mdg",
+                    correlation_id=game_id,
+                    context={"action": "create_fee", "game_id": game_id, "host": {"id": uid, "username": user.get("username")}, "opponents": [], "stake_points": total_pts, "fee_points": fee_pts, "extra_pot_points": extra_pts, "from": "entertainer_fund"},
                     meta={"action": "create_fee", "game_id": game_id, "fee_points": fee_pts, "extra_pot_points": extra_pts, "from": "entertainer_fund"},
                     wallet_points_before=pts_before_create,
                     wallet_points_after=pts_before_create,
@@ -525,8 +529,6 @@ def register(router):
                 {"action": "create", "game_id": game_id, "fee_points": fee_pts, "fee_money": fee_money, "extra_pot_points": extra_pts, "extra_pot_money": extra_money, "entertainer_fund": True},
             )
             return {"message": "Game created and you are in it", "game_id": game_id, "game": _mdg_sanitize_for_json(doc)}
-        u_pts_read = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1})
-        pts_before_create = int((u_pts_read or {}).get("points") or 0)
         deduct_filter = {"id": uid}
         deduct_inc = {}
         if total_pts:
@@ -536,16 +538,25 @@ def register(router):
             deduct_filter["money"] = {"$gte": total_money}
             deduct_inc["money"] = -total_money
         if deduct_inc:
-            result = await db.users.update_one(deduct_filter, {"$inc": deduct_inc})
-            if result.modified_count == 0:
+            user_before_create = await db.users.find_one_and_update(
+                deduct_filter,
+                {"$inc": deduct_inc},
+                projection={"_id": 0, "points": 1},
+                return_document=ReturnDocument.BEFORE,
+            )
+            if not user_before_create:
                 raise HTTPException(status_code=400, detail="Insufficient points or money to create and join (fee + extra pot)")
             if total_pts > 0:
+                pts_before_create = int(user_before_create.get("points") or 0)
                 await log_points_event(
                     db,
                     user_id=uid,
                     points=-total_pts,
                     event_type="casino_mdg",
                     event_ref=f"create:{game_id}",
+                    source="casino_mdg",
+                    correlation_id=game_id,
+                    context={"action": "create_fee", "game_id": game_id, "host": {"id": uid, "username": user.get("username")}, "opponents": [], "stake_points": total_pts, "fee_points": fee_pts, "extra_pot_points": extra_pts},
                     meta={"action": "create_fee", "game_id": game_id, "fee_points": fee_pts, "extra_pot_points": extra_pts},
                     wallet_points_before=pts_before_create,
                     wallet_points_after=pts_before_create - total_pts,
@@ -595,8 +606,6 @@ def register(router):
         new_pot_pts = int(game.get("pot_points") or 0) + fee_pts
         new_pot_money = float(game.get("pot_money") or 0) + fee_money
 
-        u_join_pts = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1})
-        pts_before_join = int((u_join_pts or {}).get("points") or 0)
         deduct_filter = {"id": uid}
         deduct_inc = {}
         if fee_pts:
@@ -606,17 +615,26 @@ def register(router):
             deduct_filter["money"] = {"$gte": fee_money}
             deduct_inc["money"] = -fee_money
         if deduct_inc:
-            result = await db.users.update_one(deduct_filter, {"$inc": deduct_inc})
-            if result.modified_count == 0:
+            user_before_join = await db.users.find_one_and_update(
+                deduct_filter,
+                {"$inc": deduct_inc},
+                projection={"_id": 0, "points": 1},
+                return_document=ReturnDocument.BEFORE,
+            )
+            if not user_before_join:
                 raise HTTPException(status_code=400, detail="Insufficient points or money")
             if fee_pts > 0:
+                pts_before_join = int(user_before_join.get("points") or 0)
                 await log_points_event(
                     db,
                     user_id=uid,
                     points=-fee_pts,
                     event_type="casino_mdg",
                     event_ref=f"join:{request.game_id}",
-                    meta={"action": "join_fee", "game_id": request.game_id},
+                    source="casino_mdg",
+                    correlation_id=request.game_id,
+                    context={"action": "join_fee", "game_id": request.game_id, "host": {"id": game.get("created_by"), "username": game.get("created_by_username")}, "opponents": [{"id": e.get("user_id"), "username": e.get("username")} for e in entries], "stake_points": fee_pts, "fee_points": fee_pts},
+                    meta={"action": "join_fee", "game_id": request.game_id, "fee_points": fee_pts},
                     wallet_points_before=pts_before_join,
                     wallet_points_after=pts_before_join - fee_pts,
                 )
@@ -634,17 +652,24 @@ def register(router):
             {"$set": {"entries": new_entries, "pot_points": new_pot_pts, "pot_money": new_pot_money}},
         )
         if result.matched_count == 0:
-            u_ref = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1})
-            pts_before_refund = int((u_ref or {}).get("points") or 0)
-            await db.users.update_one({"id": uid}, {"$inc": {"points": fee_pts, "money": fee_money}})
+            user_before_refund = await db.users.find_one_and_update(
+                {"id": uid},
+                {"$inc": {"points": fee_pts, "money": fee_money}},
+                projection={"_id": 0, "points": 1},
+                return_document=ReturnDocument.BEFORE,
+            )
             if fee_pts > 0:
+                pts_before_refund = int((user_before_refund or {}).get("points") or 0)
                 await log_points_event(
                     db,
                     user_id=uid,
                     points=fee_pts,
                     event_type="casino_mdg",
                     event_ref=f"refund:{request.game_id}",
-                    meta={"action": "join_refund", "game_id": request.game_id},
+                    source="casino_mdg",
+                    correlation_id=request.game_id,
+                    context={"action": "join_refund", "result": "refunded", "game_id": request.game_id, "host": {"id": game.get("created_by"), "username": game.get("created_by_username")}, "opponents": [{"id": e.get("user_id"), "username": e.get("username")} for e in entries], "refund_points": fee_pts},
+                    meta={"action": "join_refund", "game_id": request.game_id, "fee_points": fee_pts},
                     wallet_points_before=pts_before_refund,
                     wallet_points_after=pts_before_refund + fee_pts,
                 )
@@ -691,20 +716,24 @@ def register(router):
             )
             if not claim_res:
                 return {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money}
-            w_pts_read = await db.users.find_one({"id": winner_id}, {"_id": 0, "points": 1})
-            pts_before_payout = int((w_pts_read or {}).get("points") or 0)
-            await db.users.update_one(
+            winner_before_payout = await db.users.find_one_and_update(
                 {"id": winner_id},
                 {"$inc": {"points": new_pot_pts, "money": new_pot_money}},
+                projection={"_id": 0, "points": 1},
+                return_document=ReturnDocument.BEFORE,
             )
             if new_pot_pts > 0:
+                pts_before_payout = int((winner_before_payout or {}).get("points") or 0)
                 await log_points_event(
                     db,
                     user_id=winner_id,
                     points=new_pot_pts,
                     event_type="casino_mdg",
                     event_ref=f"payout:{request.game_id}",
-                    meta={"action": "winner_payout", "game_id": request.game_id, "trigger": "auto_roll"},
+                    source="casino_mdg",
+                    correlation_id=request.game_id,
+                    context={"action": "winner_payout", "result": "won", "game_id": request.game_id, "host": {"id": game.get("created_by"), "username": game.get("created_by_username")}, "opponents": [{"id": e.get("user_id"), "username": e.get("username")} for e in new_entries if e.get("user_id") != winner_id], "stake_points": int(winner_entry.get("paid_points") or 0), "payout_points": new_pot_pts, "pot_points": new_pot_pts, "trigger": "auto_roll"},
+                    meta={"action": "winner_payout", "game_id": request.game_id, "pot_points": new_pot_pts, "trigger": "auto_roll"},
                     wallet_points_before=pts_before_payout,
                     wallet_points_after=pts_before_payout + new_pot_pts,
                 )
@@ -770,17 +799,24 @@ def register(router):
         )
         if not claim_res:
             raise HTTPException(status_code=400, detail="Game already closed")
-        w_pts_read = await db.users.find_one({"id": winner_id}, {"_id": 0, "points": 1})
-        pts_before_payout = int((w_pts_read or {}).get("points") or 0)
-        await db.users.update_one({"id": winner_id}, {"$inc": {"points": pot_pts, "money": pot_money}})
+        winner_before_payout = await db.users.find_one_and_update(
+            {"id": winner_id},
+            {"$inc": {"points": pot_pts, "money": pot_money}},
+            projection={"_id": 0, "points": 1},
+            return_document=ReturnDocument.BEFORE,
+        )
         if pot_pts > 0:
+            pts_before_payout = int((winner_before_payout or {}).get("points") or 0)
             await log_points_event(
                 db,
                 user_id=winner_id,
                 points=pot_pts,
                 event_type="casino_mdg",
                 event_ref=f"payout:{request.game_id}",
-                meta={"action": "winner_payout", "game_id": request.game_id, "trigger": "manual_roll"},
+                source="casino_mdg",
+                correlation_id=request.game_id,
+                context={"action": "winner_payout", "result": "won", "game_id": request.game_id, "host": {"id": game.get("created_by"), "username": game.get("created_by_username")}, "opponents": [{"id": e.get("user_id"), "username": e.get("username")} for e in entries if e.get("user_id") != winner_id], "stake_points": int(winner_entry.get("paid_points") or 0), "payout_points": pot_pts, "pot_points": pot_pts, "trigger": "manual_roll"},
+                meta={"action": "winner_payout", "game_id": request.game_id, "pot_points": pot_pts, "trigger": "manual_roll"},
                 wallet_points_before=pts_before_payout,
                 wallet_points_after=pts_before_payout + pot_pts,
             )

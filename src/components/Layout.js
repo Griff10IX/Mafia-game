@@ -441,6 +441,8 @@ export default function Layout({ children }) {
   const [messagingMenuOpen, setMessagingMenuOpen] = useState(() => getNavSectionOpen('messaging-menu'));
   const [categoryOpen, setCategoryOpen] = useState(() => ({ information: true, travel: true, messaging: true, money: true, other: true }));
   const [mobileBottomMenuOpen, setMobileBottomMenuOpen] = useState(null);
+  const [pocketMenuOpen, setPocketMenuOpen] = useState(false);
+  const [pocketStatsOpen, setPocketStatsOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
@@ -507,6 +509,7 @@ export default function Layout({ children }) {
   const navigationType = useNavigationType();
   const {
     mobileNavStyle,
+    mobileLayoutId,
     themeVariant,
     setColour,
     setTexture,
@@ -808,7 +811,11 @@ export default function Layout({ children }) {
     setNotificationBallPosition({ x: window.innerWidth - 72, y: window.innerHeight - 120 });
   }, [mobileStatsDisplay]);
 
-  useEffect(() => { setMobileBottomMenuOpen(null); }, [location.pathname]);
+  useEffect(() => {
+    setMobileBottomMenuOpen(null);
+    setPocketMenuOpen(false);
+    setPocketStatsOpen(false);
+  }, [location.pathname]);
 
   // Priority: load the current page's JS chunk before background polls compete for connections.
   useEffect(() => {
@@ -1719,14 +1726,42 @@ export default function Layout({ children }) {
   const staffTopBarEntry = isAdmin && staffToolsNavVisible ? adminNavItems[0] : (isModerator && staffToolsNavVisible ? moderatorNavItems[0] : null);
   const StaffTopBarIcon = staffTopBarEntry?.icon;
 
-  const sidebarBgStyle = { backgroundColor: 'var(--noir-content)' };
-  const sidebarActiveStyle = { background: 'var(--noir-raised)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
-  const sidebarActiveGroupStyle = { background: 'var(--noir-surface)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
+  const isOldSchool = themeVariant === 'old_school';
+  const isPocketDeck = isMobileViewport && mobileLayoutId === 'pocket_deck';
+  const sidebarBgStyle = isOldSchool
+    ? { backgroundColor: '#3d3d3d', borderColor: '#9a9a9a' }
+    : { backgroundColor: 'var(--noir-content)' };
+  const sidebarActiveStyle = isOldSchool
+    ? { background: '#0a1a4a', backgroundImage: 'none', borderLeft: 'none', color: '#ffffff', borderRadius: 0 }
+    : { background: 'var(--noir-raised)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
+  const sidebarActiveGroupStyle = isOldSchool
+    ? { background: '#0c2048', backgroundImage: 'none', borderLeft: 'none', color: '#ffffff', borderRadius: 0 }
+    : { background: 'var(--noir-surface)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
   const dividerMarginClass = sidebarSpacing === 'compact' ? 'my-0.5' : sidebarSpacing === 'relaxed' ? 'my-1.5' : 'my-1';
   const dividerStyle = sidebarDividerStyle === 'solid'
-    ? { height: '1px', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }
-    : { height: 0, borderTop: `1px ${sidebarDividerStyle} rgba(var(--noir-primary-rgb), 0.35)` };
-  const categoryHeaderStyle = { backgroundColor: 'rgba(var(--noir-primary-rgb), 0.12)', color: 'var(--noir-primary)' };
+    ? { height: '1px', backgroundColor: isOldSchool ? '#6a6a6a' : 'rgba(var(--noir-primary-rgb), 0.35)' }
+    : { height: 0, borderTop: `1px ${sidebarDividerStyle} ${isOldSchool ? '#6a6a6a' : 'rgba(var(--noir-primary-rgb), 0.35)'}` };
+  const categoryHeaderStyle = isOldSchool
+    ? { backgroundColor: '#0a1a4a', color: '#ffffff', borderRadius: 0 }
+    : { backgroundColor: 'rgba(var(--noir-primary-rgb), 0.12)', color: 'var(--noir-primary)' };
+  const osSectionBtnStyle = isOldSchool
+    ? { padding: '4px 8px', marginTop: 2, background: '#0a1a4a', borderRadius: 0 }
+    : { padding: '5px 8px 3px 10px', marginTop: 3 };
+  const osSectionLineStyle = isOldSchool
+    ? { display: 'none' }
+    : { flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' };
+  const osSectionLabelStyle = (active) => ({
+    fontFamily: 'var(--font-heading, "Cinzel", serif)',
+    fontSize: 8,
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase',
+    color: isOldSchool ? '#ffffff' : (active ? 'var(--noir-primary)' : 'var(--noir-muted)'),
+    whiteSpace: 'nowrap',
+    ...(isOldSchool ? { flex: 1, textAlign: 'left' } : {}),
+  });
+  const osSectionChevronStyle = isOldSchool
+    ? { color: '#ffffff', opacity: 0.75 }
+    : { color: 'var(--noir-primary)', opacity: 0.5 };
   const navDividerEl = (key) => showSidebarDividers ? <div key={key} className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" /> : null;
 
   const isRankingPath = (p) => p === '/game/ranking' || (p && (p.startsWith('/game/ranking/') || p.startsWith('/crime/') || p === '/organised-crime' || p === '/account/prestige'));
@@ -1734,16 +1769,16 @@ export default function Layout({ children }) {
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-ranking-group" onClick={() => setRankingOpen((v) => { const next = !v; setNavSectionOpen('ranking', next); return next; })}
         className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isRankingPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
-        style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
-        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
-        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: isRankingPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Ranking</span>
+        style={osSectionBtnStyle}>
+        <div style={osSectionLineStyle} />
+        <span style={osSectionLabelStyle(isRankingPath(location.pathname))}>Ranking</span>
         {!rankingOpen && (rankingCounts.crimes > 0 || rankingCounts.gta > 0) && (
           <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30 shrink-0">
             {rankingCounts.crimes + rankingCounts.gta}
           </span>
         )}
-        {rankingOpen ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
-        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+        {rankingOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
+        <div style={osSectionLineStyle} />
       </button>
       {rankingOpen && (
         <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
@@ -1804,11 +1839,11 @@ export default function Layout({ children }) {
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-combat-group" onClick={() => setCombatOpen((v) => { const next = !v; setNavSectionOpen('combat', next); return next; })}
         className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCombatPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
-        style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
-        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
-        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: isCombatPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Combat</span>
-        {combatOpen ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
-        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+        style={osSectionBtnStyle}>
+        <div style={osSectionLineStyle} />
+        <span style={osSectionLabelStyle(isCombatPath(location.pathname))}>Combat</span>
+        {combatOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
+        <div style={osSectionLineStyle} />
       </button>
       {combatOpen && (
         <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
@@ -1885,19 +1920,10 @@ export default function Layout({ children }) {
           data-testid="nav-messaging-menu-group"
           onClick={() => setMessagingMenuOpen((v) => { const next = !v; setNavSectionOpen('messaging-menu', next); return next; })}
           className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isMessagingPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
-          style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}
+          style={osSectionBtnStyle}
         >
-          <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
-          <span
-            style={{
-              fontFamily: 'var(--font-heading, "Cinzel", serif)',
-              fontSize: 8,
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              color: isMessagingPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)',
-              whiteSpace: 'nowrap',
-            }}
-          >
+          <div style={osSectionLineStyle} />
+          <span style={osSectionLabelStyle(isMessagingPath(location.pathname))}>
             Forum & inbox
           </span>
           {!messagingMenuOpen && (unreadCount > 0 || updateLogUnread > 0) && (
@@ -1912,8 +1938,8 @@ export default function Layout({ children }) {
               {(unreadCount + updateLogUnread) > 9 ? '9+' : (unreadCount + updateLogUnread)}
             </span>
           )}
-          {messagingMenuOpen ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
-          <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+          {messagingMenuOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
+          <div style={osSectionLineStyle} />
         </button>
         {messagingMenuOpen && (
           <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
@@ -1970,11 +1996,11 @@ export default function Layout({ children }) {
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-casino-group" onClick={() => setCasinoOpen((v) => { const next = !v; setNavSectionOpen('casino', next); return next; })}
         className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCasinoPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
-        style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
-        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
-        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: isCasinoPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Casino</span>
-        {casinoOpen ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
-        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+        style={osSectionBtnStyle}>
+        <div style={osSectionLineStyle} />
+        <span style={osSectionLabelStyle(isCasinoPath(location.pathname))}>Casino</span>
+        {casinoOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
+        <div style={osSectionLineStyle} />
       </button>
       {casinoOpen && (
         <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
@@ -2023,11 +2049,11 @@ export default function Layout({ children }) {
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-minigames-group" onClick={() => setMiniGamesOpen((v) => { const next = !v; setNavSectionOpen('minigames', next); return next; })}
         className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isMiniGamesPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
-        style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
-        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
-        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: isMiniGamesPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Mini games</span>
-        {miniGamesOpen ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
-        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+        style={osSectionBtnStyle}>
+        <div style={osSectionLineStyle} />
+        <span style={osSectionLabelStyle(isMiniGamesPath(location.pathname))}>Mini games</span>
+        {miniGamesOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
+        <div style={osSectionLineStyle} />
       </button>
       {miniGamesOpen && (
         <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
@@ -2328,15 +2354,15 @@ export default function Layout({ children }) {
       {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
       <div
         data-layout="sidebar"
-        className={`fixed left-0 top-0 h-full ${themeVariant === 'modern' ? 'w-40' : 'w-48'} ${styles.sidebar} z-50 transform transition-transform duration-300 ${mobileNavStyle === 'bottom' ? 'hidden md:translate-x-0 md:block' : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}`}
+        className={`fixed left-0 top-0 h-full ${themeVariant === 'modern' ? 'w-40' : 'w-48'} ${styles.sidebar} z-50 transform transition-transform duration-300 ${mobileNavStyle === 'bottom' || isPocketDeck ? 'hidden md:translate-x-0 md:block' : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}`}
         style={sidebarBgStyle}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className={`h-12 flex items-center px-2.5 border-b ${styles.borderGoldLight} shrink-0`}>
+          <div className={`h-12 flex items-center px-2.5 border-b ${styles.borderGoldLight} shrink-0`} style={isOldSchool ? { background: '#0a1a4a', borderColor: '#9a9a9a' } : undefined}>
             <div className="flex items-center gap-1.5 w-full">
-              <div className="w-4 h-px shrink-0" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
-              <h1 className={`text-base font-heading font-bold tracking-widest truncate ${styles.sidebarHeaderTitle}`} data-testid="app-logo">MAFIA WARS</h1>
+              <div className="w-4 h-px shrink-0" style={{ backgroundColor: isOldSchool ? '#9a9a9a' : 'var(--noir-accent-line)', opacity: 0.5 }} />
+              <h1 className={`text-base font-heading font-bold tracking-widest truncate ${styles.sidebarHeaderTitle}`} data-testid="app-logo" style={isOldSchool ? { color: '#ffffff' } : undefined}>MAFIA WARS</h1>
               {autoRankPrefs.auto_rank_enabled && (
                 <TooltipProvider>
                   <Tooltip>
@@ -2377,11 +2403,11 @@ export default function Layout({ children }) {
                     return (
                       <Fragment key={cat.id}>
                         {isBlockCategory ? null : (
-                          <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent opacity-90 hover:opacity-100" style={{ padding: '5px 8px 3px 10px', marginTop: 3 }} aria-expanded={open}>
-                            <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
-                            <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--noir-muted)', whiteSpace: 'nowrap' }}>{cat.label}</span>
-                            {open ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
-                            <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+                          <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent opacity-90 hover:opacity-100" style={osSectionBtnStyle} aria-expanded={open}>
+                            <div style={osSectionLineStyle} />
+                            <span style={osSectionLabelStyle(false)}>{cat.label}</span>
+                            {open ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
+                            <div style={osSectionLineStyle} />
                           </button>
                         )}
                         {open && (
@@ -2467,14 +2493,14 @@ export default function Layout({ children }) {
       </div>
 
       {/* Mobile overlay */}
-      {sidebarOpen && mobileNavStyle !== 'bottom' && (
+      {sidebarOpen && mobileNavStyle !== 'bottom' && !isPocketDeck && (
         <div className={`fixed inset-0 bg-black/50 z-40 ${!isLandscapeCompactLayout ? 'md:hidden' : ''}`} onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* ── TOP BAR ─────────────────────────────────────────────────────────── */}
-      <div data-layout="topbar" className={`fixed top-0 right-0 left-0 safe-area-pt ${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:left-40' : 'md:left-48') : ''} min-h-[36px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-2 py-1 md:px-3 md:py-0 gap-1 md:gap-2 ${user && mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:right-60' : 'md:right-52') : ''}`}>
+      <div data-layout="topbar" className={`fixed top-0 right-0 left-0 safe-area-pt ${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:left-40' : 'md:left-48') : ''} min-h-[36px] md:min-h-0 md:h-12 ${styles.topBar} ${isOldSchool ? '' : 'backdrop-blur-md'} z-30 flex flex-col md:flex-row md:items-center px-2 py-1 md:px-3 md:py-0 gap-1 md:gap-2 ${user && mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout && !isPocketDeck ? (themeVariant === 'modern' ? 'md:right-60' : 'md:right-52') : ''}`}>
         <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0 overflow-hidden md:justify-end">
-          {mobileNavStyle !== 'bottom' && (
+          {mobileNavStyle !== 'bottom' && !isPocketDeck && (
             <button onClick={() => setSidebarOpen(!sidebarOpen)} data-testid="mobile-menu-toggle"
               className={`${!isLandscapeCompactLayout ? 'md:hidden' : ''} shrink-0 min-h-[34px] min-w-[34px] flex items-center justify-center -m-1 rounded-lg hover:bg-white/[0.06] active:bg-white/[0.1] transition-colors order-last`}
               style={{ color: 'var(--noir-primary)' }} aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}>
@@ -2483,7 +2509,7 @@ export default function Layout({ children }) {
           )}
 
           {/* Flash news — show on desktop; on mobile hide when top bar stats selected (moved to bottom). */}
-          <div className={`${(!isMobileViewport || (mobileNavStyle === 'bottom' && mobileStatsDisplay !== 'top_bar')) ? 'flex' : 'hidden'} items-center flex-1 min-w-0 max-w-sm md:max-w-md`}>
+          <div className={`${(!isMobileViewport || isPocketDeck || (mobileNavStyle === 'bottom' && mobileStatsDisplay !== 'top_bar')) ? 'flex' : 'hidden'} items-center flex-1 min-w-0 max-w-sm md:max-w-md`}>
             {flashNews.length > 0 && (
               <div className="flex items-center gap-1 md:gap-2 min-w-0 w-full min-h-[1.5rem] md:min-h-[2rem] rounded px-1.5 py-0.5 md:px-2 md:py-1 border border-primary/15 bg-primary/5">
                 <Newspaper className="shrink-0 text-primary/70 self-center w-3 h-3 md:w-3.5 md:h-3.5" aria-hidden />
@@ -2602,10 +2628,10 @@ export default function Layout({ children }) {
               <>
                 {/* IMPROVEMENT 6: scroll fade mask on mobile */}
                 <div
-                  className={`${(isMobileViewport && mobileStatsDisplay === 'touch_ball') || mobileStatsDisplay === 'right_sidebar' ? 'hidden' : 'flex'} md:flex items-center ${topBarGapClass} flex-1 min-w-0 py-0 md:py-0 md:mx-0 md:px-0 overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth touch-pan-x min-h-0`}
+                  className={`${isPocketDeck || (isMobileViewport && mobileStatsDisplay === 'touch_ball') || mobileStatsDisplay === 'right_sidebar' ? 'hidden' : 'flex'} md:flex items-center ${topBarGapClass} flex-1 min-w-0 py-0 md:py-0 md:mx-0 md:px-0 overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth touch-pan-x min-h-0`}
                   style={isMobileViewport ? { WebkitMaskImage: 'linear-gradient(to right, transparent 0, black 8px, black 90%, transparent 100%)', maskImage: 'linear-gradient(to right, transparent 0, black 8px, black 90%, transparent 100%)' } : undefined}
                 >
-                  {(!isMobileViewport || mobileStatsDisplay === 'top_bar') && mobileStatsDisplay !== 'right_sidebar' && (
+                  {!isPocketDeck && (!isMobileViewport || mobileStatsDisplay === 'top_bar') && mobileStatsDisplay !== 'right_sidebar' && (
                     <div className="flex items-center gap-0.5 md:gap-2 min-w-full w-max justify-evenly md:min-w-0 md:w-auto md:justify-start md:shrink-0">
                       {/* Search — desktop only (mobile: find users elsewhere, e.g. social) */}
                       {!isMobileViewport && (
@@ -2775,7 +2801,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
-      <main data-layout="main" className={`${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:ml-40' : 'md:ml-48') : ''} mt-main-below-topbar min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-safe-bottom-nav md:pb-6' : ''} ${(isMobileViewport || isLandscapeCompactLayout) && mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && mobileNavStyle !== 'bottom' ? 'pb-16 md:pb-6' : ''} ${user && mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:mr-60' : 'md:mr-52') : ''}`}>
+      <main data-layout="main" className={`${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:ml-40' : 'md:ml-48') : ''} mt-main-below-topbar min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' || isPocketDeck ? 'pb-safe-bottom-nav md:pb-6' : ''} ${isPocketDeck ? 'pt-9 md:pt-0' : ''} ${(isMobileViewport || isLandscapeCompactLayout) && !isPocketDeck && mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && mobileNavStyle !== 'bottom' ? 'pb-16 md:pb-6' : ''} ${user && mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout && !isPocketDeck ? (themeVariant === 'modern' ? 'md:mr-60' : 'md:mr-52') : ''}`}>
         {needsEmailVerification && (
           <div className="mb-3 px-3 py-2 rounded-sm flex items-center gap-2 flex-wrap" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', border: '1px solid rgba(var(--noir-primary-rgb), 0.4)' }}>
             <Mail size={16} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
@@ -2823,7 +2849,7 @@ export default function Layout({ children }) {
       </main>
 
       {/* ── RIGHT SIDEBAR ────────────────────────────────────────────────────── */}
-      {user && mobileStatsDisplay === 'right_sidebar' && (
+      {user && mobileStatsDisplay === 'right_sidebar' && !isPocketDeck && (
         <>
           {isMobileViewport && rightSidebarOpen && (
             <div className="fixed inset-0 bg-black/50 z-40 md:hidden cursor-pointer touch-manipulation" aria-label="Close stats" role="button" tabIndex={-1}
@@ -2840,13 +2866,13 @@ export default function Layout({ children }) {
           <div data-layout="right-sidebar" className={`fixed right-0 w-52 flex flex-col z-40 overflow-y-auto border-l ${styles.sidebar} transition-transform duration-300 ${isMobileViewport ? (rightSidebarOpen ? 'translate-x-0 pointer-events-auto' : 'translate-x-full pointer-events-none') : 'translate-x-0'} ${isMobileViewport ? 'top-0 h-full' : 'md:top-0 md:h-full'}`} style={sidebarBgStyle}>
 
             {/* IMPROVEMENT 4: username + rank in header; page + user for logs */}
-            <div className={`flex flex-col px-2.5 py-1.5 border-b ${styles.borderGoldLight} shrink-0 gap-0.5`}>
+            <div className={`flex flex-col px-2.5 py-1.5 border-b ${styles.borderGoldLight} shrink-0 gap-0.5`} style={isOldSchool ? { background: '#0a1a4a', borderColor: '#9a9a9a' } : undefined}>
               <div className="flex items-center justify-between gap-2 min-h-[28px]">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <User size={13} style={{ color: 'var(--noir-primary)', flexShrink: 0 }} />
-                  <span className="text-[11px] font-heading font-bold truncate" style={{ color: 'var(--noir-primary)' }}>{user.username || 'Profile'}</span>
+                  <User size={13} style={{ color: isOldSchool ? '#ffffff' : 'var(--noir-primary)', flexShrink: 0 }} />
+                  <span className="text-[11px] font-heading font-bold truncate" style={{ color: isOldSchool ? '#ffffff' : 'var(--noir-primary)' }}>{user.username || 'Profile'}</span>
                 </div>
-                <span className="text-[9px] font-heading uppercase tracking-wider shrink-0" style={{ color: 'var(--noir-muted)' }}>{user.rank_name || rankProgress?.current_rank_name || ''}</span>
+                <span className="text-[9px] font-heading uppercase tracking-wider shrink-0" style={{ color: isOldSchool ? '#d0d0d0' : 'var(--noir-muted)' }}>{user.rank_name || rankProgress?.current_rank_name || ''}</span>
                 {isMobileViewport && (
                   <button type="button" onClick={closeRightSidebar}
                     onPointerUp={(e) => { e.preventDefault(); closeRightSidebar(); }}
@@ -3027,8 +3053,210 @@ export default function Layout({ children }) {
         </>
       )}
 
+      {/* ── POCKET DECK (mobile shell) ───────────────────────────────────────── */}
+      {isPocketDeck && user && (
+        <>
+          <div
+            data-layout="pocket-hud"
+            className="md:hidden fixed left-0 right-0 z-[31] px-2"
+            style={{ top: 'var(--pocket-hud-top, 2.75rem)' }}
+          >
+            <button
+              type="button"
+              data-testid="pocket-hud"
+              onClick={() => { setPocketStatsOpen(true); setPocketMenuOpen(false); }}
+              className="w-full flex items-stretch gap-1 rounded-md border touch-manipulation active:scale-[0.99] transition-transform overflow-hidden"
+              style={{
+                backgroundColor: 'var(--noir-content)',
+                borderColor: 'rgba(var(--noir-primary-rgb), 0.35)',
+                minHeight: 36,
+              }}
+              aria-label="Open player stats"
+            >
+              <span className="flex-1 flex flex-col items-center justify-center px-1 py-1 min-w-0 border-r" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.15)' }}>
+                <span className="text-[8px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>Cash</span>
+                <span className="text-[11px] font-heading font-bold tabular-nums truncate max-w-full" style={{ color: 'var(--noir-primary)' }}>{formatMoneyCompact(user.money)}</span>
+              </span>
+              <span className="flex-1 flex flex-col items-center justify-center px-1 py-1 min-w-0 border-r" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.15)' }}>
+                <span className="text-[8px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>Health</span>
+                <span
+                  className={`text-[11px] font-heading font-bold tabular-nums ${
+                    Number(user.health) > 50 ? 'text-emerald-400' : Number(user.health) > 25 ? 'text-amber-400' : 'text-red-400'
+                  }`}
+                >
+                  {Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%'}
+                </span>
+              </span>
+              <span className="flex-1 flex flex-col items-center justify-center px-1 py-1 min-w-0">
+                <span className="text-[8px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>Rank</span>
+                <span className="text-[10px] font-heading font-bold truncate max-w-full" style={{ color: 'var(--noir-foreground)' }}>
+                  {user.rank_name || rankProgress?.current_rank_name || '—'}
+                </span>
+              </span>
+            </button>
+          </div>
+
+          {(pocketMenuOpen || pocketStatsOpen) && (
+            <div
+              role="presentation"
+              className="md:hidden fixed inset-0 z-[54] bg-black/55 touch-manipulation"
+              onClick={() => { setPocketMenuOpen(false); setPocketStatsOpen(false); }}
+            />
+          )}
+
+          {pocketStatsOpen && (
+            <div
+              data-layout="pocket-stats-sheet"
+              className="md:hidden fixed inset-x-0 bottom-0 z-[55] max-h-[75vh] overflow-y-auto rounded-t-xl border-t shadow-2xl safe-area-pb"
+              style={{ backgroundColor: 'var(--noir-content)', borderColor: 'rgba(var(--noir-primary-rgb), 0.3)' }}
+              role="dialog"
+              aria-label="Player stats"
+            >
+              <div className="flex items-center justify-between px-3 py-2 border-b sticky top-0" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.15)', backgroundColor: 'var(--noir-content)' }}>
+                <span className="text-[11px] font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Player stats</span>
+                <button type="button" onClick={() => setPocketStatsOpen(false)} className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md" style={{ color: 'var(--noir-muted)' }} aria-label="Close stats">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="px-3 py-2 space-y-0">
+                {[
+                  { label: 'Cash', value: formatMoney(user.money), to: '/bank' },
+                  { label: 'Points', value: formatInt(user.points), to: '/game/store?tab=points' },
+                  { label: 'Bullets', value: formatInt(user.bullets), to: '/game/store?tab=bullets' },
+                  { label: 'Health', value: Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%', to: '/game/store?tab=upgrades' },
+                  { label: 'Location', value: user.current_state || user.location || '—', to: '/travel' },
+                  { label: 'Family', value: user.gang_name || 'None', to: '/game/family/list' },
+                  { label: 'Guards', value: typeof user.bodyguard_count === 'number' ? `${user.bodyguard_count}/${user.bodyguard_slots ?? 1}` : '—', to: '/kill/bodyguards' },
+                ].map((row) => (
+                  <SameRouteAwareLink
+                    key={row.label}
+                    to={row.to}
+                    onClick={() => setPocketStatsOpen(false)}
+                    className="flex justify-between items-center gap-2 px-1 py-2.5 min-h-[44px] border-b text-[12px] font-heading touch-manipulation"
+                    style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.1)', color: 'var(--noir-foreground)' }}
+                  >
+                    <span style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
+                    <span className="font-bold truncate max-w-[60%]" style={{ color: 'var(--noir-primary)' }}>{row.value}</span>
+                  </SameRouteAwareLink>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {pocketMenuOpen && (
+            <div
+              data-layout="pocket-menu-sheet"
+              className="md:hidden fixed inset-x-0 bottom-0 z-[55] max-h-[80vh] overflow-y-auto rounded-t-xl border-t shadow-2xl safe-area-pb"
+              style={{ backgroundColor: 'var(--noir-content)', borderColor: 'rgba(var(--noir-primary-rgb), 0.3)' }}
+              role="dialog"
+              aria-label="Game menu"
+            >
+              <div className="flex items-center justify-between px-3 py-2 border-b sticky top-0 z-10" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.15)', backgroundColor: 'var(--noir-content)' }}>
+                <span className="text-[11px] font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Menu</span>
+                <button type="button" onClick={() => setPocketMenuOpen(false)} className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md" style={{ color: 'var(--noir-muted)' }} aria-label="Close menu">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="px-2 py-2 space-y-3">
+                {SIDEBAR_CATEGORIES.map((cat) => {
+                  const items = navItems.filter((i) => (PATH_TO_CATEGORY[i.path] || 'other') === cat.id && !String(i.path).startsWith('__'));
+                  if (!items.length) return null;
+                  return (
+                    <div key={cat.id}>
+                      <div className="px-2 py-1.5 mb-1 rounded-sm text-[9px] font-heading font-bold uppercase tracking-widest" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.12)', color: 'var(--noir-primary)' }}>
+                        {cat.label}
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {items.map((item) => {
+                          const Icon = item.icon;
+                          const isActive = location.pathname === item.path || (item.path !== '/account/dashboard' && location.pathname.startsWith(item.path + '/'));
+                          return (
+                            <SameRouteAwareLink
+                              key={item.path}
+                              to={item.path}
+                              onClick={() => setPocketMenuOpen(false)}
+                              className="tap-feedback flex items-center gap-2 px-2 py-2.5 min-h-[44px] rounded-md border text-[10px] font-heading uppercase tracking-wider touch-manipulation"
+                              style={isActive
+                                ? { borderColor: 'rgba(var(--noir-primary-rgb), 0.5)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.14)', color: 'var(--noir-primary)' }
+                                : { borderColor: 'rgba(var(--noir-primary-rgb), 0.12)', backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' }}
+                            >
+                              {Icon && <Icon size={14} className="shrink-0" />}
+                              <span className="truncate">{item.label}</span>
+                            </SameRouteAwareLink>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="grid grid-cols-2 gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setThemePickerOpen(true); setPocketMenuOpen(false); }}
+                    className="flex items-center justify-center gap-1.5 px-2 py-2.5 min-h-[44px] rounded-md border font-heading text-[10px] uppercase tracking-wider"
+                    style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.3)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.1)', color: 'var(--noir-primary)' }}
+                  >
+                    <Palette size={14} /> Theme
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { handleLogout(); setPocketMenuOpen(false); }}
+                    className="flex items-center justify-center gap-1.5 px-2 py-2.5 min-h-[44px] rounded-md border font-heading text-[10px] uppercase tracking-wider text-red-400"
+                    style={{ borderColor: 'rgba(248,113,113,0.35)', backgroundColor: 'rgba(248,113,113,0.08)' }}
+                  >
+                    <LogOut size={14} /> Logout
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div data-layout="pocket-dock" className="md:hidden fixed bottom-0 left-0 right-0 z-[51] safe-area-pb" style={{ backgroundColor: 'var(--noir-content)', borderTop: '1px solid rgba(var(--noir-primary-rgb), 0.28)' }}>
+            <nav className="flex items-stretch gap-1 px-1 py-1" aria-label="Pocket Deck navigation">
+              {[
+                { id: 'home', label: 'Home', path: '/account/dashboard', Icon: Home },
+                { id: 'crime', label: 'Crime', path: '/crime/crimes', Icon: ListChecks },
+                { id: 'combat', label: 'Combat', path: '/kill/attack', Icon: Sword },
+                { id: 'money', label: 'Money', path: '/money/bank', Icon: Landmark },
+              ].map((slot) => {
+                const active = location.pathname === slot.path || (slot.path !== '/account/dashboard' && location.pathname.startsWith(slot.path.split('/').slice(0, 2).join('/') + '/'));
+                const Icon = slot.Icon;
+                return (
+                  <SameRouteAwareLink
+                    key={slot.id}
+                    to={slot.path}
+                    onClick={() => { setPocketMenuOpen(false); setPocketStatsOpen(false); }}
+                    data-testid={`pocket-dock-${slot.id}`}
+                    className="tap-feedback flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[52px] rounded-md border touch-manipulation active:scale-[0.97]"
+                    style={active
+                      ? { borderColor: 'rgba(var(--noir-primary-rgb), 0.55)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.16)', color: 'var(--noir-primary)' }
+                      : { borderColor: 'transparent', backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' }}
+                  >
+                    <Icon size={16} strokeWidth={2.2} />
+                    <span className="text-[8px] font-heading uppercase tracking-wider">{slot.label}</span>
+                  </SameRouteAwareLink>
+                );
+              })}
+              <button
+                type="button"
+                data-testid="pocket-dock-menu"
+                onClick={() => { setPocketMenuOpen((v) => !v); setPocketStatsOpen(false); }}
+                className="tap-feedback flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[52px] rounded-md border touch-manipulation active:scale-[0.97]"
+                style={pocketMenuOpen
+                  ? { borderColor: 'rgba(var(--noir-primary-rgb), 0.55)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.16)', color: 'var(--noir-primary)' }
+                  : { borderColor: 'transparent', backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' }}
+                aria-expanded={pocketMenuOpen}
+              >
+                <Menu size={16} strokeWidth={2.2} />
+                <span className="text-[8px] font-heading uppercase tracking-wider">Menu</span>
+              </button>
+            </nav>
+          </div>
+        </>
+      )}
+
       {/* ── MOBILE BOTTOM AREA (nav + news/casino bar when top bar stats) ─────── */}
-      {isMobileViewport && (mobileNavStyle === 'bottom' || (mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)))) && (
+      {!isPocketDeck && isMobileViewport && (mobileNavStyle === 'bottom' || (mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)))) && (
         <>
       {mobileNavStyle === 'bottom' && mobileBottomMenuOpen && (
         <div
@@ -3253,7 +3481,7 @@ export default function Layout({ children }) {
       )}
 
       {/* ── TOUCH BALL ───────────────────────────────────────────────────────── */}
-      {user && notificationBallPosition && isMobileViewport && mobileStatsDisplay === 'touch_ball'
+      {user && notificationBallPosition && isMobileViewport && !isPocketDeck && mobileStatsDisplay === 'touch_ball'
         && !String(location.pathname || '').startsWith('/tjjeujr3wa') && (
         <div ref={notificationBallRef} data-layout="touch-ball" className="fixed z-50 touch-none" style={{ left: notificationBallPosition.x, top: notificationBallPosition.y, width: 56, height: 56 }}>
           <button type="button"

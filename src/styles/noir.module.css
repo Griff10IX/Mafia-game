@@ -1079,3 +1079,310 @@ body[data-theme-variant="dark_mafia"] [data-page="store"] .store-art-line {
   opacity: 1;
 }
 
+/* ═══════════════════════════════════════════════════════════
+   Old School Mafia Theme — early browser-game chrome
+   Navy patterned canvas, gray boxed panels, deep-blue bars,
+   square edges, thin light borders, compact type.
+   ═══════════════════════════════════════════════════════════ */
+body[data-theme-variant="old_school"] {
+  --noir-bg: #0a1628;
+  --noir-background: #0a1628;
+  --noir-panel: #3a3a3a;
+  --noir-content: #3d3d3d;
+  --noir-surface: #454545;
+  --noir-raised: #525252;
+  --noir-border: #8a8a8a;
+  --noir-border-light: #9a9a9a;
+  --noir-border-mid: #7a7a7a;
+  --os-navy: #0a1a4a;
+  --os-navy-bar: #0c2048;
+  --os-panel: #3d3d3d;
+  --os-panel-inner: #454545;
+  --os-border: #9a9a9a;
+  --os-border-dim: #6a6a6a;
+  --gm-bg: #0a1628;
+  --gm-sidebar: #3d3d3d;
+  --gm-content: #3d3d3d;
+  --gm-card: #454545;
+  --gm-card-hover: #525252;
+  --gm-border: #9a9a9a;
+  --gm-text: #f0f0f0;
+  --gm-muted: #c8c8c8;
+  --gm-gold: var(--noir-primary);
+}
+
+body[data-theme-variant="old_school"] .themeGangsterModern,
+body[data-theme-variant="old_school"] .themeGangsterModern.page,
+body[data-theme-variant="old_school"] .themeGangsterModern .pageContent {
+  letter-spacing: 0;
+  /* Navy canvas shows through; gray is reserved for boxed chrome */
+  background-color: transparent !important;
+  background: transparent !important;
+}
+
+body[data-theme-variant="old_school"] .themeGangsterModern .topBar,
+body[data-theme-variant="old_school"] .themeGangsterModern .sidebar {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: var(--os-panel) !important;
+  border-color: var(--os-border);
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+body[data-theme-variant="old_school"] .themeGangsterModern .topBar {
+  border-bottom: 1px solid var(--os-border);
+  background: var(--os-panel) !important;
+}
+
+body[data-theme-variant="old_school"] .themeGangsterModern .sidebar {
+  background: var(--os-panel) !important;
+  border-right: 1px solid var(--os-border);
+}
+
+body[data-theme-variant="old_school"] .themeGangsterModern .panel,
+body[data-theme-variant="old_school"] .themeGangsterModern .surface,
+body[data-theme-variant="old_school"] .themeGangsterModern .surfaceMuted {
+  position: relative;
+  background: var(--os-panel) !important;
+  border: 1px solid var(--os-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+body[data-theme-variant="old_school"] .themeGangsterModern .panel::before,
+body[data-theme-variant="old_school"] .themeGangsterModern .surface::before,
+body[data-theme-variant="old_school"] .themeGangsterModern .panel::after,
+body[data-theme-variant="old_school"] .themeGangsterModern .surface::after {
+  display: none !important;
+  content: none !important;
+}
+
+body[data-theme-variant="old_school"] .themeGangsterModern .panelHeader {
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+  padding-left: 0.5rem;
+  border-bottom: 1px solid var(--os-border-dim);
+  background: var(--os-navy-bar) !important;
+  border-radius: 0 !important;
+  color: #f0f0f0;
+}
+
+body[data-theme-variant="old_school"] .themeGangsterModern .input {
+  background: #2e2e2e !important;
+  border: 1px solid var(--os-border) !important;
+  border-radius: 0 !important;
+  color: #f0f0f0;
+  box-shadow: none !important;
+  font-size: 11px;
+}
+
+body[data-theme-variant="old_school"] .themeGangsterModern .input:focus {
+  border-color: #b0b0b0 !important;
+  box-shadow: none !important;
+}
+
+body[data-theme-variant="old_school"] .themeGangsterModern .btnGoldDarkText,
+body[data-theme-variant="old_school"] .themeGangsterModern .btnPrimary {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: var(--os-navy-bar) !important;
+  border: 1px solid var(--os-border) !important;
+  color: #f0f0f0 !important;
+}
+
+body[data-theme-variant="old_school"] .themeGangsterModern .sidebar .navItemActive,
+body[data-theme-variant="old_school"] .themeGangsterModern .navItemActive,
+body[data-theme-variant="old_school"] .themeGangsterModern .sidebar .navItemActivePage,
+body[data-theme-variant="old_school"] .themeGangsterModern .navItemActivePage {
+  background: var(--os-navy) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  border-left: none !important;
+  border-radius: 0 !important;
+}
+
+body[data-theme-variant="old_school"] .themeGangsterModern .sidebar .navItemActivePage:hover,
+body[data-theme-variant="old_school"] .themeGangsterModern .navItemActivePage:hover {
+  background: var(--os-navy-bar) !important;
+  background-image: none !important;
+}
+
+body[data-theme-variant="old_school"] .themeGangsterModern .sidebarNavLink:hover {
+  background-color: #4a4a4a !important;
+  color: #ffffff !important;
+}
+
+body[data-theme-variant="old_school"] .themeGangsterModern .raisedHover:hover {
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body[data-theme-variant="old_school"] [data-layout="sidebar"] {
+  width: 12rem !important;
+  background: var(--os-panel) !important;
+  border-right: 1px solid var(--os-border) !important;
+  box-shadow: none !important;
+}
+
+body[data-theme-variant="old_school"] [data-layout="topbar"] {
+  min-height: 36px !important;
+  padding-left: 0.4rem !important;
+  padding-right: 0.4rem !important;
+  padding-top: 0.2rem !important;
+  padding-bottom: 0.2rem !important;
+  gap: 0.35rem !important;
+  background: var(--os-panel) !important;
+  border-bottom: 1px solid var(--os-border) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body[data-theme-variant="old_school"] [data-layout="main"] {
+  margin-top: 2.75rem !important;
+  padding: 0.5rem !important;
+  background: transparent !important;
+}
+
+body[data-theme-variant="old_school"] [data-layout="right-sidebar"] {
+  width: 13rem !important;
+  border-left: 1px solid var(--os-border) !important;
+  background: var(--os-panel) !important;
+  box-shadow: none !important;
+}
+
+body[data-theme-variant="old_school"] [data-layout="sidebar"] .sidebarNavLink {
+  border-radius: 0 !important;
+  border: none !important;
+  font-size: 10px !important;
+  min-height: 20px !important;
+  padding-top: 0.15rem !important;
+  padding-bottom: 0.15rem !important;
+}
+
+@media (min-width: 768px) {
+  body[data-theme-variant="old_school"] [data-layout="topbar"] {
+    left: 12rem !important;
+    height: 2.75rem !important;
+    padding-left: 0.55rem !important;
+    padding-right: 0.55rem !important;
+  }
+
+  body[data-theme-variant="old_school"] [data-layout="main"] {
+    margin-left: 12rem !important;
+    margin-top: 2.75rem !important;
+    padding: 0.65rem !important;
+  }
+}
+
+@media (max-width: 767px) {
+  body[data-theme-variant="old_school"] [data-layout="topbar"] {
+    min-height: 36px !important;
+  }
+  body[data-theme-variant="old_school"] [data-layout="main"] {
+    padding: 0.45rem !important;
+    margin-top: 2.5rem !important;
+  }
+  body[data-theme-variant="old_school"] [data-layout="sidebar"],
+  body[data-theme-variant="old_school"] [data-layout="right-sidebar"] {
+    width: 14rem !important;
+  }
+}
+
+body[data-theme-variant="old_school"] [data-chat-surface] {
+  border: 1px solid var(--os-border) !important;
+  background: var(--os-panel) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+body[data-theme-variant="old_school"] [data-chat-part="header"] {
+  background: var(--os-navy-bar) !important;
+  border-bottom-color: var(--os-border) !important;
+  border-radius: 0 !important;
+}
+
+body[data-theme-variant="old_school"] [data-chat-part="messages"] {
+  background: #323232 !important;
+}
+
+body[data-theme-variant="old_school"] [data-chat-part="message-row"] {
+  border-color: var(--os-border-dim) !important;
+  background: #3a3a3a;
+  border-radius: 0 !important;
+}
+
+body[data-theme-variant="old_school"] [data-chat-own="true"] {
+  background: rgba(10, 26, 74, 0.45);
+}
+
+body[data-theme-variant="old_school"] [data-chat-part="composer"] {
+  border-top-color: var(--os-border) !important;
+  background: #323232 !important;
+}
+
+body[data-theme-variant="old_school"] [data-chat-part="input"] {
+  background: #2e2e2e !important;
+  border-color: var(--os-border) !important;
+  border-radius: 0 !important;
+}
+
+body[data-theme-variant="old_school"] [data-chat-part="send"],
+body[data-theme-variant="old_school"] [data-chat-part="aux-btn"] {
+  background: var(--os-navy-bar) !important;
+  border-color: var(--os-border) !important;
+  border-radius: 0 !important;
+}
+
+body[data-theme-variant="old_school"] [data-layout="bottom-nav"] nav {
+  background: var(--os-panel) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-top: 1px solid var(--os-border) !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+body[data-theme-variant="old_school"] [data-layout="bottom-nav-submenu"] {
+  background: var(--os-panel) !important;
+  border: 1px solid var(--os-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+body[data-theme-variant="old_school"] [data-layout="touch-ball"] button {
+  background: var(--os-panel) !important;
+  border: 1px solid var(--os-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+body[data-theme-variant="old_school"] [data-layout="touch-ball-panel"] {
+  background: var(--os-panel) !important;
+  border: 1px solid var(--os-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+body[data-theme-variant="old_school"] [data-page="store"] .store-art-line {
+  background: linear-gradient(90deg, transparent 0%, var(--os-border) 50%, transparent 100%) !important;
+  height: 1px;
+  opacity: 0.7;
+}
+
+/* Compact tables / tabs when old school is active */
+body[data-theme-variant="old_school"] table,
+body[data-theme-variant="old_school"] .mobile-panel {
+  border-radius: 0 !important;
+}
+
+body[data-theme-variant="old_school"] [data-layout="main"] .rounded-xl,
+body[data-theme-variant="old_school"] [data-layout="main"] .rounded-lg,
+body[data-theme-variant="old_school"] [data-layout="main"] .rounded-2xl,
+body[data-theme-variant="old_school"] [data-layout="main"] .rounded-md {
+  border-radius: 0 !important;
+}
+

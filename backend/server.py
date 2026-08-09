@@ -1100,6 +1100,7 @@ class ThemePreferencesRequest(BaseModel):
     sidebar_layout: Optional[str] = None
     mobile_nav_style: Optional[str] = None
     mobile_stats_display: Optional[str] = None
+    mobile_layout_id: Optional[str] = None
     game_chat_visible: Optional[bool] = None
     button_shape_id: Optional[str] = None
     top_bar_gap: Optional[str] = None
@@ -1518,7 +1519,9 @@ async def get_current_user(
                             user[free_key] = int(user.get(free_key) or 0) + reward_amount
                             if free_key == "points":
                                 asyncio.create_task(log_points_event(db, user_id=user_id, points=reward_amount,
-                                    event_type="game_pass_free_grant", event_ref=f"tier:{t}"))
+                                    event_type="game_pass_free_grant", event_ref=f"tier:{t}",
+                                    wallet_points_before=int(user.get("points") or 0) - reward_amount,
+                                    wallet_points_after=int(user.get("points") or 0)))
 
                             next_tier = t + 1 if t < MAX_MICRO_TIER else None
                             next_summary = (

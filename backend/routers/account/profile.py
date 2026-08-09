@@ -1531,6 +1531,7 @@ def register(router):
             "sidebar_layout": "sidebarLayout",
             "mobile_nav_style": "mobileNavStyle",
             "mobile_stats_display": "mobileStatsDisplay",
+            "mobile_layout_id": "mobileLayoutId",
             "game_chat_visible": "gameChatVisible",
             "button_shape_id": "buttonShapeId",
             "top_bar_gap": "topBarGap",
@@ -1598,6 +1599,9 @@ def register(router):
         msd = stored.get("mobileStatsDisplay")
         if msd is not None and msd not in ("top_bar", "touch_ball", "right_sidebar"):
             raise HTTPException(status_code=400, detail="Invalid mobile_stats_display")
+        mld = stored.get("mobileLayoutId")
+        if mld is not None and mld not in ("classic", "pocket_deck"):
+            raise HTTPException(status_code=400, detail="Invalid mobile_layout_id")
         field = "theme_preferences_pc" if platform == "pc" else "theme_preferences_mobile"
         base = _theme_bucket_prefs(current_user, platform_pc=(platform == "pc"))
         new_prefs = {**base, **stored}

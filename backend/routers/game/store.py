@@ -3,6 +3,7 @@ import logging
 from datetime import date, datetime, timezone
 from typing import Optional
 import uuid
+from pymongo import ReturnDocument
 
 logger = logging.getLogger(__name__)
 from pydantic import BaseModel, field_validator, model_validator
@@ -221,6 +222,10 @@ async def _record_store_points_spend(
                 event_ref=event_ref,
                 meta={"source": "store"},
                 assume_balance_already_decremented_by=spend_points,
+                source="store",
+                context={"store_item": event_ref, "cost_points": int(cost_used or 0), **dict(extra or {})},
+                wallet_points_before=int(current_user.get("points") or 0),
+                wallet_points_after=int(current_user.get("points") or 0) - spend_points,
             )
         except Exception:
             logger.exception("point provenance spend failed user_id=%s event_ref=%s", user_id, event_ref)
@@ -1724,17 +1729,20 @@ async def send_points(request: SendPointsRequest, current_user: dict = Depends(g
     if recipient["id"] == sender_id:
         raise HTTPException(status_code=400, detail="You cannot send points to yourself")
     # Atomic deduct: only succeeds if sender still has enough points
-    deduct = await db.users.update_one(
+    sender_before_doc = await db.users.find_one_and_update(
         {"id": sender_id, "points": {"$gte": amount}},
         {"$inc": {"points": -amount}},
+        projection={"_id": 0, "points": 1},
+        return_document=ReturnDocument.BEFORE,
     )
-    if deduct.modified_count == 0:
+    if not sender_before_doc:
         raise HTTPException(status_code=400, detail="Insufficient points")
     recipient_username = (recipient.get("username") or "").strip() or "?"
     now = datetime.now(timezone.utc).isoformat()
     transfer_id = str(uuid.uuid4())
     slices = []
     try:
+        sender_pts_before_transfer = int(sender_before_doc.get("points") or 0)
         slices = await consume_points_fifo(
             db,
             user_id=sender_id,
@@ -1743,6 +1751,17 @@ async def send_points(request: SendPointsRequest, current_user: dict = Depends(g
             event_ref=transfer_id,
             meta={"to_user_id": recipient["id"], "to_username": recipient_username},
             assume_balance_already_decremented_by=amount,
+            source="p2p",
+            correlation_id=transfer_id,
+            counterparty={"id": recipient["id"], "username": recipient_username},
+            context={
+                "direction": "out",
+                "transfer_id": transfer_id,
+                "from_username": sender_username,
+                "to_username": recipient_username,
+            },
+            wallet_points_before=sender_pts_before_transfer,
+            wallet_points_after=sender_pts_before_transfer - amount,
         )
     except Exception:
         logger.exception("point provenance transfer_out failed transfer_id=%s", transfer_id)
@@ -1764,7 +1783,13 @@ async def send_points(request: SendPointsRequest, current_user: dict = Depends(g
                 logger.exception("point provenance rollback failed transfer_id=%s", transfer_id)
         await db.users.update_one({"id": sender_id}, {"$inc": {"points": amount}})
         raise HTTPException(status_code=500, detail="Transfer failed integrity check. No points were sent.")
-    await db.users.update_one({"id": recipient["id"]}, {"$inc": {"points": amount}})
+    recipient_before_doc = await db.users.find_one_and_update(
+        {"id": recipient["id"]},
+        {"$inc": {"points": amount}},
+        projection={"_id": 0, "points": 1},
+        return_document=ReturnDocument.BEFORE,
+    )
+    recipient_points_before = int((recipient_before_doc or {}).get("points") or 0)
     try:
         await mint_transfer_in_lots(
             db,
@@ -1772,6 +1797,10 @@ async def send_points(request: SendPointsRequest, current_user: dict = Depends(g
             transfer_id=transfer_id,
             from_user_id=sender_id,
             slices=slices,
+            from_username=sender_username,
+            to_username=recipient_username,
+            wallet_points_before=recipient_points_before,
+            wallet_points_after=recipient_points_before + amount,
         )
     except Exception:
         logger.exception("point provenance transfer_in failed transfer_id=%s", transfer_id)
@@ -1782,12 +1811,10 @@ async def send_points(request: SendPointsRequest, current_user: dict = Depends(g
         except Exception:
             logger.exception("point provenance rollback failed transfer_id=%s", transfer_id)
         raise HTTPException(status_code=500, detail="Transfer failed. No points were sent; please retry.")
-    sender_u = await db.users.find_one({"id": sender_id}, {"_id": 0, "points": 1})
-    recipient_u = await db.users.find_one({"id": recipient["id"]}, {"_id": 0, "points": 1})
-    sender_pts_after = int((sender_u or {}).get("points") or 0)
-    recipient_pts_after = int((recipient_u or {}).get("points") or 0)
-    sender_pts_before = sender_pts_after + int(amount)
-    recipient_pts_before = recipient_pts_after - int(amount)
+    sender_pts_before = int(sender_before_doc.get("points") or 0)
+    sender_pts_after = sender_pts_before - amount
+    recipient_pts_before = recipient_points_before
+    recipient_pts_after = recipient_pts_before + amount
     await db.points_transfers.insert_one({
         "id": transfer_id,
         "from_user_id": sender_id,
@@ -2644,6 +2671,14 @@ async def buy_store_points_cash(
             user_id=current_user["id"],
             purchase_id=purchase_id,
             points=points,
+            wallet_points_before=points_before,
+            wallet_points_after=points_after,
+            context={
+                "cash_cost": cash_cost,
+                "price_per_point": round(price_per_point, 2),
+                "client_ip": client_ip,
+                "email": email,
+            },
         )
     except Exception:
         logger.exception("store points cash lot mint failed purchase_id=%s", purchase_id)

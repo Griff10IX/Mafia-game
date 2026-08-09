@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 from fastapi import Depends, HTTPException
 from bson.objectid import ObjectId
+from pymongo import ReturnDocument
 
 from server import (
     db,
@@ -127,6 +128,8 @@ async def _log_qt_sell_offer_accept_transfers(
     cash_amount: int,
     seller_hide_name: bool,
     created_at_iso: str,
+    seller_points_before: Optional[int] = None,
+    seller_points_after: Optional[int] = None,
 ) -> None:
     """Points + cash ledger rows for someone buying a sell listing (Store + Bank history)."""
     if points_amount <= 0 and cash_amount <= 0:
@@ -151,8 +154,8 @@ async def _log_qt_sell_offer_accept_transfers(
             "to_username": buyer_un,
             "amount": points_amount,
             "created_at": created_at_iso,
-            "sender_points_before": seller_pts_after,
-            "sender_points_after": seller_pts_after,
+            "sender_points_before": seller_points_before if seller_points_before is not None else seller_pts_after,
+            "sender_points_after": seller_points_after if seller_points_after is not None else seller_pts_after,
             "recipient_points_before": rp_before,
             "recipient_points_after": buyer_pts_after,
             "qt_anonymize_from": bool(seller_hide_name),
@@ -441,13 +444,37 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
     points_after_fee = offer.points - fee
     if points_after_fee <= 0:
         raise HTTPException(status_code=400, detail="Points are too low after fee. Minimum is 2 points.")
-    result = await db.users.update_one(
+    user_before = await db.users.find_one_and_update(
         {"id": user_id, "points": {"$gte": offer.points}},
-        {"$inc": {"points": -offer.points}}
+        {"$inc": {"points": -offer.points}},
+        projection={"_id": 0, "points": 1},
+        return_document=ReturnDocument.BEFORE,
     )
-    if result.modified_count == 0:
+    if not user_before:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await log_points_event(db, user_id=user_id, points=-offer.points, event_type="quicktrade_create", meta={"direction": "sell", "listed_points": points_after_fee, "fee": fee, "cost": offer.cost})
+    points_before = int(user_before.get("points") or 0)
+    offer_correlation_id = str(uuid.uuid4())
+    await log_points_event(
+        db,
+        user_id=user_id,
+        points=-offer.points,
+        event_type="quicktrade_create",
+        event_ref=offer_correlation_id,
+        source="quicktrade",
+        correlation_id=offer_correlation_id,
+        context={
+            "direction": "sell",
+            "listed_points": points_after_fee,
+            "fee": fee,
+            "cost": offer.cost,
+            "cost_cash": offer.cost,
+            "seller_id": user_id,
+            "seller_username": username,
+        },
+        meta={"direction": "sell", "listed_points": points_after_fee, "fee": fee, "cost": offer.cost, "cost_cash": offer.cost},
+        wallet_points_before=points_before,
+        wallet_points_after=points_before - offer.points,
+    )
     new_offer = {
         "user_id": user_id,
         "username": username,
@@ -457,7 +484,10 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
         "cost": offer.cost,
         "hide_name": offer.hide_name,
         "status": "active",
-        "created_at": datetime.now(timezone.utc)
+        "created_at": datetime.now(timezone.utc),
+        "points_correlation_id": offer_correlation_id,
+        "seller_points_before": points_before,
+        "seller_points_after": points_before - offer.points,
     }
     result = await db.trade_sell_offers.insert_one(new_offer)
     try:
@@ -510,18 +540,38 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
             {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
         )
         raise HTTPException(status_code=400, detail="Insufficient cash")
-    result = await db.users.update_one(
+    buyer_before = await db.users.find_one_and_update(
         {"id": buyer_id, "money": {"$gte": offer["cost"]}},
-        {"$inc": {"money": -offer["cost"], "points": offer["points"]}}
+        {"$inc": {"money": -offer["cost"], "points": offer["points"]}},
+        projection={"_id": 0, "points": 1},
+        return_document=ReturnDocument.BEFORE,
     )
-    if result.modified_count == 0:
+    if not buyer_before:
         await db.trade_sell_offers.update_one(
             {"_id": ObjectId(offer_id)},
             {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
         )
         raise HTTPException(status_code=400, detail="Insufficient cash")
     if offer["points"] != 0:
-        await log_points_event(db, user_id=buyer_id, points=offer["points"], event_type="quicktrade_buy", meta={"offer_id": offer_id, "direction": "sell_offer_accepted", "cost_cash": offer["cost"]})
+        before = int(buyer_before.get("points") or 0)
+        qt_correlation = str(offer.get("points_correlation_id") or offer_id)
+        await log_points_event(
+            db, user_id=buyer_id, points=offer["points"], event_type="quicktrade_buy",
+            event_ref=f"quicktrade:{offer_id}:buyer", source="quicktrade", correlation_id=qt_correlation,
+            counterparty={"id": offer["user_id"], "username": offer.get("username")},
+            context={
+                "offer_id": offer_id,
+                "direction": "sell_offer_accepted",
+                "cost_cash": offer["cost"],
+                "seller_id": offer["user_id"],
+                "seller_username": offer.get("username"),
+                "buyer_id": buyer_id,
+                "buyer_username": buyer_username,
+                "points": int(offer["points"]),
+            },
+            meta={"offer_id": offer_id, "direction": "sell_offer_accepted", "cost_cash": offer["cost"]},
+            wallet_points_before=before, wallet_points_after=before + int(offer["points"]),
+        )
     await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"money": offer["cost"]}})
     try:
         await _log_qt_sell_offer_accept_transfers(
@@ -533,6 +583,8 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
             cash_amount=int(offer.get("cost") or 0),
             seller_hide_name=bool(offer.get("hide_name")),
             created_at_iso=now.isoformat(),
+            seller_points_before=offer.get("seller_points_before"),
+            seller_points_after=offer.get("seller_points_after"),
         )
     except Exception:
         logger.exception("quicktrade accept_sell_offer transfer ledger failed offer_id=%s", offer_id)
@@ -594,9 +646,27 @@ async def cancel_sell_offer_delete(offer_id: str, current_user: dict = Depends(g
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found or already cancelled")
     refund_amount = offer.get("original_points", offer["points"])
-    await db.users.update_one({"id": user_id}, {"$inc": {"points": refund_amount}})
     if refund_amount != 0:
-        await log_points_event(db, user_id=user_id, points=refund_amount, event_type="quicktrade_cancel", meta={"offer_id": offer_id, "direction": "sell_cancel", "fee_refunded": offer.get("fee", 0)})
+        user_before = await db.users.find_one_and_update(
+            {"id": user_id},
+            {"$inc": {"points": refund_amount}},
+            projection={"_id": 0, "points": 1},
+            return_document=ReturnDocument.BEFORE,
+        )
+        before = int((user_before or {}).get("points") or 0)
+        await log_points_event(
+            db,
+            user_id=user_id,
+            points=refund_amount,
+            event_type="quicktrade_cancel",
+            event_ref=f"quicktrade:{offer_id}:cancel",
+            source="quicktrade",
+            correlation_id=str(offer.get("points_correlation_id") or offer_id),
+            context={"offer_id": offer_id, "direction": "sell_cancel", "fee_refunded": offer.get("fee", 0)},
+            meta={"offer_id": offer_id, "direction": "sell_cancel", "fee_refunded": offer.get("fee", 0)},
+            wallet_points_before=before,
+            wallet_points_after=before + int(refund_amount),
+        )
     _invalidate_trade_caches()
     try:
         await db.trade_events.insert_one(
@@ -626,9 +696,27 @@ async def cancel_sell_offer_post(offer_id: str, current_user: dict = Depends(get
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found or already cancelled")
     original_points = offer.get("original_points", offer["points"])
-    await db.users.update_one({"id": user_id}, {"$inc": {"points": original_points}})
     if original_points != 0:
-        await log_points_event(db, user_id=user_id, points=original_points, event_type="quicktrade_cancel", meta={"offer_id": offer_id, "direction": "sell_cancel"})
+        user_before = await db.users.find_one_and_update(
+            {"id": user_id},
+            {"$inc": {"points": original_points}},
+            projection={"_id": 0, "points": 1},
+            return_document=ReturnDocument.BEFORE,
+        )
+        before = int((user_before or {}).get("points") or 0)
+        await log_points_event(
+            db,
+            user_id=user_id,
+            points=original_points,
+            event_type="quicktrade_cancel",
+            event_ref=f"quicktrade:{offer_id}:cancel",
+            source="quicktrade",
+            correlation_id=str(offer.get("points_correlation_id") or offer_id),
+            context={"offer_id": offer_id, "direction": "sell_cancel"},
+            meta={"offer_id": offer_id, "direction": "sell_cancel"},
+            wallet_points_before=before,
+            wallet_points_after=before + int(original_points),
+        )
     _invalidate_trade_caches()
     try:
         await db.trade_events.insert_one(
@@ -897,21 +985,44 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
         }
 
     # Points (legacy listings have no price_currency → treat as points)
-    result = await db.users.update_one(
+    buyer_points_before = await db.users.find_one_and_update(
         {"id": buyer_id, "points": {"$gte": price_points}},
         {"$inc": {"points": -price_points, field: offer["quantity"]}},
+        projection={"_id": 0, "points": 1},
+        return_document=ReturnDocument.BEFORE,
     )
-    if result.modified_count == 0:
+    if not buyer_points_before:
         await db.trade_token_offers.update_one(
             {"_id": ObjectId(offer_id)},
             {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
         )
         raise HTTPException(status_code=400, detail="Insufficient points")
     if price_points != 0:
-        await log_points_event(db, user_id=buyer_id, points=-price_points, event_type="quicktrade_item_shop", meta={"offer_id": offer_id, "token_type": token_type, "quantity": offer["quantity"]})
-    await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"points": price_points}})
+        before = int(buyer_points_before.get("points") or 0)
+        await log_points_event(
+            db, user_id=buyer_id, points=-price_points, event_type="quicktrade_item_shop",
+            event_ref=f"quicktrade:{offer_id}:buyer", source="quicktrade", correlation_id=str(offer_id),
+            counterparty={"id": offer["user_id"], "username": offer.get("username")},
+            context={"offer_id": offer_id, "item_type": "token", "token_type": token_type, "quantity": offer["quantity"]},
+            meta={"offer_id": offer_id, "token_type": token_type, "quantity": offer["quantity"]},
+            wallet_points_before=before, wallet_points_after=before - price_points,
+        )
+    seller_points_before = await db.users.find_one_and_update(
+        {"id": offer["user_id"]},
+        {"$inc": {"points": price_points}},
+        projection={"_id": 0, "points": 1},
+        return_document=ReturnDocument.BEFORE,
+    )
     if price_points != 0:
-        await log_points_event(db, user_id=offer["user_id"], points=price_points, event_type="quicktrade_sell", meta={"offer_id": offer_id, "token_type": token_type, "quantity": offer["quantity"]})
+        before = int((seller_points_before or {}).get("points") or 0)
+        await log_points_event(
+            db, user_id=offer["user_id"], points=price_points, event_type="quicktrade_sell",
+            event_ref=f"quicktrade:{offer_id}:seller", source="quicktrade", correlation_id=str(offer_id),
+            counterparty={"id": buyer_id, "username": buyer_username},
+            context={"offer_id": offer_id, "item_type": "token", "token_type": token_type, "quantity": offer["quantity"]},
+            meta={"offer_id": offer_id, "token_type": token_type, "quantity": offer["quantity"]},
+            wallet_points_before=before, wallet_points_after=before + price_points,
+        )
     _invalidate_trade_caches()
     await log_activity(
         buyer_id,
@@ -1176,19 +1287,42 @@ async def accept_loot_piece_offer(offer_id: str, current_user: dict = Depends(ge
             "cash_paid": price_money,
         }
 
-    result = await db.users.update_one(
+    buyer_points_before = await db.users.find_one_and_update(
         {"id": buyer_id, "points": {"$gte": price_points}},
         {"$inc": {"points": -price_points, LOOT_BOX_PIECES_FIELD: qty}},
+        projection={"_id": 0, "points": 1},
+        return_document=ReturnDocument.BEFORE,
     )
-    if result.modified_count == 0:
+    if not buyer_points_before:
         await db.trade_loot_piece_offers.update_one(
             {"_id": ObjectId(offer_id)},
             {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
         )
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"points": price_points}})
-    await log_points_event(db, user_id=buyer_id, points=-price_points, event_type="quicktrade_item_shop", meta={"offer_id": offer_id, "loot_pieces": qty})
-    await log_points_event(db, user_id=offer["user_id"], points=price_points, event_type="quicktrade_sell", meta={"offer_id": offer_id, "loot_pieces": qty})
+    seller_points_before = await db.users.find_one_and_update(
+        {"id": offer["user_id"]},
+        {"$inc": {"points": price_points}},
+        projection={"_id": 0, "points": 1},
+        return_document=ReturnDocument.BEFORE,
+    )
+    buyer_before = int(buyer_points_before.get("points") or 0)
+    seller_before = int((seller_points_before or {}).get("points") or 0)
+    await log_points_event(
+        db, user_id=buyer_id, points=-price_points, event_type="quicktrade_item_shop",
+        event_ref=f"quicktrade:{offer_id}:buyer", source="quicktrade", correlation_id=str(offer_id),
+        counterparty={"id": offer["user_id"], "username": offer.get("username")},
+        context={"offer_id": offer_id, "item_type": "loot_piece", "loot_pieces": qty},
+        meta={"offer_id": offer_id, "loot_pieces": qty},
+        wallet_points_before=buyer_before, wallet_points_after=buyer_before - price_points,
+    )
+    await log_points_event(
+        db, user_id=offer["user_id"], points=price_points, event_type="quicktrade_sell",
+        event_ref=f"quicktrade:{offer_id}:seller", source="quicktrade", correlation_id=str(offer_id),
+        counterparty={"id": buyer_id, "username": buyer_username},
+        context={"offer_id": offer_id, "item_type": "loot_piece", "loot_pieces": qty},
+        meta={"offer_id": offer_id, "loot_pieces": qty},
+        wallet_points_before=seller_before, wallet_points_after=seller_before + price_points,
+    )
     _invalidate_trade_caches()
     await log_activity(
         buyer_id,
@@ -1381,21 +1515,44 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
             {"$set": {"status": "active"}, "$unset": {"seller_id": 1, "seller_username": 1, "completed_at": 1}},
         )
         raise HTTPException(status_code=400, detail="Insufficient points")
-    result = await db.users.update_one(
+    seller_points_before = await db.users.find_one_and_update(
         {"id": seller_id, "points": {"$gte": offer["points"]}},
-        {"$inc": {"points": -offer["points"], "money": offer["offer"]}}
+        {"$inc": {"points": -offer["points"], "money": offer["offer"]}},
+        projection={"_id": 0, "points": 1},
+        return_document=ReturnDocument.BEFORE,
     )
-    if result.modified_count == 0:
+    if not seller_points_before:
         await db.trade_buy_offers.update_one(
             {"_id": ObjectId(offer_id)},
             {"$set": {"status": "active"}, "$unset": {"seller_id": 1, "seller_username": 1, "completed_at": 1}},
         )
         raise HTTPException(status_code=400, detail="Insufficient points")
     if offer["points"] != 0:
-        await log_points_event(db, user_id=seller_id, points=-offer["points"], event_type="quicktrade_sell", meta={"offer_id": offer_id, "direction": "buy_offer_accepted", "cash_received": offer["offer"]})
-    await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"points": offer["points"]}})
+        before = int(seller_points_before.get("points") or 0)
+        await log_points_event(
+            db, user_id=seller_id, points=-offer["points"], event_type="quicktrade_sell",
+            event_ref=f"quicktrade:{offer_id}:seller", source="quicktrade", correlation_id=str(offer_id),
+            counterparty={"id": offer["user_id"], "username": offer.get("username")},
+            context={"offer_id": offer_id, "direction": "buy_offer_accepted", "cash_received": offer["offer"]},
+            meta={"offer_id": offer_id, "direction": "buy_offer_accepted", "cash_received": offer["offer"]},
+            wallet_points_before=before, wallet_points_after=before - int(offer["points"]),
+        )
+    buyer_points_before = await db.users.find_one_and_update(
+        {"id": offer["user_id"]},
+        {"$inc": {"points": offer["points"]}},
+        projection={"_id": 0, "points": 1},
+        return_document=ReturnDocument.BEFORE,
+    )
     if offer["points"] != 0:
-        await log_points_event(db, user_id=offer["user_id"], points=offer["points"], event_type="quicktrade_buy", meta={"offer_id": offer_id, "direction": "buy_offer_fulfilled"})
+        before = int((buyer_points_before or {}).get("points") or 0)
+        await log_points_event(
+            db, user_id=offer["user_id"], points=offer["points"], event_type="quicktrade_buy",
+            event_ref=f"quicktrade:{offer_id}:buyer", source="quicktrade", correlation_id=str(offer_id),
+            counterparty={"id": seller_id, "username": seller_username},
+            context={"offer_id": offer_id, "direction": "buy_offer_fulfilled", "cash_paid": offer["offer"]},
+            meta={"offer_id": offer_id, "direction": "buy_offer_fulfilled"},
+            wallet_points_before=before, wallet_points_after=before + int(offer["points"]),
+        )
     try:
         await _log_qt_buy_offer_accept_transfers(
             buyer_id=offer["user_id"],
@@ -1615,19 +1772,42 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         if await _user_owns_any_property(buyer_id):
             await _restore()
             raise HTTPException(status_code=400, detail="You already own an airport or armoury. Relinquish it before buying the sports betting book.")
-    result = await db.users.update_one(
+    buyer_points_before = await db.users.find_one_and_update(
         {"id": buyer_id, "points": {"$gte": sale_price}},
-        {"$inc": {"points": -sale_price}}
+        {"$inc": {"points": -sale_price}},
+        projection={"_id": 0, "points": 1},
+        return_document=ReturnDocument.BEFORE,
     )
-    if result.modified_count == 0:
+    if not buyer_points_before:
         await _restore()
         raise HTTPException(status_code=400, detail="Insufficient points")
     if sale_price != 0:
-        await log_points_event(db, user_id=buyer_id, points=-sale_price, event_type="quicktrade_property", meta={"property_id": property_id, "property_name": prop.get("name"), "property_type": prop.get("type")})
+        before = int(buyer_points_before.get("points") or 0)
+        await log_points_event(
+            db, user_id=buyer_id, points=-sale_price, event_type="quicktrade_property",
+            event_ref=f"quicktrade:property:{property_id}:buyer", source="quicktrade", correlation_id=str(property_id),
+            counterparty={"id": prop.get("owner_id"), "username": prop.get("owner_username")},
+            context={"property_id": property_id, "property_name": prop.get("name"), "property_type": prop.get("type")},
+            meta={"property_id": property_id, "property_name": prop.get("name"), "property_type": prop.get("type")},
+            wallet_points_before=before, wallet_points_after=before - int(sale_price),
+        )
     if prop.get("owner_id"):
-        await db.users.update_one({"id": prop["owner_id"]}, {"$inc": {"points": sale_price}})
+        seller_points_before = await db.users.find_one_and_update(
+            {"id": prop["owner_id"]},
+            {"$inc": {"points": sale_price}},
+            projection={"_id": 0, "points": 1},
+            return_document=ReturnDocument.BEFORE,
+        )
         if sale_price != 0:
-            await log_points_event(db, user_id=prop["owner_id"], points=sale_price, event_type="quicktrade_property", meta={"property_id": property_id, "property_name": prop.get("name"), "buyer_id": buyer_id})
+            before = int((seller_points_before or {}).get("points") or 0)
+            await log_points_event(
+                db, user_id=prop["owner_id"], points=sale_price, event_type="quicktrade_property",
+                event_ref=f"quicktrade:property:{property_id}:seller", source="quicktrade", correlation_id=str(property_id),
+                counterparty={"id": buyer_id, "username": buyer_username},
+                context={"property_id": property_id, "property_name": prop.get("name"), "property_type": prop.get("type")},
+                meta={"property_id": property_id, "property_name": prop.get("name"), "buyer_id": buyer_id},
+                wallet_points_before=before, wallet_points_after=before + int(sale_price),
+            )
         loc = prop.get("location") or prop.get("state")
         loc_suffix = f" ({loc})" if loc else ""
         await _notify_quicktrade_inbox(

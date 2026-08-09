@@ -14,7 +14,7 @@ import {
   THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS,
   THEME_BUTTON_STYLES, THEME_BUTTON_SHAPES, THEME_DIVIDER_STYLES,
   THEME_SIDEBAR_SPACING, THEME_SIDEBAR_LAYOUT, THEME_TOAST_POSITION, THEME_WRITING_COLOURS, THEME_TEXT_STYLES,
-  THEME_COLOUR_SECTIONS, THEME_WRITING_SECTIONS, THEME_VARIANTS,
+  THEME_COLOUR_SECTIONS, THEME_WRITING_SECTIONS, THEME_VARIANTS, THEME_MOBILE_LAYOUTS,
   THEME_RESET_CLASSIC_ID, THEME_RESET_MODERN_ID, THEME_RESET_DARK_MAFIA_ID, STARTING_LOOK_PRESET_IDS,
   THEME_LAYOUT_RESET_DEFAULTS,
   getThemeColour, getThemePreset, EXPANDED_PRESET_CATEGORIES,
@@ -184,6 +184,8 @@ function PresetCard({ preset, active, onSelect, featured = false }) {
   const primary = colour?.primary ?? '#888';
   const isModern = preset.themeVariant === 'modern';
   const isDarkMafia = preset.themeVariant === 'dark_mafia';
+  const isOldSchool = preset.themeVariant === 'old_school';
+  const layoutBadge = isOldSchool ? 'Old School' : isDarkMafia ? 'Dark Mafia' : isModern ? 'Modern' : 'Classic';
   return (
     <button type="button" onClick={() => onSelect(preset)} title={preset.description}
       data-testid={`theme-preset-${preset.id}`}
@@ -192,8 +194,8 @@ function PresetCard({ preset, active, onSelect, featured = false }) {
           ? 'border-primary ring-2 ring-[rgba(var(--noir-primary-rgb),0.45)] shadow-[0_0_22px_rgba(var(--noir-primary-rgb),0.22)]'
           : 'border-zinc-700 hover:border-zinc-500'
       }`}>
-      <div className={`${featured ? 'h-14' : 'h-12'} w-full relative`} style={sw}>
-        {colour?.stops?.length >= 2 && (
+      <div className={`${featured ? 'h-14' : 'h-12'} w-full relative`} style={isOldSchool ? { background: 'linear-gradient(180deg,#0a1628 0%,#3d3d3d 55%,#0a1a4a 100%)' } : sw}>
+        {colour?.stops?.length >= 2 && !isOldSchool && (
           <div
             className="absolute bottom-0 left-0 right-0 h-1.5 flex"
             aria-hidden
@@ -229,7 +231,7 @@ function PresetCard({ preset, active, onSelect, featured = false }) {
               Sample
             </span>
             <span className="text-[8px] font-heading uppercase text-zinc-600 truncate">
-              {isDarkMafia ? 'Dark Mafia' : isModern ? 'Modern' : 'Classic'}
+              {layoutBadge}
             </span>
           </div>
         )}
@@ -301,10 +303,10 @@ export default function ThemePicker({ open, onClose }) {
   const {
     colourId, textureId, buttonColourId, accentLineColourId, fontId,
     buttonStyleId, buttonShapeId, writingColourId, mutedWritingColourId,
-    toastTextColourId, textStyleId, mobileNavStyle, themeVariant, modernVisualQuality,
+    toastTextColourId, textStyleId, mobileNavStyle, mobileLayoutId, themeVariant, modernVisualQuality,
     setColour, setTexture, setButtonColour, setAccentLineColour, setFont,
     setButtonStyle, setButtonShape, setWritingColour, setMutedWritingColour,
-    setToastTextColour, setTextStyle, setMobileNavStyle, setThemeVariant, setModernVisualQuality,
+    setToastTextColour, setTextStyle, setMobileNavStyle, setMobileLayout, setThemeVariant, setModernVisualQuality,
     resetButtonToDefault, resetAccentLineToDefault, resetThemeToPreset,
     customThemes, addCustomTheme, removeCustomTheme,
   } = useTheme();
@@ -464,7 +466,18 @@ export default function ThemePicker({ open, onClose }) {
     (p.themeVariant == null || themeVariant === p.themeVariant) &&
     (p.buttonShapeId == null || buttonShapeId === p.buttonShapeId);
 
+  const handleResetToPreset = (presetId) => {
+    resetThemeToPreset(presetId);
+    const d = THEME_LAYOUT_RESET_DEFAULTS;
+    setChipW(d.topBarChipWidthScale);
+    setChipH(d.topBarChipHeightScale);
+  };
+
   const applyPreset = (p) => {
+    if (p.isFullPreset) {
+      handleResetToPreset(p.id);
+      return;
+    }
     setColour(p.colourId); setTexture(p.textureId);
     setButtonColour(p.buttonColourId ?? null); setAccentLineColour(p.accentLineColourId ?? null);
     if (p.writingColourId != null) setWritingColour(p.writingColourId);
@@ -484,13 +497,6 @@ export default function ThemePicker({ open, onClose }) {
       lsSet(KEYS.sidebarLayout, p.sidebarLayout, 'sidebar-layout-changed');
       api.patch('/profile/theme', { sidebar_layout: p.sidebarLayout, theme_platform: getThemeUiPlatform() }).catch(() => {});
     }
-  };
-
-  const handleResetToPreset = (presetId) => {
-    resetThemeToPreset(presetId);
-    const d = THEME_LAYOUT_RESET_DEFAULTS;
-    setChipW(d.topBarChipWidthScale);
-    setChipH(d.topBarChipHeightScale);
   };
 
   const startingLookPresets = STARTING_LOOK_PRESET_IDS
@@ -522,6 +528,7 @@ export default function ThemePicker({ open, onClose }) {
   ];
 
   const isModernChrome = themeVariant === 'modern' || themeVariant === 'dark_mafia';
+  const isOldSchoolChrome = themeVariant === 'old_school';
 
   if (!open) return null;
 
@@ -531,17 +538,23 @@ export default function ThemePicker({ open, onClose }) {
       onClick={onClose}
     >
       <div
-        className={`${styles.panel} rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col`}
+        className={`${styles.panel} ${isOldSchoolChrome ? 'rounded-none' : 'rounded-2xl'} w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col`}
         style={{
-          background: themeVariant === 'dark_mafia'
+          background: isOldSchoolChrome
+            ? '#3d3d3d'
+            : themeVariant === 'dark_mafia'
             ? 'linear-gradient(180deg, #141414 0%, #0a0a0a 100%)'
             : isModernChrome
             ? 'linear-gradient(180deg, rgba(45,45,50,0.96) 0%, rgba(32,32,36,0.97) 100%)'
             : 'linear-gradient(180deg,#1c1917 0%,#141210 100%)',
-          border: isModernChrome || themeVariant === 'dark_mafia'
+          border: isOldSchoolChrome
+            ? '1px solid #9a9a9a'
+            : isModernChrome || themeVariant === 'dark_mafia'
             ? '1px solid rgba(var(--noir-primary-rgb),0.22)'
             : '1px solid rgba(212,175,55,0.15)',
-          boxShadow: themeVariant === 'dark_mafia'
+          boxShadow: isOldSchoolChrome
+            ? 'none'
+            : themeVariant === 'dark_mafia'
             ? '0 0 0 1px rgba(var(--noir-primary-rgb),0.1),0 32px 80px rgba(0,0,0,0.9)'
             : isModernChrome
             ? '0 0 0 1px rgba(var(--noir-primary-rgb),0.08),0 38px 90px rgba(12,12,14,0.78)'
@@ -555,7 +568,9 @@ export default function ThemePicker({ open, onClose }) {
         <div
           className="px-4 py-3 flex items-center justify-between gap-3 shrink-0 border-b border-zinc-800/80"
           style={{
-            background: isModernChrome || themeVariant === 'dark_mafia'
+            background: isOldSchoolChrome
+              ? '#0a1a4a'
+              : isModernChrome || themeVariant === 'dark_mafia'
               ? 'linear-gradient(90deg,rgba(var(--noir-primary-rgb),0.11) 0%, rgba(var(--noir-primary-rgb),0.04) 42%, transparent 100%)'
               : 'linear-gradient(90deg,rgba(212,175,55,0.09) 0%,transparent 60%)',
           }}
@@ -634,8 +649,8 @@ export default function ThemePicker({ open, onClose }) {
           {/* ════ PRESETS ════ */}
           {activeTab === 'presets' && (
             <>
-              <TabSection icon={PanelLeft} title="Layout mode" sub="Classic, Modern, or Dark Mafia Wars command-center chrome">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <TabSection icon={PanelLeft} title="Layout mode" sub="Classic, Modern, Dark Mafia Wars, or Old School Mafia Theme chrome">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {THEME_VARIANTS.map((variant) => {
                     const active = themeVariant === variant.id;
                     return (
@@ -693,7 +708,7 @@ export default function ThemePicker({ open, onClose }) {
               <TabSection
                 icon={Eye}
                 title="Starting looks"
-                sub="Classic, Modern, Dark Mafia Wars, and curated full packs"
+                sub="Classic, Modern, Dark Mafia Wars, Old School Mafia Theme, and curated full packs"
               >
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                   {startingLookPresets
@@ -1211,6 +1226,54 @@ export default function ThemePicker({ open, onClose }) {
           {/* ════ MOBILE ════ */}
           {activeTab === 'mobile' && (
             <div className="space-y-6">
+              <TabSection icon={Smartphone} title="Mobile layout" sub="Phone shell on small screens — Classic keeps your nav/stats picks; Pocket Deck is a full HUD shell">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {THEME_MOBILE_LAYOUTS.map((layout) => {
+                    const active = mobileLayoutId === layout.id;
+                    return (
+                      <button
+                        key={layout.id}
+                        type="button"
+                        onClick={() => setMobileLayout(layout.id)}
+                        data-testid={`theme-mobile-layout-${layout.id}`}
+                        className={`text-left rounded-lg border px-3 py-2.5 transition-all ${
+                          active
+                            ? 'border-primary/70 bg-primary/12 text-primary'
+                            : 'border-zinc-700/80 bg-zinc-900/70 text-zinc-300 hover:border-primary/35 hover:bg-zinc-800/85'
+                        }`}
+                      >
+                        <div className="text-[10px] font-heading font-black uppercase tracking-wider">
+                          {layout.name}
+                        </div>
+                        <div className="text-[10px] text-zinc-500 mt-0.5">
+                          {layout.description}
+                        </div>
+                        {layout.id === 'pocket_deck' && (
+                          <div
+                            className="mt-2 rounded border border-zinc-700/80 overflow-hidden bg-zinc-950/80"
+                            aria-hidden
+                          >
+                            <div className="h-3 flex items-stretch border-b border-zinc-700/70">
+                              <span className="flex-1 bg-primary/25" />
+                              <span className="flex-1 bg-emerald-500/20" />
+                              <span className="flex-1 bg-primary/15" />
+                            </div>
+                            <div className="h-8 bg-zinc-900/90" />
+                            <div className="h-4 flex gap-0.5 px-0.5 pb-0.5">
+                              {[0, 1, 2, 3, 4].map((i) => (
+                                <span key={i} className="flex-1 rounded-sm bg-zinc-800 border border-zinc-700/80" />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </TabSection>
+
+              {mobileLayoutId !== 'pocket_deck' && (
+                <>
               <TabSection icon={Smartphone} title="Navigation style" sub="Sidebar or fixed bottom bar on small screens">
                 <Pills
                   options={[
@@ -1231,6 +1294,8 @@ export default function ThemePicker({ open, onClose }) {
                   value={mobileStatsDisplay} onChange={setStatsDisplay}
                 />
               </TabSection>
+                </>
+              )}
 
               <TabSection title="Game Chat button" sub="Hide the floating chat launcher. Return here at any time to show it again.">
                 <Pills

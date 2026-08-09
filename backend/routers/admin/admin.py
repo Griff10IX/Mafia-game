@@ -41,13 +41,19 @@ from utils.game_pass_season import (
     normalize_game_pass_season_end_at,
 )
 from utils.point_provenance import (
+    apply_points_delta_with_audit,
     chargeback_preview,
     execute_chargeback_best_effort,
     ensure_user_legacy_seed_lot,
     consume_points_fifo,
     log_points_event,
 )
-from utils.point_sources_breakdown import build_received_breakdown
+from utils.point_sources_breakdown import (
+    build_detailed_points_audit,
+    build_received_breakdown,
+    decode_audit_cursor,
+    parse_audit_datetime,
+)
 from utils.claim_costs import (
     CLAIM_COSTS_SETTINGS_KEY,
     invalidate_claim_costs_cache,
@@ -1462,25 +1468,42 @@ def register(router):
     async def admin_add_points(target_username: str, points: int, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        if points == 0:
+            raise HTTPException(status_code=400, detail="points must be non-zero")
         username_pattern = _username_pattern(target_username)
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
-        await db.users.update_one(
-            {"id": target["id"]},
-            {"$inc": {"points": points}}
+        correlation_id = str(uuid.uuid4())
+        adjustment = await apply_points_delta_with_audit(
+            db,
+            user_id=target["id"],
+            delta=points,
+            source="admin",
+            event_type="admin_add_points",
+            correlation_id=correlation_id,
+            origin="admin_manual_adjustment",
+            origin_ref=f"admin:{current_user.get('id') or 'unknown'}",
+            actor={"id": current_user.get("id"), "username": current_user.get("username")},
+            context={
+                "target_username": target.get("username") or target_username,
+                "requested_delta": points,
+            },
         )
         await log_points_event(
             db,
             user_id=target["id"],
             points=points,
             event_type="admin_add_points",
-            event_ref=f"admin:{current_user.get('id') or 'unknown'}",
+            event_ref=correlation_id,
             meta={
                 "admin_user_id": current_user.get("id"),
                 "admin_username": current_user.get("username") or "?",
                 "target_username": target.get("username") or target_username,
             },
+            wallet_points_before=adjustment["wallet_points_before"],
+            wallet_points_after=adjustment["wallet_points_after"],
+            record_normalized=False,
         )
         return {"message": f"Added {points} points to {target_username}"}
 
@@ -1511,18 +1534,23 @@ def register(router):
 
         # Consume points from oldest FIFO lots and record provenance in point_lots/point_ledger_events.
         # consume_points_fifo returns the slices it actually removed (should equal `remove` after legacy seeding).
+        correlation_id = f"admin-remove:{uuid.uuid4()}"
         slices = await consume_points_fifo(
             db,
             user_id=target["id"],
             points=remove,
             event_type="admin_remove_points",
-            event_ref=f"admin:{current_user.get('id') or 'unknown'}",
+            event_ref=correlation_id,
             meta={
                 "admin_user_id": current_user.get("id"),
                 "admin_username": current_user.get("username") or "?",
                 "source": "admin",
                 "target_username": target.get("username") or target_username,
             },
+            source="admin",
+            correlation_id=correlation_id,
+            actor={"id": current_user.get("id"), "username": current_user.get("username")},
+            context={"requested_amount": int(amount), "target_username": target.get("username") or target_username},
         )
         actual_removed = sum(int(s.get("amount") or 0) for s in (slices or []))
 
@@ -1679,10 +1707,32 @@ def register(router):
         return out
 
     @router.get("/admin/points/sources/{user_id_or_username}")
-    async def admin_points_sources(user_id_or_username: str, current_user: dict = Depends(get_current_user)):
+    async def admin_points_sources(
+        user_id_or_username: str,
+        date_from: Optional[str] = Query(None, alias="from"),
+        date_to: Optional[str] = Query(None, alias="to"),
+        source: Optional[str] = Query(None, max_length=80),
+        direction: Optional[str] = Query(None, pattern="^(inflow|outflow)$"),
+        counterparty: Optional[str] = Query(None, max_length=120),
+        reference_text: Optional[str] = Query(None, alias="reference", max_length=200),
+        incomplete_only: bool = Query(False),
+        suspicious_only: bool = Query(False),
+        page_size: int = Query(50, ge=1, le=200),
+        offset: int = Query(0, ge=0, le=100000),
+        cursor: Optional[str] = Query(None, max_length=1000),
+        current_user: dict = Depends(get_current_user),
+    ):
         """Aggregate store-currency point sources: lots, ledger, completed Stripe payments, transfers, and key user counters."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        try:
+            parsed_from = parse_audit_datetime(date_from)
+            parsed_to = parse_audit_datetime(date_to, end_of_day=True)
+            decode_audit_cursor(cursor)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if parsed_from and parsed_to and parsed_from > parsed_to:
+            raise HTTPException(status_code=400, detail="'from' must be before or equal to 'to'")
         raw = (user_id_or_username or "").strip()
         if not raw:
             raise HTTPException(status_code=400, detail="User id or username required")
@@ -1753,7 +1803,24 @@ def register(router):
 
         lot_sum = sum(int(r.get("remaining") or 0) for r in lots_rows)
         balance = int(u.get("points") or 0)
-        received = await build_received_breakdown(db, user_id, for_player=False, include_transactions=True, tx_limit=200)
+        received, detailed_audit = await asyncio.gather(
+            build_received_breakdown(db, user_id, for_player=False, include_transactions=True, tx_limit=200),
+            build_detailed_points_audit(
+                db,
+                user_id,
+                date_from=parsed_from,
+                date_to=parsed_to,
+                source=source,
+                direction=direction,
+                counterparty=counterparty,
+                reference_text=reference_text,
+                incomplete_only=incomplete_only,
+                suspicious_only=suspicious_only,
+                limit=page_size,
+                offset=offset,
+                cursor=cursor,
+            ),
+        )
 
         return {
             "user": {
@@ -1775,6 +1842,7 @@ def register(router):
             "received_transactions": received.get("received_transactions") or [],
             "sent_transactions": received.get("sent_transactions") or [],
             "tx_limit": received.get("tx_limit"),
+            "detailed_audit": detailed_audit,
             "lots_remaining_by_origin": [
                 {
                     "origin_type": r.get("_id"),
@@ -1985,6 +2053,7 @@ def register(router):
                 "admin_username": current_user.get("username") or "?",
                 "accounts_affected": result.modified_count,
             },
+            infer_wallet_after=False,
         )
         return {"message": f"Gave {points} points to {result.modified_count} accounts", "updated": result.modified_count}
 
@@ -8283,6 +8352,7 @@ def register(router):
                             "ledger_spent": ledger_spent,
                             "lifetime_points_spent": lifetime,
                         },
+                        infer_wallet_after=False,
                     )
             if body.lock_alt_accounts and alt_id != victim_id:
                 now_iso = datetime.now(timezone.utc).isoformat()

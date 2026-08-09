@@ -427,6 +427,241 @@ function BtnSecondary({ children, ...props }) {
   );
 }
 
+const DEFAULT_POINTS_AUDIT_FILTERS = {
+  dateFrom: '',
+  dateTo: '',
+  source: '',
+  direction: '',
+  counterparty: '',
+  reference: '',
+  incompleteOnly: false,
+  suspiciousOnly: false,
+  pageSize: '50',
+};
+
+function pointAuditNumber(value) {
+  return value == null || value === '' ? '—' : Number(value).toLocaleString();
+}
+
+function pointAuditPartyName(party) {
+  if (!party) return '';
+  if (typeof party === 'string') return party;
+  return party.username || party.name || party.id || '';
+}
+
+function pointAuditProfileUsername(party) {
+  if (!party || typeof party !== 'object') return '';
+  const username = String(party.username || '').trim();
+  return username && username.length <= 64 && !/^(system|unknown)/i.test(username) ? username : '';
+}
+
+function PointAuditBadge({ children, tone = 'zinc' }) {
+  const tones = {
+    red: 'border-red-500/40 bg-red-500/10 text-red-300',
+    amber: 'border-amber-500/40 bg-amber-500/10 text-amber-200',
+    emerald: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
+    primary: 'border-primary/40 bg-primary/10 text-primary',
+    zinc: 'border-zinc-600/60 bg-zinc-800/70 text-zinc-300',
+  };
+  return <span className={`inline-flex rounded border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide ${tones[tone]}`}>{children}</span>;
+}
+
+function PointsDetailedAudit({
+  audit,
+  filters,
+  loading,
+  error,
+  pageIndex,
+  targetUsername,
+  onFilterChange,
+  onApply,
+  onReset,
+  onPrevious,
+  onNext,
+  onExport,
+}) {
+  const items = audit?.items || [];
+  const pagination = audit?.pagination || {};
+  const anomalySummary = audit?.anomaly_summary || {};
+  const anomalyCount = Object.values(anomalySummary).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const fieldClass = 'w-full rounded border border-zinc-700/70 bg-zinc-950/70 px-2 py-1.5 text-[10px] text-foreground outline-none focus:border-primary/60';
+  const setField = (field, value) => onFilterChange({ ...filters, [field]: value });
+
+  return (
+    <section className="rounded-md border border-primary/40 bg-black/30 p-2.5 sm:p-3 space-y-3 shadow-[0_0_18px_rgba(var(--noir-primary-rgb),0.06)]">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <ScrollText size={14} className="text-primary" />
+            <h4 className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Detailed points audit</h4>
+          </div>
+          <p className="mt-0.5 text-[9px] text-mutedForeground">Canonical point events, newest first. Filters apply to this timeline.</p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <PointAuditBadge tone={anomalyCount ? 'red' : 'emerald'}>{anomalyCount} anomaly flags</PointAuditBadge>
+          <PointAuditBadge>{pagination.returned ?? items.length} returned</PointAuditBadge>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="text-[9px] uppercase tracking-wide text-mutedForeground">From
+          <input type="date" value={filters.dateFrom} onChange={(e) => setField('dateFrom', e.target.value)} className={fieldClass} />
+        </label>
+        <label className="text-[9px] uppercase tracking-wide text-mutedForeground">To
+          <input type="date" value={filters.dateTo} onChange={(e) => setField('dateTo', e.target.value)} className={fieldClass} />
+        </label>
+        <label className="text-[9px] uppercase tracking-wide text-mutedForeground">Source
+          <input value={filters.source} onChange={(e) => setField('source', e.target.value)} placeholder="e.g. transfer, store" className={fieldClass} />
+        </label>
+        <label className="text-[9px] uppercase tracking-wide text-mutedForeground">Direction
+          <select value={filters.direction} onChange={(e) => setField('direction', e.target.value)} className={fieldClass}>
+            <option value="">All changes</option>
+            <option value="inflow">Inflow</option>
+            <option value="outflow">Outflow</option>
+          </select>
+        </label>
+        <label className="text-[9px] uppercase tracking-wide text-mutedForeground">Counterparty
+          <input value={filters.counterparty} onChange={(e) => setField('counterparty', e.target.value)} placeholder="Username or user ID" className={fieldClass} />
+        </label>
+        <label className="text-[9px] uppercase tracking-wide text-mutedForeground">Reference
+          <input value={filters.reference} onChange={(e) => setField('reference', e.target.value)} placeholder="Transaction, correlation, origin…" className={fieldClass} />
+        </label>
+        <label className="text-[9px] uppercase tracking-wide text-mutedForeground">Page size
+          <select value={filters.pageSize} onChange={(e) => setField('pageSize', e.target.value)} className={fieldClass}>
+            {[25, 50, 100, 200].map((size) => <option key={size} value={String(size)}>{size}</option>)}
+          </select>
+        </label>
+        <div className="flex flex-wrap items-end gap-3 rounded border border-zinc-800/70 bg-zinc-950/40 p-2">
+          <label className="flex items-center gap-1.5 text-[9px] text-zinc-300">
+            <input type="checkbox" checked={filters.incompleteOnly} onChange={(e) => setField('incompleteOnly', e.target.checked)} />
+            Incomplete only
+          </label>
+          <label className="flex items-center gap-1.5 text-[9px] text-zinc-300">
+            <input type="checkbox" checked={filters.suspiciousOnly} onChange={(e) => setField('suspiciousOnly', e.target.checked)} />
+            Suspicious only
+          </label>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <BtnPrimary type="button" onClick={onApply} disabled={loading}>{loading ? 'Applying…' : 'Apply filters'}</BtnPrimary>
+        <BtnSecondary type="button" onClick={onReset} disabled={loading}>Reset</BtnSecondary>
+        <BtnSecondary type="button" onClick={onExport} disabled={loading || items.length === 0}>Export JSON</BtnSecondary>
+        {Object.keys(anomalySummary).length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {Object.entries(anomalySummary).map(([flag, count]) => (
+              <PointAuditBadge key={flag} tone="red">{flag.replaceAll('_', ' ')}: {count}</PointAuditBadge>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {error && <div role="alert" className="rounded border border-red-500/40 bg-red-500/10 p-2 text-[10px] text-red-300">{error}</div>}
+      {loading && <div className="rounded border border-primary/25 bg-primary/5 p-3 text-center text-[10px] text-primary">Loading detailed audit…</div>}
+      {!loading && !error && items.length === 0 && (
+        <div className="rounded border border-dashed border-zinc-700 p-4 text-center text-[10px] text-mutedForeground">No point events match these filters.</div>
+      )}
+
+      {!loading && items.length > 0 && (
+        <div className="space-y-2">
+          {items.map((item, index) => {
+            const delta = Number(item.delta) || 0;
+            const counterpartyName = pointAuditPartyName(item.counterparty);
+            const profileUsername = pointAuditProfileUsername(item.counterparty);
+            const reference = item.origin?.ref || item.transaction_id || item.correlation_id || '';
+            return (
+              <article key={item.id || `${item.time}-${index}`} className={`rounded border p-2.5 sm:p-3 ${item.suspicious ? 'border-red-500/40 bg-red-950/10' : 'border-zinc-700/60 bg-zinc-950/55'}`}>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[9px] text-zinc-500">{item.time ? formatAdminDateTime(item.time) : 'Time unknown'}</span>
+                      <PointAuditBadge tone="primary">{item.source || 'unknown source'}</PointAuditBadge>
+                      {item.legacy && <PointAuditBadge tone="amber">Legacy</PointAuditBadge>}
+                      {item.incomplete && <PointAuditBadge tone="amber">Incomplete</PointAuditBadge>}
+                      {item.suspicious && <PointAuditBadge tone="red">Suspicious</PointAuditBadge>}
+                    </div>
+                    <p className="mt-1.5 text-[11px] sm:text-xs font-semibold leading-relaxed text-zinc-100">{item.narrative || item.event_type || 'Unlabelled point event'}</p>
+                  </div>
+                  <div className="sm:text-right">
+                    <div className={`text-base sm:text-lg font-black tabular-nums ${delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {delta >= 0 ? '+' : '−'}{Math.abs(delta).toLocaleString()} pts
+                    </div>
+                    <div className="text-[10px] font-mono text-zinc-300">
+                      {item.balance_known
+                        ? `${pointAuditNumber(item.wallet_points_before)} → ${pointAuditNumber(item.wallet_points_after)}`
+                        : 'Balance snapshot unavailable'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-2 grid grid-cols-1 gap-1.5 text-[9px] sm:grid-cols-2 lg:grid-cols-4">
+                  <div><span className="text-mutedForeground">Event:</span> <span className="font-mono text-zinc-300">{item.event_type || '—'}</span></div>
+                  <div>
+                    <span className="text-mutedForeground">Counterparty:</span>{' '}
+                    {profileUsername ? (
+                      <Link to={`/profile/${encodeURIComponent(profileUsername)}`} className="font-bold text-primary hover:underline">{counterpartyName}</Link>
+                    ) : <span className="text-zinc-300">{counterpartyName || '—'}</span>}
+                  </div>
+                  <div>
+                    <span className="text-mutedForeground">Actor:</span>{' '}
+                    {pointAuditProfileUsername(item.actor) ? (
+                      <Link to={`/profile/${encodeURIComponent(pointAuditProfileUsername(item.actor))}`} className="font-bold text-primary hover:underline">{pointAuditPartyName(item.actor)}</Link>
+                    ) : <span className="text-zinc-300">{pointAuditPartyName(item.actor) || '—'}</span>}
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-mutedForeground">Reference:</span>{' '}
+                    <span className="break-all font-mono text-zinc-300">{reference || '—'}</span>
+                    {item.correlation_id && item.correlation_id !== reference && (
+                      <div className="break-all font-mono text-zinc-500">corr {item.correlation_id}</div>
+                    )}
+                  </div>
+                </div>
+
+                {(item.anomaly_flags || []).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {item.anomaly_flags.map((flag) => <PointAuditBadge key={flag} tone="red">{String(flag).replaceAll('_', ' ')}</PointAuditBadge>)}
+                  </div>
+                )}
+
+                <details className="mt-2 rounded border border-zinc-800/80 bg-black/25">
+                  <summary className="cursor-pointer select-none px-2 py-1.5 text-[9px] font-bold uppercase tracking-wide text-zinc-400 hover:text-primary">
+                    Context, linked legs & raw event
+                  </summary>
+                  <div className="grid grid-cols-1 gap-2 border-t border-zinc-800/80 p-2 lg:grid-cols-2">
+                    {[
+                      ['Context', item.context],
+                      ['Metadata', item.meta],
+                      ['Linked legs', item.linked_legs],
+                      ['Historical enrichment', item.historical_enrichment],
+                    ].map(([label, value]) => (
+                      <div key={label} className="min-w-0">
+                        <div className="mb-1 text-[8px] font-bold uppercase text-mutedForeground">{label}</div>
+                        <pre className="max-h-40 overflow-auto rounded bg-zinc-950 p-2 text-[8px] text-zinc-300">{JSON.stringify(value ?? {}, null, 2)}</pre>
+                      </div>
+                    ))}
+                    <div className="min-w-0 lg:col-span-2">
+                      <div className="mb-1 text-[8px] font-bold uppercase text-mutedForeground">Raw normalized event</div>
+                      <pre className="max-h-56 overflow-auto rounded bg-zinc-950 p-2 text-[8px] text-zinc-300">{JSON.stringify(item, null, 2)}</pre>
+                    </div>
+                  </div>
+                </details>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2 border-t border-zinc-800/70 pt-2 sm:flex-row sm:items-center sm:justify-between">
+        <span className="text-[9px] text-mutedForeground">Page {pageIndex + 1} · {pagination.returned ?? items.length} events</span>
+        <div className="flex gap-2">
+          <BtnSecondary type="button" onClick={onPrevious} disabled={loading || pageIndex === 0}>Previous</BtnSecondary>
+          <BtnSecondary type="button" onClick={onNext} disabled={loading || !pagination.has_more || !pagination.next_cursor}>Next</BtnSecondary>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const SUSTAINED_RL_SCOPES = [
   { id: 'jail', label: 'Jail', settingField: 'sustained_page_rl_jail_enabled', toastLabel: 'Jail pacing limiter', description: 'Player jail routes (list, status, bust, snitch, private cell, etc.). Jail-style pacing (~750ms / ~22s) as above.' },
   { id: 'forum', label: 'Forum', settingField: 'sustained_page_rl_forum_enabled', toastLabel: 'Forum pacing limiter', description: 'All /forum/topics… routes (topics, comments, likes, reactions). Same jail-style math (~750ms / ~22s).' },
@@ -887,6 +1122,10 @@ export default function Admin() {
   const [pointsProvPaymentData, setPointsProvPaymentData] = useState(null);
   const [pointsSourcesReport, setPointsSourcesReport] = useState(null);
   const [pointsSourcesLoading, setPointsSourcesLoading] = useState(false);
+  const [pointsSourcesError, setPointsSourcesError] = useState('');
+  const [pointsAuditFilters, setPointsAuditFilters] = useState(DEFAULT_POINTS_AUDIT_FILTERS);
+  const [pointsAuditCursorHistory, setPointsAuditCursorHistory] = useState([null]);
+  const [pointsAuditPageIndex, setPointsAuditPageIndex] = useState(0);
   const [viewRegistrationInfo, setViewRegistrationInfo] = useState(null);
   const [adminUserSessions, setAdminUserSessions] = useState(null);
   const [adminUserSessionsLoading, setAdminUserSessionsLoading] = useState(false);
@@ -3753,23 +3992,97 @@ export default function Admin() {
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
-  const handleLoadPointsSources = async () => {
+  const handleLoadPointsSources = async ({
+    filters = pointsAuditFilters,
+    cursor = null,
+    navigation = 'reset',
+  } = {}) => {
     const username = (formData.targetUsername || '').trim();
     if (!username) {
       toast.error('Enter target username above');
       return;
     }
     setPointsSourcesLoading(true);
-    setPointsSourcesReport(null);
+    setPointsSourcesError('');
+    if (!pointsSourcesReport) setPointsSourcesReport(null);
     try {
-      const res = await api.get(`/admin/points/sources/${encodeURIComponent(username)}`);
+      const params = {
+        page_size: Math.max(1, Math.min(200, parseInt(filters.pageSize, 10) || 50)),
+      };
+      if (filters.dateFrom) params.from = filters.dateFrom;
+      if (filters.dateTo) params.to = filters.dateTo;
+      if (filters.source.trim()) params.source = filters.source.trim();
+      if (filters.direction) params.direction = filters.direction;
+      if (filters.counterparty.trim()) params.counterparty = filters.counterparty.trim();
+      if (filters.reference.trim()) params.reference = filters.reference.trim();
+      if (filters.incompleteOnly) params.incomplete_only = true;
+      if (filters.suspiciousOnly) params.suspicious_only = true;
+      if (cursor) params.cursor = cursor;
+      const res = await api.get(`/admin/points/sources/${encodeURIComponent(username)}`, { params });
       setPointsSourcesReport(res.data || null);
-      toast.success('Point sources loaded');
+      if (navigation === 'next') {
+        setPointsAuditCursorHistory((previous) => [...previous.slice(0, pointsAuditPageIndex + 1), cursor]);
+        setPointsAuditPageIndex((previous) => previous + 1);
+      } else if (navigation === 'previous') {
+        setPointsAuditPageIndex((previous) => Math.max(0, previous - 1));
+      } else {
+        setPointsAuditCursorHistory([null]);
+        setPointsAuditPageIndex(0);
+      }
+      if (!pointsSourcesReport) toast.success('Point sources loaded');
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to load point sources');
+      const message = error.response?.data?.detail || 'Failed to load point sources';
+      setPointsSourcesError(message);
+      toast.error(message);
     } finally {
       setPointsSourcesLoading(false);
     }
+  };
+
+  const handleResetPointsAudit = () => {
+    const resetFilters = { ...DEFAULT_POINTS_AUDIT_FILTERS };
+    setPointsAuditFilters(resetFilters);
+    handleLoadPointsSources({ filters: resetFilters });
+  };
+
+  const handleNextPointsAuditPage = () => {
+    const nextCursor = pointsSourcesReport?.detailed_audit?.pagination?.next_cursor;
+    if (nextCursor) handleLoadPointsSources({ cursor: nextCursor, navigation: 'next' });
+  };
+
+  const handlePreviousPointsAuditPage = () => {
+    if (pointsAuditPageIndex <= 0) return;
+    handleLoadPointsSources({
+      cursor: pointsAuditCursorHistory[pointsAuditPageIndex - 1] || null,
+      navigation: 'previous',
+    });
+  };
+
+  const handleExportPointsAudit = () => {
+    const audit = pointsSourcesReport?.detailed_audit;
+    if (!audit?.items?.length) {
+      toast.error('No audit rows to export');
+      return;
+    }
+    const username = pointsSourcesReport?.user?.username || formData.targetUsername || 'player';
+    const payload = {
+      exported_at: new Date().toISOString(),
+      user: pointsSourcesReport.user,
+      filters: audit.filters,
+      pagination: audit.pagination,
+      anomaly_summary: audit.anomaly_summary,
+      items: audit.items,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `points-audit-${String(username).replace(/[^\w.-]+/g, '_')}-${Date.now()}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    toast.success('Exported detailed audit JSON');
   };
 
   const handleLoadCurrencySpendAudit = async () => {
@@ -10645,9 +10958,38 @@ export default function Admin() {
                 {pointsSourcesLoading ? 'Loading…' : 'Load breakdown'}
               </BtnSecondary>
             </ActionRow>
+            {pointsSourcesLoading && !pointsSourcesReport && (
+              <div className="ml-0 sm:ml-6 rounded border border-primary/25 bg-primary/5 p-3 text-center text-[10px] text-primary">
+                Loading point source aggregates and detailed audit…
+              </div>
+            )}
+            {pointsSourcesError && !pointsSourcesReport && (
+              <div role="alert" className="ml-0 sm:ml-6 rounded border border-red-500/40 bg-red-500/10 p-2 text-[10px] text-red-300">
+                {pointsSourcesError}
+              </div>
+            )}
             {pointsSourcesReport && (
               <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-2 pl-6">
                 <div className="font-bold text-primary">Point sources — {pointsSourcesReport.user?.username || '?'}</div>
+                <PointsDetailedAudit
+                  audit={pointsSourcesReport.detailed_audit}
+                  filters={pointsAuditFilters}
+                  loading={pointsSourcesLoading}
+                  error={pointsSourcesError}
+                  pageIndex={pointsAuditPageIndex}
+                  targetUsername={pointsSourcesReport.user?.username || formData.targetUsername}
+                  onFilterChange={setPointsAuditFilters}
+                  onApply={() => handleLoadPointsSources()}
+                  onReset={handleResetPointsAudit}
+                  onPrevious={handlePreviousPointsAuditPage}
+                  onNext={handleNextPointsAuditPage}
+                  onExport={handleExportPointsAudit}
+                />
+                <div className="flex items-center gap-2 pt-1 text-[9px] font-bold uppercase tracking-[0.12em] text-mutedForeground">
+                  <span className="h-px flex-1 bg-zinc-700/60" />
+                  Aggregate source breakdown
+                  <span className="h-px flex-1 bg-zinc-700/60" />
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/40">
                     <div className="text-mutedForeground uppercase text-[9px]">Balance</div>

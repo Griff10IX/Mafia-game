@@ -773,15 +773,36 @@ export const THEME_VARIANTS = [
   { id: 'classic', name: 'Classic Layout', description: 'Original mafia layout and spacing' },
   { id: 'modern', name: 'Modern Layout', description: 'Futuristic layout with modern spacing and sections' },
   { id: 'dark_mafia', name: 'Dark Mafia Wars', description: 'Command-center chrome — near-black panels, accent rail, dense layout' },
+  { id: 'old_school', name: 'Old School Mafia', description: 'Early browser-game chrome — navy canvas, gray boxes, deep-blue bars' },
 ];
 
 /** Normalize stored / API themeVariant to a known layout id. */
 export function normalizeThemeVariant(variant) {
-  if (variant === 'modern' || variant === 'dark_mafia' || variant === 'wars2026') {
+  if (variant === 'modern' || variant === 'dark_mafia' || variant === 'wars2026' || variant === 'old_school') {
     // wars2026 was an early id; treat as Dark Mafia Wars
     return variant === 'wars2026' ? 'dark_mafia' : variant;
   }
   return 'classic';
+}
+
+/** Mobile-only shell layouts (≤767px). Orthogonal to themeVariant colours/chrome. */
+export const DEFAULT_MOBILE_LAYOUT_ID = 'classic';
+export const THEME_MOBILE_LAYOUTS = [
+  {
+    id: 'classic',
+    name: 'Classic Mobile',
+    description: 'Current phone chrome — sidebar or bottom bar, plus your chosen stats placement',
+  },
+  {
+    id: 'pocket_deck',
+    name: 'Pocket Deck',
+    description: 'Phone HUD: thin status strip, 5-slot dock, and a full menu sheet',
+  },
+];
+
+/** Normalize stored / API mobileLayoutId. */
+export function normalizeMobileLayoutId(id) {
+  return id === 'pocket_deck' ? 'pocket_deck' : 'classic';
 }
 
 /** First-time / Reset Classic & Reset Modern / Dark Mafia targets. */
@@ -792,6 +813,7 @@ export const THEME_RESET_DARK_MAFIA_ID = 'dark-mafia-wars';
 /** Pinned “Starting looks” row in Theme Studio (handcrafted + hero presets). */
 export const STARTING_LOOK_PRESET_IDS = [
   'old-default',
+  'old-school-mafia-theme',
   'modern-full',
   'dark-mafia-wars',
   'noir-contrast-full',
@@ -818,6 +840,17 @@ export const THEME_LAYOUT_RESET_DEFAULTS = {
   buttonShapeId: DEFAULT_BUTTON_SHAPE_ID,
 };
 
+/** Extra layout defaults applied when resetting to Old School Mafia Theme. */
+export const THEME_LAYOUT_RESET_OLD_SCHOOL = {
+  ...THEME_LAYOUT_RESET_DEFAULTS,
+  topBarGap: 'compact',
+  topBarSize: 'small',
+  sidebarShowDividers: true,
+  sidebarDividerStyle: 'solid',
+  sidebarSpacing: 'compact',
+  buttonShapeId: 'sharp',
+};
+
 /**
  * Full presets: one-click theme bundles (colour + texture + optional button/accent/writing/buttonStyle).
  * buttonColourId / accentLineColourId: null = use main colour.
@@ -825,6 +858,7 @@ export const THEME_LAYOUT_RESET_DEFAULTS = {
  */
 export const THEME_PRESETS = [
   { id: 'old-default', name: 'Old Default Theme', description: 'Full theme: gold accent, no texture, original buttons, default text & font', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'default', mutedWritingColourId: null, buttonStyleId: 'original', fontId: 'classic', textStyleId: 'normal', toastTextColourId: null, mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'classic', buttonShapeId: 'rounded', isFullPreset: true },
+  { id: 'old-school-mafia-theme', name: 'Old School Mafia Theme', description: 'Early browser-game look: navy patterned canvas, gray boxed panels, deep-blue section bars, compact type', colourId: 'obsidian-blue', textureId: 'crosshatch', buttonColourId: 'deep-navy', accentLineColourId: 'obsidian-blue', writingColourId: 'cool-white', mutedWritingColourId: 'slate-300', buttonStyleId: 'flat', fontId: 'compact', textStyleId: 'normal', toastTextColourId: 'cool-white', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'old_school', buttonShapeId: 'sharp', isFullPreset: true, presetCategory: 'mafia' },
   { id: 'modern-full', name: 'Modern Full', description: 'Modern layout with the Telegram sky-blue accent, cleaner typography and spacing', colourId: 'sky', textureId: 'modern-soft', buttonColourId: null, accentLineColourId: null, writingColourId: 'steel-text', mutedWritingColourId: 'slate-300', buttonStyleId: 'flat', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'steel-text', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'modern', buttonShapeId: 'rounded', isFullPreset: true },
   { id: 'dark-mafia-wars', name: 'Dark Mafia Wars', description: 'Command-center chrome: near-black panels, sky accent rail, dense layout', colourId: 'sky', textureId: 'none', buttonColourId: 'sky', accentLineColourId: 'sky', writingColourId: 'cool-white', mutedWritingColourId: 'slate-300', buttonStyleId: 'flat', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'cool-white', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'dark_mafia', buttonShapeId: 'sharp', isFullPreset: true },
   { id: 'noir-contrast-full', name: 'High Contrast Noir', description: 'Charcoal + gold buttons, carbon texture, sharp industrial type', colourId: 'charcoal', textureId: 'carbon', buttonColourId: 'dark-gold', accentLineColourId: 'gold', writingColourId: 'snow', mutedWritingColourId: 'zinc-400', buttonStyleId: 'outline', fontId: 'industrial', textStyleId: 'medium', toastTextColourId: 'snow', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'classic', buttonShapeId: 'sharp', isFullPreset: true, presetCategory: 'dark-pro' },

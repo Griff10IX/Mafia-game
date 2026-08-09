@@ -541,6 +541,15 @@ async def ensure_all_indexes(db):
         await db.point_ledger_events.create_index([("user_id", 1), ("event_type", 1), ("created_at", -1)])
         await db.point_ledger_events.create_index([("root_purchase_ref", 1), ("created_at", -1)])
         await db.point_ledger_events.create_index([("origin_ref", 1), ("created_at", -1)])
+        # Staff-facing logical wallet events. Kept separate from the FIFO ledger,
+        # where one wallet action may intentionally produce several lot rows.
+        await db.point_audit_events.create_index("id", unique=True)
+        await db.point_audit_events.create_index("normalized_event_key", unique=True, sparse=True)
+        await db.point_audit_events.create_index([("user_id", 1), ("created_at", -1)])
+        await db.point_audit_events.create_index([("correlation_id", 1)])
+        await db.point_audit_events.create_index([("source", 1), ("event_type", 1), ("created_at", -1)])
+        await db.point_audit_events.create_index([("counterparty_id", 1), ("created_at", -1)])
+        await db.point_audit_events.create_index([("origin_ref", 1), ("created_at", -1)])
         await db.store_cash_purchase_logs.create_index("id", unique=True)
         await db.store_cash_purchase_logs.create_index([("created_at", -1)])
         await db.store_cash_purchase_logs.create_index([("user_id", 1), ("created_at", -1)])

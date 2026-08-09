@@ -15,9 +15,12 @@ import {
   DEFAULT_TEXT_STYLE_ID,
   DEFAULT_THEME_VARIANT,
   DEFAULT_BUTTON_SHAPE_ID,
+  DEFAULT_MOBILE_LAYOUT_ID,
   THEME_LAYOUT_RESET_DEFAULTS,
+  THEME_LAYOUT_RESET_OLD_SCHOOL,
   THEME_RESET_CLASSIC_ID,
   normalizeThemeVariant,
+  normalizeMobileLayoutId,
 } from '../constants/themes';
 import api from '../utils/api';
 import { getThemeUiPlatform } from '../utils/themePlatform';
@@ -36,6 +39,7 @@ const STORAGE_KEY_TEXT_STYLE = 'app_theme_text_style';
 const STORAGE_KEY_CUSTOM_THEMES = 'app_theme_custom_themes';
 const STORAGE_KEY_MOBILE_NAV = 'app_theme_mobile_nav';
 const MOBILE_STATS_DISPLAY_LS = 'mobile_stats_display';
+const STORAGE_KEY_MOBILE_LAYOUT = 'app_theme_mobile_layout';
 const STORAGE_KEY_BUTTON_SHAPE = 'app_theme_button_shape';
 const STORAGE_KEY_THEME_VARIANT = 'app_theme_variant';
 const STORAGE_KEY_MODERN_VISUAL_QUALITY = 'app_theme_modern_visual_quality';
@@ -402,12 +406,25 @@ function applyThemeVariantToDocument(themeVariant) {
   const body = document.body;
   const root = document.documentElement;
   const variant = normalizeThemeVariant(themeVariant);
-  if (variant === 'modern' || variant === 'dark_mafia') {
+  if (variant === 'modern' || variant === 'dark_mafia' || variant === 'old_school') {
     body.setAttribute('data-theme-variant', variant);
     root.setAttribute('data-theme-variant', variant);
   } else {
     body.removeAttribute('data-theme-variant');
     root.removeAttribute('data-theme-variant');
+  }
+}
+
+function applyMobileLayoutToDocument(mobileLayoutId) {
+  const body = document.body;
+  const root = document.documentElement;
+  const id = normalizeMobileLayoutId(mobileLayoutId);
+  if (id === 'pocket_deck') {
+    body.setAttribute('data-mobile-layout', id);
+    root.setAttribute('data-mobile-layout', id);
+  } else {
+    body.removeAttribute('data-mobile-layout');
+    root.removeAttribute('data-mobile-layout');
   }
 }
 
@@ -550,6 +567,13 @@ export function ThemeProvider({ children }) {
       return 'bottom';
     }
   });
+  const [mobileLayoutId, setMobileLayoutIdState] = useState(() => {
+    try {
+      return normalizeMobileLayoutId(localStorage.getItem(STORAGE_KEY_MOBILE_LAYOUT));
+    } catch {
+      return DEFAULT_MOBILE_LAYOUT_ID;
+    }
+  });
   const [buttonShapeId, setButtonShapeIdState] = useState(() => {
     try {
       const v = localStorage.getItem(STORAGE_KEY_BUTTON_SHAPE);
@@ -560,7 +584,7 @@ export function ThemeProvider({ children }) {
   const [themeVariant, setThemeVariantState] = useState(() => {
     try {
       const v = localStorage.getItem(STORAGE_KEY_THEME_VARIANT);
-      if (v === 'modern' || v === 'classic' || v === 'dark_mafia' || v === 'wars2026') {
+      if (v === 'modern' || v === 'classic' || v === 'dark_mafia' || v === 'wars2026' || v === 'old_school') {
         return normalizeThemeVariant(v);
       }
       const texture = localStorage.getItem(STORAGE_KEY_TEXTURE);
@@ -664,6 +688,10 @@ export function ThemeProvider({ children }) {
   }, [themeVariant, modernVisualQuality]);
 
   useEffect(() => {
+    applyMobileLayoutToDocument(mobileLayoutId);
+  }, [mobileLayoutId]);
+
+  useEffect(() => {
     applyMobileCompositorSafeToDocument();
   }, []);
 
@@ -720,6 +748,13 @@ export function ThemeProvider({ children }) {
           window.dispatchEvent(new Event('mobile-stats-display-changed'));
         } catch (_) {}
       }
+      {
+        const loadedMobileLayout = normalizeMobileLayoutId(
+          prefs.mobileLayoutId ?? prefs.mobile_layout_id ?? DEFAULT_MOBILE_LAYOUT_ID
+        );
+        localStorage.setItem(STORAGE_KEY_MOBILE_LAYOUT, loadedMobileLayout);
+        setMobileLayoutIdState(loadedMobileLayout);
+      }
       if (prefs.buttonShapeId != null) { localStorage.setItem(STORAGE_KEY_BUTTON_SHAPE, prefs.buttonShapeId); setButtonShapeIdState(prefs.buttonShapeId); }
       applyLayoutPrefsFromServerToLS(prefs).forEach((ev) => {
         try { window.dispatchEvent(new Event(ev)); } catch (_) {}
@@ -753,10 +788,11 @@ export function ThemeProvider({ children }) {
       sidebar_layout: (typeof localStorage !== 'undefined' && localStorage.getItem('sidebar_layout')) || null,
       mobile_nav_style: mobileNavStyle || null,
       mobile_stats_display,
+      mobile_layout_id: mobileLayoutId || null,
       button_shape_id: buttonShapeId || null,
       ...readLayoutSnapshotForPatch(),
     };
-  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, mobileNavStyle, buttonShapeId]);
+  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, mobileNavStyle, mobileLayoutId, buttonShapeId]);
 
   useEffect(() => {
     api.get('/profile/theme').then((res) => {
@@ -810,7 +846,7 @@ export function ThemeProvider({ children }) {
     api.patch('/profile/theme', payload).then(() => {
       try { window.dispatchEvent(new CustomEvent('theme-saved')); } catch (_) {}
     }).catch(() => {});
-  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, mobileNavStyle, buttonShapeId, buildThemePatchPayload]);
+  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, mobileNavStyle, mobileLayoutId, buttonShapeId, buildThemePatchPayload]);
 
   const setColour = useCallback((id) => {
     setColourIdState(id);
@@ -917,6 +953,25 @@ export function ThemeProvider({ children }) {
     } catch (_) {}
   }, []);
 
+  const setMobileLayout = useCallback((layoutId) => {
+    const v = normalizeMobileLayoutId(layoutId);
+    setMobileLayoutIdState(v);
+    try {
+      localStorage.setItem(STORAGE_KEY_MOBILE_LAYOUT, v);
+    } catch (_) {}
+    if (v === 'pocket_deck') {
+      setMobileNavStyleState('bottom');
+      try {
+        localStorage.setItem(STORAGE_KEY_MOBILE_NAV, 'bottom');
+        localStorage.setItem(MOBILE_STATS_DISPLAY_LS, 'top_bar');
+        window.dispatchEvent(new Event('mobile-stats-display-changed'));
+      } catch (_) {}
+    }
+    try {
+      window.dispatchEvent(new Event('toast-prefs-changed'));
+    } catch (_) {}
+  }, []);
+
   const setThemeVariant = useCallback((variant) => {
     const v = normalizeThemeVariant(variant);
     setThemeVariantState(v);
@@ -924,6 +979,11 @@ export function ThemeProvider({ children }) {
       setTextureIdState('modern-soft');
       try {
         localStorage.setItem(STORAGE_KEY_TEXTURE, 'modern-soft');
+      } catch (_) {}
+    } else if (v === 'old_school') {
+      setTextureIdState('crosshatch');
+      try {
+        localStorage.setItem(STORAGE_KEY_TEXTURE, 'crosshatch');
       } catch (_) {}
     }
     try {
@@ -945,7 +1005,6 @@ export function ThemeProvider({ children }) {
    */
   const resetThemeToPreset = useCallback((presetId = THEME_RESET_CLASSIC_ID) => {
     const p = getThemePreset(presetId);
-    const layout = THEME_LAYOUT_RESET_DEFAULTS;
     const colour = p.colourId || DEFAULT_COLOUR_ID;
     const texture = p.textureId || DEFAULT_TEXTURE_ID;
     const font = p.fontId || DEFAULT_FONT_ID;
@@ -953,11 +1012,15 @@ export function ThemeProvider({ children }) {
     const writing = p.writingColourId || DEFAULT_WRITING_COLOUR_ID;
     const textStyle = p.textStyleId || DEFAULT_TEXT_STYLE_ID;
     const variant = normalizeThemeVariant(p.themeVariant);
+    const layout = variant === 'old_school' ? THEME_LAYOUT_RESET_OLD_SCHOOL : THEME_LAYOUT_RESET_DEFAULTS;
     const mobileNav = p.mobileNavStyle === 'sidebar' ? 'sidebar' : 'bottom';
+    const mobileLayout = normalizeMobileLayoutId(p.mobileLayoutId);
     const buttonShape = p.buttonShapeId || layout.buttonShapeId || DEFAULT_BUTTON_SHAPE_ID;
     const mobileStats = p.mobileStatsDisplay || 'right_sidebar';
     const sidebarLayout = p.sidebarLayout || 'categorized_classic';
-    const resolvedTexture = variant === 'modern' ? 'modern-soft' : texture;
+    const resolvedTexture = variant === 'modern'
+      ? 'modern-soft'
+      : (variant === 'old_school' ? (texture || 'crosshatch') : texture);
 
     setColourIdState(colour);
     setTextureIdState(resolvedTexture);
@@ -970,6 +1033,7 @@ export function ThemeProvider({ children }) {
     setToastTextColourIdState(p.toastTextColourId ?? null);
     setTextStyleIdState(textStyle);
     setMobileNavStyleState(mobileNav);
+    setMobileLayoutIdState(mobileLayout);
     setThemeVariantState(variant);
     setButtonShapeIdState(buttonShape === 'sharp' || buttonShape === 'pill' ? buttonShape : 'rounded');
 
@@ -985,6 +1049,7 @@ export function ThemeProvider({ children }) {
       localStorage.setItem(STORAGE_KEY_TOAST_TEXT, p.toastTextColourId || '');
       localStorage.setItem(STORAGE_KEY_TEXT_STYLE, textStyle);
       localStorage.setItem(STORAGE_KEY_MOBILE_NAV, mobileNav);
+      localStorage.setItem(STORAGE_KEY_MOBILE_LAYOUT, mobileLayout);
       localStorage.setItem(STORAGE_KEY_THEME_VARIANT, variant);
       localStorage.setItem(STORAGE_KEY_BUTTON_SHAPE, buttonShape === 'sharp' || buttonShape === 'pill' ? buttonShape : 'rounded');
 
@@ -1024,6 +1089,7 @@ export function ThemeProvider({ children }) {
       text_style_id: textStyle,
       theme_variant: variant,
       mobile_nav_style: mobileNav,
+      mobile_layout_id: mobileLayout,
       button_shape_id: buttonShape === 'sharp' || buttonShape === 'pill' ? buttonShape : 'rounded',
       mobile_stats_display: mobileStats,
       sidebar_layout: sidebarLayout,
@@ -1089,6 +1155,8 @@ export function ThemeProvider({ children }) {
     accentLineColour: accentLineColourId ? getResolvedColour(accentLineColourId, customThemes) : null,
     mobileNavStyle,
     setMobileNavStyle,
+    mobileLayoutId,
+    setMobileLayout,
     themeVariant,
     setThemeVariant,
     modernVisualQuality,

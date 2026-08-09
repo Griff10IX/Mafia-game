@@ -1,7 +1,10 @@
 """Readable store-currency (users.points) received/sent breakdowns — aggregates + per-tx detail."""
 from __future__ import annotations
 
-from datetime import datetime
+import base64
+import json
+import re
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 # Ledger event_types that are player→player transfers (counted via points_transfers instead).
@@ -14,6 +17,8 @@ _PURCHASE_EVENT_TYPES = frozenset({"mint_purchase", "mint_store_points_cash"})
 _PLAYER_HIDDEN_EVENT_TYPES = frozenset({"legacy_seed"})
 
 _DEFAULT_TX_LIMIT = 150
+_DEFAULT_AUDIT_LIMIT = 50
+_MAX_AUDIT_LIMIT = 200
 
 _EVENT_LABELS: Dict[str, str] = {
     "mint_purchase": "Store purchase",
@@ -119,6 +124,1149 @@ def _row_ts(created: Any) -> float:
         except Exception:
             return 0.0
     return 0.0
+
+
+def parse_audit_datetime(value: Optional[str], *, end_of_day: bool = False) -> Optional[datetime]:
+    """Parse an API date/datetime into an aware UTC datetime."""
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    date_only = bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw))
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"Invalid ISO date/datetime: {raw}") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    else:
+        parsed = parsed.astimezone(timezone.utc)
+    if date_only and end_of_day:
+        parsed = parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+    return parsed
+
+
+def encode_audit_cursor(created_at: Any, event_id: Any) -> Optional[str]:
+    if not created_at or not event_id:
+        return None
+    payload = json.dumps({"t": _iso(created_at), "id": str(event_id)}, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+
+def decode_audit_cursor(cursor: Optional[str]) -> Optional[Tuple[datetime, str]]:
+    raw = str(cursor or "").strip()
+    if not raw:
+        return None
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)).decode("utf-8"))
+        created = parse_audit_datetime(payload.get("t"))
+        event_id = str(payload.get("id") or "")
+        if created is None or not event_id:
+            raise ValueError
+        return created, event_id
+    except Exception as exc:
+        raise ValueError("Invalid audit cursor") from exc
+
+
+def _int_or_none(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items() if k != "_id"}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def _party_name(party: Any, fallback: str = "unknown player") -> str:
+    if isinstance(party, dict):
+        return str(party.get("username") or party.get("id") or fallback)
+    return fallback
+
+
+def _context_value(event: Dict[str, Any], *keys: str) -> Any:
+    for container_name in ("context", "meta"):
+        container = event.get(container_name)
+        if not isinstance(container, dict):
+            continue
+        for key in keys:
+            value = container.get(key)
+            if value is not None and value != "":
+                return value
+    return None
+
+
+def _balance_words(before: Optional[int], after: Optional[int]) -> str:
+    if before is None or after is None:
+        return "Unknown (legacy record)"
+    return f"balance {before:,} → {after:,}"
+
+
+def build_audit_narrative(event: Dict[str, Any], enrichment: Optional[Dict[str, Any]] = None) -> str:
+    """Build concrete staff-readable wording without inventing missing values."""
+    enrichment = enrichment or {}
+    delta = _int_or_none(event.get("delta")) or 0
+    before = _int_or_none(event.get("wallet_points_before"))
+    after = _int_or_none(event.get("wallet_points_after"))
+    source = str(event.get("source") or "legacy").lower()
+    event_type = str(event.get("event_type") or "unknown")
+    counterparty = event.get("counterparty")
+    transfer = enrichment.get("points_transfer") if isinstance(enrichment.get("points_transfer"), dict) else {}
+
+    if source == "p2p" or event_type in _TRANSFER_EVENT_TYPES:
+        sender = str(
+            transfer.get("from_username")
+            or _context_value(event, "from_username")
+            or (_party_name(counterparty) if delta > 0 else event.get("username"))
+            or "unknown sender"
+        )
+        recipient = str(
+            transfer.get("to_username")
+            or _context_value(event, "to_username")
+            or (event.get("username") if delta > 0 else _party_name(counterparty))
+            or "unknown recipient"
+        )
+        # Example: "Highlights sent Venus 50,000 points; balance 50,000 → 100,000."
+        return f"{sender} sent {abs(delta):,} points to {recipient}; {_balance_words(before, after)}."
+
+    if source == "quicktrade" or event_type.startswith("quicktrade_"):
+        role = "buyer" if delta > 0 else "seller"
+        other = _party_name(counterparty)
+        cash = _context_value(event, "cost_cash", "cost", "cash", "money", "cash_paid", "cash_received")
+        consideration = f"${int(cash):,} cash" if _int_or_none(cash) is not None else "unknown legacy consideration"
+        self_name = event.get("username") or event.get("user_id") or "unknown player"
+        if event_type == "quicktrade_create":
+            listed = _int_or_none(_context_value(event, "listed_points")) or abs(delta)
+            fee = _int_or_none(_context_value(event, "fee"))
+            fee_words = f" (fee {fee:,})" if fee is not None else ""
+            return (
+                f"Quick Trade: {self_name} listed {listed:,} points for sale{fee_words} "
+                f"asking {consideration}; {_balance_words(before, after)}."
+            )
+        if delta > 0:
+            action = f"{self_name} bought {abs(delta):,} points from {other}"
+        else:
+            action = f"{self_name} sold/committed {abs(delta):,} points"
+            if other != "unknown player":
+                action += f" to {other}"
+        return f"Quick Trade ({role}): {action} for {consideration}; {_balance_words(before, after)}."
+
+    if event_type == "casino_mdg" or source in {"mdg", "casino_mdg"} or (
+        source == "casino" and "mdg" in str(_context_value(event, "game_id") or event.get("origin_ref") or "").lower()
+    ):
+        game = enrichment.get("mdg_game") if isinstance(enrichment.get("mdg_game"), dict) else {}
+        opponents = _context_value(event, "opponents")
+        if not isinstance(opponents, list):
+            opponents = game.get("entries") if isinstance(game.get("entries"), list) else []
+        opponent_names = [
+            str(p.get("username") or p.get("id"))
+            for p in opponents
+            if isinstance(p, dict)
+            and str(p.get("id") or p.get("user_id") or "") != str(event.get("user_id") or "")
+            and (p.get("username") or p.get("id"))
+        ]
+        versus = ", ".join(dict.fromkeys(opponent_names)) or "unknown opponent(s)"
+        stake = _int_or_none(_context_value(event, "stake_points", "fee_points"))
+        payout = _int_or_none(_context_value(event, "payout_points", "pot_points"))
+        result = str(_context_value(event, "result", "action") or ("won" if delta > 0 else "stake paid"))
+        pieces = [f"MDG vs {versus}", f"result {result}"]
+        pieces.append(f"stake {stake:,} points" if stake is not None else "stake unknown")
+        if payout is not None:
+            pieces.append(f"payout {payout:,} points")
+        elif delta > 0:
+            pieces.append(f"payout {abs(delta):,} points")
+        return "; ".join(pieces) + f"; {_balance_words(before, after)}."
+
+    label = label_for_event_type(event_type)
+    direction = "credited" if delta > 0 else "debited"
+    ref = str(event.get("origin_ref") or event.get("transaction_id") or "")
+    ref_words = f" (reference {ref})" if ref else ""
+    return f"{label}: {direction} {abs(delta):,} points{ref_words}; {_balance_words(before, after)}."
+
+
+def audit_anomaly_flags(
+    event: Dict[str, Any],
+    *,
+    duplicate_key: bool = False,
+    duplicate_reference: bool = False,
+    chain_gap: bool = False,
+) -> List[str]:
+    flags: List[str] = []
+    delta = _int_or_none(event.get("delta"))
+    before = _int_or_none(event.get("wallet_points_before"))
+    after = _int_or_none(event.get("wallet_points_after"))
+    if before is None or after is None:
+        flags.append("incomplete_snapshot")
+    elif delta is None or before + delta != after:
+        flags.append("before_delta_mismatch")
+    if (before is not None and before < 0) or (after is not None and after < 0):
+        flags.append("negative_balance")
+    if chain_gap:
+        flags.append("balance_chain_gap")
+    if duplicate_key:
+        flags.append("duplicate_normalized_event_key")
+    if duplicate_reference:
+        flags.append("duplicate_reference")
+    return flags
+
+
+def _audit_row(
+    event: Dict[str, Any],
+    enrichment: Dict[str, Any],
+    *,
+    duplicate_key: bool,
+    duplicate_reference: bool,
+    chain_gap: bool,
+    linked_legs: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    before = _int_or_none(event.get("wallet_points_before"))
+    after = _int_or_none(event.get("wallet_points_after"))
+    flags = audit_anomaly_flags(
+        event,
+        duplicate_key=duplicate_key,
+        duplicate_reference=duplicate_reference,
+        chain_gap=chain_gap,
+    )
+    unknown_fields = []
+    if before is None:
+        unknown_fields.append("wallet_points_before")
+    if after is None:
+        unknown_fields.append("wallet_points_after")
+    legacy = not event.get("schema_version") or str(event.get("origin") or "").startswith("legacy")
+    return {
+        "id": str(event.get("id") or event.get("_id") or ""),
+        "time": _iso(event.get("created_at")),
+        "synthetic": bool(event.get("_synthetic")),
+        "transaction_id": event.get("transaction_id"),
+        "correlation_id": event.get("correlation_id"),
+        "source": event.get("source") or "legacy",
+        "event_type": event.get("event_type") or "unknown",
+        "delta": _int_or_none(event.get("delta")) or 0,
+        "wallet_points_before": before,
+        "wallet_points_after": after,
+        "balance_known": before is not None and after is not None,
+        "actor": _json_safe(event.get("actor")),
+        "counterparty": _json_safe(event.get("counterparty")),
+        "context": _json_safe(event.get("context") or {}),
+        "meta": _json_safe(event.get("meta") or {}),
+        "origin": {"name": event.get("origin"), "ref": event.get("origin_ref")},
+        "schema_version": event.get("schema_version"),
+        "normalized_event_key": event.get("normalized_event_key"),
+        "narrative": build_audit_narrative(event, enrichment),
+        "incomplete": bool(unknown_fields),
+        "legacy": legacy,
+        "unknown_fields": unknown_fields,
+        "anomaly_flags": flags,
+        "suspicious": bool(flags),
+        "linked_legs": _json_safe(linked_legs),
+        "historical_enrichment": _json_safe(enrichment),
+    }
+
+
+async def _duplicate_values(db, user_id: str, field: str) -> set:
+    try:
+        rows = await db.point_audit_events.aggregate(
+            [
+                {"$match": {"user_id": user_id, field: {"$nin": [None, ""]}}},
+                {"$group": {"_id": f"${field}", "count": {"$sum": 1}}},
+                {"$match": {"count": {"$gt": 1}}},
+                {"$limit": 1000},
+            ]
+        ).to_list(1000)
+        return {str(row.get("_id")) for row in rows if row.get("_id") not in (None, "")}
+    except Exception:
+        return set()
+
+
+async def _safe_find(db, collection: str, query: dict, projection: dict, limit: int = 500) -> List[dict]:
+    try:
+        return await db[collection].find(query, projection).limit(limit).to_list(limit)
+    except Exception:
+        return []
+
+
+def _candidate_refs(events: List[dict]) -> List[str]:
+    refs: List[str] = []
+    for event in events:
+        for key in ("origin_ref", "transaction_id", "correlation_id", "normalized_event_key"):
+            value = event.get(key)
+            if value:
+                refs.append(str(value))
+        for container_name in ("context", "meta"):
+            container = event.get(container_name)
+            if not isinstance(container, dict):
+                continue
+            for key in ("offer_id", "game_id", "purchase_id", "session_id", "transaction_id"):
+                if container.get(key):
+                    refs.append(str(container[key]))
+    return list(dict.fromkeys(refs))[:1000]
+
+
+def _ref_matches(event: dict, candidate: dict) -> bool:
+    event_refs = set(_candidate_refs([event]))
+    candidate_refs = {
+        str(candidate.get(key))
+        for key in (
+            "id",
+            "origin_ref",
+            "event_ref",
+            "session_id",
+            "store_event_ref",
+            "points_correlation_id",
+            "game_id",
+        )
+        if candidate.get(key) not in (None, "")
+    }
+    return bool(event_refs & candidate_refs)
+
+
+async def _load_audit_enrichment(db, user_id: str, events: List[dict]) -> Dict[str, Dict[str, Any]]:
+    refs = _candidate_refs(events)
+    if not refs:
+        return {str(event.get("id") or ""): {} for event in events}
+
+    game_ids = list(
+        dict.fromkeys(
+            str(_context_value(event, "game_id") or "").strip()
+            or str(event.get("correlation_id") or "").strip()
+            for event in events
+            if event.get("event_type") == "casino_mdg"
+            or str(event.get("source") or "").lower() in {"mdg", "casino"}
+        )
+    )
+    game_ids = [value.split(":", 1)[-1] for value in game_ids if value]
+    common_projection = {"_id": 0}
+    transfers_coro = _safe_find(
+        db,
+        "points_transfers",
+        {
+            "$and": [
+                {"$or": [{"from_user_id": user_id}, {"to_user_id": user_id}]},
+                {"$or": [{"id": {"$in": refs}}, {"transaction_id": {"$in": refs}}]},
+            ]
+        },
+        common_projection,
+    )
+    trades_coro = _safe_find(
+        db,
+        "trade_events",
+        {
+            "$and": [
+                {"$or": [{"user_id": user_id}, {"buyer_id": user_id}, {"seller_id": user_id}]},
+                {"$or": [{"id": {"$in": refs}}, {"offer_id": {"$in": refs}}]},
+            ]
+        },
+        common_projection,
+    )
+    games_coro = _safe_find(db, "mdg_games", {"id": {"$in": game_ids + refs}}, common_projection, 300)
+    store_coro = _safe_find(
+        db,
+        "store_points_purchase_logs",
+        {
+            "user_id": user_id,
+            "$or": [{"id": {"$in": refs}}, {"store_event_ref": {"$in": refs}}],
+        },
+        common_projection,
+    )
+    payments_coro = _safe_find(
+        db,
+        "payment_transactions",
+        {
+            "user_id": user_id,
+            "$or": [
+                {"session_id": {"$in": refs}},
+                {"id": {"$in": refs}},
+                {"transaction_id": {"$in": refs}},
+            ],
+        },
+        common_projection,
+    )
+    ledger_coro = _safe_find(
+        db,
+        "point_ledger_events",
+        {
+            "user_id": user_id,
+            "$or": [{"id": {"$in": refs}}, {"origin_ref": {"$in": refs}}, {"event_ref": {"$in": refs}}],
+        },
+        common_projection,
+        1000,
+    )
+    transfers, trades, games, stores, payments, ledgers = await __import__("asyncio").gather(
+        transfers_coro, trades_coro, games_coro, store_coro, payments_coro, ledger_coro
+    )
+
+    result: Dict[str, Dict[str, Any]] = {}
+    for event in events:
+        event_id = str(event.get("id") or event.get("_id") or "")
+        enriched: Dict[str, Any] = {}
+        for label, candidates in (
+            ("points_transfer", transfers),
+            ("quicktrade_event", trades),
+            ("store_log", stores),
+            ("payment_transaction", payments),
+        ):
+            match = next((candidate for candidate in candidates if _ref_matches(event, candidate)), None)
+            if match:
+                enriched[label] = match
+        matching_ledgers = [candidate for candidate in ledgers if _ref_matches(event, candidate)]
+        if matching_ledgers:
+            enriched["point_ledger_events"] = matching_ledgers[:20]
+        game_id = str(_context_value(event, "game_id") or event.get("correlation_id") or "")
+        game_id = game_id.split(":", 1)[-1]
+        game = next((candidate for candidate in games if str(candidate.get("id") or "") == game_id), None)
+        if game:
+            enriched["mdg_game"] = game
+        result[event_id] = enriched
+    return result
+
+
+def _synthetic_base(
+    *,
+    row_id: Any,
+    user_id: str,
+    username: Any,
+    delta: Any,
+    source: str,
+    event_type: str,
+    created_at: Any,
+    origin: str,
+    origin_ref: Any = None,
+    before: Any = None,
+    after: Any = None,
+    actor: Any = None,
+    counterparty: Any = None,
+    context: Any = None,
+    meta: Any = None,
+) -> dict:
+    ref = str(origin_ref or row_id or "")
+    return {
+        "id": f"synthetic:{origin}:{row_id}",
+        "transaction_id": ref or None,
+        "correlation_id": ref or None,
+        "user_id": user_id,
+        "username": username,
+        "delta": _int_or_none(delta) or 0,
+        "wallet_points_before": _int_or_none(before),
+        "wallet_points_after": _int_or_none(after),
+        "source": source,
+        "event_type": event_type,
+        "origin": f"legacy:{origin}",
+        "origin_ref": ref or None,
+        "actor": actor,
+        "counterparty": counterparty,
+        "context": dict(context or {}),
+        "meta": dict(meta or {}),
+        "created_at": created_at,
+        "schema_version": None,
+        "_synthetic": True,
+    }
+
+
+def synthetic_points_transfer_events(user_id: str, documents: List[dict]) -> List[dict]:
+    events: List[dict] = []
+    for index, doc in enumerate(documents):
+        amount = _int_or_none(doc.get("amount"))
+        if not amount or amount <= 0:
+            continue
+        is_in = str(doc.get("to_user_id") or "") == user_id
+        is_out = str(doc.get("from_user_id") or "") == user_id
+        if not is_in and not is_out:
+            continue
+        is_quicktrade = (
+            "qt_anonymize_from" in doc
+            or "qt_anonymize_to" in doc
+            or doc.get("transfer_kind") == "quicktrade"
+        )
+        before = doc.get("recipient_points_before") if is_in else doc.get("sender_points_before")
+        after = doc.get("recipient_points_after") if is_in else doc.get("sender_points_after")
+        other = {
+            "id": doc.get("from_user_id") if is_in else doc.get("to_user_id"),
+            "username": doc.get("from_username") if is_in else doc.get("to_username"),
+            "type": "user",
+        }
+        events.append(
+            _synthetic_base(
+                row_id=doc.get("id") or f"{index}:{_iso(doc.get('created_at'))}",
+                user_id=user_id,
+                username=doc.get("to_username") if is_in else doc.get("from_username"),
+                delta=amount if is_in else -amount,
+                source="quicktrade" if is_quicktrade else "p2p",
+                event_type=("quicktrade_buy" if is_in else "quicktrade_sell")
+                if is_quicktrade
+                else ("transfer_in" if is_in else "transfer_out"),
+                created_at=doc.get("created_at"),
+                origin="points_transfers",
+                origin_ref=doc.get("id"),
+                before=before,
+                after=after,
+                counterparty=other,
+                context={
+                    "from_user_id": doc.get("from_user_id"),
+                    "from_username": doc.get("from_username"),
+                    "to_user_id": doc.get("to_user_id"),
+                    "to_username": doc.get("to_username"),
+                },
+                meta={"historical_collection": "points_transfers"},
+            )
+        )
+    return events
+
+
+def _legacy_source(event_type: Any, meta: Any = None) -> str:
+    value = str(event_type or "").lower()
+    explicit = str((meta or {}).get("source") or "").strip() if isinstance(meta, dict) else ""
+    if explicit:
+        return explicit
+    if value.startswith("transfer_"):
+        return "p2p"
+    if value.startswith("quicktrade_"):
+        return "quicktrade"
+    if value.startswith("casino_"):
+        return "casino"
+    if value.startswith(("store_", "spend_store")):
+        return "store"
+    if value.startswith(("mint_purchase", "clawback")):
+        return "payments"
+    return value.split("_", 1)[0] or "legacy"
+
+
+def synthetic_point_ledger_events(user_id: str, documents: List[dict]) -> List[dict]:
+    """Collapse FIFO lot slices sharing one logical reference into one legacy row."""
+    grouped: Dict[Tuple[str, str], List[dict]] = {}
+    for index, doc in enumerate(documents):
+        if str(doc.get("user_id") or "") != user_id:
+            continue
+        points = _int_or_none(doc.get("points"))
+        if not points:
+            continue
+        ref = str(doc.get("origin_ref") or doc.get("event_ref") or "")
+        key = (str(doc.get("event_type") or "legacy"), ref or f"row:{doc.get('id') or index}")
+        grouped.setdefault(key, []).append(doc)
+
+    events: List[dict] = []
+    for (event_type, group_ref), rows in grouped.items():
+        delta = sum(_int_or_none(row.get("points")) or 0 for row in rows)
+        if not delta:
+            continue
+        first = rows[0]
+        before_values = {_int_or_none(row.get("wallet_points_before")) for row in rows}
+        after_values = {_int_or_none(row.get("wallet_points_after")) for row in rows}
+        before = next(iter(before_values)) if len(before_values) == 1 else None
+        after = next(iter(after_values)) if len(after_values) == 1 else None
+        if before is None or after is None or after - before != delta:
+            before = after = None
+        meta = first.get("meta") if isinstance(first.get("meta"), dict) else {}
+        ref = str(first.get("origin_ref") or first.get("event_ref") or "")
+        events.append(
+            _synthetic_base(
+                row_id=ref or first.get("id") or group_ref,
+                user_id=user_id,
+                username=first.get("username"),
+                delta=delta,
+                source=_legacy_source(event_type, meta),
+                event_type=event_type,
+                created_at=max((row.get("created_at") for row in rows), key=_row_ts),
+                origin="point_ledger_events",
+                origin_ref=ref or first.get("id"),
+                before=before,
+                after=after,
+                context=meta,
+                meta={
+                    **meta,
+                    "historical_collection": "point_ledger_events",
+                    "ledger_rows_collapsed": len(rows),
+                },
+            )
+        )
+    return events
+
+
+def _synthetic_payment_events(user_id: str, documents: List[dict]) -> List[dict]:
+    events = []
+    for index, doc in enumerate(documents):
+        points = _int_or_none(doc.get("points"))
+        if not points or points <= 0:
+            continue
+        ref = doc.get("session_id") or doc.get("transaction_id") or doc.get("id")
+        events.append(
+            _synthetic_base(
+                row_id=ref or index,
+                user_id=user_id,
+                username=doc.get("username"),
+                delta=points,
+                source="payments",
+                event_type="mint_purchase",
+                created_at=doc.get("points_credited_at") or doc.get("created_at"),
+                origin="payment_transactions",
+                origin_ref=ref,
+                before=doc.get("wallet_points_before")
+                if doc.get("wallet_points_before") is not None
+                else doc.get("points_before"),
+                after=doc.get("wallet_points_after")
+                if doc.get("wallet_points_after") is not None
+                else doc.get("points_after"),
+                context={"package_id": doc.get("package_id"), "payment_status": doc.get("payment_status")},
+                meta={"historical_collection": "payment_transactions"},
+            )
+        )
+    return events
+
+
+def _synthetic_store_events(user_id: str, documents: List[dict]) -> List[dict]:
+    events = []
+    for index, doc in enumerate(documents):
+        points = _int_or_none(doc.get("points_spent") or doc.get("cost_points"))
+        if not points or points <= 0:
+            continue
+        events.append(
+            _synthetic_base(
+                row_id=doc.get("id") or index,
+                user_id=user_id,
+                username=doc.get("username"),
+                delta=-points,
+                source="store",
+                event_type="spend_store",
+                created_at=doc.get("created_at"),
+                origin="store_points_purchase_logs",
+                origin_ref=doc.get("store_event_ref") or doc.get("id"),
+                before=doc.get("points_before"),
+                after=doc.get("points_after"),
+                context={
+                    "store_item": doc.get("store_event_ref"),
+                    "item_label": doc.get("item_label"),
+                    "cost_points": points,
+                    **(doc.get("extra") if isinstance(doc.get("extra"), dict) else {}),
+                },
+                meta={"historical_collection": "store_points_purchase_logs"},
+            )
+        )
+    return events
+
+
+def _synthetic_store_cash_events(user_id: str, documents: List[dict]) -> List[dict]:
+    events = []
+    for index, doc in enumerate(documents):
+        if doc.get("purchase_kind") not in (None, "points_cash"):
+            continue
+        points = _int_or_none(doc.get("points"))
+        if not points or points <= 0:
+            continue
+        events.append(
+            _synthetic_base(
+                row_id=doc.get("id") or index,
+                user_id=user_id,
+                username=doc.get("username"),
+                delta=points,
+                source="store",
+                event_type="store_points_cash_purchase",
+                created_at=doc.get("created_at"),
+                origin="store_cash_purchase_logs",
+                origin_ref=doc.get("id"),
+                before=doc.get("points_before"),
+                after=doc.get("points_after"),
+                context={
+                    "purchase_kind": "points_cash",
+                    "cash_cost": doc.get("cash_cost"),
+                    "price_per_point": doc.get("price_per_point"),
+                    "item_label": doc.get("item_label"),
+                },
+                meta={"historical_collection": "store_cash_purchase_logs"},
+            )
+        )
+    return events
+
+
+def _synthetic_mdg_events(user_id: str, documents: List[dict]) -> List[dict]:
+    events = []
+    for index, doc in enumerate(documents):
+        details = doc.get("details") if isinstance(doc.get("details"), dict) else {}
+        action = str(details.get("action") or "").lower()
+        if str(doc.get("game_type") or "").lower() != "mdg":
+            continue
+        if action in {"create", "join"}:
+            delta = -(_int_or_none(details.get("fee_points")) or 0)
+        elif action in {"payout", "winner_payout"}:
+            delta = _int_or_none(details.get("pot_points") or details.get("payout_points")) or 0
+        elif action in {"refund", "join_refund"}:
+            delta = _int_or_none(details.get("refund_points") or details.get("fee_points")) or 0
+        else:
+            delta = _int_or_none(details.get("points_delta")) or 0
+        if not delta:
+            continue
+        game_id = details.get("game_id")
+        events.append(
+            _synthetic_base(
+                row_id=doc.get("id") or index,
+                user_id=user_id,
+                username=doc.get("username"),
+                delta=delta,
+                source="casino",
+                event_type="casino_mdg",
+                created_at=doc.get("created_at"),
+                origin="gambling_log",
+                origin_ref=f"{action}:{game_id}" if game_id else doc.get("id"),
+                context={**details, "result": "won" if delta > 0 and action == "payout" else action},
+                meta={"historical_collection": "gambling_log", **details},
+            )
+        )
+    return events
+
+
+def _synthetic_trade_events(user_id: str, documents: List[dict]) -> List[dict]:
+    events = []
+    for index, doc in enumerate(documents):
+        event_type = str(doc.get("type") or "")
+        points = _int_or_none(doc.get("original_points") or doc.get("points")) or 0
+        participants: List[Tuple[int, Any, Any, str]] = []
+        if event_type == "sell_offer_created" and str(doc.get("user_id") or "") == user_id:
+            participants.append((-points, doc.get("username"), None, "quicktrade_create"))
+        elif event_type == "sell_offer_cancelled" and str(doc.get("user_id") or "") == user_id:
+            participants.append((points, doc.get("username"), None, "quicktrade_cancel"))
+        elif event_type == "sell_offer_accepted" and str(doc.get("buyer_id") or "") == user_id:
+            participants.append(
+                (points, doc.get("buyer_username"), {"id": doc.get("seller_id"), "username": doc.get("seller_username")}, "quicktrade_buy")
+            )
+        elif event_type == "buy_offer_accepted":
+            if str(doc.get("seller_id") or "") == user_id:
+                participants.append(
+                    (-points, doc.get("seller_username"), {"id": doc.get("buyer_id"), "username": doc.get("buyer_username")}, "quicktrade_sell")
+                )
+            elif str(doc.get("buyer_id") or "") == user_id:
+                participants.append(
+                    (points, doc.get("buyer_username"), {"id": doc.get("seller_id"), "username": doc.get("seller_username")}, "quicktrade_buy")
+                )
+        for delta, username, other, normalized_type in participants:
+            if not delta:
+                continue
+            events.append(
+                _synthetic_base(
+                    row_id=f"{doc.get('id') or index}:{user_id}",
+                    user_id=user_id,
+                    username=username,
+                    delta=delta,
+                    source="quicktrade",
+                    event_type=normalized_type,
+                    created_at=doc.get("at") or doc.get("created_at"),
+                    origin="trade_events",
+                    origin_ref=doc.get("id"),
+                    counterparty=other,
+                    context={"offer_id": doc.get("id"), "cost_cash": doc.get("money"), "legacy_type": event_type},
+                    meta={"historical_collection": "trade_events"},
+                )
+            )
+    return events
+
+
+def _dedupe_event_keys(event: dict) -> set:
+    delta = _int_or_none(event.get("delta")) or 0
+    user_id = str(event.get("user_id") or "")
+    refs = {
+        str(event.get(key))
+        for key in ("origin_ref", "transaction_id", "correlation_id")
+        if event.get(key) not in (None, "")
+    }
+    keys = {f"ref:{user_id}:{ref}:{delta}" for ref in refs}
+    if event.get("normalized_event_key"):
+        keys.add(f"normalized:{event['normalized_event_key']}")
+    for ref in refs:
+        keys.add(f"normalized:points:{user_id}:{ref}:{delta}")
+    return keys
+
+
+def _matches_audit_filters(
+    event: dict,
+    *,
+    date_from: Optional[datetime],
+    date_to: Optional[datetime],
+    source: Optional[str],
+    direction: Optional[str],
+    counterparty: Optional[str],
+    reference_text: Optional[str],
+    incomplete_only: bool,
+    suspicious_only: bool,
+) -> bool:
+    timestamp = _row_ts(event.get("created_at"))
+    if date_from and timestamp < date_from.timestamp():
+        return False
+    if date_to and timestamp > date_to.timestamp():
+        return False
+    if source and str(event.get("source") or "").lower() != source.strip().lower():
+        return False
+    delta = _int_or_none(event.get("delta")) or 0
+    if direction == "inflow" and delta <= 0:
+        return False
+    if direction == "outflow" and delta >= 0:
+        return False
+    if counterparty:
+        needle = counterparty.strip().lower()
+        party = event.get("counterparty") if isinstance(event.get("counterparty"), dict) else {}
+        party_text = " ".join(str(party.get(key) or "") for key in ("id", "username")).lower()
+        context_text = json.dumps(_json_safe(event.get("context") or {}), sort_keys=True).lower()
+        if needle not in party_text and needle not in context_text:
+            return False
+    if reference_text:
+        needle = reference_text.strip().lower()
+        searchable = {
+            "transaction_id": event.get("transaction_id"),
+            "correlation_id": event.get("correlation_id"),
+            "origin_ref": event.get("origin_ref"),
+            "normalized_event_key": event.get("normalized_event_key"),
+            "context": event.get("context"),
+            "meta": event.get("meta"),
+        }
+        if needle not in json.dumps(_json_safe(searchable), sort_keys=True).lower():
+            return False
+    flags = audit_anomaly_flags(event)
+    if incomplete_only and "incomplete_snapshot" not in flags:
+        return False
+    if suspicious_only and not flags:
+        return False
+    return True
+
+
+async def _history_find(
+    db,
+    collection: str,
+    query: dict,
+    time_field: str,
+    limit: int,
+    *,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    before: Optional[datetime] = None,
+) -> List[dict]:
+    try:
+        upper = min((value for value in (date_to, before) if value is not None), default=None)
+        if date_from or upper:
+            datetime_range: Dict[str, Any] = {}
+            string_range: Dict[str, Any] = {}
+            if date_from:
+                datetime_range["$gte"] = date_from
+                string_range["$gte"] = date_from.isoformat()
+            if upper:
+                # Include equal timestamps; the final opaque cursor comparison
+                # resolves deterministic ID ties after all sources are merged.
+                datetime_range["$lte"] = upper
+                string_range["$lte"] = upper.isoformat()
+            query = {
+                "$and": [
+                    query,
+                    {"$or": [{time_field: datetime_range}, {time_field: string_range}]},
+                ]
+            }
+        return await db[collection].find(query, {"_id": 0}).sort(time_field, -1).limit(limit).to_list(limit)
+    except Exception:
+        return []
+
+
+async def build_detailed_points_audit(
+    db,
+    user_id: str,
+    *,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    source: Optional[str] = None,
+    direction: Optional[str] = None,
+    counterparty: Optional[str] = None,
+    reference_text: Optional[str] = None,
+    incomplete_only: bool = False,
+    suspicious_only: bool = False,
+    limit: int = _DEFAULT_AUDIT_LIMIT,
+    offset: int = 0,
+    cursor: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Merge canonical events with bounded best-effort historical synthetic rows."""
+    cap = max(1, min(_MAX_AUDIT_LIMIT, int(limit or _DEFAULT_AUDIT_LIMIT)))
+    safe_offset = max(0, min(100000, int(offset or 0)))
+    cursor_value = decode_audit_cursor(cursor)
+    scan_limit = max(500, min(5000, safe_offset + cap + 1))
+    duplicate_keys, duplicate_refs = await __import__("asyncio").gather(
+        _duplicate_values(db, user_id, "normalized_event_key"),
+        _duplicate_values(db, user_id, "origin_ref"),
+    )
+    history_window = {
+        "date_from": date_from,
+        "date_to": date_to,
+        "before": cursor_value[0] if cursor_value else None,
+    }
+    canonical_query: dict = {"user_id": user_id}
+    if source:
+        canonical_query["source"] = {"$regex": f"^{re.escape(source.strip())}$", "$options": "i"}
+    canonical_coro = _history_find(
+        db, "point_audit_events", canonical_query, "created_at", scan_limit, **history_window
+    )
+    transfers_coro = _history_find(
+        db,
+        "points_transfers",
+        {"$or": [{"from_user_id": user_id}, {"to_user_id": user_id}]},
+        "created_at",
+        scan_limit,
+        **history_window,
+    )
+    ledger_coro = _history_find(
+        db, "point_ledger_events", {"user_id": user_id}, "created_at", scan_limit, **history_window
+    )
+    payments_coro = _history_find(
+        db,
+        "payment_transactions",
+        {"user_id": user_id, "payment_status": "completed"},
+        "created_at",
+        scan_limit,
+        **history_window,
+    )
+    gambling_coro = _history_find(
+        db,
+        "gambling_log",
+        {"user_id": user_id, "game_type": "mdg"},
+        "created_at",
+        scan_limit,
+        **history_window,
+    )
+    trades_coro = _history_find(
+        db,
+        "trade_events",
+        {"$or": [{"user_id": user_id}, {"seller_id": user_id}, {"buyer_id": user_id}]},
+        "at",
+        scan_limit,
+        **history_window,
+    )
+    stores_coro = _history_find(
+        db,
+        "store_points_purchase_logs",
+        {"user_id": user_id},
+        "created_at",
+        scan_limit,
+        **history_window,
+    )
+    store_cash_coro = _history_find(
+        db,
+        "store_cash_purchase_logs",
+        {"user_id": user_id, "purchase_kind": "points_cash"},
+        "created_at",
+        scan_limit,
+        **history_window,
+    )
+    canonical, transfers, ledger, payments, gambling, trades, stores, store_cash = await __import__("asyncio").gather(
+        canonical_coro,
+        transfers_coro,
+        ledger_coro,
+        payments_coro,
+        gambling_coro,
+        trades_coro,
+        stores_coro,
+        store_cash_coro,
+    )
+
+    candidates: List[dict] = list(canonical)
+    candidates.extend(synthetic_points_transfer_events(user_id, transfers))
+    candidates.extend(synthetic_point_ledger_events(user_id, ledger))
+    candidates.extend(_synthetic_payment_events(user_id, payments))
+    candidates.extend(_synthetic_mdg_events(user_id, gambling))
+    candidates.extend(_synthetic_trade_events(user_id, trades))
+    candidates.extend(_synthetic_store_events(user_id, stores))
+    candidates.extend(_synthetic_store_cash_events(user_id, store_cash))
+
+    # Canonical rows win. Historical collections are ordered above by reliability;
+    # exact user/reference/delta matches collapse without guessing fuzzy equivalence.
+    deduped: List[dict] = []
+    seen_keys: set = set()
+    seen_ids: set = set()
+    semantic_times: Dict[Tuple[str, str, int], List[float]] = {}
+    for event in candidates:
+        event_id = str(event.get("id") or "")
+        keys = _dedupe_event_keys(event)
+        semantic_key = (
+            str(event.get("source") or ""),
+            str(event.get("event_type") or ""),
+            _int_or_none(event.get("delta")) or 0,
+        )
+        event_ts = _row_ts(event.get("created_at"))
+        # Some old Quick Trade rows predate correlation IDs. For those only,
+        # collapse an otherwise identical leg logged within the same operation.
+        fuzzy_duplicate = bool(
+            event.get("_synthetic")
+            and event.get("origin") == "legacy:trade_events"
+            and any(abs(event_ts - seen_ts) <= 5.0 for seen_ts in semantic_times.get(semantic_key, []))
+        )
+        if event_id and event_id in seen_ids:
+            continue
+        if (keys and keys & seen_keys) or fuzzy_duplicate:
+            continue
+        deduped.append(event)
+        if event_id:
+            seen_ids.add(event_id)
+        seen_keys.update(keys)
+        if event_ts:
+            semantic_times.setdefault(semantic_key, []).append(event_ts)
+
+    filtered = [
+        event
+        for event in deduped
+        if _matches_audit_filters(
+            event,
+            date_from=date_from,
+            date_to=date_to,
+            source=source,
+            direction=direction,
+            counterparty=counterparty,
+            reference_text=reference_text,
+            incomplete_only=incomplete_only,
+            suspicious_only=False,
+        )
+    ]
+    filtered.sort(key=lambda event: (_row_ts(event.get("created_at")), str(event.get("id") or "")), reverse=True)
+    chain_candidates_are_contiguous = not any(
+        (source, direction, counterparty, reference_text, incomplete_only)
+    )
+    if chain_candidates_are_contiguous:
+        for index, event in enumerate(filtered[:-1]):
+            newer_before = _int_or_none(event.get("wallet_points_before"))
+            older_after = _int_or_none(filtered[index + 1].get("wallet_points_after"))
+            if newer_before is not None and older_after is not None and older_after != newer_before:
+                event["_computed_chain_gap"] = True
+    if suspicious_only:
+        filtered = [
+            event
+            for event in filtered
+            if audit_anomaly_flags(event)
+            or event.get("_computed_chain_gap")
+            or (
+                event.get("normalized_event_key")
+                and str(event.get("normalized_event_key")) in duplicate_keys
+            )
+            or (event.get("origin_ref") and str(event.get("origin_ref")) in duplicate_refs)
+        ]
+    if cursor_value:
+        cursor_time, cursor_id = cursor_value
+        cursor_ts = cursor_time.timestamp()
+        filtered = [
+            event
+            for event in filtered
+            if (_row_ts(event.get("created_at")), str(event.get("id") or "")) < (cursor_ts, cursor_id)
+        ]
+        page_start = 0
+    else:
+        page_start = safe_offset
+    page_slice = filtered[page_start : page_start + cap + 1]
+    has_more = len(page_slice) > cap
+    page_events = page_slice[:cap]
+    enrichment = await _load_audit_enrichment(db, user_id, page_events)
+
+    correlations = list(
+        dict.fromkeys(
+            str(event.get("correlation_id") or event.get("transaction_id") or "")
+            for event in page_events
+            if event.get("correlation_id") or event.get("transaction_id")
+        )
+    )
+    linked: Dict[str, List[dict]] = {}
+    if correlations:
+        try:
+            legs = await db.point_audit_events.find(
+                {
+                    "correlation_id": {"$in": correlations},
+                    "user_id": {"$ne": user_id},
+                },
+                {
+                    "_id": 0,
+                    "id": 1,
+                    "user_id": 1,
+                    "username": 1,
+                    "delta": 1,
+                    "wallet_points_before": 1,
+                    "wallet_points_after": 1,
+                    "source": 1,
+                    "event_type": 1,
+                    "correlation_id": 1,
+                    "created_at": 1,
+                },
+            ).limit(1000).to_list(1000)
+            for leg in legs:
+                linked.setdefault(str(leg.get("correlation_id") or ""), []).append(leg)
+        except Exception:
+            linked = {}
+
+    rows: List[Dict[str, Any]] = []
+    anomaly_counts: Dict[str, int] = {}
+    chain_is_contiguous = not any(
+        (source, direction, counterparty, reference_text, incomplete_only, suspicious_only)
+    )
+    for index, event in enumerate(page_events):
+        chain_gap = bool(event.get("_computed_chain_gap"))
+        if chain_is_contiguous and index + 1 < len(page_events):
+            newer = event
+            older = page_events[index + 1]
+            newer_before = _int_or_none(newer.get("wallet_points_before"))
+            older_after = _int_or_none(older.get("wallet_points_after"))
+            chain_gap = newer_before is not None and older_after is not None and older_after != newer_before
+        event_id = str(event.get("id") or "")
+        correlation = str(event.get("correlation_id") or event.get("transaction_id") or "")
+        row = _audit_row(
+            event,
+            enrichment.get(event_id, {}),
+            duplicate_key=bool(
+                event.get("normalized_event_key")
+                and str(event.get("normalized_event_key")) in duplicate_keys
+            ),
+            duplicate_reference=bool(event.get("origin_ref") and str(event.get("origin_ref")) in duplicate_refs),
+            chain_gap=chain_gap,
+            linked_legs=linked.get(correlation, []),
+        )
+        for flag in row["anomaly_flags"]:
+            anomaly_counts[flag] = anomaly_counts.get(flag, 0) + 1
+        rows.append(row)
+
+    last_event = page_events[-1] if page_events and has_more else None
+    next_cursor = (
+        encode_audit_cursor(last_event.get("created_at"), last_event.get("id")) if last_event else None
+    )
+    return {
+        "items": rows,
+        "pagination": {
+            "limit": cap,
+            "offset": None if cursor_value else safe_offset,
+            "cursor": cursor or None,
+            "next_cursor": next_cursor,
+            "has_more": has_more,
+            "returned": len(rows),
+            "order": "created_at_desc,id_desc",
+        },
+        "filters": {
+            "date_from": _iso(date_from) if date_from else None,
+            "date_to": _iso(date_to) if date_to else None,
+            "source": source or None,
+            "direction": direction or None,
+            "counterparty": counterparty or None,
+            "reference_text": reference_text or None,
+            "incomplete_only": bool(incomplete_only),
+            "suspicious_only": bool(suspicious_only),
+        },
+        "anomaly_summary": anomaly_counts,
+        "canonical_collection": "point_audit_events",
+        "historical_synthetic": {
+            "enabled": True,
+            "scan_limit_per_collection": scan_limit,
+            "collections": [
+                "points_transfers",
+                "point_ledger_events",
+                "payment_transactions",
+                "gambling_log",
+                "trade_events",
+                "store_points_purchase_logs",
+                "store_cash_purchase_logs",
+            ],
+        },
+    }
 
 
 def _parse_mdg_ref(origin_ref: str, meta: Dict[str, Any]) -> Tuple[str, str]:
