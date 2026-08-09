@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { Gift, X, Package, Swords, Car, Shield, Building2, Coins, Zap, Save, Puzzle, Leaf } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
-import api, { refreshUser } from '../../utils/api';
+import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
+import {
+  apiPostWithCivilianProtectionConfirm,
+  isCivilianProtectionConfirmCancelled,
+} from '../../utils/civilianProtectionConfirm';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
@@ -1034,7 +1038,7 @@ export default function LootBox() {
     let apiData = null;
     try {
       const [res] = await Promise.all([
-        api.post('/loot-box/open', { tier: selectedTier }),
+        apiPostWithCivilianProtectionConfirm('/loot-box/open', { tier: selectedTier }),
         new Promise((r) => setTimeout(r, 900)),
       ]);
       apiData = res.data;
@@ -1063,7 +1067,8 @@ export default function LootBox() {
     } catch (e) {
       setPhase('idle');
       setOpenAnimLevel(0);
-      const detail = e.response?.data?.detail ?? e.message ?? 'Failed to open loot box';
+      if (isCivilianProtectionConfirmCancelled(e)) return;
+      const detail = getApiErrorMessage(e) || e.message || 'Failed to open loot box';
       if (process.env.NODE_ENV === 'development') {
         console.error('[Loot box open failed]', {
           detail,

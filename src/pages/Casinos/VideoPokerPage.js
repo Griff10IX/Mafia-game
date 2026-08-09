@@ -2,6 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
+import {
+  apiPostWithCivilianProtectionConfirm,
+  isCivilianProtectionConfirmCancelled,
+} from '../../utils/civilianProtectionConfirm';
 import { removeCasinoBuyBack } from '../../utils/removeCasinoBuyBack';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
@@ -294,8 +298,13 @@ export default function VideoPoker() {
     const city = ownership?.current_city;
     if (!city || ownerLoading) return;
     setOwnerLoading(true);
-    try { await api.post('/casino/videopoker/claim', { city }); toast.success('You now own this table!'); fetchConfigAndOwnership(); refreshUser(); }
-    catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
+    try {
+      await apiPostWithCivilianProtectionConfirm('/casino/videopoker/claim', { city });
+      toast.success('You now own this table!'); fetchConfigAndOwnership(); refreshUser();
+    } catch (e) {
+      if (isCivilianProtectionConfirmCancelled(e)) return;
+      toast.error(apiErrorDetail(e, 'Failed'));
+    }
     finally { setOwnerLoading(false); }
   };
 
@@ -417,11 +426,14 @@ export default function VideoPoker() {
     if (!buyBackOffer?.offer_id || buyBackActionLoading) return;
     setBuyBackActionLoading(true);
     try {
-      await api.post('/casino/videopoker/buy-back/reject', { offer_id: buyBackOffer.offer_id });
+      await apiPostWithCivilianProtectionConfirm('/casino/videopoker/buy-back/reject', { offer_id: buyBackOffer.offer_id });
       toast.success('You kept the table!');
       setBuyBackOffer(null);
       fetchConfigAndOwnership();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    } catch (e) {
+      if (isCivilianProtectionConfirmCancelled(e)) return;
+      toast.error(e.response?.data?.detail || 'Failed');
+    }
     finally { setBuyBackActionLoading(false); }
   };
 

@@ -9,10 +9,10 @@ import uuid
 from typing import Optional
 from pydantic import BaseModel, field_validator
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 
 from utils.point_provenance import log_points_event
-from utils.civilian_protection import maybe_revoke_civilian_protection
+from utils.civilian_protection import maybe_revoke_civilian_protection, require_protection_revoke_confirm
 
 from server import (
     db,
@@ -636,8 +636,13 @@ def register(router):
         return {"message": "Accepted. You received the points and the slots were returned to the previous owner."}
 
     @router.post("/casino/slots/buy-back/reject")
-    async def casino_slots_buy_back_reject(request: SlotsBuyBackRejectRequest, current_user: dict = Depends(get_current_user_verified)):
+    async def casino_slots_buy_back_reject(
+        request: SlotsBuyBackRejectRequest,
+        req: Request,
+        current_user: dict = Depends(get_current_user_verified),
+    ):
         """Reject buy-back: keep ownership."""
+        require_protection_revoke_confirm(current_user, reason="casino_buyback_reject", request=req)
         offer = await db.slots_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0, "to_user_id": 1, "from_owner_id": 1, "points_offered": 1, "state": 1})
         if not offer or offer.get("to_user_id") != current_user.get("id") or "":
             raise HTTPException(status_code=404, detail="Offer not found")

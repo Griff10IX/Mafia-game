@@ -4,6 +4,10 @@ import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown, Star } from 'lucide-react';
 import api, { apiGetWithResumeRetries, getApiErrorMessage, isTransientResumeLoadError, shouldSuppressResumeNetworkToast } from '../../utils/api';
 import {
+  apiPostWithCivilianProtectionConfirm,
+  isCivilianProtectionConfirmCancelled,
+} from '../../utils/civilianProtectionConfirm';
+import {
   getOrCreateStaffPortalDeviceId,
   isStaffPortalTokenValid,
   setStaffPortalToken,
@@ -2281,7 +2285,7 @@ export default function Profile() {
       )
         ? { search_code_name: codeName, [codeName]: listRes.data[codeName].trim() }
         : {};
-      const res = await api.post('/attack/search', {
+      const res = await apiPostWithCivilianProtectionConfirm('/attack/search', {
         target_username: profile.username,
         note: 'profile',
         ...searchCode,
@@ -2289,6 +2293,7 @@ export default function Profile() {
       toast.success(res.data?.message || `Searching for ${profile.username}...`);
       navigate('/attack');
     } catch (e) {
+      if (isCivilianProtectionConfirmCancelled(e)) return;
       const detail = e.response?.data?.detail;
       const msg = typeof detail === 'string'
         ? detail

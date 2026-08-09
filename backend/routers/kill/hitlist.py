@@ -7,12 +7,12 @@ import uuid
 from typing import Optional
 from pydantic import BaseModel
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 
 from utils.point_provenance import log_points_event
 from utils.family_perks import family_perk_modifiers
 from utils.hitlist_resolution import resolve_user_hitlist_kill
-from utils.civilian_protection import maybe_revoke_civilian_protection
+from utils.civilian_protection import maybe_revoke_civilian_protection, require_protection_revoke_confirm
 from server import (
     db,
     get_current_user,
@@ -150,8 +150,13 @@ async def _expire_stale_hitlist_npcs(*, placer_id: Optional[str] = None) -> int:
     return removed
 
 
-async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(get_current_user)):
+async def hitlist_add(
+    request: HitlistAddRequest,
+    req: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """Place a bounty on a user or their bodyguards. Cash and/or points; optional hidden (+50% cost). Can place on yourself."""
+    require_protection_revoke_confirm(current_user, reason="hitlist_add", request=req)
     target_username = (request.target_username or "").strip()
     if not target_username:
         raise HTTPException(status_code=400, detail="Target username required")

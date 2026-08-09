@@ -6,6 +6,25 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-09 13:10 UTC[/color][/b] — [b]Kill cash gated by prestige[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Killing a player no longer pays a share of their cash on hand unless they are [b]Prestige 1 or above[/b]. Prestige 0 accounts still lose on-hand cash on death, but killers get [b]$0[/b] from that share — reduces farming never-prestiged wallets.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-09 13:05 UTC[/color][/b] — [b]Kill bullet costs raised[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Bullets needed to kill are about [b]55% higher[/b] across armour tiers (armour bases retuned).[/color]
+[*][color=#888888][b]Changed:[/b] Hard minimum of [b]8,000[/b] bullets to kill — naked / low-armour accounts can no longer drop to a few thousand against strong attackers.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-09 02:10 UTC[/color][/b] — [b]Old School Mafia chrome polish[/b][/size]
 [quote]
 [list]

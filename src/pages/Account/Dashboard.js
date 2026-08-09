@@ -19,6 +19,11 @@ import {
   Crosshair,
 } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
+import {
+  apiPostWithCivilianProtectionConfirm,
+  isCivilianProtectionConfirmCancelled,
+  CIVILIAN_PROTECTION_CONFIRM_MESSAGE,
+} from '../../utils/civilianProtectionConfirm';
 import { useAuthUser } from '../../context/AuthContext';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import {
@@ -303,14 +308,15 @@ export default function Dashboard() {
   }, [civilianProtection, cpTick]);
 
   const handleTerminateProtection = useCallback(async () => {
-    if (!window.confirm('Terminate new account protection? Other players will be able to attack you.')) return;
     setCpTerminating(true);
     try {
-      const r = await api.post('/account/civilian-protection/terminate');
+      const r = await apiPostWithCivilianProtectionConfirm('/account/civilian-protection/terminate');
       setCivilianProtection(r.data);
       toast.success('Protection terminated');
     } catch (e) {
-      toast.error(getApiErrorMessage(e) || 'Failed to terminate protection');
+      if (!isCivilianProtectionConfirmCancelled(e)) {
+        toast.error(getApiErrorMessage(e) || 'Failed to terminate protection');
+      }
     } finally {
       setCpTerminating(false);
     }
@@ -504,7 +510,7 @@ export default function Dashboard() {
             <CollapsibleContent>
               <div className={`${dash.panelBody} space-y-2`}>
                 <p className="text-[10px] font-heading text-mutedForeground leading-relaxed">
-                  For your first {formatProtectionDurationLabel(civilianProtection.protection_hours)}, other players can&apos;t attack you in normal PvP. When the countdown hits zero, protection ends on its own — or it ends immediately if you do any of the following.
+                  For your first {formatProtectionDurationLabel(civilianProtection.protection_hours)}, other players can&apos;t attack you in normal PvP. When the countdown hits zero, protection ends on its own — or it ends immediately if you do any of the following. You&apos;ll be asked to confirm first so you know protection will be removed.
                 </p>
                 <div>
                   <p className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em] mb-1">These actions remove protection</p>
@@ -514,6 +520,9 @@ export default function Dashboard() {
                     ))}
                   </ul>
                 </div>
+                <p className="text-[9px] font-heading text-mutedForeground leading-relaxed">
+                  {CIVILIAN_PROTECTION_CONFIRM_MESSAGE}
+                </p>
                 <button
                   type="button"
                   onClick={handleTerminateProtection}

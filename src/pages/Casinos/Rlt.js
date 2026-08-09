@@ -2,6 +2,10 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
+import {
+  apiPostWithCivilianProtectionConfirm,
+  isCivilianProtectionConfirmCancelled,
+} from '../../utils/civilianProtectionConfirm';
 import { removeCasinoBuyBack } from '../../utils/removeCasinoBuyBack';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
@@ -693,11 +697,14 @@ export default function Rlt() {
     if (!ownership?.current_city) return;
     setOwnerLoading(true);
     try {
-      await api.post('/casino/roulette/claim', { city: ownership.current_city });
+      await apiPostWithCivilianProtectionConfirm('/casino/roulette/claim', { city: ownership.current_city });
       toast.success('You own this table!');
       fetchOwnership();
       refreshUser();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    } catch (e) {
+      if (isCivilianProtectionConfirmCancelled(e)) return;
+      toast.error(e.response?.data?.detail || 'Failed');
+    }
     finally { setOwnerLoading(false); }
   };
 
@@ -781,11 +788,14 @@ export default function Rlt() {
     if (!buyBackOffer?.offer_id || buyBackActionLoading) return;
     setBuyBackActionLoading(true);
     try {
-      await api.post('/casino/roulette/buy-back/reject', { offer_id: buyBackOffer.offer_id });
+      await apiPostWithCivilianProtectionConfirm('/casino/roulette/buy-back/reject', { offer_id: buyBackOffer.offer_id });
       toast.success('You kept the table!');
       setBuyBackOffer(null);
       fetchOwnership();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    } catch (e) {
+      if (isCivilianProtectionConfirmCancelled(e)) return;
+      toast.error(e.response?.data?.detail || 'Failed');
+    }
     finally { setBuyBackActionLoading(false); }
   };
 

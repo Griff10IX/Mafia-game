@@ -550,6 +550,7 @@ export function getApiErrorMessage(error) {
   const detail = data?.detail;
   if (typeof detail === 'string') return detail;
   if (Array.isArray(detail) && detail.length) return detail.map((x) => x.msg || x.loc?.join('.')).join('; ') || 'Validation error';
+  if (detail && typeof detail === 'object' && typeof detail.message === 'string') return detail.message;
   if (detail && typeof detail === 'object' && typeof detail.msg === 'string') return detail.msg;
   if (typeof data?.message === 'string') return data.message;
   if (error.response?.status === 502 || error.response?.status === 503 || error.response?.status === 504) return SERVER_UNAVAILABLE_MSG;

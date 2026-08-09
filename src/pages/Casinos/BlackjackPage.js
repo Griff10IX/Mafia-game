@@ -3,6 +3,10 @@ import { Link } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
+import {
+  apiPostWithCivilianProtectionConfirm,
+  isCivilianProtectionConfirmCancelled,
+} from '../../utils/civilianProtectionConfirm';
 import { removeCasinoBuyBack } from '../../utils/removeCasinoBuyBack';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
@@ -237,10 +241,13 @@ export default function Blackjack() {
     if (!buyBackOffer?.offer_id || buyBackActionLoading) return;
     setBuyBackActionLoading(true);
     try {
-      await api.post('/casino/blackjack/buy-back/reject', { offer_id: buyBackOffer.offer_id });
+      await apiPostWithCivilianProtectionConfirm('/casino/blackjack/buy-back/reject', { offer_id: buyBackOffer.offer_id });
       toast.success('You kept the casino!');
       setBuyBackOffer(null); fetchConfigAndOwnership();
-    } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
+    } catch (e) {
+      if (isCivilianProtectionConfirmCancelled(e)) return;
+      toast.error(apiErrorDetail(e, 'Failed'));
+    }
     finally { setBuyBackActionLoading(false); }
   };
 
@@ -288,8 +295,13 @@ export default function Blackjack() {
     const city = ownership?.current_city;
     if (!city || ownerLoading) return;
     setOwnerLoading(true);
-    try { await api.post('/casino/blackjack/claim', { city }); toast.success('You now own this table!'); fetchConfigAndOwnership(); refreshUser(); }
-    catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
+    try {
+      await apiPostWithCivilianProtectionConfirm('/casino/blackjack/claim', { city });
+      toast.success('You now own this table!'); fetchConfigAndOwnership(); refreshUser();
+    } catch (e) {
+      if (isCivilianProtectionConfirmCancelled(e)) return;
+      toast.error(apiErrorDetail(e, 'Failed'));
+    }
     finally { setOwnerLoading(false); }
   };
 

@@ -19,7 +19,7 @@ Use this when updating [FORUM_FAQ.md](FORUM_FAQ.md) so numbers stay aligned with
 | Car travel times | `backend/server.py` → `TRAVEL_TIMES`; car catalog `CARS` |
 | Melt-for-bullets yield | `backend/server.py` → `MELT_VALUE_PER_BULLET`, `CARS[].value`; `backend/routers/cars/gta.py` → `_melt_cars_impl` |
 | Interest bank terms & % | `backend/server.py` → `BANK_INTEREST_OPTIONS` |
-| Kill cash % | `backend/server.py` → `KILL_CASH_PERCENT` (events: `kill_cash` in `GAME_EVENTS`) |
+| Kill cash % | `backend/server.py` → `KILL_CASH_PERCENT`, `KILL_CASH_MIN_PRESTIGE_LEVEL` (events: `kill_cash` in `GAME_EVENTS`; gated in `attack.py`) |
 | Wealth rank thresholds & FAQ row colours | `backend/server.py` → `WEALTH_RANKS` (`min_money` + `color`); FAQ list uses matching `[color=#…]` per row |
 | Garage batch limits | `backend/server.py` → `DEFAULT_GARAGE_BATCH_LIMIT`, `GARAGE_BATCH_UPGRADE_*` |
 | Armour tier scaling (bullets formula) | `backend/server.py` → `ARMOUR_BASE_BULLETS`; `backend/routers/kill/attack.py` → `_bullets_to_kill` |

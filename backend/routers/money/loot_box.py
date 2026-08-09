@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 
-from fastapi import Depends, HTTPException, Body, Query
+from fastapi import Depends, HTTPException, Body, Query, Request
 from pydantic import BaseModel
 
 import os
@@ -28,7 +28,7 @@ from server import (
 from routers.kill.armoury import _invalidate_weapons_cache, TOKEN_CONFIG, TOKEN_TYPES, STORE_COUNT_ONLY_TOKENS
 from routers.game.store import STORE_COUNT_ONLY_TOKEN_FIELDS, TOKEN_STORE_UNIT_PRICE_POINTS
 from utils.point_provenance import log_points_event
-from utils.civilian_protection import maybe_revoke_civilian_protection
+from utils.civilian_protection import maybe_revoke_civilian_protection, require_protection_revoke_confirm
 from utils.speakeasy_rewards import (
     SPEAKEASY_DAILY_BULLETS,
     SPEAKEASY_DAILY_CASH,
@@ -904,9 +904,12 @@ def _loot_token_amount(box_quality: str) -> int:
 
 
 async def open_loot_box(
+    req: Request,
     body: LootBoxOpenRequest = Body(default=LootBoxOpenRequest()),
     current_user: dict = Depends(get_current_user),
 ):
+    # Exclusive car drops end new-account protection — confirm before opening.
+    require_protection_revoke_confirm(current_user, reason="exclusive_car", request=req)
     paid_tier = _normalize_paid_tier(body.tier if body else None)
     if not paid_tier:
         raise HTTPException(

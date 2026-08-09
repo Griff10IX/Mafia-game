@@ -23,7 +23,7 @@ _my_cache_ttl_sec = 10
 _my_cache_max_entries = 2000
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from fastapi import Depends, HTTPException, Body, Header, Query
+from fastapi import Depends, HTTPException, Body, Header, Query, Request
 from pydantic import BaseModel
 from bson.objectid import ObjectId
 from pymongo import ReturnDocument
@@ -56,7 +56,7 @@ from utils.family_perks import (
     FAMILY_PERK_CREW_OC_AUTO_COMMIT_DAYS,
     family_perk_modifiers,
 )
-from utils.civilian_protection import maybe_revoke_civilian_protection
+from utils.civilian_protection import maybe_revoke_civilian_protection, require_protection_revoke_confirm
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_FAMILIES
 
 from server import (
@@ -2526,7 +2526,12 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
     return out
 
 
-async def families_create(request: FamilyCreateRequest, current_user: dict = Depends(get_current_user)):
+async def families_create(
+    request: FamilyCreateRequest,
+    req: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    require_protection_revoke_confirm(current_user, reason="crew_create", request=req)
     if await resolve_family_id(current_user.get("id")):
         raise HTTPException(status_code=400, detail="Already in a family")
     is_admin = _is_admin(current_user)
@@ -2711,7 +2716,12 @@ async def _resolve_family_id(identifier: str):
     return None, None
 
 
-async def families_join(request: FamilyJoinRequest, current_user: dict = Depends(get_current_user)):
+async def families_join(
+    request: FamilyJoinRequest,
+    req: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    require_protection_revoke_confirm(current_user, reason="crew_join", request=req)
     if await resolve_family_id(current_user.get("id")):
         raise HTTPException(status_code=400, detail="Already in a family")
     fam, family_id = await _resolve_family_id(request.family_id)
@@ -2728,8 +2738,13 @@ async def families_join(request: FamilyJoinRequest, current_user: dict = Depends
     return {"message": "Joined family"}
 
 
-async def families_apply(request: FamilyApplyRequest, current_user: dict = Depends(get_current_user)):
+async def families_apply(
+    request: FamilyApplyRequest,
+    req: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """Apply to join a family when join_mode is approval. May auto-accept if family settings allow."""
+    require_protection_revoke_confirm(current_user, reason="crew_apply", request=req)
     if await resolve_family_id(current_user.get("id")):
         raise HTTPException(status_code=400, detail="Already in a family")
     fam, family_id = await _resolve_family_id(request.family_id)

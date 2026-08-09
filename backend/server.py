@@ -271,12 +271,12 @@ BANK_INTEREST_OPTIONS = [
 DEFAULT_HEALTH = 100
 # Passive regen: linear 0→100% over this many seconds of real time (lazy: applied on auth + before PvP damage calc)
 HEALTH_REGEN_FULL_SECONDS = 7200  # 2 hours
-MIN_BULLETS_TO_KILL = 5000
-MAX_BULLETS_TO_KILL = 100000
-# Base bullets before rank/weapon/gap factors; high tiers tuned down (was up to 120k @ 7).
+MIN_BULLETS_TO_KILL = 8000
+MAX_BULLETS_TO_KILL = 230000
+# Base bullets before rank/weapon/gap factors (~55% above prior table; hard floor 8k in attack._apply_bullet_caps).
 MAX_ARMOUR_LEVEL = 7
 LOOT_EXCLUSIVE_ARMOUR_LEVEL = 7
-ARMOUR_BASE_BULLETS = {0: 5000, 1: 14000, 2: 25000, 3: 36000, 4: 47000, 5: 55000, 6: 60000, 7: 66000}
+ARMOUR_BASE_BULLETS = {0: 8000, 1: 22000, 2: 39000, 3: 56000, 4: 73000, 5: 85000, 6: 93000, 7: 102000}
 # Level 6: Points Store only (not armoury factory stock). Requires owning level 5 first.
 ARMOUR_POINT_STORE_TIER = {
     "level": 6,
@@ -294,7 +294,9 @@ WEAPON_POINT_STORE_TIER = {
     "rank_required": 11,
     "cost_points": 1000,
 }
-KILL_CASH_PERCENT = 0.75  # killer gets 75% of victim's cash
+KILL_CASH_PERCENT = 0.75  # killer gets 75% of victim's on-hand cash when eligible
+# On-hand kill cash only if victim prestige_level is Prestige 1 or above.
+KILL_CASH_MIN_PRESTIGE_LEVEL = 1
 # Dead > Alive retrieve: cash uses DEAD_ALIVE_PERCENT (state head tax on money); points use DEAD_ALIVE_POINTS_PERCENT.
 DEAD_ALIVE_PERCENT = 0.9995  # cash: 0.05% tax to state head — recipient gets 99.95% of money_at_death
 DEAD_ALIVE_POINTS_PERCENT = 1.0  # points: 100% of points_at_death to recipient (no points tax)

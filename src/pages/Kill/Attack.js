@@ -2,6 +2,10 @@ import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText, Users, Star } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api, { refreshUser, getApiErrorMessage, apiRequestWith429Retry } from '../../utils/api';
+import {
+  apiPostWithCivilianProtectionConfirm,
+  isCivilianProtectionConfirmCancelled,
+} from '../../utils/civilianProtectionConfirm';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -69,7 +73,7 @@ function formatInflationResetReady(availableAtIso) {
 // Shown in toast when caught during booze run (prohibition bust)
 const BOOZE_CAUGHT_IMAGE = 'https://historicipswich.net/wp-content/uploads/2021/12/0a79f-boston-rum-prohibition1.jpg';
 const MOLOTOV_BULLET_EQUIV = 250;
-const MAX_BULLETS_REQUIRED = 150000;
+const MAX_BULLETS_REQUIRED = 230000;
 const MOBILE_SEARCH_RENDER_STEP = 40;
 
 function clampBulletsRequired(value) {
@@ -1744,11 +1748,13 @@ export default function Attack() {
               const searchBody = await withSearchCode(
                 await withAttackCaptcha('search', { target_username: bg.search_username, note }),
               );
-              const res = await api.post('/attack/search', searchBody);
+              const res = await apiPostWithCivilianProtectionConfirm('/attack/search', searchBody);
               toast.success(res.data?.message || 'Search started', { duration: 10000 });
               await refreshAttacks({ force: true });
             } catch (err) {
-              if (isAttackSearchCodeError(err)) {
+              if (isCivilianProtectionConfirmCancelled(err)) {
+                /* user declined */
+              } else if (isAttackSearchCodeError(err)) {
                 await refreshAttacks({ force: true });
                 toast.error('Search code refreshed. Tap Search again.', { duration: 10000 });
               } else {
@@ -1797,7 +1803,7 @@ export default function Attack() {
         const searchBody = await withSearchCode(
           await withAttackCaptcha('search', { target_username: trimmed, note: noteFromBoard }),
         );
-        const response = await api.post('/attack/search', searchBody, { signal: ac.signal });
+        const response = await apiPostWithCivilianProtectionConfirm('/attack/search', searchBody, { signal: ac.signal });
         if (cancelled) return;
         stripBoardQuery();
         toast.success(response.data?.message || 'Search started');
@@ -1806,6 +1812,10 @@ export default function Attack() {
         window.dispatchEvent(new CustomEvent('app:refresh-attacks'));
       } catch (error) {
         if (cancelled || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') return;
+        if (isCivilianProtectionConfirmCancelled(error)) {
+          stripBoardQuery();
+          return;
+        }
         stripBoardQuery();
         if (isAttackSearchCodeError(error)) {
           window.dispatchEvent(new CustomEvent('app:refresh-attacks'));
@@ -2000,11 +2010,13 @@ export default function Attack() {
               note: payload.note || '',
             }),
           );
-          const response = await api.post('/attack/search', searchBody);
+          const response = await apiPostWithCivilianProtectionConfirm('/attack/search', searchBody);
           toast.success(response.data?.message || 'Search started');
           await refreshAttacks({ force: true });
         } catch (error) {
-          if (isAttackSearchCodeError(error)) {
+          if (isCivilianProtectionConfirmCancelled(error)) {
+            /* user declined */
+          } else if (isAttackSearchCodeError(error)) {
             await refreshAttacks({ force: true });
             toast.error('Search code refreshed. Try Start Search again.');
           } else {
@@ -2110,13 +2122,15 @@ export default function Attack() {
       const searchBody = await withSearchCode(
         await withAttackCaptcha('search', { target_username: target, note: noteVal }),
       );
-      const response = await api.post('/attack/search', searchBody);
+      const response = await apiPostWithCivilianProtectionConfirm('/attack/search', searchBody);
       toast.success(response.data.message);
       setTargetUsername('');
       setNote('');
       await refreshAttacks({ force: true });
     } catch (error) {
-      if (isAttackSearchCodeError(error)) {
+      if (isCivilianProtectionConfirmCancelled(error)) {
+        /* user declined */
+      } else if (isAttackSearchCodeError(error)) {
         await refreshAttacks({ force: true });
         toast.error('Search code refreshed. Click Start Search again.');
       } else {

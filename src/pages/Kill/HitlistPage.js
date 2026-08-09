@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { Target, Eye, ShieldOff, DollarSign, Coins, User, Users, UserPlus, Clock, Crosshair } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
+import {
+  apiPostWithCivilianProtectionConfirm,
+  isCivilianProtectionConfirmCancelled,
+} from '../../utils/civilianProtectionConfirm';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
@@ -836,7 +840,7 @@ export default function HitlistPage() {
     }
     setSubmitting(true);
     try {
-      await api.post('/hitlist/add', {
+      await apiPostWithCivilianProtectionConfirm('/hitlist/add', {
         target_username: targetUsername.trim(),
         target_type: targetType,
         reward_cash: cashAmt,
@@ -851,7 +855,9 @@ export default function HitlistPage() {
       refreshUser();
       fetchData();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to issue contract');
+      if (!isCivilianProtectionConfirmCancelled(err)) {
+        toast.error(getApiErrorMessage(err) || 'Failed to issue contract');
+      }
     } finally {
       setSubmitting(false);
     }

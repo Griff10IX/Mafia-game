@@ -9,7 +9,7 @@ from typing import Optional
 from pydantic import BaseModel, field_validator
 from bson.objectid import ObjectId
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 
 from utils.claim_costs import load_claim_costs
 from utils.point_provenance import log_points_event
@@ -17,6 +17,7 @@ from utils.civilian_protection import (
     cleanup_expired_buyback_offers_for_user,
     maybe_revoke_civilian_protection,
     raise_if_civilian_protected_asset_recipient,
+    require_protection_revoke_confirm,
 )
 
 from server import (
@@ -549,7 +550,12 @@ def register(router):
         return out
 
     @router.post("/casino/blackjack/claim")
-    async def casino_blackjack_claim(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user_verified)):
+    async def casino_blackjack_claim(
+        request: RouletteClaimRequest,
+        req: Request,
+        current_user: dict = Depends(get_current_user_verified),
+    ):
+        require_protection_revoke_confirm(current_user, reason="casino_claim", request=req)
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
         prestige_level = int(current_user.get("prestige_level") or 0)
         if rank_id < CAPO_RANK_ID and prestige_level < 1:
@@ -718,7 +724,12 @@ def register(router):
         return {"message": "Accepted. You received the points and the table was returned to the previous owner."}
 
     @router.post("/casino/blackjack/buy-back/reject")
-    async def casino_blackjack_buy_back_reject(request: BlackjackBuyBackRejectRequest, current_user: dict = Depends(get_current_user_verified)):
+    async def casino_blackjack_buy_back_reject(
+        request: BlackjackBuyBackRejectRequest,
+        req: Request,
+        current_user: dict = Depends(get_current_user_verified),
+    ):
+        require_protection_revoke_confirm(current_user, reason="casino_buyback_reject", request=req)
         offer = await db.blackjack_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0, "to_user_id": 1, "from_owner_id": 1, "points_offered": 1, "city": 1})
         if not offer or offer.get("to_user_id") != current_user.get("id") or "":
             raise HTTPException(status_code=404, detail="Offer not found")

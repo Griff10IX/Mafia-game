@@ -38,7 +38,7 @@ Combat is the heart of the game. Attack other players to steal their cash and ea
 
 [b]What Happens When You Kill Someone:[/b]
 [list]
-[*][color=#2ECC71]You gain 25% of their cash on hand (base; some game events can change kill cash rewards)[/color]
+[*][color=#2ECC71]You gain [b]75%[/b] of their cash on hand [b]only if they are Prestige 1 or above[/b]. Prestige 0 victims drop [b]no[/b] on-hand cash to the killer (their cash is still lost). Some game events can change kill cash rewards when eligible.[/color]
 [*][color=#2ECC71]You gain rank points (RP) based on their level[/color]
 [*][color=#2ECC71]You gain respect points[/color]
 [*][color=#2ECC71]Kill is logged and counts toward stats/objectives[/color]

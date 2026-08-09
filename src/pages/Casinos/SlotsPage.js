@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { MapPin, User, Clock, Coins, LogIn } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
+import {
+  apiPostWithCivilianProtectionConfirm,
+  isCivilianProtectionConfirmCancelled,
+} from '../../utils/civilianProtectionConfirm';
 import { removeCasinoBuyBack } from '../../utils/removeCasinoBuyBack';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -518,10 +522,13 @@ export default function SlotsPage() {
     if (!buyBackOffer?.offer_id) return;
     setOwnerActionLoading(true);
     try {
-      await api.post('/casino/slots/buy-back/reject', { offer_id: buyBackOffer.offer_id });
+      await apiPostWithCivilianProtectionConfirm('/casino/slots/buy-back/reject', { offer_id: buyBackOffer.offer_id });
       toast.success('Rejected. You keep the slots.');
       setBuyBackOffer(null);
       fetchOwnership();
+    } catch (e) {
+      if (isCivilianProtectionConfirmCancelled(e)) return;
+      toast.error(getApiErrorMessage(e) || 'Failed');
     } finally {
       setOwnerActionLoading(false);
     }

@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Users, Building2, DollarSign, TrendingUp, TrendingDown, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, ChevronDown, MessageSquare, UserPlus, Lock, Unlock, ArrowUpCircle, Flame, MapPin, Plane, Sparkles, Search, ListChecks, Gift } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
+import {
+  apiPostWithCivilianProtectionConfirm,
+  isCivilianProtectionConfirmCancelled,
+} from '../../utils/civilianProtectionConfirm';
 import { toast } from 'sonner';
 import { getRacketAccent } from '../../constants';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -3828,7 +3832,7 @@ export default function FamilyPage() {
     if (createEmblemPreset) payload.emblem_preset_id = createEmblemPreset;
     else if (createEmblemDataUrl) payload.emblem_custom_data = createEmblemDataUrl;
     try {
-      await api.post('/families', payload);
+      await apiPostWithCivilianProtectionConfirm('/families', payload);
       toast.success('Family created!');
       setCreateName('');
       setCreateTag('');
@@ -3837,7 +3841,7 @@ export default function FamilyPage() {
       refreshUser();
       fetchData();
     } catch (err) {
-      toast.error(apiDetail(err));
+      if (!isCivilianProtectionConfirmCancelled(err)) toast.error(apiDetail(err));
     }
   };
   const handleJoin = async (e) => {
@@ -3847,16 +3851,17 @@ export default function FamilyPage() {
     const isApproval = fam?.join_mode === 'approval';
     try {
       if (isApproval) {
-        const res = await api.post('/families/apply', { family_id: joinId });
+        const res = await apiPostWithCivilianProtectionConfirm('/families/apply', { family_id: joinId });
         toast.success(res.data?.auto_accepted ? 'Joined!' : 'Application submitted.');
       } else {
-        await api.post('/families/join', { family_id: joinId });
+        await apiPostWithCivilianProtectionConfirm('/families/join', { family_id: joinId });
         toast.success('Joined!');
       }
       setJoinId('');
       refreshUser();
       fetchData();
     } catch (e) {
+      if (isCivilianProtectionConfirmCancelled(e)) return;
       const d = apiDetail(e);
       toast.error(
         d === 'family_war_recruitment_closed'

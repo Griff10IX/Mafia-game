@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from fastapi import HTTPException
+from starlette.requests import Request
 
 PROTECTION_HOURS = 14 * 24
 
@@ -19,6 +20,26 @@ CIVILIAN_PROTECTION_HITMAN_BLOCKED_DETAIL = (
 CIVILIAN_PROTECTION_ASSET_TRANSFER_BLOCKED_DETAIL = (
     "That player still has new-account protection and can't receive casinos, armoury, or airports yet."
 )
+
+CIVILIAN_PROTECTION_CONFIRM_CODE = "civilian_protection_confirm"
+CIVILIAN_PROTECTION_CONFIRM_HEADER = "X-Confirm-Civilian-Protection-Revoke"
+CIVILIAN_PROTECTION_CONFIRM_MESSAGE = (
+    "This will permanently remove your new account protection. "
+    "Other players will be able to attack you in normal PvP. Continue?"
+)
+
+# Intentional player actions that strip protection and require an explicit confirm header.
+CONFIRM_REQUIRED_REASONS = frozenset({
+    "manual",
+    "search_player",
+    "hitlist_add",
+    "crew_apply",
+    "crew_join",
+    "crew_create",
+    "exclusive_car",
+    "casino_claim",
+    "casino_buyback_reject",
+})
 
 RULES_BULLETS: List[str] = [
     "Take a casino from someone and reject their buyback, or ignore buyback until it expires.",
@@ -100,6 +121,65 @@ def is_civilian_protected(user: Optional[dict]) -> bool:
         return False
     now = datetime.now(timezone.utc)
     return now < end
+
+
+def parse_civilian_protection_revoke_confirmed(
+    value: Optional[Union[str, bool, int]] = None,
+    *,
+    request: Optional[Request] = None,
+) -> bool:
+    """True if client sent X-Confirm-Civilian-Protection-Revoke (or equivalent)."""
+    raw = value
+    if raw is None and request is not None:
+        raw = request.headers.get(CIVILIAN_PROTECTION_CONFIRM_HEADER)
+        if raw is None:
+            # Starlette lower-cases header names in .headers mapping
+            raw = request.headers.get(CIVILIAN_PROTECTION_CONFIRM_HEADER.lower())
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return False
+    s = str(raw).strip().lower()
+    return s in ("1", "true", "yes", "on")
+
+
+def raise_if_protection_revoke_needs_confirm(
+    user: Optional[dict],
+    *,
+    confirmed: bool,
+    reason: str,
+) -> None:
+    """
+    Block intentional revoke-causing actions until the client confirms.
+    Raises HTTP 409 with structured detail when the user is still protected and confirmed is False.
+    """
+    if not is_civilian_protected(user):
+        return
+    r = str(reason or "").strip()
+    if r not in CONFIRM_REQUIRED_REASONS:
+        return
+    if confirmed:
+        return
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "code": CIVILIAN_PROTECTION_CONFIRM_CODE,
+            "message": CIVILIAN_PROTECTION_CONFIRM_MESSAGE,
+            "reason": r,
+        },
+    )
+
+
+def require_protection_revoke_confirm(
+    user: Optional[dict],
+    *,
+    reason: str,
+    request: Optional[Request] = None,
+    confirmed: Optional[bool] = None,
+) -> None:
+    """Convenience: read confirm from Request header unless confirmed is passed explicitly."""
+    ok = bool(confirmed) if confirmed is not None else parse_civilian_protection_revoke_confirmed(request=request)
+    raise_if_protection_revoke_needs_confirm(user, confirmed=ok, reason=reason)
 
 
 async def revoke_civilian_protection(db, user_id: str, reason: str) -> bool:

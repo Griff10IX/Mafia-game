@@ -2,6 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
+import {
+  apiPostWithCivilianProtectionConfirm,
+  isCivilianProtectionConfirmCancelled,
+} from '../../utils/civilianProtectionConfirm';
 import { removeCasinoBuyBack } from '../../utils/removeCasinoBuyBack';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
@@ -390,11 +394,14 @@ export default function Dice() {
     if (!city || ownerLoading) return;
     setOwnerLoading(true);
     try {
-      const res = await api.post('/casino/dice/claim', { city });
+      const res = await apiPostWithCivilianProtectionConfirm('/casino/dice/claim', { city });
       toast.success(res.data?.message || 'You own this table!');
       fetchConfigAndOwnership();
       refreshUser();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    } catch (e) {
+      if (isCivilianProtectionConfirmCancelled(e)) return;
+      toast.error(e.response?.data?.detail || 'Failed');
+    }
     finally { setOwnerLoading(false); }
   };
 
@@ -511,11 +518,14 @@ export default function Dice() {
     if (!buyBackOffer?.offer_id || buyBackActionLoading) return;
     setBuyBackActionLoading(true);
     try {
-      await api.post('/casino/dice/buy-back/reject', { offer_id: buyBackOffer.offer_id });
+      await apiPostWithCivilianProtectionConfirm('/casino/dice/buy-back/reject', { offer_id: buyBackOffer.offer_id });
       toast.success('You kept the casino!');
       setBuyBackOffer(null);
       fetchConfigAndOwnership();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    } catch (e) {
+      if (isCivilianProtectionConfirmCancelled(e)) return;
+      toast.error(e.response?.data?.detail || 'Failed');
+    }
     finally { setBuyBackActionLoading(false); }
   };
 

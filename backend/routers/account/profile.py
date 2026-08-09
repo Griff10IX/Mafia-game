@@ -62,11 +62,15 @@ def _theme_response_payload(user: Dict[str, Any]) -> Dict[str, Any]:
 
 
 import httpx
-from fastapi import Body, Depends, File, HTTPException, Query, UploadFile
+from fastapi import Body, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 
 from utils.profile_cosmetics import profile_cosmetic_public_fields
-from utils.civilian_protection import civilian_protection_status_payload, maybe_revoke_civilian_protection
+from utils.civilian_protection import (
+    civilian_protection_status_payload,
+    maybe_revoke_civilian_protection,
+    require_protection_revoke_confirm,
+)
 from utils.hitlist_resolution import resolve_user_hitlist_kill
 from utils.bbcode_normalize import normalize_bbcode_media_typos
 from utils.imgbb_resolve import rewrite_imgbb_urls_in_banner_text
@@ -2313,7 +2317,11 @@ def register(router):
         return civilian_protection_status_payload(merged)
 
     @router.post("/account/civilian-protection/terminate")
-    async def terminate_civilian_protection(current_user: dict = Depends(get_current_user_verified)):
+    async def terminate_civilian_protection(
+        req: Request,
+        current_user: dict = Depends(get_current_user_verified),
+    ):
+        require_protection_revoke_confirm(current_user, reason="manual", request=req)
         await maybe_revoke_civilian_protection(db, current_user["id"], "manual")
         u = await db.users.find_one(
             {"id": current_user["id"]},

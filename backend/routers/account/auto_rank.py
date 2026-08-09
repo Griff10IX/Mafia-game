@@ -1421,113 +1421,119 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     use_skips = user.get("auto_rank_use_skip_tokens") is True
 
     # --- GTA: up to AUTO_RANK_SKIP_BATCH skipped attempts per cycle when skips on. ---
+    # Skip while new-account protection is active (exclusive drops require an explicit confirm).
     if _auto_rank_task_enabled(user, "auto_rank_gta"):
-        gta_success_count = 0
-        gta_fail_count = 0
-        gta_names: list[str] = []
-        skip_gta_used = 0
-        _first_gta_in_cycle = True
-        while True:
-            user = await db.users.find_one({"id": user_id}, {"_id": 0})
-            if not user:
-                break
-            if user.get("in_jail"):
-                if user.get("auto_rank_use_skip_tokens") is True:
-                    freed, user = await _auto_rank_try_jail_bailout(db, user_id, user, lines)
-                    if not freed:
+        from utils.civilian_protection import is_civilian_protected
+
+        if is_civilian_protected(user):
+            lines.append("GTA skipped: new account protection is still active.")
+        else:
+            gta_success_count = 0
+            gta_fail_count = 0
+            gta_names: list[str] = []
+            skip_gta_used = 0
+            _first_gta_in_cycle = True
+            while True:
+                user = await db.users.find_one({"id": user_id}, {"_id": 0})
+                if not user:
+                    break
+                if user.get("in_jail"):
+                    if user.get("auto_rank_use_skip_tokens") is True:
+                        freed, user = await _auto_rank_try_jail_bailout(db, user_id, user, lines)
+                        if not freed:
+                            break
+                    else:
                         break
-                else:
+                use_skips = user.get("auto_rank_use_skip_tokens") is True
+                wall_now = datetime.now(timezone.utc)
+                cooldown_doc = await db.gta_cooldowns.find_one({"user_id": user_id}, {"_id": 0, "cooldown_until": 1})
+                until = _parse_iso(cooldown_doc.get("cooldown_until")) if cooldown_doc else None
+                on_cooldown = bool(until and until > wall_now)
+                will_use_skip = False
+                if on_cooldown:
+                    if (
+                        not use_skips
+                        or skip_gta_used >= AUTO_RANK_SKIP_BATCH
+                        or not _can_use_skip(user, "gta")
+                    ):
+                        break
+                    ok, user = await _ensure_skip_credit(db, user_id, user, "gta")
+                    if not ok:
+                        break
+                    will_use_skip = True
+                elif not _first_gta_in_cycle and not use_skips:
                     break
-            use_skips = user.get("auto_rank_use_skip_tokens") is True
-            wall_now = datetime.now(timezone.utc)
-            cooldown_doc = await db.gta_cooldowns.find_one({"user_id": user_id}, {"_id": 0, "cooldown_until": 1})
-            until = _parse_iso(cooldown_doc.get("cooldown_until")) if cooldown_doc else None
-            on_cooldown = bool(until and until > wall_now)
-            will_use_skip = False
-            if on_cooldown:
-                if (
-                    not use_skips
-                    or skip_gta_used >= AUTO_RANK_SKIP_BATCH
-                    or not _can_use_skip(user, "gta")
-                ):
+                rank_id, _ = get_rank_info(int(user.get("rank_points") or 0), user_prestige_rank_mult(user))
+                unlocked = [opt for opt in GTA_OPTIONS if rank_id >= opt["min_rank"]]
+                allowed_gta_ids = user.get("auto_rank_gta_option_ids")
+                if isinstance(allowed_gta_ids, list) and len(allowed_gta_ids) > 0:
+                    allowed_set = set(allowed_gta_ids)
+                    unlocked = [opt for opt in unlocked if opt.get("id") in allowed_set]
+                if not unlocked:
                     break
-                ok, user = await _ensure_skip_credit(db, user_id, user, "gta")
-                if not ok:
-                    break
-                will_use_skip = True
-            elif not _first_gta_in_cycle and not use_skips:
-                break
-            rank_id, _ = get_rank_info(int(user.get("rank_points") or 0), user_prestige_rank_mult(user))
-            unlocked = [opt for opt in GTA_OPTIONS if rank_id >= opt["min_rank"]]
-            allowed_gta_ids = user.get("auto_rank_gta_option_ids")
-            if isinstance(allowed_gta_ids, list) and len(allowed_gta_ids) > 0:
-                allowed_set = set(allowed_gta_ids)
-                unlocked = [opt for opt in unlocked if opt.get("id") in allowed_set]
-            if not unlocked:
-                break
-            try:
-                # Keep skip batches snappy; natural (non-skip) pacing stays on the cycle interval.
-                if not _first_gta_in_cycle and not will_use_skip:
-                    await asyncio.sleep(AUTO_RANK_CRIME_COMMIT_INTERVAL_SEC)
-                _first_gta_in_cycle = False
-                next_index = int(user.get("auto_rank_next_gta_option_index") or 0) % max(1, len(unlocked))
-                opt = unlocked[next_index]
-                # Refresh credits onto user for _attempt_gta_impl skip consume
-                user = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
-                out = await attempt_gta_locked(opt["id"], user, caller_updates_total_gta=True)
-                await db.users.update_one(
-                    {"id": user_id},
-                    {"$set": {"auto_rank_next_gta_option_index": (next_index + 1) % len(unlocked)}},
-                )
-                if will_use_skip:
-                    skip_gta_used += 1
-                if out.success:
-                    has_success = True
-                    gta_success_count += 1
-                    car_name = out.car.get("name", "Car") if out.car else "Car"
-                    gta_names.append(car_name)
-                    await _update_auto_rank_stats_gta(
-                        db, user_id, out.car or {}, wall_now, option_id=opt.get("id"), option_name=opt.get("name")
+                try:
+                    # Keep skip batches snappy; natural (non-skip) pacing stays on the cycle interval.
+                    if not _first_gta_in_cycle and not will_use_skip:
+                        await asyncio.sleep(AUTO_RANK_CRIME_COMMIT_INTERVAL_SEC)
+                    _first_gta_in_cycle = False
+                    next_index = int(user.get("auto_rank_next_gta_option_index") or 0) % max(1, len(unlocked))
+                    opt = unlocked[next_index]
+                    # Refresh credits onto user for _attempt_gta_impl skip consume
+                    user = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
+                    out = await attempt_gta_locked(opt["id"], user, caller_updates_total_gta=True)
+                    await db.users.update_one(
+                        {"id": user_id},
+                        {"$set": {"auto_rank_next_gta_option_index": (next_index + 1) % len(unlocked)}},
                     )
-                    await _set_last_activity(db, user_id, "gta", wall_now)
-                else:
+                    if will_use_skip:
+                        skip_gta_used += 1
+                    if out.success:
+                        has_success = True
+                        gta_success_count += 1
+                        car_name = out.car.get("name", "Car") if out.car else "Car"
+                        gta_names.append(car_name)
+                        await _update_auto_rank_stats_gta(
+                            db, user_id, out.car or {}, wall_now, option_id=opt.get("id"), option_name=opt.get("name")
+                        )
+                        await _set_last_activity(db, user_id, "gta", wall_now)
+                    else:
+                        gta_fail_count += 1
+                        await _inc_failed_today(db, user_id, "auto_rank_failed_gtas_today", "auto_rank_failed_gtas_date", wall_now)
+                        if getattr(out, "jailed", False) and use_skips:
+                            user = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
+                            if user.get("in_jail"):
+                                freed, user = await _auto_rank_try_jail_bailout(db, user_id, user, lines)
+                                if not freed:
+                                    break
+                except HTTPException:
+                    break
+                except Exception as e:
+                    logger.exception("Auto rank GTA for %s: %s", user_id, e)
                     gta_fail_count += 1
                     await _inc_failed_today(db, user_id, "auto_rank_failed_gtas_today", "auto_rank_failed_gtas_date", wall_now)
-                    if getattr(out, "jailed", False) and use_skips:
-                        user = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
-                        if user.get("in_jail"):
-                            freed, user = await _auto_rank_try_jail_bailout(db, user_id, user, lines)
-                            if not freed:
-                                break
-            except HTTPException:
-                break
-            except Exception as e:
-                logger.exception("Auto rank GTA for %s: %s", user_id, e)
-                gta_fail_count += 1
-                await _inc_failed_today(db, user_id, "auto_rank_failed_gtas_today", "auto_rank_failed_gtas_date", wall_now)
-                break
-            if not use_skips:
-                break
-            if skip_gta_used >= AUTO_RANK_SKIP_BATCH:
-                break
-        if gta_success_count > 0 or skip_gta_used > 0:
-            if skip_gta_used:
-                await _inc_auto_rank_skip_stats(db, user_id, now, kind="gta", used=skip_gta_used, cash=0)
-                try:
-                    from utils.token_perk_stats import bump_token_perk_stats
-                    await bump_token_perk_stats(
-                        db, user_id, "cooldown_skip_gta", uses=skip_gta_used, via_auto_rank=skip_gta_used
+                    break
+                if not use_skips:
+                    break
+                if skip_gta_used >= AUTO_RANK_SKIP_BATCH:
+                    break
+            if gta_success_count > 0 or skip_gta_used > 0:
+                if skip_gta_used:
+                    await _inc_auto_rank_skip_stats(db, user_id, now, kind="gta", used=skip_gta_used, cash=0)
+                    try:
+                        from utils.token_perk_stats import bump_token_perk_stats
+                        await bump_token_perk_stats(
+                            db, user_id, "cooldown_skip_gta", uses=skip_gta_used, via_auto_rank=skip_gta_used
+                        )
+                    except Exception:
+                        pass
+                if gta_success_count > 0:
+                    names_part = ", ".join(gta_names[:6])
+                    if len(gta_names) > 6:
+                        names_part += f" (+{len(gta_names) - 6} more)"
+                    skip_note = f" ({skip_gta_used} skip{'s' if skip_gta_used != 1 else ''})" if skip_gta_used else ""
+                    lines.append(
+                        f"**GTA** — Success ×{gta_success_count}: {names_part}.{skip_note}"
                     )
-                except Exception:
-                    pass
-            if gta_success_count > 0:
-                names_part = ", ".join(gta_names[:6])
-                if len(gta_names) > 6:
-                    names_part += f" (+{len(gta_names) - 6} more)"
-                skip_note = f" ({skip_gta_used} skip{'s' if skip_gta_used != 1 else ''})" if skip_gta_used else ""
-                lines.append(
-                    f"**GTA** — Success ×{gta_success_count}: {names_part}.{skip_note}"
-                )
 
     # --- Melt ---
     user = await db.users.find_one({"id": user_id}, {"_id": 0})

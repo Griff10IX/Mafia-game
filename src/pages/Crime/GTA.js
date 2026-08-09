@@ -27,6 +27,10 @@ const RARITY_GLOW_HEX = {
   vip_exclusive: '#06b6d4',
 };
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
+import {
+  apiPostWithCivilianProtectionConfirm,
+  isCivilianProtectionConfirmCancelled,
+} from '../../utils/civilianProtectionConfirm';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
@@ -665,7 +669,7 @@ export default function GTA() {
     let willRetry = false;
     
     try {
-      const response = await api.post('/gta/attempt', { option_id: optionId });
+      const response = await apiPostWithCivilianProtectionConfirm('/gta/attempt', { option_id: optionId });
       const data = response.data || {};
       const car = data.car;
       const progressAfter = data.progress_after;
@@ -753,20 +757,24 @@ export default function GTA() {
       );
       refreshUser();
     } catch (error) {
-      const status = error.response?.status;
-      const d = error.response?.data?.detail;
-      const backendMsg = typeof d === 'string' ? d : Array.isArray(d) ? d.map((x) => x.msg || x.loc?.join('.')).join('; ') : null;
-      const reason = error.code === 'ECONNABORTED' ? 'Request timed out' : error.message === 'Network Error' ? 'Network error' : backendMsg || (status ? `${status} error` : 'Request failed');
-      toast.error(`Failed to steal car: ${reason}`);
-      willRetry = !isRetry && (error.code === 'ECONNABORTED' || error.message === 'Network Error' || (status && status >= 500));
-      
-      if (willRetry) {
-        await new Promise((r) => setTimeout(r, 800));
-        setAttemptingOptionId(null);
-        attemptGTA(optionId, true);
-        return;
+      if (isCivilianProtectionConfirmCancelled(error)) {
+        /* user declined — keep protection */
+      } else {
+        const status = error.response?.status;
+        const d = error.response?.data?.detail;
+        const backendMsg = typeof d === 'string' ? d : Array.isArray(d) ? d.map((x) => x.msg || x.loc?.join('.')).join('; ') : null;
+        const reason = error.code === 'ECONNABORTED' ? 'Request timed out' : error.message === 'Network Error' ? 'Network error' : backendMsg || (status ? `${status} error` : 'Request failed');
+        toast.error(`Failed to steal car: ${reason}`);
+        willRetry = !isRetry && (error.code === 'ECONNABORTED' || error.message === 'Network Error' || (status && status >= 500));
+
+        if (willRetry) {
+          await new Promise((r) => setTimeout(r, 800));
+          setAttemptingOptionId(null);
+          attemptGTA(optionId, true);
+          return;
+        }
+        fetchData({ silent: true });
       }
-      fetchData({ silent: true });
     } finally {
       if (!willRetry) setAttemptingOptionId(null);
     }

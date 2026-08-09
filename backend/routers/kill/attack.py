@@ -144,6 +144,7 @@ from server import (
     MIN_BULLETS_TO_KILL,
     DEFAULT_HEALTH,
     KILL_CASH_PERCENT,
+    KILL_CASH_MIN_PRESTIGE_LEVEL,
     _is_admin,
     _is_hdo,
     _is_moderator,
@@ -184,6 +185,7 @@ from utils.civilian_protection import (
     CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL,
     is_civilian_protected,
     maybe_revoke_civilian_protection,
+    require_protection_revoke_confirm,
 )
 from routers.money.booze_run import BOOZE_TYPES
 from routers.account.objectives import update_objectives_progress
@@ -1696,8 +1698,8 @@ def _bullets_to_kill_breakdown(
 
 # Attacker has Colt Monitor (weapon_loot) equipped: fewer bullets needed to kill.
 LOOT_EXCLUSIVE_WEAPON_ATTACK_BULLET_MULT = 0.75
-MAX_BULLETS_TO_KILL = 150_000
-ROBOT_BODYGUARD_MAX_BULLETS_TO_KILL = 80_000
+MAX_BULLETS_TO_KILL = 230_000
+ROBOT_BODYGUARD_MAX_BULLETS_TO_KILL = 125_000
 
 _BULLET_CALC_TARGET_PROJECTION = {
     "_id": 0,
@@ -1754,10 +1756,11 @@ _ATTACK_STATUS_ROW_PROJECTION = {
 
 
 def _apply_bullet_caps(target: dict, bullets_required: int) -> int:
-    """Apply global and role-specific bullet caps."""
-    capped = min(max(1, int(bullets_required)), MAX_BULLETS_TO_KILL)
+    """Apply global min floor, max cap, and role-specific bullet caps."""
+    capped = min(max(MIN_BULLETS_TO_KILL, int(bullets_required)), MAX_BULLETS_TO_KILL)
     if target.get("is_bodyguard") and target.get("is_npc"):
         capped = min(capped, ROBOT_BODYGUARD_MAX_BULLETS_TO_KILL)
+        capped = max(MIN_BULLETS_TO_KILL, capped)
     return capped
 
 
@@ -1987,6 +1990,7 @@ async def search_target(payload: AttackSearchRequest, req: Request, current_user
     # Protected new accounts lose protection when searching a real player or bodyguard (not hitlist NPC).
     allowed_hitlist_npc_only = target.get("is_npc") and not target.get("is_bodyguard")
     if is_civilian_protected(current_user) and not allowed_hitlist_npc_only:
+        require_protection_revoke_confirm(current_user, reason="search_player", request=req)
         await maybe_revoke_civilian_protection(db, current_user["id"], "search_player")
     note = (payload.note or "").strip()
     note = note[:80] if note else None
@@ -3106,13 +3110,23 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             },
         )
         victim_money = max(0, int(death_claim.get("money", 0) or 0))
-        base_cash_loot = int(victim_money * KILL_CASH_PERCENT)
+        victim_prestige = int(
+            death_claim.get("prestige_level")
+            if death_claim.get("prestige_level") is not None
+            else (target.get("prestige_level") or 0)
+        )
+        # Prestige 0: no on-hand wealth share (stops cash farming never-prestiged accounts).
+        # Cash still wiped from the victim; cars/properties/illegal-business rewards unchanged.
+        if victim_prestige >= int(KILL_CASH_MIN_PRESTIGE_LEVEL):
+            base_cash_loot = int(victim_money * KILL_CASH_PERCENT)
+        else:
+            base_cash_loot = 0
         rank_points = 25
         ev = await get_effective_event()
         _ev_cash_mult = float(ev.get("kill_cash", 1.0) or 1.0)
         _ev_rp_mult = float(ev.get("rank_points", 1.0) or 1.0)
-        cash_loot = min(victim_money, int(base_cash_loot * _ev_cash_mult))
-        _we_bonus_cash = max(0, cash_loot - min(victim_money, base_cash_loot)) if _ev_cash_mult > 1.0 else 0
+        cash_loot = min(victim_money, int(base_cash_loot * _ev_cash_mult)) if base_cash_loot > 0 else 0
+        _we_bonus_cash = max(0, cash_loot - min(victim_money, base_cash_loot)) if _ev_cash_mult > 1.0 and base_cash_loot > 0 else 0
         _we_bonus_rp = 0
         if _ev_rp_mult > 1.0:
             _pre_rp = rank_points
