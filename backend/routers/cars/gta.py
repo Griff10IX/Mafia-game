@@ -2884,6 +2884,12 @@ async def buy_listed_car(
     seller_payout = max(0, price - owner_cut)
     # Ownership already transferred by find_one_and_update; pay seller
     await db.users.update_one({"id": seller_id}, {"$inc": {"money": seller_payout}})
+    # Same mission counters as NPC dealer stock — Buy Cars page includes player listings.
+    buy_inc = {"cars_purchased_from_dealership": 1}
+    _rarity = ((car_info or {}).get("rarity") or "").strip().lower()
+    if _rarity in ("uncommon", "rare", "ultra_rare", "legendary"):
+        buy_inc[f"cars_purchased_dealership_{_rarity}"] = 1
+    await db.users.update_one({"id": buyer_id}, {"$inc": buy_inc})
     seller = await db.users.find_one({"id": seller_id}, {"_id": 0, "username": 1})
     now_iso = datetime.now(timezone.utc).isoformat()
     await db.economy_events.insert_one({
