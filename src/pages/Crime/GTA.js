@@ -586,7 +586,10 @@ export default function GTA() {
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
-  const fetchData = useCallback(async ({ silent = false } = {}) => {
+  // silent=true (cooldown sync): can skip toast noise; includeStats overrides so footer numbers stay real
+  // (session boot used to skip /gta/stats → stuck at 0/1 while Auto Rank kept stealing).
+  const fetchData = useCallback(async ({ silent = false, includeStats } = {}) => {
+    const wantStats = includeStats ?? !silent;
     let nextOptions = optionsRef.current;
     let nextRecentStolen = [];
     let nextEvent = null;
@@ -599,7 +602,7 @@ export default function GTA() {
         api.get('/gta/options'),
         api.get('/gta/recent-stolen'),
         apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
-        silent ? Promise.resolve({ data: null }) : api.get('/gta/stats').catch(() => ({ data: {} })),
+        wantStats ? api.get('/gta/stats').catch(() => ({ data: {} })) : Promise.resolve({ data: null }),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
         api.get('/auth/me').catch(() => ({ data: null })),
       ]);
@@ -613,7 +616,7 @@ export default function GTA() {
           toast.error('Failed to load GTA options');
         }
       }
-      if (!silent && statsRes.status === 'fulfilled' && statsRes.value?.data && typeof statsRes.value.data === 'object') {
+      if (wantStats && statsRes.status === 'fulfilled' && statsRes.value?.data && typeof statsRes.value.data === 'object') {
         nextGtaStats = { ...DEFAULT_GTA_STATS, ...statsRes.value.data };
         setGtaStats(nextGtaStats);
       }
@@ -643,7 +646,7 @@ export default function GTA() {
         recentStolen: nextRecentStolen,
         event: nextEvent,
         eventsEnabled: nextEventsEnabled,
-        gtaStats: silent ? (readSessionJson(GTA_SESSION_CACHE_KEY)?.gtaStats ?? nextGtaStats) : nextGtaStats,
+        gtaStats: wantStats ? nextGtaStats : (readSessionJson(GTA_SESSION_CACHE_KEY)?.gtaStats ?? nextGtaStats),
         autoRankGtaDisabled: nextAutoRankGtaDisabled,
         user: nextUser,
       });
@@ -657,11 +660,12 @@ export default function GTA() {
 
   useEffect(() => {
     const boot = readSessionJson(GTA_SESSION_CACHE_KEY);
-    fetchData({ silent: !!(boot?.options?.length) });
+    // Always refresh stats on mount — silent boot previously reused stale session counts.
+    fetchData({ silent: !!(boot?.options?.length), includeStats: true });
     // Intentionally once per mount (returning to /crime/gta remounts and loads fresh).
   }, [fetchData]);
 
-  const tick = useCooldownTicker(options, () => fetchData({ silent: true }));
+  const tick = useCooldownTicker(options, () => fetchData({ silent: true, includeStats: !!autoRankGtaDisabled }));
 
   const attemptGTA = async (optionId, isRetry = false) => {
     if (attemptingOptionId) return;
