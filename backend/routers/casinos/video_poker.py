@@ -85,11 +85,11 @@ SUITS = ["H", "D", "C", "S"]
 VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
 VALUE_RANK = {"2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "J": 11, "Q": 12, "K": 13, "A": 14}
 
-# Payout multipliers: cash credited to the player on draw = round(bet * multiplier) (stake was already taken on deal).
-# So "even money" on a pair of Jacks requires multiplier 2 (full stake back + equal win), not 1.5.
-#
-# Presets change pay table multipliers only. Deal is fair; draw has a small secret miss rate (see
-# VIDEO_POKER_SECRET_MISS_CHANCE). Owner preset still only changes cash returned per hand tier.
+# Payout multipliers: cash credited on draw = round(bet * multiplier); stake already taken on deal.
+# Values match real Jacks-or-Better machine pays (total return of the bet):
+#   jacks_or_better=1 → stake returned (net 0), two_pair=2, … royal 250–800.
+# Presets: tight=8/5, normal=9/6 full-pay, increased=9/7, enhanced=10/7.
+# Deal is fair; draw has a small secret miss rate (VIDEO_POKER_SECRET_MISS_CHANCE).
 VIDEO_POKER_DEFAULT_ODDS_PRESET = "tight"
 VIDEO_POKER_ODDS_PRESET_LABELS = {
     "tight": "Tight payouts",
@@ -97,51 +97,54 @@ VIDEO_POKER_ODDS_PRESET_LABELS = {
     "increased": "Increased payouts",
     "enhanced": "Enhanced payouts",
 }
-# Between normal and enhanced (rounded); not specified by players — middle tier.
 VIDEO_POKER_PAY_PRESETS: dict[str, dict[str, float]] = {
+    # 8/5 JoB — real-life house-positive (~97% RTP with optimal play before secret miss)
     "tight": {
-        "royal_flush": 75,
-        "straight_flush": 40,
-        "four_of_a_kind": 20,
+        "royal_flush": 250,
+        "straight_flush": 50,
+        "four_of_a_kind": 25,
         "full_house": 8,
+        "flush": 5,
+        "straight": 4,
+        "three_of_a_kind": 3,
+        "two_pair": 2,
+        "jacks_or_better": 1,
+    },
+    # 9/6 full-pay (~99.5% before miss)
+    "normal": {
+        "royal_flush": 800,
+        "straight_flush": 50,
+        "four_of_a_kind": 25,
+        "full_house": 9,
         "flush": 6,
         "straight": 4,
-        "three_of_a_kind": 3.5,
-        "two_pair": 2.5,
-        "jacks_or_better": 2,
+        "three_of_a_kind": 3,
+        "two_pair": 2,
+        "jacks_or_better": 1,
     },
-    "normal": {
-        "royal_flush": 100,
+    # 9/7
+    "increased": {
+        "royal_flush": 800,
+        "straight_flush": 50,
+        "four_of_a_kind": 25,
+        "full_house": 9,
+        "flush": 7,
+        "straight": 4,
+        "three_of_a_kind": 3,
+        "two_pair": 2,
+        "jacks_or_better": 1,
+    },
+    # 10/7
+    "enhanced": {
+        "royal_flush": 800,
         "straight_flush": 50,
         "four_of_a_kind": 25,
         "full_house": 10,
         "flush": 7,
-        "straight": 5,
-        "three_of_a_kind": 4,
-        "two_pair": 3,
-        "jacks_or_better": 2,
-    },
-    "increased": {
-        "royal_flush": 125,
-        "straight_flush": 63,
-        "four_of_a_kind": 28,
-        "full_house": 12.5,
-        "flush": 9,
-        "straight": 6,
-        "three_of_a_kind": 4.5,
-        "two_pair": 3.5,
-        "jacks_or_better": 2.25,
-    },
-    "enhanced": {
-        "royal_flush": 150,
-        "straight_flush": 75,
-        "four_of_a_kind": 30,
-        "full_house": 15,
-        "flush": 10,
-        "straight": 7,
-        "three_of_a_kind": 4,
-        "two_pair": 3,
-        "jacks_or_better": 2,
+        "straight": 4,
+        "three_of_a_kind": 3,
+        "two_pair": 2,
+        "jacks_or_better": 1,
     },
 }
 # Back-compat alias for imports / admin tooling

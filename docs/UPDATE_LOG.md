@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-10 22:45 UTC[/color][/b] — [b]Video poker: real-life paytable[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] Video poker payouts now match [b]real Jacks-or-Better[/b] (e.g. Jacks = [b]1×[/b] stake back, not 2×). Owners were losing money every hand on the old table.[/color]
+[*][color=#888888][b]Presets:[/b] Tight = [b]8/5[/b], Normal = [b]9/6[/b], Increased = [b]9/7[/b], Enhanced = [b]10/7[/b]. Royals pay proper machine amounts ([b]250–800×[/b]).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-10 22:10 UTC[/color][/b] — [b]Missions: fewer crimes[/b][/size]
 [quote]
 [list]
