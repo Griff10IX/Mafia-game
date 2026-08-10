@@ -6,29 +6,14 @@
 
 [hr]
 
-[size=1.5][b][color=#2ECC71]2026-08-11 00:20 UTC[/color][/b] — [b]Wheel: $5B cash[/b][/size]
+[size=1.5][b][color=#2ECC71]2026-08-11[/color][/b] — [b]Casino: Wheel of Fortune updates[/b][/size]
 [quote]
 [list]
-[*][color=#888888][b]Added:[/b] Rare [b]$5,000,000,000[/b] cash wedge on Wheel of Fortune.[/color]
-[/list]
-[/quote]
-
-[hr]
-
-[size=1.5][b][color=#2ECC71]2026-08-11 00:15 UTC[/color][/b] — [b]Wheel: robot hire + bullets[/b][/size]
-[quote]
-[list]
-[*][color=#888888][b]Added:[/b] Rare [b]Free Robot Bodyguard[/b] wedge — banks a hire token. On [b]Kill → Bodyguards[/b], hiring a robot spends the token instead of points (auto-used when you have one).[/color]
-[*][color=#888888][b]Added:[/b] Bullet wedges: [b]1,000[/b], [b]2,500[/b], and [b]5,000[/b] bullets.[/color]
-[/list]
-[/quote]
-
-[hr]
-
-[size=1.5][b][color=#2ECC71]2026-08-11 00:00 UTC[/color][/b] — [b]Store: Wheel spins per £10[/b][/size]
-[quote]
-[list]
-[*][color=#888888][b]Added:[/b] Every [b]whole £10[/b] on a [b]GBP store checkout[/b] (points packs, Game Pass, Auto Rank, revive, prestige, etc.) also credits [b]1 banked free Wheel of Fortune spin[/b] (per purchase; leftover under £10 on that checkout does not roll over). Spend them anytime on the wheel — they do not use your 24h free spin.[/color]
+[*][color=#888888][b]Store:[/b] Every [b]whole £10[/b] on a [b]GBP store checkout[/b] (points packs, Game Pass, Auto Rank, revive, prestige, etc.) also credits [b]1 banked free Wheel of Fortune spin[/b] (per purchase; leftover under £10 on that checkout does not roll over). Spend them anytime — they do not use your 24h free spin.[/color]
+[*][color=#888888][b]Rares:[/b] [b]Free Robot Bodyguard[/b] hire token (use on Kill → Bodyguards — auto-spent instead of points) and [b]$5,000,000,000[/b] cash.[/color]
+[*][color=#888888][b]Bullets:[/b] Wedges for [b]1,000[/b], [b]2,500[/b], and [b]5,000[/b] bullets.[/color]
+[*][color=#888888][b]UI:[/b] [b]View all rewards[/b] dropdown under the wheel; labels run [b]along each section[/b]; mobile layout polished.[/color]
+[*][color=#888888][b]Added:[/b] [b]Last 5 wins[/b] — game-wide feed (username + prize) so everyone can see recent house payouts.[/color]
 [/list]
 [/quote]
 

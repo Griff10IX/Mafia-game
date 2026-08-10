@@ -15,6 +15,7 @@ from server import (
     log_activity,
     log_gambling,
     log_respect_delta,
+    _is_admin,
 )
 from utils.casino_page_rl import casinos_sustained_rl_dependencies
 from utils.point_provenance import consume_points_fifo
@@ -28,6 +29,8 @@ WHEEL_PAID_SPIN_POINTS = 100
 WHEEL_PAID_SPIN_RESPECT = 300  # 3× points cost
 WHEEL_PAID_SPINS_PER_DAY = 3
 WHEEL_FREE_COOLDOWN = timedelta(hours=24)
+WHEEL_RECENT_WINS_LIMIT = 5
+WHEEL_WINS_COLLECTION = "wheel_of_fortune_wins"
 
 # token_type -> user count field (store / armoury; no game pass)
 TOKEN_FIELD_MAP: Dict[str, str] = {
@@ -52,24 +55,24 @@ TOKEN_FIELD_MAP: Dict[str, str] = {
 }
 
 TOKEN_LABELS: Dict[str, Tuple[str, str]] = {
-    "xp_crimes": ("Crimes XP ×3", "Crime XP"),
-    "xp_gta": ("GTA XP ×3", "GTA XP"),
+    "xp_crimes": ("Crimes XP ×3", "CXP"),
+    "xp_gta": ("GTA XP ×3", "GXP"),
     "melt": ("Melt ×3", "Melt"),
     "oc_reduced": ("OC ×3", "OC"),
     "booze": ("Booze ×3", "Booze"),
-    "racket": ("Racket ×3", "Racket"),
-    "properties": ("Properties ×3", "Props"),
-    "travel": ("Travel ×3", "Travel"),
+    "racket": ("Racket ×3", "Rkt"),
+    "properties": ("Properties ×3", "Prop"),
+    "travel": ("Travel ×3", "Trvl"),
     "jailbust_bonus": ("Jailbust ×3", "Bust"),
-    "auto_rank_2h": ("Auto Rank 2h ×3", "AR 2h"),
-    "crew_oc_auto_3h": ("Crew OC ×3", "Crew OC"),
-    "auto_collect_12h": ("Auto Collect 12h ×3", "AC 12h"),
-    "auto_collect_24h": ("Auto Collect 24h ×3", "AC 24h"),
+    "auto_rank_2h": ("Auto Rank 2h ×3", "AR"),
+    "crew_oc_auto_3h": ("Crew OC ×3", "Crew"),
+    "auto_collect_12h": ("Auto Collect 12h ×3", "AC12"),
+    "auto_collect_24h": ("Auto Collect 24h ×3", "AC24"),
     "jail_bailout": ("Jail Bailout ×3", "Bail"),
-    "cooldown_skip_crime": ("Crime Skip ×3", "Skip C"),
-    "cooldown_skip_gta": ("GTA Skip ×3", "Skip G"),
-    "cooldown_skip_booze": ("Booze Skip ×3", "Skip B"),
-    "cooldown_skip_properties": ("Props Skip ×3", "Skip P"),
+    "cooldown_skip_crime": ("Crime Skip ×3", "SkC"),
+    "cooldown_skip_gta": ("GTA Skip ×3", "SkG"),
+    "cooldown_skip_booze": ("Booze Skip ×3", "SkB"),
+    "cooldown_skip_properties": ("Props Skip ×3", "SkP"),
 }
 
 # Mafia palette alternating charcoal / burgundy / gold accents
@@ -109,12 +112,12 @@ def _build_segments() -> List[Dict[str, Any]]:
             }
         )
 
-    add("jackpot_points", "2,500 Points", "2.5K PTS", "jackpot", 1, {"kind": "points", "amount": 2500}, "#FFD700")
-    add("jackpot_loot", "1,000 Loot Pieces", "1K LOOT", "jackpot", 1, {"kind": "loot_box_pieces", "amount": 1000}, "#E8C547")
+    add("jackpot_points", "2,500 Points", "2.5K", "jackpot", 1, {"kind": "points", "amount": 2500}, "#FFD700")
+    add("jackpot_loot", "1,000 Loot Pieces", "Loot", "jackpot", 1, {"kind": "loot_box_pieces", "amount": 1000}, "#E8C547")
     add(
         "jackpot_mission_skip",
         "Mission Skip",
-        "M SKIP",
+        "MSkip",
         "jackpot",
         1,
         {"kind": "mission_skip", "amount": 1},
@@ -123,7 +126,7 @@ def _build_segments() -> List[Dict[str, Any]]:
     add(
         "rare_robot_hire",
         "Free Robot Bodyguard",
-        "ROBOT",
+        "Bot",
         "rare",
         2,
         {"kind": "robot_bodyguard_hire", "amount": 1},
@@ -148,23 +151,30 @@ def _build_segments() -> List[Dict[str, Any]]:
     add("cash_1m", "$1,000,000", "$1M", "common", 22, {"kind": "money", "amount": 1_000_000})
     add("cash_5m", "$5,000,000", "$5M", "common", 12, {"kind": "money", "amount": 5_000_000})
 
-    add("pts_25", "25 Points", "25 PTS", "common", 40, {"kind": "points", "amount": 25})
-    add("pts_50", "50 Points", "50 PTS", "common", 34, {"kind": "points", "amount": 50})
-    add("pts_100", "100 Points", "100 PTS", "common", 28, {"kind": "points", "amount": 100})
+    add("pts_25", "25 Points", "25", "common", 40, {"kind": "points", "amount": 25})
+    add("pts_50", "50 Points", "50", "common", 34, {"kind": "points", "amount": 50})
+    add("pts_100", "100 Points", "100", "common", 28, {"kind": "points", "amount": 100})
 
-    add("loot_5", "5 Loot Pieces", "5 Loot", "common", 40, {"kind": "loot_box_pieces", "amount": 5})
+    add("loot_5", "5 Loot Pieces", "5L", "common", 40, {"kind": "loot_box_pieces", "amount": 5})
 
-    add("bullets_1k", "1,000 Bullets", "1K BLT", "common", 26, {"kind": "bullets", "amount": 1000})
-    add("bullets_2_5k", "2,500 Bullets", "2.5K BLT", "common", 18, {"kind": "bullets", "amount": 2500})
-    add("bullets_5k", "5,000 Bullets", "5K BLT", "common", 10, {"kind": "bullets", "amount": 5000})
+    add("bullets_1k", "1,000 Bullets", "1K", "common", 26, {"kind": "bullets", "amount": 1000})
+    add("bullets_2_5k", "2,500 Bullets", "2.5K", "common", 18, {"kind": "bullets", "amount": 2500})
+    add("bullets_5k", "5,000 Bullets", "5K", "common", 10, {"kind": "bullets", "amount": 5000})
 
     for tt, short in (
-        ("cooldown_skip_crime", "1× Crime Skip"),
-        ("cooldown_skip_gta", "1× GTA Skip"),
-        ("cooldown_skip_booze", "1× Booze Skip"),
-        ("cooldown_skip_properties", "1× Props Skip"),
+        ("cooldown_skip_crime", "Csk"),
+        ("cooldown_skip_gta", "Gsk"),
+        ("cooldown_skip_booze", "Bsk"),
+        ("cooldown_skip_properties", "Psk"),
     ):
-        add(f"skip1_{tt}", short, short.replace("1× ", ""), "common", 28, {"kind": "token", "token_type": tt, "amount": 1})
+        add(
+            f"skip1_{tt}",
+            f"1× {TOKEN_LABELS.get(tt, (tt, tt))[0].replace(' ×3', '')}",
+            short,
+            "common",
+            28,
+            {"kind": "token", "token_type": tt, "amount": 1},
+        )
 
     return segs
 
@@ -277,17 +287,26 @@ def _spin_status(user: dict) -> Dict[str, Any]:
     free_ok, free_next, free_secs = _free_available(user, now)
     paid_used = _paid_spins_used(user)
     bonus = max(0, int(user.get("wheel_bonus_free_spins") or 0))
+    admin = _is_admin(user)
+    if admin:
+        free_ok = True
+        free_next = None
+        free_secs = None
+        paid_remaining = 999
+    else:
+        paid_remaining = max(0, WHEEL_PAID_SPINS_PER_DAY - paid_used)
     return {
         "free_available": free_ok or bonus > 0,
         "daily_free_available": free_ok,
         "bonus_free_spins": bonus,
         "free_next_at": free_next,
         "free_seconds_remaining": free_secs,
-        "paid_spins_used_today": paid_used,
-        "paid_spins_remaining_today": max(0, WHEEL_PAID_SPINS_PER_DAY - paid_used),
+        "paid_spins_used_today": 0 if admin else paid_used,
+        "paid_spins_remaining_today": paid_remaining,
         "paid_spins_per_day": WHEEL_PAID_SPINS_PER_DAY,
         "paid_cost_points": WHEEL_PAID_SPIN_POINTS,
         "paid_cost_respect": WHEEL_PAID_SPIN_RESPECT,
+        "admin_unlimited": admin,
         "points": int(user.get("points") or 0),
         "respect_points": int(user.get("respect_points") or 0),
         "money": int(user.get("money") or 0),
@@ -295,6 +314,66 @@ def _spin_status(user: dict) -> Dict[str, Any]:
         "bullets": int(user.get("bullets") or 0),
         "robot_bodyguard_hire_tokens": int(user.get("robot_bodyguard_hire_tokens") or 0),
     }
+
+
+async def _recent_wheel_wins(limit: int = WHEEL_RECENT_WINS_LIMIT) -> List[Dict[str, Any]]:
+    """Game-wide last N public wins (newest first)."""
+    try:
+        rows = (
+            await db[WHEEL_WINS_COLLECTION]
+            .find({}, {"_id": 0})
+            .sort("at", -1)
+            .limit(max(1, int(limit)))
+            .to_list(max(1, int(limit)))
+        )
+    except Exception:
+        logger.exception("wheel recent wins fetch failed")
+        return []
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        at = r.get("at")
+        if isinstance(at, datetime):
+            at_iso = at.astimezone(timezone.utc).isoformat() if at.tzinfo else at.replace(tzinfo=timezone.utc).isoformat()
+        else:
+            at_iso = str(at or "")
+        out.append(
+            {
+                "at": at_iso,
+                "username": str(r.get("username") or "?"),
+                "prize_label": str(r.get("prize_label") or r.get("label") or "prize"),
+                "tier": str(r.get("tier") or "common"),
+                "segment_id": r.get("segment_id"),
+            }
+        )
+    return out
+
+
+async def _record_wheel_win(
+    *,
+    user_id: str,
+    username: str,
+    prize_label: str,
+    tier: str,
+    segment_id: str,
+    label: str,
+    pay_with: str,
+) -> None:
+    """Append a public win (callers should skip admin test spins)."""
+    try:
+        await db[WHEEL_WINS_COLLECTION].insert_one(
+            {
+                "at": datetime.now(timezone.utc),
+                "user_id": user_id,
+                "username": (username or "?").strip() or "?",
+                "prize_label": prize_label,
+                "tier": tier,
+                "segment_id": segment_id,
+                "label": label,
+                "pay_with": pay_with,
+            }
+        )
+    except Exception:
+        logger.exception("wheel win record failed user_id=%s", user_id)
 
 
 class WheelSpinRequest(BaseModel):
@@ -319,6 +398,7 @@ def register(router):
         return {
             "wedges": wedges,
             "segment_count": len(WHEEL_SEGMENTS),
+            "recent_wins": await _recent_wheel_wins(),
             **_spin_status(user),
         }
 
@@ -350,11 +430,15 @@ def register(router):
         filt: Dict[str, Any] = {"id": uid}
         inc: Dict[str, Any] = dict(grant)
         set_doc: Dict[str, Any] = {}
+        admin = _is_admin(user) or _is_admin(current_user)
 
         if pay == "free":
             bonus = max(0, int(user.get("wheel_bonus_free_spins") or 0))
             free_ok, free_next, _ = _free_available(user, now)
-            if bonus > 0:
+            if admin:
+                # Admins: unlimited free spins; do not touch cooldown or bonus bank
+                pass
+            elif bonus > 0:
                 # Store GBP bonus spins: consume bank first (does not start 24h cooldown)
                 inc["wheel_bonus_free_spins"] = int(inc.get("wheel_bonus_free_spins") or 0) - 1
                 filt["wheel_bonus_free_spins"] = {"$gte": 1}
@@ -377,19 +461,20 @@ def register(router):
                 )
         else:
             paid_used = _paid_spins_used(user)
-            if paid_used >= WHEEL_PAID_SPINS_PER_DAY:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Paid spin limit reached ({WHEEL_PAID_SPINS_PER_DAY} per UTC day)",
-                )
-            if (user.get("wheel_paid_spins_day") or "") != today:
-                set_doc["wheel_paid_spins_day"] = today
-                set_doc["wheel_paid_spins_today"] = 1
-            else:
-                set_doc["wheel_paid_spins_day"] = today
-                inc["wheel_paid_spins_today"] = 1
-                filt["wheel_paid_spins_today"] = {"$lt": WHEEL_PAID_SPINS_PER_DAY}
-                filt["wheel_paid_spins_day"] = today
+            if not admin:
+                if paid_used >= WHEEL_PAID_SPINS_PER_DAY:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Paid spin limit reached ({WHEEL_PAID_SPINS_PER_DAY} per UTC day)",
+                    )
+                if (user.get("wheel_paid_spins_day") or "") != today:
+                    set_doc["wheel_paid_spins_day"] = today
+                    set_doc["wheel_paid_spins_today"] = 1
+                else:
+                    set_doc["wheel_paid_spins_day"] = today
+                    inc["wheel_paid_spins_today"] = 1
+                    filt["wheel_paid_spins_today"] = {"$lt": WHEEL_PAID_SPINS_PER_DAY}
+                    filt["wheel_paid_spins_day"] = today
 
             if pay == "points":
                 cost = WHEEL_PAID_SPIN_POINTS
@@ -423,10 +508,10 @@ def register(router):
                     points=WHEEL_PAID_SPIN_POINTS,
                     event_type="spend_wheel",
                     event_ref="wheel_of_fortune",
-                    meta={"source": "wheel"},
+                    meta={"source": "wheel", "admin": admin},
                     assume_balance_already_decremented_by=WHEEL_PAID_SPIN_POINTS,
                     source="wheel",
-                    context={"cost_points": WHEEL_PAID_SPIN_POINTS},
+                    context={"cost_points": WHEEL_PAID_SPIN_POINTS, "admin": admin},
                     wallet_points_before=int(user.get("points") or 0),
                     wallet_points_after=int(user.get("points") or 0) - WHEEL_PAID_SPIN_POINTS,
                 )
@@ -450,6 +535,7 @@ def register(router):
                     "segment_id": segment["id"],
                     "prize": prize,
                     "prize_label": prize_label,
+                    "admin": admin,
                 },
             )
             await log_gambling(
@@ -467,6 +553,17 @@ def register(router):
         except Exception:
             logger.exception("wheel log failed user_id=%s", uid)
 
+        if not admin:
+            await _record_wheel_win(
+                user_id=uid,
+                username=user.get("username") or "?",
+                prize_label=prize_label,
+                tier=str(segment.get("tier") or "common"),
+                segment_id=str(segment.get("id") or ""),
+                label=str(segment.get("label") or ""),
+                pay_with=pay,
+            )
+
         refreshed = await db.users.find_one({"id": uid}, {"_id": 0}) or user
         status = _spin_status(refreshed)
         return {
@@ -477,5 +574,6 @@ def register(router):
             "prize": prize,
             "prize_label": prize_label,
             "pay_with": pay,
+            "recent_wins": await _recent_wheel_wins(),
             **status,
         }
