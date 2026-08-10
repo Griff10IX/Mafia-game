@@ -63,6 +63,53 @@ def _ease_amount(v: int) -> int:
     return max(1, int(round(int(v) * MISSION_REQUIREMENT_MULT)))
 
 
+# Realistic full-day grind from live top players (~4.3k–6.7k successes/day; Meraxes ≈5.0k).
+MISSION_CRIME_DAY_CAPACITY = 5000
+
+
+def fair_crime_target_for_order(order: int) -> int:
+    """
+    Crime requirements paced against real daily capacity.
+    Early ≈ 0.5 day, mid ≈ 1 day, late ≈ 2–3 days (when the mission includes crimes).
+    """
+    day = float(MISSION_CRIME_DAY_CAPACITY)
+    o = int(order or 0)
+    if o <= 0:
+        return 8  # starter tutorial
+    if o <= 24:
+        # order 1 → ~0.05 day … order 24 → 0.5 day
+        t = (o - 1) / 23.0
+        days = 0.05 + t * 0.45
+    elif o <= 59:
+        # ~1 day across mid ladder
+        t = (o - 25) / 34.0
+        days = 1.0 + t * 0.15  # 1.00 → 1.15
+    else:
+        # late: 2 → 3 days
+        t = (o - 60) / 39.0
+        days = 2.0 + t * 1.0
+    return max(1, int(round(day * days)))
+
+
+def apply_fair_crime_targets(mission: Dict[str, Any]) -> None:
+    """Replace any crimes requirement with the paced fair target (exact, not re-eased)."""
+    req = mission.get("requirements") or {}
+    if "crimes" not in req:
+        return
+    order = int(mission.get("order") or 0)
+    target = fair_crime_target_for_order(order)
+    req = dict(req)
+    req["crimes"] = target
+    mission["requirements"] = req
+    # Preserve starter flavor line if present.
+    base = _format_requirements_description(req)
+    prev = (mission.get("description") or "").strip()
+    if mission.get("id") == FIRST_MISSION_ID and "The outfit wants to see" in prev:
+        mission["description"] = f"{base} The outfit wants to see what you're made of."
+    else:
+        mission["description"] = base
+
+
 def ease_mission_requirements(req: Dict[str, Any]) -> Dict[str, Any]:
     """Scale countable requirement targets; leave flags / city / mission lists alone."""
     out: Dict[str, Any] = {}
@@ -878,6 +925,7 @@ def build_missions() -> List[Dict[str, Any]]:
     )
 
     for m in missions:
+        apply_fair_crime_targets(m)
         attach_dealership_car_buys(m)
     assert dealership_cars_for_order(1) == 3
     assert dealership_cars_for_order(99) == 100
@@ -891,5 +939,12 @@ def build_missions() -> List[Dict[str, Any]]:
     assert m100_sum == 100
     assert int(m2_req.get("cars_purchased_dealership_legendary") or 0) == 0  # early: no legendaries
     assert int(m100_req.get("cars_purchased_dealership_legendary") or 0) >= 1
+    # Crime pacing vs ~5k/day capacity
+    assert fair_crime_target_for_order(0) == 8
+    assert fair_crime_target_for_order(24) == 2500  # 0.5 day
+    assert 5000 <= fair_crime_target_for_order(38) <= 6000  # mid ~1 day (Harbor Cut 14)
+    assert 10000 <= fair_crime_target_for_order(60) <= 10500
+    assert 14500 <= fair_crime_target_for_order(99) <= 15000
+    assert int((missions[38].get("requirements") or {}).get("crimes") or 0) == fair_crime_target_for_order(38)
 
     return missions

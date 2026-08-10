@@ -6,11 +6,21 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-10 22:10 UTC[/color][/b] — [b]Missions: fewer crimes[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Crime targets on missions are paced to real daily grind speed (~[b]5,000[/b] crimes/day). Roughly [b]½ day[/b] early, [b]~1 day[/b] mid-ladder, [b]2–3 days[/b] late — down from targets that were taking [b]5–12+ days[/b] of crime alone.[/color]
+[*][color=#888888][b]Example:[/b] Harbor Cut 14 drops from [b]~28k[/b] crimes to around [b]5k[/b]. Progress already earned still counts.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-10 21:15 UTC[/color][/b] — [b]Missions: dealership buys by rarity[/b][/size]
 [quote]
 [list]
 [*][color=#888888][b]Changed:[/b] Dealership mission targets are now a [b]mix of rarities[/b] ([b]uncommon → legendary[/b]) — not any cheapest car. Each mission gets a different split (totals still scale ~[b]3 → 100[/b]). [b]Commons do not count.[/color]
-[*][color=#888888][b]Note:[/b] Early missions only ask for uncommon/rare; ultra rare and legendary show up later.[/color]
+[*][color=#888888][b]Note:[/b] Early missions only ask for uncommon/rare; ultra rare and legendary show up later. Buys count from [b]dealer stock and player listings[/b] on the Buy Cars page.[/color]
 [/list]
 [/quote]
 
