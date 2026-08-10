@@ -2439,9 +2439,13 @@ async def buy_car(
         "damage_percent": 0,
     }
     await db.user_cars.insert_one(doc)
+    buy_inc = {"cars_purchased_from_dealership": 1}
+    _rarity = (car_info.get("rarity") or "").strip().lower()
+    if _rarity in ("uncommon", "rare", "ultra_rare", "legendary"):
+        buy_inc[f"cars_purchased_dealership_{_rarity}"] = 1
     await db.users.update_one(
         {"id": current_user.get("id") or ""},
-        {"$inc": {"cars_purchased_from_dealership": 1}},
+        {"$inc": buy_inc},
     )
     _invalidate_travel_info_cache(current_user.get("id") or "")
     now_iso = now.isoformat()
@@ -2593,9 +2597,15 @@ async def buy_cars_bulk(
 
     await db.user_cars.insert_many(user_car_docs)
     if bought_lines:
+        buy_inc = {"cars_purchased_from_dealership": len(bought_lines)}
+        for line in bought_lines:
+            _rarity = (line["car_info"].get("rarity") or "").strip().lower()
+            if _rarity in ("uncommon", "rare", "ultra_rare", "legendary"):
+                key = f"cars_purchased_dealership_{_rarity}"
+                buy_inc[key] = int(buy_inc.get(key) or 0) + 1
         await db.users.update_one(
             {"id": uid},
-            {"$inc": {"cars_purchased_from_dealership": len(bought_lines)}},
+            {"$inc": buy_inc},
         )
     if transfer_docs:
         await db.money_transfers.insert_many(transfer_docs)

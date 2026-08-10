@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-10 21:15 UTC[/color][/b] — [b]Missions: dealership buys by rarity[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Dealership mission targets are now a [b]mix of rarities[/b] ([b]uncommon → legendary[/b]) — not any cheapest car. Each mission gets a different split (totals still scale ~[b]3 → 100[/b]). [b]Commons do not count.[/color]
+[*][color=#888888][b]Note:[/b] Early missions only ask for uncommon/rare; ultra rare and legendary show up later.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-10 20:46 UTC[/color][/b] — [b]Missions: buy cars from the dealership[/b][/size]
 [quote]
 [list]

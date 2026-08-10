@@ -148,8 +148,22 @@ def _baseline_snapshot_for_mission(user: dict, mission: dict) -> Dict[str, int]:
     return {k: _get_user_progress_value(user, k) for k in _stat_requirement_keys(mission)}
 
 
+# Mid-ladder / new dealership ledgers: missing baseline key → 0 so lifetime buys count.
+_DEALERSHIP_MISSION_LEDGER_KEYS = frozenset({
+    "cars_purchased_dealership",
+    "cars_purchased_dealership_uncommon",
+    "cars_purchased_dealership_rare",
+    "cars_purchased_dealership_ultra_rare",
+    "cars_purchased_dealership_legendary",
+})
+
+
 async def _ensure_extended_mission_baselines(user: dict) -> None:
-    """Persist mission_baselines.<id> for unlocked missions after m_third (lazy backfill / first visit)."""
+    """Persist mission_baselines.<id> for unlocked missions (lazy backfill / first visit).
+
+    Also merges newly-added requirement keys into existing snaps. Without that, a missing key
+    falls back to ``total`` on every request and progress stays stuck at 0 forever.
+    """
     completed = _user_completed_mission_ids(user)
     uid = user.get("id")
     if not uid:
@@ -162,12 +176,39 @@ async def _ensure_extended_mission_baselines(user: dict) -> None:
             continue
         if not _mission_unlocked_by_previous(m, completed):
             continue
-        if mid in (FIRST_MISSION_ID, SECOND_MISSION_ID, THIRD_MISSION_ID):
+        if mid == FIRST_MISSION_ID:
             continue
-        if mb.get(mid):
+        needed_all = _stat_requirement_keys(m)
+        # m2/m3 keep flat baselines for classic stats; only store dealership keys in mission_baselines.
+        if mid in (SECOND_MISSION_ID, THIRD_MISSION_ID):
+            needed = [k for k in needed_all if k.startswith("cars_purchased_dealership")]
+        else:
+            needed = needed_all
+        if not needed:
             continue
-        snap = _baseline_snapshot_for_mission(user, m)
-        if snap:
+        existing = mb.get(mid)
+        if not existing:
+            if mid in (SECOND_MISSION_ID, THIRD_MISSION_ID):
+                snap = {}
+                for k in needed:
+                    snap[k] = 0 if k in _DEALERSHIP_MISSION_LEDGER_KEYS else _get_user_progress_value(user, k)
+            else:
+                snap = _baseline_snapshot_for_mission(user, m)
+            if snap:
+                to_set[mid] = snap
+            continue
+        # Existing snap — fill any new requirement keys that were added after unlock.
+        snap = dict(existing)
+        changed = False
+        for k in needed:
+            if k in snap:
+                continue
+            if k in _DEALERSHIP_MISSION_LEDGER_KEYS:
+                snap[k] = 0
+            else:
+                snap[k] = _get_user_progress_value(user, k)
+            changed = True
+        if changed:
             to_set[mid] = snap
     if not to_set:
         return
@@ -225,6 +266,8 @@ def _get_user_progress_value(user: dict, req_key: str) -> int:
         return int(user.get("cars_melted") or 0)
     if req_key == "cars_purchased_dealership":
         return int(user.get("cars_purchased_from_dealership") or 0)
+    if req_key.startswith("cars_purchased_dealership_"):
+        return int(user.get(req_key) or 0)
     if req_key == "bullets_melted":
         return int(user.get("bullets_melted") or 0)
     if req_key == "bullets_purchased_armoury":
@@ -320,15 +363,16 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
             if baseline is None:
                 baseline = total
             current = max(0, total - baseline)
-        elif key == "cars_purchased_dealership" and mission.get("id") == SECOND_MISSION_ID:
-            total = int(user.get("cars_purchased_from_dealership") or 0)
-            baseline = user.get("mission_2_cars_purchased_dealership_baseline")
-            if baseline is None:
-                baseline = total
-            current = max(0, total - baseline)
+        elif isinstance(key, str) and key.startswith("cars_purchased_dealership"):
+            total = _get_user_progress_value(user, key)
+            baselines_m = (user.get("mission_baselines") or {}).get(mission.get("id")) or {}
+            b = baselines_m.get(key)
+            if b is None:
+                b = 0 if key in _DEALERSHIP_MISSION_LEDGER_KEYS else total
+            current = max(0, total - int(b))
         elif mission.get("id") == THIRD_MISSION_ID and key in (
             "crimes", "jail_busts", "gta", "booze_sells", "bullets_melted",
-            "bullets_purchased_armoury", "uncommon_cars_scrapped", "cars_purchased_dealership",
+            "bullets_purchased_armoury", "uncommon_cars_scrapped",
         ):
             total_key = {
                 "crimes": "total_crimes",
@@ -338,7 +382,6 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
                 "bullets_melted": "bullets_melted",
                 "bullets_purchased_armoury": "bullets_purchased_from_armoury",
                 "uncommon_cars_scrapped": "uncommon_cars_scrapped",
-                "cars_purchased_dealership": "cars_purchased_from_dealership",
             }[key]
             baseline_key = {
                 "crimes": "mission_3_crimes_baseline",
@@ -348,7 +391,6 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
                 "bullets_melted": "mission_3_bullets_melted_baseline",
                 "bullets_purchased_armoury": "mission_3_bullets_purchased_armoury_baseline",
                 "uncommon_cars_scrapped": "mission_3_uncommon_cars_scrapped_baseline",
-                "cars_purchased_dealership": "mission_3_cars_purchased_dealership_baseline",
             }[key]
             total = int(user.get(total_key) or 0)
             baseline = user.get(baseline_key)
@@ -396,6 +438,14 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
             parts.append(f"{display:,}/{target:,} cars melted")
         elif key == "cars_purchased_dealership":
             parts.append(f"{display:,}/{target:,} cars from dealership")
+        elif key == "cars_purchased_dealership_uncommon":
+            parts.append(f"{display:,}/{target:,} uncommon from dealership")
+        elif key == "cars_purchased_dealership_rare":
+            parts.append(f"{display:,}/{target:,} rare from dealership")
+        elif key == "cars_purchased_dealership_ultra_rare":
+            parts.append(f"{display:,}/{target:,} ultra rare from dealership")
+        elif key == "cars_purchased_dealership_legendary":
+            parts.append(f"{display:,}/{target:,} legendary from dealership")
         elif key == "bullets_melted":
             parts.append(f"{display:,}/{target:,} bullets melted")
         elif key == "bullets_purchased_armoury":

@@ -1,6 +1,7 @@
 # 100-mission ladder: rewards hit fixed economy sums; requirements m_26+ generated/scaled.
 from __future__ import annotations
 
+import random
 from typing import Any, Dict, List, Tuple
 
 # Must match armoury TOKEN_TYPES minus rank_xp_pass (avoid importing armoury — circular via server).
@@ -87,7 +88,11 @@ def _format_requirements_description(req: Dict[str, Any]) -> str:
         "gta",
         "booze_sells",
         "cars_melted",
-        "cars_purchased_dealership",
+        "cars_purchased_dealership_uncommon",
+        "cars_purchased_dealership_rare",
+        "cars_purchased_dealership_ultra_rare",
+        "cars_purchased_dealership_legendary",
+        "cars_purchased_dealership",  # legacy flat any-rarity
         "bullets_melted",
         "bullets_purchased_armoury",
         "uncommon_cars_stolen",
@@ -95,6 +100,12 @@ def _format_requirements_description(req: Dict[str, Any]) -> str:
         "hitlist_npc_kills",
         "deposit_interest",
     )
+    rarity_labels = {
+        "cars_purchased_dealership_uncommon": "uncommon",
+        "cars_purchased_dealership_rare": "rare",
+        "cars_purchased_dealership_ultra_rare": "ultra rare",
+        "cars_purchased_dealership_legendary": "legendary",
+    }
     seen = set()
     for k in order:
         if k not in req:
@@ -113,6 +124,13 @@ def _format_requirements_description(req: Dict[str, Any]) -> str:
             parts.append(f"Do {v:,} booze runs")
         elif k == "cars_melted":
             parts.append(f"Melt {v:,} car" if v == 1 else f"Melt {v:,} cars")
+        elif k in rarity_labels:
+            label = rarity_labels[k]
+            parts.append(
+                f"Buy {v:,} {label} car from the dealership"
+                if v == 1
+                else f"Buy {v:,} {label} cars from the dealership"
+            )
         elif k == "cars_purchased_dealership":
             parts.append(f"Buy {v:,} car from the dealership" if v == 1 else f"Buy {v:,} cars from the dealership")
         elif k == "bullets_melted":
@@ -135,23 +153,72 @@ def _format_requirements_description(req: Dict[str, Any]) -> str:
     return (". ".join(parts) + ".") if parts else ""
 
 
+# Dealership buys: uncommon → legendary only (commons are too cheap).
+DEALERSHIP_MISSION_RARITIES = ("uncommon", "rare", "ultra_rare", "legendary")
+
+
 def dealership_cars_for_order(order: int) -> int:
     """Mission 2 (order 1) → 3 cars; mission 100 (order 99) → 100 cars. Mission 1 has none."""
     if order < 1:
         return 0
-    # Linear: order 1 → 3, order 99 → 100
     t = (order - 1) / 98.0
     return max(3, min(100, int(round(3 + t * 97))))
 
 
+def dealership_rarity_mix_for_order(order: int) -> Dict[str, int]:
+    """
+    Stable random mix uncommon→legendary for missions 2–100.
+    Seeded by order so every player sees the same targets; amounts vary mission-to-mission.
+    Higher rarities unlock later so early rungs stay affordable.
+    """
+    if order < 1:
+        return {}
+    target_total = dealership_cars_for_order(order)
+    if order <= 8:
+        pool = ("uncommon", "rare")
+    elif order <= 25:
+        pool = ("uncommon", "rare", "ultra_rare")
+    else:
+        pool = DEALERSHIP_MISSION_RARITIES
+
+    rng = random.Random(77001 + int(order) * 97)
+    # Prefer cheaper rarities on average, but still roll a new mix each mission.
+    bias = {"uncommon": 3.0, "rare": 2.2, "ultra_rare": 1.4, "legendary": 1.0}
+    weights = [bias[r] * (0.35 + rng.random()) for r in pool]
+    wsum = sum(weights) or 1.0
+    raw = [target_total * w / wsum for w in weights]
+    ints = [int(x) for x in raw]
+    # Largest-remainder so sum == target_total
+    frac_idx = sorted(range(len(pool)), key=lambda i: raw[i] - ints[i], reverse=True)
+    for j in range(target_total - sum(ints)):
+        ints[frac_idx[j % len(frac_idx)]] += 1
+    # Tiny early totals: keep at least one uncommon when possible
+    if target_total >= 2 and "uncommon" in pool and ints[0] == 0:
+        donor = max(range(len(ints)), key=lambda i: ints[i])
+        if ints[donor] > 0:
+            ints[donor] -= 1
+            ints[0] += 1
+    out: Dict[str, int] = {}
+    for rarity, n in zip(pool, ints):
+        if n > 0:
+            out[rarity] = n
+    return out
+
+
 def attach_dealership_car_buys(mission: Dict[str, Any]) -> None:
-    """Add exact (not eased) dealership buy targets so early=3 and final=100 stay literal."""
+    """Add exact (not eased) per-rarity dealership buy targets (uncommon → legendary)."""
     order = int(mission.get("order") or 0)
-    n = dealership_cars_for_order(order)
-    if n <= 0:
-        return
+    mix = dealership_rarity_mix_for_order(order)
     req = dict(mission.get("requirements") or {})
-    req["cars_purchased_dealership"] = n
+    req.pop("cars_purchased_dealership", None)
+    for rarity in DEALERSHIP_MISSION_RARITIES:
+        req.pop(f"cars_purchased_dealership_{rarity}", None)
+    if not mix:
+        mission["requirements"] = req
+        mission["description"] = _format_requirements_description(req)
+        return
+    for rarity, n in mix.items():
+        req[f"cars_purchased_dealership_{rarity}"] = int(n)
     mission["requirements"] = req
     mission["description"] = _format_requirements_description(req)
 
@@ -815,7 +882,14 @@ def build_missions() -> List[Dict[str, Any]]:
     assert dealership_cars_for_order(1) == 3
     assert dealership_cars_for_order(99) == 100
     assert "cars_purchased_dealership" not in (missions[0].get("requirements") or {})
-    assert int((missions[1].get("requirements") or {}).get("cars_purchased_dealership") or 0) == 3
-    assert int((missions[99].get("requirements") or {}).get("cars_purchased_dealership") or 0) == 100
+    m2_req = missions[1].get("requirements") or {}
+    m100_req = missions[99].get("requirements") or {}
+    assert "cars_purchased_dealership" not in m2_req
+    m2_sum = sum(int(m2_req.get(f"cars_purchased_dealership_{r}") or 0) for r in DEALERSHIP_MISSION_RARITIES)
+    m100_sum = sum(int(m100_req.get(f"cars_purchased_dealership_{r}") or 0) for r in DEALERSHIP_MISSION_RARITIES)
+    assert m2_sum == 3
+    assert m100_sum == 100
+    assert int(m2_req.get("cars_purchased_dealership_legendary") or 0) == 0  # early: no legendaries
+    assert int(m100_req.get("cars_purchased_dealership_legendary") or 0) >= 1
 
     return missions
