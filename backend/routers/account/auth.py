@@ -733,6 +733,7 @@ def register(router):
                 "jail_busts_npc": 0,
                 "snitch_count": 0,
                 "cars_melted": 0,
+                "cars_purchased_from_dealership": 0,
                 "bullets_purchased_from_armoury": 0,
                 "uncommon_cars_scrapped": 0,
                 "uncommon_cars_stolen": 0,
@@ -1865,79 +1866,171 @@ def register(router):
 
     @router.post("/auth/verify-email")
     async def verify_email(body: VerifyEmailBody, request: Request):
-        """Verify email with token from link; marks user verified and returns JWT + user."""
-        record = await db.email_verifications.find_one_and_delete({"token": body.token})
-        if not record:
-            raise HTTPException(status_code=400, detail="Invalid or expired verification link.")
-        expires_at = datetime.fromisoformat(record["expires_at"].replace("Z", "+00:00"))
-        if datetime.now(timezone.utc) > expires_at:
-            raise HTTPException(status_code=400, detail="Verification link has expired. Request a new one.")
-        await db.users.update_one(
-            {"id": record["user_id"]},
-            {"$set": {"email_verified": True}, "$inc": {"bullets": 400, "respect_points": 500}},
-        )
-        await srv.log_respect_earned(record["user_id"], 500, "email_verify")
-        user = await db.users.find_one({"id": record["user_id"]}, {"_id": 0})
-        if not user:
-            raise HTTPException(status_code=400, detail="User not found.")
-        user_response = {k: v for k, v in user.items() if k not in ("password_hash", "email", "is_dead", "dead_at", "points_at_death", "retrieval_used")}
+        """Verify email with token from link; marks user verified and returns JWT + user.
 
-        # If login is currently locked (pre-launch), do NOT issue a JWT/session on verification link click.
-        # This prevents "click-to-login" while the game is closed.
-        settings = await db.game_settings.find_one({"_id": "main"})
-        now = datetime.now(timezone.utc)
-        login_lock_until = settings.get("login_lock_until") if settings else None
-        login_lock_from = settings.get("login_lock_from") if settings else None
-        login_is_locked = False
-        if login_lock_until:
+        Idempotent: reused/expired-used links succeed when the account is already verified
+        (or when the logged-in requester is already verified), so email-client re-clicks and
+        Strict Mode double-posts do not look like failures. Rewards are granted only once.
+        """
+        raw_token = (body.token or "").strip()
+        if not raw_token:
+            raise HTTPException(status_code=400, detail="Missing verification token.")
+
+        async def _optional_bearer_user() -> Optional[dict]:
+            auth = (request.headers.get("Authorization") or "").strip()
+            if not auth.lower().startswith("bearer "):
+                return None
+            tok = auth.split(" ", 1)[1].strip()
+            if not tok:
+                return None
             try:
-                lock_dt = datetime.fromisoformat(login_lock_until.replace("Z", "+00:00"))
+                payload = srv.jwt.decode(tok, srv.SECRET_KEY, algorithms=[srv.ALGORITHM])
+                uid = payload.get("sub")
+                if not uid:
+                    return None
+                return await db.users.find_one({"id": uid}, {"_id": 0})
+            except Exception:
+                return None
+
+        def _login_locked_now(settings_doc, now_dt: datetime) -> bool:
+            if not settings_doc:
+                return False
+            login_lock_until = settings_doc.get("login_lock_until")
+            login_lock_from = settings_doc.get("login_lock_from")
+            if not login_lock_until:
+                return False
+            try:
+                lock_dt = datetime.fromisoformat(str(login_lock_until).replace("Z", "+00:00"))
                 started = True
                 if login_lock_from:
-                    from_dt = datetime.fromisoformat(login_lock_from.replace("Z", "+00:00"))
-                    started = now >= from_dt
-                login_is_locked = started and now < lock_dt
+                    from_dt = datetime.fromisoformat(str(login_lock_from).replace("Z", "+00:00"))
+                    started = now_dt >= from_dt
+                return started and now_dt < lock_dt
             except (ValueError, TypeError):
-                pass
+                return False
 
-        if login_is_locked:
+        async def _success_payload(user_doc: dict, *, reward_bullets: int, reward_respect: int, detail: Optional[str] = None):
+            user_response = {
+                k: v
+                for k, v in user_doc.items()
+                if k not in ("password_hash", "email", "is_dead", "dead_at", "points_at_death", "retrieval_used")
+            }
+            settings = await db.game_settings.find_one({"_id": "main"})
+            now = datetime.now(timezone.utc)
+            if _login_locked_now(settings, now):
+                out = {
+                    "token": None,
+                    "user": user_response,
+                    "email_verified": True,
+                    "reward_bullets": reward_bullets,
+                    "reward_respect_points": reward_respect,
+                    "detail": detail or "Email verified. Login is not available until launch.",
+                }
+                return out
+
+            ip = _client_ip(request) or ""
+            ua = (request.headers.get("User-Agent") or "").strip()
+            device_type = _device_type_from_user_agent(ua) if ua else "Unknown"
+            now_iso = now.isoformat()
+            session_id = str(uuid.uuid4())
+            session_entry = {
+                "id": session_id,
+                "ip": ip,
+                "device_type": device_type,
+                "created_at": now_iso,
+                "last_used_at": now_iso,
+            }
+            await db.users.update_one(
+                {"id": user_doc["id"]},
+                {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 10}}},
+            )
+            access = create_access_token({
+                "sub": user_doc["id"],
+                "v": user_doc.get("token_version", 0),
+                "session_id": session_id,
+                "username": user_doc.get("username") or "",
+                "staff_issued": False,
+            })
             return {
-                "token": None,
+                "token": access,
                 "user": user_response,
-                "reward_bullets": 400,
-                "reward_respect_points": 500,
-                "detail": "Email verified. Login is not available until launch.",
+                "email_verified": True,
+                "reward_bullets": reward_bullets,
+                "reward_respect_points": reward_respect,
+                "detail": detail,
             }
 
-        ip = _client_ip(request) or ""
-        ua = (request.headers.get("User-Agent") or "").strip()
-        device_type = _device_type_from_user_agent(ua) if ua else "Unknown"
-        now_iso = now.isoformat()
-        session_id = str(uuid.uuid4())
-        session_entry = {
-            "id": session_id,
-            "ip": ip,
-            "device_type": device_type,
-            "created_at": now_iso,
-            "last_used_at": now_iso,
-        }
-        await db.users.update_one(
-            {"id": user["id"]},
-            {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 10}}},
+        record = await db.email_verifications.find_one({"token": raw_token})
+        if not record:
+            # Reused link: if this account (from token hash we can't recover) — or logged-in user —
+            # is already verified, treat as success so the UI does not say it failed.
+            bearer_user = await _optional_bearer_user()
+            if bearer_user and bearer_user.get("email_verified") is True:
+                return await _success_payload(
+                    bearer_user,
+                    reward_bullets=0,
+                    reward_respect=0,
+                    detail="Email already verified.",
+                )
+            # Token may have been consumed moments ago by a double-submit; check recently verified
+            # users by matching Authorization or tell them to request a new link.
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid or expired verification link. If you already verified, refresh the game — otherwise request a new link.",
+            )
+
+        try:
+            expires_at = datetime.fromisoformat(str(record["expires_at"]).replace("Z", "+00:00"))
+        except (ValueError, TypeError, KeyError):
+            expires_at = None
+        if expires_at and datetime.now(timezone.utc) > expires_at:
+            await db.email_verifications.delete_many({"token": raw_token})
+            raise HTTPException(status_code=400, detail="Verification link has expired. Request a new one.")
+
+        uid = record.get("user_id")
+        if not uid:
+            await db.email_verifications.delete_many({"token": raw_token})
+            raise HTTPException(status_code=400, detail="Invalid verification link.")
+
+        existing = await db.users.find_one({"id": uid}, {"_id": 0, "email_verified": 1})
+        if not existing:
+            await db.email_verifications.delete_many({"user_id": uid})
+            raise HTTPException(status_code=400, detail="User not found.")
+
+        reward_bullets = 0
+        reward_respect = 0
+        if existing.get("email_verified") is True:
+            await db.email_verifications.delete_many({"user_id": uid})
+        else:
+            # Grant rewards once on first successful verify (guard against double-click races).
+            upd = await db.users.update_one(
+                {"id": uid, "email_verified": {"$ne": True}},
+                {
+                    "$set": {
+                        "email_verified": True,
+                        "email_verified_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                    "$inc": {"bullets": 400, "respect_points": 500},
+                },
+            )
+            if upd.modified_count > 0:
+                reward_bullets = 400
+                reward_respect = 500
+                try:
+                    await srv.log_respect_earned(uid, reward_respect, "email_verify")
+                except Exception:
+                    logging.exception("email_verify respect log failed user_id=%s", uid)
+            await db.email_verifications.delete_many({"user_id": uid})
+
+        user = await db.users.find_one({"id": uid}, {"_id": 0})
+        if not user:
+            raise HTTPException(status_code=400, detail="User not found.")
+        return await _success_payload(
+            user,
+            reward_bullets=reward_bullets,
+            reward_respect=reward_respect,
+            detail="Email verified." if reward_bullets else "Email already verified.",
         )
-        token = create_access_token({
-            "sub": user["id"],
-            "v": user.get("token_version", 0),
-            "session_id": session_id,
-            "username": user.get("username") or "",
-            "staff_issued": False,
-        })
-        return {
-            "token": token,
-            "user": user_response,
-            "reward_bullets": 400,
-            "reward_respect_points": 500,
-        }
 
     @router.post("/auth/resend-verification")
     async def resend_verification(body: ResendVerificationBody):

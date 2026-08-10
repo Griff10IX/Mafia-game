@@ -1405,7 +1405,7 @@ export default function Layout({ children }) {
       }
       if (!userRes.data?.rules_accepted && location.pathname !== '/account/rules-acceptance') {
         sinkProgress(progressPromise);
-        setUser((prev) => ({ ...userRes.data, ...prev }));
+        setUser((prev) => ({ ...(prev || {}), ...userRes.data }));
         if (userRes.data?.username) setProfileSessionLastMeUsername(userRes.data.username);
         navigate('/account/rules-acceptance', { replace: true });
         return;
@@ -1728,6 +1728,35 @@ export default function Layout({ children }) {
 
   // Staff accounts bypass the email verification requirement.
   const needsEmailVerification = user && user.email_verified === false && !isAdmin && !isModerator;
+
+  // Keep the top "Verify email" banner honest: poll while showing, and sync when
+  // another tab finishes /auth/verify-email (localStorage signal).
+  useEffect(() => {
+    if (!needsEmailVerification) return undefined;
+    let cancelled = false;
+    const refreshVerifiedFlag = async () => {
+      try {
+        const r = await api.get('/auth/me');
+        if (cancelled) return;
+        if (r.data?.email_verified === true) {
+          setUser((prev) => (prev ? { ...prev, email_verified: true } : prev));
+          window.dispatchEvent(new CustomEvent('app:refresh-user'));
+        }
+      } catch (_) { /* ignore */ }
+    };
+    const onStorage = (e) => {
+      if (e.key === 'mafia:email_verified' && e.newValue) refreshVerifiedFlag();
+    };
+    window.addEventListener('storage', onStorage);
+    const intervalId = setInterval(refreshVerifiedFlag, 15000);
+    // Immediate check in case they verified moments before mount / returned from email app.
+    refreshVerifiedFlag();
+    return () => {
+      cancelled = true;
+      window.removeEventListener('storage', onStorage);
+      clearInterval(intervalId);
+    };
+  }, [needsEmailVerification]);
 
   const isCategorizedClassic = sidebarLayout === 'categorized_classic';
   const PATH_TO_CATEGORY = isCategorizedClassic

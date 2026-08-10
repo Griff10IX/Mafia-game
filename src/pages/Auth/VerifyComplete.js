@@ -4,8 +4,8 @@ import styles from '../../styles/noir.module.css';
 export default function VerifyComplete() {
   const location = useLocation();
   const state = location.state || {};
-  const bullets = state.reward_bullets ?? 2000;
-  const respectPoints = state.reward_respect_points ?? 500;
+  const bullets = state.reward_bullets ?? 0;
+  const respectPoints = state.reward_respect_points ?? 0;
 
   return (
     <div
@@ -25,9 +25,13 @@ export default function VerifyComplete() {
           <p className="text-sm mb-3" style={{ color: 'var(--noir-muted)' }}>
             You&apos;ve verified your email. Your account is ready — you can log in anytime with your email or username.
           </p>
-          <p className="text-sm mb-6 font-heading" style={{ color: 'var(--noir-primary)' }}>
-            You received {bullets.toLocaleString()} bullets and {respectPoints.toLocaleString()} Respect Points as a thank you.
-          </p>
+          {(bullets > 0 || respectPoints > 0) ? (
+            <p className="text-sm mb-6 font-heading" style={{ color: 'var(--noir-primary)' }}>
+              You received {bullets.toLocaleString()} bullets and {respectPoints.toLocaleString()} Respect Points as a thank you.
+            </p>
+          ) : (
+            <div className="mb-6" />
+          )}
           <Link
             to="/account/dashboard"
             className={`${styles.btnPrimary} inline-block px-6 py-3 rounded-sm font-heading font-bold uppercase tracking-wider`}

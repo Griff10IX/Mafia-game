@@ -223,6 +223,8 @@ def _get_user_progress_value(user: dict, req_key: str) -> int:
         return int(user.get("snitch_count") or 0)
     if req_key == "cars_melted":
         return int(user.get("cars_melted") or 0)
+    if req_key == "cars_purchased_dealership":
+        return int(user.get("cars_purchased_from_dealership") or 0)
     if req_key == "bullets_melted":
         return int(user.get("bullets_melted") or 0)
     if req_key == "bullets_purchased_armoury":
@@ -318,9 +320,15 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
             if baseline is None:
                 baseline = total
             current = max(0, total - baseline)
+        elif key == "cars_purchased_dealership" and mission.get("id") == SECOND_MISSION_ID:
+            total = int(user.get("cars_purchased_from_dealership") or 0)
+            baseline = user.get("mission_2_cars_purchased_dealership_baseline")
+            if baseline is None:
+                baseline = total
+            current = max(0, total - baseline)
         elif mission.get("id") == THIRD_MISSION_ID and key in (
             "crimes", "jail_busts", "gta", "booze_sells", "bullets_melted",
-            "bullets_purchased_armoury", "uncommon_cars_scrapped",
+            "bullets_purchased_armoury", "uncommon_cars_scrapped", "cars_purchased_dealership",
         ):
             total_key = {
                 "crimes": "total_crimes",
@@ -330,6 +338,7 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
                 "bullets_melted": "bullets_melted",
                 "bullets_purchased_armoury": "bullets_purchased_from_armoury",
                 "uncommon_cars_scrapped": "uncommon_cars_scrapped",
+                "cars_purchased_dealership": "cars_purchased_from_dealership",
             }[key]
             baseline_key = {
                 "crimes": "mission_3_crimes_baseline",
@@ -339,6 +348,7 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
                 "bullets_melted": "mission_3_bullets_melted_baseline",
                 "bullets_purchased_armoury": "mission_3_bullets_purchased_armoury_baseline",
                 "uncommon_cars_scrapped": "mission_3_uncommon_cars_scrapped_baseline",
+                "cars_purchased_dealership": "mission_3_cars_purchased_dealership_baseline",
             }[key]
             total = int(user.get(total_key) or 0)
             baseline = user.get(baseline_key)
@@ -384,6 +394,8 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
             parts.append(f"Snitch on someone (in jail): {display:,}/{target:,}")
         elif key == "cars_melted":
             parts.append(f"{display:,}/{target:,} cars melted")
+        elif key == "cars_purchased_dealership":
+            parts.append(f"{display:,}/{target:,} cars from dealership")
         elif key == "bullets_melted":
             parts.append(f"{display:,}/{target:,} bullets melted")
         elif key == "bullets_purchased_armoury":
@@ -424,11 +436,20 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
                 "mission_2_crimes_baseline": c_baseline,
                 "mission_2_jail_busts_baseline": j_baseline,
                 "mission_2_cars_melted_baseline": melt_baseline,
+                "mission_2_cars_purchased_dealership_baseline": int(current_user.get("cars_purchased_from_dealership") or 0),
             }},
         )
         current_user["mission_2_crimes_baseline"] = c_baseline
         current_user["mission_2_jail_busts_baseline"] = j_baseline
         current_user["mission_2_cars_melted_baseline"] = melt_baseline
+        current_user["mission_2_cars_purchased_dealership_baseline"] = int(current_user.get("cars_purchased_from_dealership") or 0)
+    elif FIRST_MISSION_ID in completed_ids and current_user.get("mission_2_cars_purchased_dealership_baseline") is None:
+        deal_b = int(current_user.get("cars_purchased_from_dealership") or 0)
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"mission_2_cars_purchased_dealership_baseline": deal_b}},
+        )
+        current_user["mission_2_cars_purchased_dealership_baseline"] = deal_b
     # Ensure third mission baselines exist (all counts from when mission 3 unlocks)
     if SECOND_MISSION_ID in completed_ids and current_user.get("mission_3_crimes_baseline") is None:
         m3_set = {
@@ -439,9 +460,17 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
             "mission_3_bullets_melted_baseline": int(current_user.get("bullets_melted") or 0),
             "mission_3_bullets_purchased_armoury_baseline": int(current_user.get("bullets_purchased_from_armoury") or 0),
             "mission_3_uncommon_cars_scrapped_baseline": int(current_user.get("uncommon_cars_scrapped") or 0),
+            "mission_3_cars_purchased_dealership_baseline": int(current_user.get("cars_purchased_from_dealership") or 0),
         }
         await db.users.update_one({"id": current_user["id"]}, {"$set": m3_set})
         current_user.update(m3_set)
+    elif SECOND_MISSION_ID in completed_ids and current_user.get("mission_3_cars_purchased_dealership_baseline") is None:
+        deal_b = int(current_user.get("cars_purchased_from_dealership") or 0)
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"mission_3_cars_purchased_dealership_baseline": deal_b}},
+        )
+        current_user["mission_3_cars_purchased_dealership_baseline"] = deal_b
     await _ensure_extended_mission_baselines(current_user)
     current_user = await _maybe_mission_loot_backfill(current_user)
     current_user = await _maybe_mission_rp_backfill(current_user)
@@ -545,11 +574,20 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
                 "mission_2_crimes_baseline": c_baseline,
                 "mission_2_jail_busts_baseline": j_baseline,
                 "mission_2_cars_melted_baseline": melt_baseline,
+                "mission_2_cars_purchased_dealership_baseline": int(current_user.get("cars_purchased_from_dealership") or 0),
             }},
         )
         current_user["mission_2_crimes_baseline"] = c_baseline
         current_user["mission_2_jail_busts_baseline"] = j_baseline
         current_user["mission_2_cars_melted_baseline"] = melt_baseline
+        current_user["mission_2_cars_purchased_dealership_baseline"] = int(current_user.get("cars_purchased_from_dealership") or 0)
+    elif FIRST_MISSION_ID in completed_ids and current_user.get("mission_2_cars_purchased_dealership_baseline") is None:
+        deal_b = int(current_user.get("cars_purchased_from_dealership") or 0)
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"mission_2_cars_purchased_dealership_baseline": deal_b}},
+        )
+        current_user["mission_2_cars_purchased_dealership_baseline"] = deal_b
     if SECOND_MISSION_ID in completed_ids and current_user.get("mission_3_crimes_baseline") is None:
         m3_set = {
             "mission_3_crimes_baseline": int(current_user.get("total_crimes") or 0),
@@ -559,9 +597,17 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
             "mission_3_bullets_melted_baseline": int(current_user.get("bullets_melted") or 0),
             "mission_3_bullets_purchased_armoury_baseline": int(current_user.get("bullets_purchased_from_armoury") or 0),
             "mission_3_uncommon_cars_scrapped_baseline": int(current_user.get("uncommon_cars_scrapped") or 0),
+            "mission_3_cars_purchased_dealership_baseline": int(current_user.get("cars_purchased_from_dealership") or 0),
         }
         await db.users.update_one({"id": current_user["id"]}, {"$set": m3_set})
         current_user.update(m3_set)
+    elif SECOND_MISSION_ID in completed_ids and current_user.get("mission_3_cars_purchased_dealership_baseline") is None:
+        deal_b = int(current_user.get("cars_purchased_from_dealership") or 0)
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"mission_3_cars_purchased_dealership_baseline": deal_b}},
+        )
+        current_user["mission_3_cars_purchased_dealership_baseline"] = deal_b
     await _ensure_extended_mission_baselines(current_user)
     current_user = await _maybe_mission_loot_backfill(current_user)
     current_user = await _maybe_mission_rp_backfill(current_user)
@@ -759,6 +805,7 @@ def _build_mission_completion_reward_update(
         update.setdefault("$set", {})["mission_2_crimes_baseline"] = int(current_user.get("total_crimes") or 0)
         update.setdefault("$set", {})["mission_2_jail_busts_baseline"] = int(current_user.get("jail_busts") or 0)
         update.setdefault("$set", {})["mission_2_cars_melted_baseline"] = int(current_user.get("cars_melted") or 0)
+        update.setdefault("$set", {})["mission_2_cars_purchased_dealership_baseline"] = int(current_user.get("cars_purchased_from_dealership") or 0)
     if mission_id == SECOND_MISSION_ID:
         update.setdefault("$set", {})["mission_3_crimes_baseline"] = int(current_user.get("total_crimes") or 0)
         update.setdefault("$set", {})["mission_3_jail_busts_baseline"] = int(current_user.get("jail_busts") or 0)
@@ -767,6 +814,7 @@ def _build_mission_completion_reward_update(
         update.setdefault("$set", {})["mission_3_bullets_melted_baseline"] = int(current_user.get("bullets_melted") or 0)
         update.setdefault("$set", {})["mission_3_bullets_purchased_armoury_baseline"] = int(current_user.get("bullets_purchased_from_armoury") or 0)
         update.setdefault("$set", {})["mission_3_uncommon_cars_scrapped_baseline"] = int(current_user.get("uncommon_cars_scrapped") or 0)
+        update.setdefault("$set", {})["mission_3_cars_purchased_dealership_baseline"] = int(current_user.get("cars_purchased_from_dealership") or 0)
     if tribute_bank_inc:
         update.setdefault("$inc", {})["tribute_bank"] = tribute_bank_inc
     if reward_respect:
@@ -1317,6 +1365,9 @@ async def ensure_mission_chain_baselines(user: dict) -> None:
         mset["mission_2_crimes_baseline"] = int(user.get("total_crimes") or 0)
         mset["mission_2_jail_busts_baseline"] = int(user.get("jail_busts") or 0)
         mset["mission_2_cars_melted_baseline"] = int(user.get("cars_melted") or 0)
+        mset["mission_2_cars_purchased_dealership_baseline"] = int(user.get("cars_purchased_from_dealership") or 0)
+    elif FIRST_MISSION_ID in completed_ids and user.get("mission_2_cars_purchased_dealership_baseline") is None:
+        mset["mission_2_cars_purchased_dealership_baseline"] = int(user.get("cars_purchased_from_dealership") or 0)
     if SECOND_MISSION_ID in completed_ids and user.get("mission_3_crimes_baseline") is None:
         mset["mission_3_crimes_baseline"] = int(user.get("total_crimes") or 0)
         mset["mission_3_jail_busts_baseline"] = int(user.get("jail_busts") or 0)
@@ -1325,6 +1376,9 @@ async def ensure_mission_chain_baselines(user: dict) -> None:
         mset["mission_3_bullets_melted_baseline"] = int(user.get("bullets_melted") or 0)
         mset["mission_3_bullets_purchased_armoury_baseline"] = int(user.get("bullets_purchased_from_armoury") or 0)
         mset["mission_3_uncommon_cars_scrapped_baseline"] = int(user.get("uncommon_cars_scrapped") or 0)
+        mset["mission_3_cars_purchased_dealership_baseline"] = int(user.get("cars_purchased_from_dealership") or 0)
+    elif SECOND_MISSION_ID in completed_ids and user.get("mission_3_cars_purchased_dealership_baseline") is None:
+        mset["mission_3_cars_purchased_dealership_baseline"] = int(user.get("cars_purchased_from_dealership") or 0)
     if mset:
         await db.users.update_one({"id": uid}, {"$set": mset})
         user.update(mset)

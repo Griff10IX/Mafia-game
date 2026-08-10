@@ -7,10 +7,43 @@ import styles from '../../styles/noir.module.css';
 /** One-time verification POST per token. React 18 Strict Mode runs effects twice in dev — without this the 2nd call consumes nothing and shows "invalid link". */
 const verifyEmailPostStarted = new Set();
 
+const EMAIL_VERIFIED_STORAGE_KEY = 'mafia:email_verified';
+
+function broadcastEmailVerified() {
+  try {
+    localStorage.setItem(EMAIL_VERIFIED_STORAGE_KEY, String(Date.now()));
+  } catch (_) { /* ignore */ }
+  try {
+    window.dispatchEvent(new CustomEvent('app:refresh-user'));
+  } catch (_) { /* ignore */ }
+}
+
+function finishVerified(navigate, setStatus, setMessage, setIsAuthenticated, data) {
+  const bullets = Number(data?.reward_bullets ?? 0) || 0;
+  const respect = Number(data?.reward_respect_points ?? 0) || 0;
+  if (data?.token) {
+    localStorage.setItem('token', data.token);
+    if (setIsAuthenticated) setIsAuthenticated(true);
+  }
+  broadcastEmailVerified();
+  setStatus('success');
+  if (bullets > 0 || respect > 0) {
+    setMessage(`Email verified! You received ${bullets.toLocaleString()} bullets and ${respect.toLocaleString()} Respect Points.`);
+    toast.success(`You received ${bullets.toLocaleString()} bullets and ${respect.toLocaleString()} Respect Points!`);
+  } else {
+    setMessage(data?.detail || 'Email verified! Your account is ready.');
+    toast.success('Email verified!');
+  }
+  setTimeout(
+    () => navigate('/verify-complete', { replace: true, state: { reward_bullets: bullets, reward_respect_points: respect } }),
+    800,
+  );
+}
+
 export default function VerifyEmail({ setIsAuthenticated }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [status, setStatus] = useState('loading'); // 'loading' | 'success' | 'error' | 'unverified'
+  const [status, setStatus] = useState('loading'); // 'loading' | 'success' | 'error' | 'unverified' | 'already'
   const [message, setMessage] = useState('');
   const [resendIdentifier, setResendIdentifier] = useState('');
   const [resendLoading, setResendLoading] = useState(false);
@@ -33,26 +66,44 @@ export default function VerifyEmail({ setIsAuthenticated }) {
       ran.current = true;
       api.post('/auth/verify-email', { token })
         .then((response) => {
-          if (response.data.token) {
-            localStorage.setItem('token', response.data.token);
-            if (setIsAuthenticated) setIsAuthenticated(true);
-            setStatus('success');
-            const bullets = response.data.reward_bullets ?? 2000;
-            const respect = response.data.reward_respect_points ?? 500;
-            setMessage(`Email verified! You received ${bullets.toLocaleString()} bullets and ${respect.toLocaleString()} Respect Points.`);
-            toast.success(`You received ${bullets.toLocaleString()} bullets and ${respect.toLocaleString()} Respect Points!`);
-            window.dispatchEvent(new CustomEvent('app:refresh-user'));
-            setTimeout(() => navigate('/verify-complete', { replace: true, state: { reward_bullets: bullets, reward_respect_points: respect } }), 800);
+          const data = response.data || {};
+          // Success when JWT issued OR server confirms verified (e.g. login lock / already verified / reused link).
+          const ok =
+            !!data.token
+            || data.email_verified === true
+            || data.user?.email_verified === true
+            || (typeof data.detail === 'string' && /verified/i.test(data.detail) && !/failed|invalid|expired/i.test(data.detail));
+          if (ok) {
+            finishVerified(navigate, setStatus, setMessage, setIsAuthenticated, data);
           } else {
             setStatus('error');
-            setMessage(response.data.detail || 'Verification failed.');
+            setMessage(data.detail || 'Verification failed.');
           }
         })
         .catch((err) => {
           verifyEmailPostStarted.delete(token);
-          setStatus('error');
-          const detail = err.response?.data?.detail;
-          setMessage(typeof detail === 'string' ? detail : 'Verification link invalid or expired. Request a new one.');
+          // If link was already used but session is verified, still succeed.
+          api.get('/auth/me')
+            .then((me) => {
+              if (me.data?.email_verified === true) {
+                finishVerified(navigate, setStatus, setMessage, setIsAuthenticated, {
+                  token: null,
+                  email_verified: true,
+                  reward_bullets: 0,
+                  reward_respect_points: 0,
+                  detail: 'Email already verified.',
+                });
+                return;
+              }
+              setStatus('error');
+              const detail = err.response?.data?.detail;
+              setMessage(typeof detail === 'string' ? detail : 'Verification link invalid or expired. Request a new one.');
+            })
+            .catch(() => {
+              setStatus('error');
+              const detail = err.response?.data?.detail;
+              setMessage(typeof detail === 'string' ? detail : 'Verification link invalid or expired. Request a new one.');
+            });
         });
       return;
     }
@@ -60,18 +111,24 @@ export default function VerifyEmail({ setIsAuthenticated }) {
     api.get('/auth/me')
       .then((response) => {
         const data = response.data;
+        if (data && data.email_verified === true) {
+          setStatus('already');
+          setMessage('Your email is already verified.');
+          broadcastEmailVerified();
+          return;
+        }
         if (data && data.email_verified === false) {
           setStatus('unverified');
           setResendIdentifier(data.username || '');
           setMessage('');
         } else {
           setStatus('error');
-          setMessage('Missing verification link. Check your email or request a new link.');
+          setMessage('Missing verification link. Check your email or request a new one.');
         }
       })
       .catch(() => {
         setStatus('error');
-        setMessage('Missing verification link. Check your email or request a new link.');
+        setMessage('Missing verification link. Check your email or request a new one.');
       });
   }, [searchParams, navigate, setIsAuthenticated]);
 
@@ -115,6 +172,17 @@ export default function VerifyEmail({ setIsAuthenticated }) {
           )}
           {status === 'success' && (
             <p className="text-sm" style={{ color: 'var(--noir-primary)' }}>{message}</p>
+          )}
+          {status === 'already' && (
+            <>
+              <p className="text-sm mb-4" style={{ color: 'var(--noir-primary)' }}>{message}</p>
+              <Link
+                to="/account/dashboard"
+                className={`${styles.btnPrimary} inline-block px-6 py-2 rounded-sm font-heading font-bold uppercase tracking-wider`}
+              >
+                Go to dashboard
+              </Link>
+            </>
           )}
           {status === 'unverified' && (
             <>
@@ -161,3 +229,5 @@ export default function VerifyEmail({ setIsAuthenticated }) {
     </div>
   );
 }
+
+export { EMAIL_VERIFIED_STORAGE_KEY };

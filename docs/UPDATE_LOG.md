@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-10 20:46 UTC[/color][/b] — [b]Missions: buy cars from the dealership[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Added:[/b] Missions [b]2–100[/b] now require buying cars from the [b]garage dealership[/b] (Buy Cars). Targets scale from [b]3[/b] cars early to [b]100[/b] on the final mission.[/color]
+[*][color=#888888][b]Note:[/b] Only dealership purchases count. Completed missions stay completed — you are [b]not[/b] sent back to mission 1. Progress for the new cars target counts from when that mission unlocks.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-09 23:02 UTC[/color][/b] — [b]Mini-games: fair score claims[/b][/size]
 [quote]
 [list]

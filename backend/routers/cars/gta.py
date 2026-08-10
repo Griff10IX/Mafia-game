@@ -2439,6 +2439,10 @@ async def buy_car(
         "damage_percent": 0,
     }
     await db.user_cars.insert_one(doc)
+    await db.users.update_one(
+        {"id": current_user.get("id") or ""},
+        {"$inc": {"cars_purchased_from_dealership": 1}},
+    )
     _invalidate_travel_info_cache(current_user.get("id") or "")
     now_iso = now.isoformat()
     await db.money_transfers.insert_one({
@@ -2588,6 +2592,11 @@ async def buy_cars_bulk(
         })
 
     await db.user_cars.insert_many(user_car_docs)
+    if bought_lines:
+        await db.users.update_one(
+            {"id": uid},
+            {"$inc": {"cars_purchased_from_dealership": len(bought_lines)}},
+        )
     if transfer_docs:
         await db.money_transfers.insert_many(transfer_docs)
 

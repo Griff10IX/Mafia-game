@@ -87,6 +87,7 @@ def _format_requirements_description(req: Dict[str, Any]) -> str:
         "gta",
         "booze_sells",
         "cars_melted",
+        "cars_purchased_dealership",
         "bullets_melted",
         "bullets_purchased_armoury",
         "uncommon_cars_stolen",
@@ -112,6 +113,8 @@ def _format_requirements_description(req: Dict[str, Any]) -> str:
             parts.append(f"Do {v:,} booze runs")
         elif k == "cars_melted":
             parts.append(f"Melt {v:,} car" if v == 1 else f"Melt {v:,} cars")
+        elif k == "cars_purchased_dealership":
+            parts.append(f"Buy {v:,} car from the dealership" if v == 1 else f"Buy {v:,} cars from the dealership")
         elif k == "bullets_melted":
             parts.append(f"Melt {v:,} bullets")
         elif k == "bullets_purchased_armoury":
@@ -130,6 +133,27 @@ def _format_requirements_description(req: Dict[str, Any]) -> str:
         if isinstance(v, (int, float)):
             parts.append(f"{int(v):,} {k.replace('_', ' ')}")
     return (". ".join(parts) + ".") if parts else ""
+
+
+def dealership_cars_for_order(order: int) -> int:
+    """Mission 2 (order 1) → 3 cars; mission 100 (order 99) → 100 cars. Mission 1 has none."""
+    if order < 1:
+        return 0
+    # Linear: order 1 → 3, order 99 → 100
+    t = (order - 1) / 98.0
+    return max(3, min(100, int(round(3 + t * 97))))
+
+
+def attach_dealership_car_buys(mission: Dict[str, Any]) -> None:
+    """Add exact (not eased) dealership buy targets so early=3 and final=100 stay literal."""
+    order = int(mission.get("order") or 0)
+    n = dealership_cars_for_order(order)
+    if n <= 0:
+        return
+    req = dict(mission.get("requirements") or {})
+    req["cars_purchased_dealership"] = n
+    mission["requirements"] = req
+    mission["description"] = _format_requirements_description(req)
 
 
 def _weights_100() -> List[float]:
@@ -785,5 +809,13 @@ def build_missions() -> List[Dict[str, Any]]:
         sum(int(m.get("reward_tribute_loot_box_pieces_daily") or 0) for m in missions)
         == TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY
     )
+
+    for m in missions:
+        attach_dealership_car_buys(m)
+    assert dealership_cars_for_order(1) == 3
+    assert dealership_cars_for_order(99) == 100
+    assert "cars_purchased_dealership" not in (missions[0].get("requirements") or {})
+    assert int((missions[1].get("requirements") or {}).get("cars_purchased_dealership") or 0) == 3
+    assert int((missions[99].get("requirements") or {}).get("cars_purchased_dealership") or 0) == 100
 
     return missions
