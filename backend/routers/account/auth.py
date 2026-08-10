@@ -2496,6 +2496,8 @@ def register(router):
                 auto_collect_12h_tokens=_safe_int(u.get("auto_collect_12h_tokens"), 0),
                 auto_collect_24h_tokens=_safe_int(u.get("auto_collect_24h_tokens"), 0),
                 jail_bailout_tokens=_safe_int(u.get("jail_bailout_tokens"), 0),
+                mission_skip_tokens=_safe_int(u.get("mission_skip_tokens"), 0),
+                robot_bodyguard_hire_tokens=_safe_int(u.get("robot_bodyguard_hire_tokens"), 0),
                 cooldown_skip_crime_tokens=_safe_int(u.get("cooldown_skip_crime_tokens"), 0),
                 cooldown_skip_gta_tokens=_safe_int(u.get("cooldown_skip_gta_tokens"), 0),
                 cooldown_skip_booze_tokens=_safe_int(u.get("cooldown_skip_booze_tokens"), 0),

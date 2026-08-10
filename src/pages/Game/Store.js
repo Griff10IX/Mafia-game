@@ -387,7 +387,7 @@ const TOKEN_STORE_ITEMS = [
   { tokenType: 'cooldown_skip_crime', title: 'Crime Cooldown Skip', price: 35, userKey: 'cooldown_skip_crime_tokens', flagKey: 'cooldown_skip_crime', desc: 'Activate in My Inventory or tap Skip on a crime row — skips one crime cooldown (max 5,000 activations/day). Skipped crimes pay −50% cash.' },
   { tokenType: 'cooldown_skip_gta', title: 'GTA Cooldown Skip', price: 35, userKey: 'cooldown_skip_gta_tokens', flagKey: 'cooldown_skip_gta', desc: 'Skips one GTA cooldown when activated (1,000/day cap).' },
   { tokenType: 'cooldown_skip_booze', title: 'Booze Travel Skip', price: 35, userKey: 'cooldown_skip_booze_tokens', flagKey: 'cooldown_skip_booze', desc: 'Skips one booze-run travel wait when activated (200/day cap).' },
-  { tokenType: 'cooldown_skip_properties', title: 'Properties Collect Skip', price: 35, userKey: 'cooldown_skip_properties_tokens', flagKey: 'cooldown_skip_properties', desc: 'Skips one property collect cooldown when activated — tap ⚡ Skip Collect on the Properties page (3/day cap).' },
+  { tokenType: 'cooldown_skip_properties', title: 'Properties Collect Skip', price: 35, userKey: 'cooldown_skip_properties_tokens', flagKey: 'cooldown_skip_properties', desc: 'Skips property collect cooldowns — Skip Collect All covers every business for 1 token (3/day).' },
 ];
 
 const TOKEN_BUNDLES = [
@@ -1543,7 +1543,8 @@ export default function Store() {
                     <>
                       Enter whole points from 1,000–1,000,000, or a GBP budget — the server prices along the standard store curve (Stripe checkout).
                       {' '}
-                      <span className="text-violet-400/90">GBP card checkouts earn ~9,000 loot box pieces per £120 charged</span> (75 per whole £1; credited when your points are).
+                      <span className="text-violet-400/90">GBP card checkouts earn ~9,000 loot box pieces per £120 charged</span> (75 per whole £1; credited when your points are). Any GBP store checkout also earns{' '}
+                      <span className="text-amber-400/90">1 Wheel of Fortune free spin per whole £10</span> (banked; leftover under £10 on that checkout does not carry).
                     </>
                   )
                   : (
@@ -1633,6 +1634,15 @@ export default function Store() {
                           <span className="text-violet-400/90">{Number(customQuote.loot_box_pieces).toLocaleString()} loot pieces</span>
                         </>
                       )}
+                      {Number(customQuote.wheel_bonus_free_spins || 0) > 0 && (
+                        <>
+                          {' · '}
+                          <span className="text-amber-400/90">
+                            {Number(customQuote.wheel_bonus_free_spins).toLocaleString()} wheel free spin
+                            {Number(customQuote.wheel_bonus_free_spins) === 1 ? '' : 's'}
+                          </span>
+                        </>
+                      )}
                     </>
                   ) : (
                     <>
@@ -1646,6 +1656,15 @@ export default function Store() {
                         <>
                           {' · '}
                           <span className="text-violet-400/90">{Number(customQuote.loot_box_pieces).toLocaleString()} loot pieces</span>
+                        </>
+                      )}
+                      {Number(customQuote.wheel_bonus_free_spins || 0) > 0 && (
+                        <>
+                          {' · '}
+                          <span className="text-amber-400/90">
+                            {Number(customQuote.wheel_bonus_free_spins).toLocaleString()} wheel free spin
+                            {Number(customQuote.wheel_bonus_free_spins) === 1 ? '' : 's'}
+                          </span>
                         </>
                       )}
                       <span className="block text-[8px] text-mutedForeground mt-0.5">GBP mode charges the shown amount (largest whole base points that fit your budget; event bonus is added on top).</span>

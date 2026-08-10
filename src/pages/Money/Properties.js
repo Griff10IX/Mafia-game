@@ -323,13 +323,10 @@ export default function Properties() {
     let total = 0;
     const softFailures = [];
     const hardFailures = [];
-    let tokensLeft = skipTokens;
     if (useSkip) {
       try {
-        // Activate one held token into a credit if needed; further on-cooldown collects
-        // consume additional credits already held (daily activate cap is 3).
+        // One token / one daily use covers every business (server opens a short skip sweep).
         await ensurePropertiesSkipCredit();
-        if (skipCredits < 1) tokensLeft = Math.max(0, tokensLeft - 1);
       } catch (e) {
         toast.error(e.response?.data?.detail || 'Failed to activate properties collect skip');
         setCollectAllLoading(false);
@@ -352,11 +349,9 @@ export default function Properties() {
         }
       } catch (e) {
         const detail = formatApiDetail(e.response?.data?.detail);
-        // Mid-loop: if this one needs a skip and we still hold tokens, activate and retry once.
-        if (useSkip && isCollectCooldownOrWaitMessage(detail) && tokensLeft > 0) {
+        // Retry once if still on cooldown — first collect opens the skip sweep for the rest.
+        if (useSkip && isCollectCooldownOrWaitMessage(detail)) {
           try {
-            await api.post('/inventory/tokens/use', { token_type: 'cooldown_skip_properties' });
-            tokensLeft -= 1;
             const retry = await api.post(`/properties/${prop.id}/collect`);
             collected++;
             patchPropertyAfterCollect(prop.id, retry.data);
@@ -394,7 +389,7 @@ export default function Properties() {
     } else if (softFailures.length > 1) {
       toast.warning(
         canSkipCollect && !useSkip
-          ? `${softFailures.length} businesses not ready yet. Use ⚡ Skip Collect if you hold Properties Collect Skip tokens (3/day).`
+          ? `${softFailures.length} businesses not ready yet. Use ⚡ Skip Collect if you hold Properties Collect Skip tokens (1 token skips all, 3/day).`
           : `${softFailures.length} businesses not ready yet. ${softFailures[0]} (+${softFailures.length - 1} more — open each card for details or wait for the timer).`,
       );
     }

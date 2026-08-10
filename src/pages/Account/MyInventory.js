@@ -23,14 +23,16 @@ const TOKEN_TYPES = [
   'auto_collect_12h', 'auto_collect_24h',
   'cooldown_skip_crime', 'cooldown_skip_gta', 'cooldown_skip_booze', 'cooldown_skip_properties',
   'jail_bailout',
+  'mission_skip',
+  'robot_bodyguard_hire',
   'rank_xp_pass',
 ];
 // Backend: all TOKEN_TYPES except rank_xp_pass / crew_oc_auto_3h; jail_bailout is not giftable either.
-const GIFTABLE_TOKEN_TYPES = TOKEN_TYPES.filter((k) => !['rank_xp_pass', 'crew_oc_auto_3h', 'jail_bailout'].includes(k));
+const GIFTABLE_TOKEN_TYPES = TOKEN_TYPES.filter((k) => !['rank_xp_pass', 'crew_oc_auto_3h', 'jail_bailout', 'mission_skip', 'robot_bodyguard_hire'].includes(k));
 // Cooldown skip vouchers activate one at a time (backend rejects use_all).
 const NO_USE_ALL_TOKEN_TYPES = new Set(['cooldown_skip_crime', 'cooldown_skip_gta', 'cooldown_skip_booze', 'cooldown_skip_properties']);
 // Count-only tokens have no Use button here (spent from their own page).
-const COUNT_ONLY_TOKEN_TYPES = new Set(['jail_bailout']);
+const COUNT_ONLY_TOKEN_TYPES = new Set(['jail_bailout', 'mission_skip', 'robot_bodyguard_hire']);
 const TOKEN_GIFT_DAILY_DEFAULT = { sent: 0, limit: 20 };
 /** Keep in sync with backend armoury.TOKEN_MAX_STACK_HOURS (7 × 24 = 1 week). */
 const TOKEN_MAX_STACK_LABEL = '1 week';
@@ -56,8 +58,10 @@ const tokenLabels = {
   cooldown_skip_crime: { name: 'Crime cooldown skip', icon: Zap, desc: 'Activate to skip one crime cooldown (max 5,000 activations/day; other skip types 200/day).' },
   cooldown_skip_gta: { name: 'GTA cooldown skip', icon: Zap, desc: 'Activate to skip one GTA cooldown (1,000/day cap).' },
   cooldown_skip_booze: { name: 'Booze travel skip', icon: Zap, desc: 'Activate to skip one booze-run travel wait (200/day cap).' },
-  cooldown_skip_properties: { name: 'Properties collect skip', icon: Zap, desc: 'Activate to skip one property collect cooldown — or tap ⚡ Skip Collect on the Properties page (3/day cap).' },
+  cooldown_skip_properties: { name: 'Properties collect skip', icon: Zap, desc: 'Skip property collect cooldowns — ⚡ Skip Collect All covers every business for 1 token (3/day).' },
   jail_bailout: { name: 'Jail bailout token', icon: Target, desc: 'Instant leave jail — use it from the Jail page (500 uses/day UTC; does not bypass OC lockdown).' },
+  mission_skip: { name: 'Mission Skip', icon: Zap, desc: 'Ultra rare — instantly complete your current open mission and claim its rewards. Use from the Missions page. Wheel of Fortune only.' },
+  robot_bodyguard_hire: { name: 'Free Robot Bodyguard', icon: Shield, desc: 'Rare — hire one robot bodyguard for free (instead of paying points). Auto-used on Kill → Bodyguards when you hire. Wheel of Fortune only.' },
   rank_xp_pass: { name: 'Game Pass', icon: Package, desc: 'Activate in Armoury/My Inventory to claim one-time Game Pass rewards. Expires in 1 month if unused.' },
 };
 
@@ -710,10 +714,20 @@ export default function MyInventory() {
       )}
       {COUNT_ONLY_TOKEN_TYPES.has(key) ? (
         <Link
-          to="/crime/jail"
+          to={
+            key === 'mission_skip'
+              ? '/account/missions'
+              : key === 'robot_bodyguard_hire'
+                ? '/kill/bodyguards'
+                : '/crime/jail'
+          }
           className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
         >
-          Use on Jail page →
+          {key === 'mission_skip'
+            ? 'Use on Missions →'
+            : key === 'robot_bodyguard_hire'
+              ? 'Use on Bodyguards →'
+              : 'Use on Jail page →'}
         </Link>
       ) : (
         <button

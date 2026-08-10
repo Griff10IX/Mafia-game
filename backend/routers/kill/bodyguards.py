@@ -558,12 +558,13 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
 
         sub_doc = await db.users.find_one(
             {"id": uid},
-            {"_id": 0, "robot_bg_auto_search_until": 1},
+            {"_id": 0, "robot_bg_auto_search_until": 1, "robot_bodyguard_hire_tokens": 1},
         )
         until = (sub_doc or {}).get("robot_bg_auto_search_until")
         payload["robot_bg_auto_search_until"] = until
         payload["robot_bg_auto_search_active"] = robot_bg_auto_search_active(sub_doc or {})
         payload["robot_bg_auto_search_cost"] = ROBOT_BG_AUTO_SEARCH_COST
+        payload["robot_bodyguard_hire_tokens"] = int((sub_doc or {}).get("robot_bodyguard_hire_tokens") or 0)
         _bodyguards_cache[uid] = (payload, now + _BODYGUARDS_CACHE_TTL_SEC)
         logger.info("get_bodyguards success uid=%s slots=%d", uid, len(result))
         return payload
@@ -789,9 +790,11 @@ async def _do_hire_bodyguard_reserved(
             "_id": 0,
             "bodyguard_slots": 1,
             "bodyguard_robot_loss_hire_allowed_after": 1,
+            "robot_bodyguard_hire_tokens": 1,
         },
     )
     slots = int((fresh or {}).get("bodyguard_slots") or 0)
+    hire_tokens = max(0, int((fresh or {}).get("robot_bodyguard_hire_tokens") or 0))
     until_iso = (fresh or {}).get("bodyguard_robot_loss_hire_allowed_after")
     until = _parse_iso_datetime(until_iso) if until_iso else None
     if until and datetime.now(timezone.utc) < until:
@@ -832,15 +835,20 @@ async def _do_hire_bodyguard_reserved(
     inflation_level = _bodyguard_inflation_level_now(user_for_inflation)
     new_inflation_level = inflation_level + 1
     inflation_mult = 1.0 + _effective_bodyguard_inflation_percent(inflation_level, user_for_inflation)
-    total_cost = int(base_cost * event_cost_mult * inflation_mult)
+    listed_cost = int(base_cost * event_cost_mult * inflation_mult)
+    use_hire_token = bool(is_robot and hire_tokens >= 1)
+    total_cost = 0 if use_hire_token else listed_cost
     now = datetime.now(timezone.utc)
     window_end = now + timedelta(hours=BODYGUARD_INFLATION_HOURS)
-    inc_doc = {
-        "points": -total_cost,
+    inc_doc: Dict[str, Any] = {
         "bodyguard_lifetime_hires": 1,
-        "bodyguard_lifetime_spent_hires": total_cost,
-        "lifetime_points_spent": total_cost,
     }
+    if use_hire_token:
+        inc_doc["robot_bodyguard_hire_tokens"] = -1
+    else:
+        inc_doc["points"] = -total_cost
+        inc_doc["bodyguard_lifetime_spent_hires"] = total_cost
+        inc_doc["lifetime_points_spent"] = total_cost
     update_op = {
         "$inc": inc_doc,
         "$set": {
@@ -851,33 +859,41 @@ async def _do_hire_bodyguard_reserved(
     }
     if unlock_next_slot:
         update_op["$max"] = {"bodyguard_slots": slot}
-    hire_result = await db.users.update_one(
-        {"id": current_user["id"], "points": {"$gte": total_cost}, reserve_field: reservation_id},
-        update_op,
-    )
+    hire_filter: Dict[str, Any] = {"id": current_user["id"], reserve_field: reservation_id}
+    if use_hire_token:
+        hire_filter["robot_bodyguard_hire_tokens"] = {"$gte": 1}
+    else:
+        hire_filter["points"] = {"$gte": total_cost}
+    hire_result = await db.users.update_one(hire_filter, update_op)
     if hire_result.modified_count == 0:
+        if use_hire_token:
+            raise HTTPException(status_code=400, detail="Free robot hire token unavailable")
         raise HTTPException(status_code=400, detail="Insufficient points")
     try:
         from utils.world_event_stats import bump_world_event_discount
-        no_event_cost = int(base_cost * inflation_mult)
-        await bump_world_event_discount(
-            db, current_user["id"], base_cost=no_event_cost, paid_cost=total_cost, currency="points"
-        )
+        if not use_hire_token:
+            no_event_cost = int(base_cost * inflation_mult)
+            await bump_world_event_discount(
+                db, current_user["id"], base_cost=no_event_cost, paid_cost=total_cost, currency="points"
+            )
     except Exception:
         pass
     hire_meta = {
         "slot": slot,
         "is_robot": is_robot,
         "cost": total_cost,
+        "listed_cost": listed_cost,
+        "used_hire_token": use_hire_token,
         "inflation_level_before": inflation_level,
         "inflation_mult": inflation_mult,
         "event_bodyguard_cost_mult": event_cost_mult,
         "base_slot_cost": base_cost,
     }
-    await log_points_event(
-        db, user_id=current_user["id"], points=-total_cost, event_type="bodyguard_hire",
-        event_ref=f"slot:{slot}", meta=hire_meta,
-    )
+    if not use_hire_token:
+        await log_points_event(
+            db, user_id=current_user["id"], points=-total_cost, event_type="bodyguard_hire",
+            event_ref=f"slot:{slot}", meta=hire_meta,
+        )
     robot_name = None
     robot_user_id = None
     robot_initial_state: Optional[str] = None
@@ -895,6 +911,7 @@ async def _do_hire_bodyguard_reserved(
         "armour_level": 0,
         "hired_at": datetime.now(timezone.utc).isoformat(),
         "hire_cost": total_cost,
+        "hired_with_token": use_hire_token,
     }
     await db.bodyguards.insert_one(bodyguard_doc)
     await db.users.update_one({"id": current_user["id"]}, {"$unset": {"bodyguard_robot_loss_hire_allowed_after": ""}})
@@ -906,6 +923,8 @@ async def _do_hire_bodyguard_reserved(
         "slot": slot,
         "is_robot": is_robot,
         "hire_cost": total_cost,
+        "listed_cost": listed_cost,
+        "used_hire_token": use_hire_token,
         "bodyguard_username": robot_name if is_robot else None,
         "bodyguard_slot_row_id": bodyguard_doc["id"],
         "inflation_level_before": inflation_level,
@@ -919,7 +938,10 @@ async def _do_hire_bodyguard_reserved(
             hire_event["robot_initial_state"] = robot_initial_state
     await db.hitlist_bodyguard_events.insert_one(hire_event)
     name_part = robot_name if is_robot else "a human bodyguard"
-    msg = f"You hired {name_part} for {total_cost} points (slot {slot}/4). Past hires show here — max 4 at once."
+    if use_hire_token:
+        msg = f"You hired {name_part} with a free hire token (slot {slot}/4). Past hires show here — max 4 at once."
+    else:
+        msg = f"You hired {name_part} for {total_cost} points (slot {slot}/4). Past hires show here — max 4 at once."
     asyncio.create_task(send_notification(
         current_user["id"],
         "🛡️ Bodyguard Hired",
@@ -928,7 +950,12 @@ async def _do_hire_bodyguard_reserved(
     ))
     _invalidate_bodyguards_cache(current_user["id"])
     await log_activity(current_user["id"], current_user.get("username", "?"), "bodyguard_hire", {
-        "slot": slot, "is_robot": is_robot, "cost": total_cost, "name": robot_name,
+        "slot": slot,
+        "is_robot": is_robot,
+        "cost": total_cost,
+        "listed_cost": listed_cost,
+        "used_hire_token": use_hire_token,
+        "name": robot_name,
     })
     infl_after = await _bodyguard_inflation_status(
         {
@@ -937,11 +964,19 @@ async def _do_hire_bodyguard_reserved(
             "slow_bodyguard_hire_inflation_until": user_for_inflation.get("slow_bodyguard_hire_inflation_until"),
         }
     )
+    tokens_left = max(0, hire_tokens - 1) if use_hire_token else hire_tokens
+    if use_hire_token:
+        hire_msg = f"Robot bodyguard {robot_name} hired with a free token"
+    else:
+        hire_msg = f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {total_cost} points"
     return {
-        "message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {total_cost} points",
+        "message": hire_msg,
         "bodyguard_name": robot_name,
         "slot": slot,
         "cost": total_cost,
+        "listed_cost": listed_cost,
+        "used_hire_token": use_hire_token,
+        "robot_bodyguard_hire_tokens": tokens_left,
         "base_slot_cost": base_cost,
         "hire_inflation_pct_applied": round(_effective_bodyguard_inflation_percent(inflation_level, user_for_inflation) * 100),
         **infl_after,

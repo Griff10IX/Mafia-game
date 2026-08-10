@@ -32,6 +32,8 @@ logger = logging.getLogger(__name__)
 # GBP store points (Stripe): bonus loot box pieces — 75 pieces per whole £1 charged (~9,000 per £120; currency must be GBP).
 STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK = 100
 STORE_POINTS_LOOT_PIECES_PER_BLOCK = 75
+# GBP store points: 1 bonus Wheel of Fortune free spin per whole £10 charged (per purchase; leftover under £10 does not carry).
+STORE_POINTS_WHEEL_GBP_MINOR_PER_SPIN = 1000
 STORE_POINTS_EVENT_BONUS_RATE = 0.75
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
@@ -232,6 +234,86 @@ def loot_box_pieces_for_gbp_stripe_minor(amount_minor: Optional[int], currency: 
     if m <= 0:
         return 0
     return (m // STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK) * STORE_POINTS_LOOT_PIECES_PER_BLOCK
+
+
+def wheel_bonus_spins_for_gbp_stripe_minor(amount_minor: Optional[int], currency: Optional[str]) -> int:
+    """Whole £10 blocks (1000 pence each) → 1 bonus Wheel free spin. Per purchase; Non-GBP or invalid → 0."""
+    if amount_minor is None:
+        return 0
+    cur = (currency or "gbp").strip().lower()
+    if cur != "gbp":
+        return 0
+    try:
+        m = int(amount_minor)
+    except (TypeError, ValueError):
+        return 0
+    if m <= 0:
+        return 0
+    return m // STORE_POINTS_WHEEL_GBP_MINOR_PER_SPIN
+
+
+def _store_points_gbp_bonus_incs(amount_minor: Optional[int], currency: Optional[str]) -> Dict[str, int]:
+    """Loot pieces + wheel bonus free spins for a GBP Stripe charge (same minor/currency resolution)."""
+    inc: Dict[str, int] = {}
+    loot_bonus = loot_box_pieces_for_gbp_stripe_minor(amount_minor, currency)
+    if loot_bonus:
+        inc["loot_box_pieces"] = loot_bonus
+    wheel_spins = wheel_bonus_spins_for_gbp_stripe_minor(amount_minor, currency)
+    if wheel_spins:
+        inc["wheel_bonus_free_spins"] = wheel_spins
+    return inc
+
+
+def _store_points_gbp_bonus_notify_tail(user_inc: Dict[str, int]) -> str:
+    parts: list[str] = []
+    loot = int(user_inc.get("loot_box_pieces") or 0)
+    if loot:
+        parts.append(f"{loot:,} loot box pieces")
+    spins = int(user_inc.get("wheel_bonus_free_spins") or 0)
+    if spins:
+        label = "Wheel of Fortune free spin" if spins == 1 else "Wheel of Fortune free spins"
+        parts.append(f"{spins:,} {label}")
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return f" You also received {parts[0]}."
+    return f" You also received {parts[0]} and {parts[1]}."
+
+
+def _wheel_spins_notify_sentence(spins: int) -> str:
+    if spins <= 0:
+        return ""
+    label = "Wheel of Fortune free spin" if spins == 1 else "Wheel of Fortune free spins"
+    return f" You also received {spins:,} banked {label}."
+
+
+async def _credit_wheel_bonus_spins_for_gbp_session(
+    db,
+    *,
+    user_id: str,
+    session_id: str,
+    package_id: str,
+    txn: Optional[Dict[str, Any]] = None,
+) -> int:
+    """Grant banked Wheel free spins for whole £10 blocks on a fulfilled GBP store purchase."""
+    if not user_id:
+        return 0
+    import server as srv
+
+    row = txn
+    if row is None:
+        row = await db.payment_transactions.find_one(
+            {"session_id": session_id},
+            {"_id": 0, "stripe_amount_total_minor": 1, "stripe_currency": 1, "expected_amount_minor": 1},
+        )
+    minor, cur = _minor_and_currency_for_store_points_loot_bonus(
+        row, package_id or "", srv.POINT_PACKAGES or {}
+    )
+    spins = wheel_bonus_spins_for_gbp_stripe_minor(minor, cur)
+    if spins <= 0:
+        return 0
+    await db.users.update_one({"id": user_id}, {"$inc": {"wheel_bonus_free_spins": spins}})
+    return spins
 
 
 def _utc_epoch_day(dt: datetime) -> int:
@@ -684,11 +766,16 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                 {"$set": {"rank_xp_pass_tokens": 0}},
             )
 
+        wheel_spins = await _credit_wheel_bonus_spins_for_gbp_session(
+            db, user_id=user_id, session_id=session_id, package_id=package_id
+        )
+        wheel_tail = _wheel_spins_notify_sentence(wheel_spins)
+
         if activated:
             await send_notification(
                 user_id,
                 "Game Pass",
-                "Your Game Pass has been activated and rewards have been granted!",
+                f"Your Game Pass has been activated and rewards have been granted!{wheel_tail}",
                 "rank_xp_pass_activated",
             )
         else:
@@ -697,17 +784,18 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                 "Game Pass",
                 (
                     "Your Game Pass token is ready. "
-                    "Use it in the Armoury/My Inventory to claim your one-time rewards."
+                    f"Use it in the Armoury/My Inventory to claim your one-time rewards.{wheel_tail}"
                 ),
                 "rank_xp_pass_token_entitled",
             )
         logger.info(
-            "Rank-XP pass entitlement granted: session_id=%s user_id=%s tier_snapshot=%s expires_at=%s auto_activated=%s",
+            "Rank-XP pass entitlement granted: session_id=%s user_id=%s tier_snapshot=%s expires_at=%s auto_activated=%s wheel_bonus_spins=%s",
             session_id,
             user_id,
             season_rp,
             expires_at,
             activated,
+            wheel_spins,
         )
         return {"credited": True, "preorder": False, "pass_entitled": True, "auto_activated": activated}
 
@@ -786,17 +874,24 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
             user_id=user_id,
         )
         await sync_auto_rank_email_entitlement_to_user(db, user_id, email)
+        wheel_spins = await _credit_wheel_bonus_spins_for_gbp_session(
+            db, user_id=user_id, session_id=session_id, package_id=package_id
+        )
         await send_notification(
             user_id,
             "Permanent Auto Rank",
-            "Your permanent Auto Rank is active on this account and tied to your verified email.",
+            (
+                "Your permanent Auto Rank is active on this account and tied to your verified email."
+                f"{_wheel_spins_notify_sentence(wheel_spins)}"
+            ),
             "auto_rank_permanent_entitled",
         )
         logger.info(
-            "Permanent Auto Rank entitlement granted: session_id=%s user_id=%s email=%s",
+            "Permanent Auto Rank entitlement granted: session_id=%s user_id=%s email=%s wheel_bonus_spins=%s",
             session_id,
             user_id,
             str(email).strip().lower(),
+            wheel_spins,
         )
         return {"credited": True, "preorder": False, "auto_rank_entitled": True}
 
@@ -894,11 +989,26 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                 }
             },
         )
+        wheel_spins = await _credit_wheel_bonus_spins_for_gbp_session(
+            db, user_id=user_id, session_id=session_id, package_id=package_id
+        )
+        if wheel_spins:
+            try:
+                await send_notification(
+                    user_id,
+                    "Store reward",
+                    f"Thanks for your purchase.{_wheel_spins_notify_sentence(wheel_spins)}",
+                    "store_wheel_bonus_spins",
+                    category="system",
+                )
+            except Exception:
+                logger.exception("revive wheel spin notify failed user_id=%s", user_id)
         logger.info(
-            "Dead>Alive revive fulfilled: session_id=%s user_id=%s revived=%s",
+            "Dead>Alive revive fulfilled: session_id=%s user_id=%s revived=%s wheel_bonus_spins=%s",
             session_id,
             user_id,
             revive_out.get("revived_username"),
+            wheel_spins,
         )
         return {
             "credited": True,
@@ -1030,12 +1140,27 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                 }
             },
         )
+        wheel_spins = await _credit_wheel_bonus_spins_for_gbp_session(
+            db, user_id=user_id, session_id=session_id, package_id=package_id
+        )
+        if wheel_spins:
+            try:
+                await send_notification(
+                    user_id,
+                    "Store reward",
+                    f"Thanks for your purchase.{_wheel_spins_notify_sentence(wheel_spins)}",
+                    "store_wheel_bonus_spins",
+                    category="system",
+                )
+            except Exception:
+                logger.exception("prestige wheel spin notify failed user_id=%s", user_id)
         logger.info(
-            "Game Pass prestige fulfilled: session_id=%s user_id=%s queued=%s count=%s",
+            "Game Pass prestige fulfilled: session_id=%s user_id=%s queued=%s count=%s wheel_bonus_spins=%s",
             session_id,
             user_id,
             queued,
             prestige_out.get("prestige_count"),
+            wheel_spins,
         )
         return {
             "credited": True,
@@ -1150,10 +1275,8 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
         {"_id": 0, "stripe_amount_total_minor": 1, "stripe_currency": 1, "expected_amount_minor": 1},
     )
     minor, cur = _minor_and_currency_for_store_points_loot_bonus(txn_row, package_id, srv.POINT_PACKAGES or {})
-    loot_bonus = loot_box_pieces_for_gbp_stripe_minor(minor, cur)
-    user_inc: Dict[str, int] = {"points": points}
-    if loot_bonus:
-        user_inc["loot_box_pieces"] = loot_bonus
+    bonus_inc = _store_points_gbp_bonus_incs(minor, cur)
+    user_inc: Dict[str, int] = {"points": points, **bonus_inc}
     await db.users.update_one({"id": user_id}, {"$inc": user_inc})
     await mint_purchase_lot_if_missing(
         db,
@@ -1163,10 +1286,17 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
         points=points,
     )
     logger.info(
-        "Payment credited: session_id=%s user_id=%s package_id=%s points_added=%s points_before=%s points_after=%s loot_pieces_bonus=%s",
-        session_id, user_id, package_id, points, points_before, points_after, loot_bonus,
+        "Payment credited: session_id=%s user_id=%s package_id=%s points_added=%s points_before=%s points_after=%s loot_pieces_bonus=%s wheel_bonus_spins=%s",
+        session_id,
+        user_id,
+        package_id,
+        points,
+        points_before,
+        points_after,
+        int(bonus_inc.get("loot_box_pieces") or 0),
+        int(bonus_inc.get("wheel_bonus_free_spins") or 0),
     )
-    loot_tail = f" You also received {loot_bonus:,} loot box pieces." if loot_bonus else ""
+    loot_tail = _store_points_gbp_bonus_notify_tail(bonus_inc)
     await send_notification(
         user_id,
         "Points Credited",
@@ -1207,10 +1337,8 @@ async def _credit_preorder_points(db, txn: dict) -> bool:
     import server as srv
 
     minor, cur = _minor_and_currency_for_store_points_loot_bonus(txn, package_id, srv.POINT_PACKAGES or {})
-    loot_bonus = loot_box_pieces_for_gbp_stripe_minor(minor, cur)
-    user_inc: Dict[str, int] = {"points": points}
-    if loot_bonus:
-        user_inc["loot_box_pieces"] = loot_bonus
+    bonus_inc = _store_points_gbp_bonus_incs(minor, cur)
+    user_inc: Dict[str, int] = {"points": points, **bonus_inc}
     await db.users.update_one({"id": user_id}, {"$inc": user_inc})
     await mint_purchase_lot_if_missing(
         db,
@@ -1220,10 +1348,15 @@ async def _credit_preorder_points(db, txn: dict) -> bool:
         points=points,
     )
     logger.info(
-        "Preorder points released: session_id=%s user_id=%s package_id=%s points=%s loot_pieces_bonus=%s",
-        session_id, user_id, package_id, points, loot_bonus,
+        "Preorder points released: session_id=%s user_id=%s package_id=%s points=%s loot_pieces_bonus=%s wheel_bonus_spins=%s",
+        session_id,
+        user_id,
+        package_id,
+        points,
+        int(bonus_inc.get("loot_box_pieces") or 0),
+        int(bonus_inc.get("wheel_bonus_free_spins") or 0),
     )
-    loot_tail = f" You also received {loot_bonus:,} loot box pieces." if loot_bonus else ""
+    loot_tail = _store_points_gbp_bonus_notify_tail(bonus_inc)
     await send_notification(
         user_id,
         "Pre-Order Points Released",
@@ -1775,6 +1908,7 @@ def register(router):
             store_points_event = await _store_points_event_payload_for_db(db)
             credited_points, bonus_points, active_store_points_event = _apply_store_points_event_bonus(p, store_points_event)
             loot_box_pieces = loot_box_pieces_for_gbp_stripe_minor(m, "gbp")
+            wheel_bonus_free_spins = wheel_bonus_spins_for_gbp_stripe_minor(m, "gbp")
             return {
                 "mode": "points",
                 "base_points": p,
@@ -1783,6 +1917,7 @@ def register(router):
                 "price_gbp": round(float(pr), 2),
                 "expected_amount_minor": m,
                 "loot_box_pieces": loot_box_pieces,
+                "wheel_bonus_free_spins": wheel_bonus_free_spins,
                 "min_points": CUSTOM_POINTS_MIN,
                 "max_points": CUSTOM_POINTS_MAX,
                 "store_points_event": active_store_points_event,
@@ -1795,6 +1930,7 @@ def register(router):
         store_points_event = await _store_points_event_payload_for_db(db)
         credited_points, bonus_points, active_store_points_event = _apply_store_points_event_bonus(pts, store_points_event)
         loot_box_pieces = loot_box_pieces_for_gbp_stripe_minor(m, "gbp")
+        wheel_bonus_free_spins = wheel_bonus_spins_for_gbp_stripe_minor(m, "gbp")
         return {
             "mode": "gbp",
             "base_points": pts,
@@ -1803,6 +1939,7 @@ def register(router):
             "price_gbp": round(float(pr), 2),
             "expected_amount_minor": m,
             "loot_box_pieces": loot_box_pieces,
+            "wheel_bonus_free_spins": wheel_bonus_free_spins,
             "min_points": CUSTOM_POINTS_MIN,
             "max_points": CUSTOM_POINTS_MAX,
             "store_points_event": active_store_points_event,
@@ -2708,10 +2845,8 @@ def register(router):
             }},
         )
         minor, cur = _minor_and_currency_for_store_points_loot_bonus(txn, package_id, POINT_PACKAGES)
-        loot_bonus = loot_box_pieces_for_gbp_stripe_minor(minor, cur)
-        user_inc: Dict[str, int] = {"points": points}
-        if loot_bonus:
-            user_inc["loot_box_pieces"] = loot_bonus
+        bonus_inc = _store_points_gbp_bonus_incs(minor, cur)
+        user_inc: Dict[str, int] = {"points": points, **bonus_inc}
         await db.users.update_one({"id": user_id}, {"$inc": user_inc})
         await mint_purchase_lot_if_missing(
             db,
@@ -2722,10 +2857,15 @@ def register(router):
         )
         
         logger.info(
-            "Admin manual credit: session_id=%s user_id=%s points=%s loot_pieces_bonus=%s by=%s",
-            body.session_id, user_id, points, loot_bonus, current_user.get("username"),
+            "Admin manual credit: session_id=%s user_id=%s points=%s loot_pieces_bonus=%s wheel_bonus_spins=%s by=%s",
+            body.session_id,
+            user_id,
+            points,
+            int(bonus_inc.get("loot_box_pieces") or 0),
+            int(bonus_inc.get("wheel_bonus_free_spins") or 0),
+            current_user.get("username"),
         )
-        loot_tail = f" You also received {loot_bonus:,} loot box pieces." if loot_bonus else ""
+        loot_tail = _store_points_gbp_bonus_notify_tail(bonus_inc)
         await send_notification(
             user_id,
             "Points Credited",

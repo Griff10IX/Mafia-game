@@ -141,6 +141,7 @@ export default function Bodyguards() {
   const [robotBgAutoSearchUntil, setRobotBgAutoSearchUntil] = useState(null);
   const [robotBgAutoSearchCost, setRobotBgAutoSearchCost] = useState(ROBOT_BG_AUTO_SEARCH_COST_DEFAULT);
   const [autoSearchBuying, setAutoSearchBuying] = useState(false);
+  const [robotHireTokens, setRobotHireTokens] = useState(0);
   const claimedSlotsRef = useRef(new Set());
   const pendingHiresRef = useRef(0);
   const hireCodePayloadRef = useRef({});
@@ -174,6 +175,9 @@ export default function Bodyguards() {
     setSlowBodyguardHireInflationActive(!!infl.slow_bodyguard_hire_inflation_active);
     setBgStats(w.stats ?? null);
     setInvites(w.invites ?? { sent: [], received: [] });
+    if (typeof bgData?.robot_bodyguard_hire_tokens === 'number') {
+      setRobotHireTokens(bgData.robot_bodyguard_hire_tokens);
+    }
     setHasLoaded(true);
   }, []);
 
@@ -255,6 +259,11 @@ export default function Bodyguards() {
       setRobotBgAutoSearchActive(!!bgData?.robot_bg_auto_search_active);
       setRobotBgAutoSearchUntil(bgData?.robot_bg_auto_search_until ?? null);
       setRobotBgAutoSearchCost(Number(bgData?.robot_bg_auto_search_cost) || ROBOT_BG_AUTO_SEARCH_COST_DEFAULT);
+      if (typeof bgData?.robot_bodyguard_hire_tokens === 'number') {
+        setRobotHireTokens(bgData.robot_bodyguard_hire_tokens);
+      } else if (typeof userRes.data?.robot_bodyguard_hire_tokens === 'number') {
+        setRobotHireTokens(userRes.data.robot_bodyguard_hire_tokens);
+      }
       hireCodePayloadRef.current = getBodyguardHireCodePayload(bgData);
       setUser(userRes.data);
       setEvent(eventsRes.data?.event ?? null);
@@ -424,6 +433,9 @@ export default function Bodyguards() {
       if (typeof response?.data?.slow_bodyguard_hire_inflation_active === 'boolean') {
         setSlowBodyguardHireInflationActive(response.data.slow_bodyguard_hire_inflation_active);
       }
+      if (typeof response?.data?.robot_bodyguard_hire_tokens === 'number') {
+        setRobotHireTokens(response.data.robot_bodyguard_hire_tokens);
+      }
       showHireBanner('success', response?.data?.message ?? 'Bodyguard hired');
     } catch (error) {
       claimedSlotsRef.current.delete(slot);
@@ -515,6 +527,17 @@ export default function Bodyguards() {
     const mult = event?.bodyguard_cost ?? 1;
     const inflationMult = 1 + (nextHireInflationPct ?? 0) / 100;
     return Math.round(base * mult * inflationMult);
+  };
+
+  const hireRobotButtonLabel = (slotNumber, { emoji = false, short = false } = {}) => {
+    const prefix = emoji ? '🤖 ' : '';
+    if (robotHireTokens > 0) {
+      if (short) return `Hire free (${robotHireTokens})`;
+      return `${prefix}Hire robot — free token (${robotHireTokens})`;
+    }
+    const pts = getHireCost(slotNumber).toLocaleString();
+    if (short) return `Hire (${pts})`;
+    return `${prefix}Hire robot (${pts} pts)`;
   };
 
   const nextEmptySlot = bodyguards.find(
@@ -885,7 +908,7 @@ export default function Bodyguards() {
               data-testid="hire-robot-next"
               className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all active:scale-95 touch-manipulation font-heading shrink-0"
             >
-              {`🤖 Hire robot (${getHireCost(nextEmptySlot).toLocaleString()} pts)`}
+              {hireRobotButtonLabel(nextEmptySlot, { emoji: true })}
             </button>
           ) : (
             <span className="shrink-0" aria-hidden="true" />
@@ -925,7 +948,7 @@ export default function Bodyguards() {
                 data-testid="hire-robot-header"
                 className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading font-bold uppercase tracking-wide border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 active:scale-95 touch-manipulation"
               >
-                Hire ({getHireCost(nextEmptySlot).toLocaleString()})
+                {hireRobotButtonLabel(nextEmptySlot, { short: true })}
               </button>
             )}
             <button
@@ -1045,7 +1068,7 @@ export default function Bodyguards() {
                       data-testid="hire-robot-slot"
                       className="bg-primary/20 text-primary rounded px-3 py-2 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all active:scale-95 touch-manipulation font-heading shrink-0"
                     >
-                      {`Hire robot (${getHireCost(nextEmptySlot).toLocaleString()} pts)`}
+                      {hireRobotButtonLabel(nextEmptySlot)}
                     </button>
                   </div>
                   <div className="text-[10px] text-mutedForeground">

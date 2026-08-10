@@ -199,7 +199,7 @@ TOKEN_TYPES = (
     "rank_xp_pass",
 )
 # Store-only count tokens (not activated in Armoury)
-STORE_COUNT_ONLY_TOKENS = frozenset({"jail_bailout"})
+STORE_COUNT_ONLY_TOKENS = frozenset({"jail_bailout", "mission_skip", "robot_bodyguard_hire"})
 # count_field: user doc key for token count
 # until_field: active-until ISO timestamp
 # duration_hours: effect duration per token (overrides global TOKEN_DURATION_HOURS)
@@ -2473,7 +2473,7 @@ def _tokens_from_user(user: dict) -> dict:
             except (TypeError, ValueError):
                 row["max_join_fee"] = None
         out[t] = row
-    # Count-only tokens (no Armoury activation; used elsewhere, e.g. Jail page).
+    # Count-only tokens (no Armoury activation; used elsewhere, e.g. Jail / Missions).
     out["jail_bailout"] = {
         "count": int(user.get("jail_bailout_tokens") or 0),
         "active_until": None,
@@ -2484,6 +2484,16 @@ def _tokens_from_user(user: dict) -> dict:
         out["jail_bailout"]["perk_stats"] = {
             k: int(v) for k, v in ps.items() if isinstance(v, (int, float))
         }
+    out["mission_skip"] = {
+        "count": int(user.get("mission_skip_tokens") or 0),
+        "active_until": None,
+        "expires_at": None,
+    }
+    out["robot_bodyguard_hire"] = {
+        "count": int(user.get("robot_bodyguard_hire_tokens") or 0),
+        "active_until": None,
+        "expires_at": None,
+    }
     return out
 
 

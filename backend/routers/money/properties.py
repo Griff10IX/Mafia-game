@@ -1178,16 +1178,15 @@ async def collect_property_income_impl(property_id: str, current_user: dict, *, 
         raise HTTPException(status_code=404, detail="You don't own this property")
     cooldown_hours = COLLECT_COOLDOWN_MINUTES / 60.0
     if min_hours_passed < cooldown_hours:
-        from utils.cooldown_skip import has_skip_credit, consume_skip_credit
+        from utils.cooldown_skip import allow_properties_collect_skip
 
-        if has_skip_credit(current_user, "properties"):
-            if await consume_skip_credit(db, user_id, "properties"):
-                old_enough = (now_utc - timedelta(minutes=COLLECT_COOLDOWN_MINUTES + 1)).isoformat()
-                await db.user_properties.update_many(
-                    {"user_id": user_id, "property_id": property_id},
-                    {"$set": {"last_collected": old_enough}},
-                )
-                min_hours_passed = cooldown_hours
+        if await allow_properties_collect_skip(db, current_user, user_id, now_utc):
+            old_enough = (now_utc - timedelta(minutes=COLLECT_COOLDOWN_MINUTES + 1)).isoformat()
+            await db.user_properties.update_many(
+                {"user_id": user_id, "property_id": property_id},
+                {"$set": {"last_collected": old_enough}},
+            )
+            min_hours_passed = cooldown_hours
         if min_hours_passed < cooldown_hours:
             mins_left = max(1, int((cooldown_hours - min_hours_passed) * 60))
             raise HTTPException(

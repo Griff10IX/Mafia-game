@@ -1,4 +1,4 @@
-import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Users, LayoutGrid } from 'lucide-react';
+import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Users, LayoutGrid, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import styles from '../../styles/noir.module.css';
 import { SLOTS_FEATURE_ENABLED } from '../../config/gameFeatures';
@@ -12,7 +12,8 @@ const CASINO_STYLES = `
 `;
 
 const GAMES = [
-  { to: '/casino/rlt', label: 'Roulette', desc: 'Wheel of fortune', Icon: Dice1, testId: 'play-roulette' },
+  { to: '/casino/wheel', label: 'Wheel of Fortune', desc: 'Free daily spin · tokens & jackpots', Icon: Sparkles, testId: 'play-wheel-of-fortune' },
+  { to: '/casino/rlt', label: 'Roulette', desc: 'Bet the wheel', Icon: Dice1, testId: 'play-roulette' },
   { to: '/casino/blackjack', label: 'Blackjack', desc: 'Beat the dealer to 21', Icon: Spade, testId: 'play-blackjack' },
   { to: '/casino/dice', label: 'Dice', desc: 'Roll for riches', Icon: Hash, testId: 'play-dice' },
   { to: '/casino/horseracing', label: 'Horse Racing', desc: 'Bet on the fastest', Icon: TrendingUp, testId: 'play-horse-racing' },
@@ -34,7 +35,7 @@ export default function Casino() {
       <div className="relative cas-fade-in">
         <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The House</p>
         <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Casino</h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Roulette, Blackjack, Dice, Horse Racing, Slots, Keno, MDG, MP Blackjack, Poker, Sports.</p>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Wheel of Fortune, Roulette, Blackjack, Dice, and more.</p>
       </div>
 
       <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cas-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>

@@ -136,6 +136,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
       label: 'Casinos',
       items: [
         { path: '/casino/dice', label: 'Dice' },
+        { path: '/casino/wheel', label: 'Wheel of Fortune' },
         { path: '/casino/rlt', label: 'Roulette' },
         { path: '/casino/blackjack', label: 'Blackjack' },
         { path: '/casino/horseracing', label: 'Horse Racing' },
@@ -2146,6 +2147,7 @@ export default function Layout({ children }) {
         <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
           {[
             { to: '/casino/dice', label: 'Dice', testId: 'nav-dice', Icon: Dice5 },
+            { to: '/casino/wheel', label: 'Wheel of Fortune', testId: 'nav-wheel-of-fortune', Icon: Gift },
             { to: '/casino/rlt', label: 'Roulette', testId: 'nav-roulette', Icon: CircleDot },
             { to: '/casino/blackjack', label: 'Blackjack', testId: 'nav-blackjack', Icon: Spade },
             { to: '/casino/horseracing', label: 'Horse Racing', testId: 'nav-horseracing', Icon: Flag },
@@ -3468,6 +3470,7 @@ export default function Layout({ children }) {
               ],
               play: [
                 { path: '/casino', label: 'Casino', Icon: Dice5 },
+                { path: '/casino/wheel', label: 'Wheel', Icon: Gift },
                 { path: '/casino/dice', label: 'Dice', Icon: Dice5 },
                 { path: '/casino/rlt', label: 'Roulette', Icon: CircleDot },
                 { path: '/casino/blackjack', label: 'Blackjack', Icon: Spade },

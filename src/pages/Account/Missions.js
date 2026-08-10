@@ -8,6 +8,7 @@ import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import { readMissionsBoot, writeMissionsBoot } from '../../utils/missionsPageWarm';
+import { useAuthUser } from '../../context/AuthContext';
 // ─────────────────────────────────────────────────────────────────────────────
 // STYLES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -362,10 +363,11 @@ function MissionFocusSection({
 // MISSION DETAIL MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 
-function MissionModal({ mission, onClose, onComplete, completing }) {
+function MissionModal({ mission, onClose, onComplete, onSkip, completing, skipTokens = 0, isCurrentOpen = false }) {
   if (!mission) return null;
   const { completed, requirements_met, is_boss, progress, difficulty, unlocked, previous_mission_title } = mission;
   const canComplete = !completed && requirements_met && unlocked;
+  const canSkip = !completed && unlocked && isCurrentOpen && Number(skipTokens) > 0 && typeof onSkip === 'function';
   const stars = difficultyStars(difficulty);
 
   return (
@@ -614,7 +616,9 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
             }}>
               <CheckCircle size={14} /> Mission complete
             </div>
-          ) : canComplete ? (
+          ) : (
+            <div className="space-y-2">
+              {canComplete ? (
             <button
               onClick={() => onComplete(mission.id)}
               disabled={completing}
@@ -634,16 +638,6 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 boxShadow: is_boss ? '0 0 16px rgba(234,179,8,0.1)' : 'none',
               }}
-              onMouseEnter={e => {
-                if (!completing) e.currentTarget.style.background = is_boss
-                  ? 'linear-gradient(135deg, rgba(234,179,8,0.28), rgba(161,98,7,0.28))'
-                  : 'rgba(234,179,8,0.2)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = is_boss
-                  ? 'linear-gradient(135deg, rgba(234,179,8,0.2), rgba(161,98,7,0.2))'
-                  : 'rgba(234,179,8,0.12)';
-              }}
             >
               {completing
                 ? 'Completing…'
@@ -652,12 +646,36 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
                 : 'Complete Mission'
               }
             </button>
-          ) : (
+              ) : (
             <div className="flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-zinc-800/50 border border-zinc-600/50 text-mutedForeground text-[10px]">
               {!unlocked && previous_mission_title ? (
                 <><Lock size={12} /> Complete &quot;{previous_mission_title}&quot; first</>
               ) : (
                 <><Lock size={12} /> Requirements not yet met</>
+              )}
+            </div>
+              )}
+              {canSkip && (
+                <button
+                  type="button"
+                  data-testid="mission-skip-btn"
+                  onClick={() => onSkip()}
+                  disabled={completing}
+                  style={{
+                    width: '100%', padding: '10px',
+                    background: 'rgba(155,89,182,0.14)',
+                    border: '1px solid rgba(155,89,182,0.55)',
+                    borderRadius: 7,
+                    color: '#d8b4fe', fontWeight: 700, fontSize: '0.85rem',
+                    fontFamily: "'Cormorant Garamond', serif",
+                    letterSpacing: '0.04em',
+                    cursor: completing ? 'not-allowed' : 'pointer',
+                    opacity: completing ? 0.65 : 1,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  }}
+                >
+                  <Zap size={14} /> Skip Mission ({fmtInt(skipTokens)} left)
+                </button>
               )}
             </div>
           )}
@@ -978,6 +996,8 @@ function TributeBanner({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Missions() {
+  const authUser = useAuthUser();
+  const skipTokens = Number(authUser?.mission_skip_tokens || 0);
   const missionsBoot = readMissionsBoot();
   const [data,       setData]       = useState(missionsBoot?.data ?? null);
   const [missions,   setMissions]   = useState(missionsBoot?.missions ?? []);
@@ -1051,6 +1071,32 @@ export default function Missions() {
       }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to complete mission');
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  const handleSkip = async () => {
+    if (!window.confirm('Use 1 Mission Skip to instantly complete your current mission and claim its rewards?')) return;
+    setCompleting(true);
+    try {
+      const res = await api.post('/missions/skip');
+      if (res.data?.completed) {
+        const parts = [`Skipped ${res.data.title || 'mission'}`];
+        const tributeTotal = (res.data.reward_money || 0) + (res.data.reward_tribute || 0);
+        if (tributeTotal > 0) parts.push(`+${fmt(tributeTotal)} tribute`);
+        if (res.data.reward_cash_immediate > 0) parts.push(`+${fmt(res.data.reward_cash_immediate)} cash`);
+        if (res.data.reward_points > 0) parts.push(`+${fmtInt(res.data.reward_points)} RP`);
+        if (res.data.reward_respect > 0) parts.push(`+${fmtInt(res.data.reward_respect)} respect`);
+        if (res.data.unlocked_city) parts.push(`${res.data.unlocked_city} unlocked!`);
+        toast.success(parts.join(' · '));
+        refreshUser();
+        await load();
+        setSelected(null);
+        if (res.data.unlocked_city) setCity(res.data.unlocked_city);
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to skip mission');
     } finally {
       setCompleting(false);
     }
@@ -1174,7 +1220,10 @@ export default function Missions() {
             mission={selected}
             onClose={() => setSelected(null)}
             onComplete={handleComplete}
+            onSkip={handleSkip}
             completing={completing}
+            skipTokens={skipTokens}
+            isCurrentOpen={Boolean(currentMission && selected?.id === currentMission.id)}
           />
         )}
       </div>
@@ -1310,7 +1359,10 @@ export default function Missions() {
           mission={selected}
           onClose={() => setSelected(null)}
           onComplete={handleComplete}
+          onSkip={handleSkip}
           completing={completing}
+          skipTokens={skipTokens}
+          isCurrentOpen={Boolean(currentMission && selected?.id === currentMission.id)}
         />
       )}
     </div>

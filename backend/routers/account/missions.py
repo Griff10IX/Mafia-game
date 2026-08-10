@@ -16,6 +16,7 @@ from server import (
     user_prestige_rank_mult,
     get_prestige_bonus,
     log_respect_earned,
+    log_activity,
     maybe_process_rank_up,
     send_notification,
     STATES,
@@ -222,6 +223,31 @@ def _mission_unlocked_by_previous(mission: dict, completed_ids: set) -> bool:
     """True if this mission is unlocked by progression (previous mission in same city completed)."""
     prev = _previous_mission(mission)
     return prev is None or prev["id"] in completed_ids
+
+
+def _current_open_mission(user: dict) -> Optional[dict]:
+    """First unlocked incomplete mission (same priority as Missions UI current)."""
+    completed = _user_completed_mission_ids(user)
+    unlocked_cities = set(_user_unlocked_cities(user) or [])
+    candidates: List[dict] = []
+    for m in MISSIONS:
+        if m["id"] in completed:
+            continue
+        if m.get("city") not in unlocked_cities:
+            continue
+        if not _mission_unlocked_by_previous(m, completed):
+            continue
+        candidates.append(m)
+    if not candidates:
+        return None
+    candidates.sort(
+        key=lambda x: (
+            CITY_ORDER.index(x["city"]) if x.get("city") in CITY_ORDER else 999,
+            1 if x.get("is_boss") else 0,
+            int(x.get("order") or 0),
+        )
+    )
+    return candidates[0]
 
 
 def _get_user_progress_value(user: dict, req_key: str) -> int:
@@ -1038,6 +1064,94 @@ async def complete_mission(
     }
 
 
+async def skip_current_mission(current_user: dict = Depends(get_current_user)):
+    """Spend one Mission Skip token to complete the current open mission (full rewards)."""
+    user_id = current_user.get("id") or ""
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if int(current_user.get("mission_skip_tokens") or 0) < 1:
+        raise HTTPException(status_code=400, detail="No Mission Skip tokens")
+
+    mission = _current_open_mission(current_user)
+    if not mission:
+        raise HTTPException(status_code=400, detail="No open mission to skip")
+    mission_id = mission["id"]
+    unlocked = _user_unlocked_cities(current_user)
+    if mission["city"] not in unlocked:
+        raise HTTPException(status_code=403, detail="City not unlocked")
+
+    consumed = await db.users.update_one(
+        {"id": user_id, "mission_skip_tokens": {"$gte": 1}},
+        {"$inc": {"mission_skip_tokens": -1}},
+    )
+    if consumed.modified_count != 1:
+        raise HTTPException(status_code=400, detail="No Mission Skip tokens")
+
+    try:
+        mult = _mission_completion_reward_mult(current_user)
+        update, meta = _build_mission_completion_reward_update(
+            current_user,
+            mission_id,
+            mission,
+            mult,
+            include_mission_completion_push=True,
+            include_next_mission_baseline=True,
+        )
+        mission_update = apply_season_rp_mirror_to_update(update, user=current_user)
+        result = await db.users.update_one(
+            {"id": user_id, "mission_completions.mission_id": {"$ne": mission_id}},
+            mission_update,
+        )
+        if result.modified_count == 0:
+            await db.users.update_one({"id": user_id}, {"$inc": {"mission_skip_tokens": 1}})
+            raise HTTPException(status_code=400, detail="Mission already completed")
+        await _run_mission_completion_side_effects(
+            user_id,
+            current_user,
+            mission_id,
+            meta,
+            rp_awarded=rank_points_in_update(mission_update),
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        await db.users.update_one({"id": user_id}, {"$inc": {"mission_skip_tokens": 1}})
+        raise
+
+    try:
+        await log_activity(
+            user_id,
+            current_user.get("username") or "?",
+            "mission_skip",
+            {"mission_id": mission_id, "title": mission.get("title")},
+        )
+    except Exception:
+        pass
+
+    reward_car_names = [_car_display_name(cid) for cid in meta["granted_car_ids"]]
+    refreshed = await db.users.find_one({"id": user_id}, {"_id": 0, "mission_skip_tokens": 1}) or {}
+    return {
+        "completed": True,
+        "skipped": True,
+        "mission_id": mission_id,
+        "title": mission.get("title"),
+        "mission_skip_tokens": int(refreshed.get("mission_skip_tokens") or 0),
+        "reward_money": meta["reward_money"],
+        "reward_cash_immediate": meta["reward_cash_immediate"],
+        "reward_points": meta["reward_points"],
+        "reward_respect": meta["reward_respect"],
+        "reward_tribute": meta["reward_tribute"],
+        "reward_car_id": meta["reward_car_id"],
+        "reward_car_ids": meta["reward_car_ids"],
+        "reward_car_names": reward_car_names,
+        "reward_booze": meta["reward_booze"],
+        "reward_bullets": meta["reward_bullets"],
+        "reward_loot_box_pieces": meta["reward_loot_box_pieces"],
+        "reward_auto_rank_2h": meta["reward_auto_rank_2h"],
+        "unlocked_city": meta["unlocks_city"],
+    }
+
+
 async def collect_tribute(current_user: dict = Depends(get_current_user)):
     """Collect accumulated tribute (cash, bullets, loot box pieces, respect, tokens) into balance. All daily rewards stack until collected."""
     user_id = current_user["id"]
@@ -1278,6 +1392,7 @@ def register(router):
     router.add_api_route("/missions", get_missions, methods=["GET"], dependencies=_missions_rl_u)
     router.add_api_route("/missions/map", get_missions_map, methods=["GET"], dependencies=_missions_rl_u)
     router.add_api_route("/missions/complete", complete_mission, methods=["POST"])
+    router.add_api_route("/missions/skip", skip_current_mission, methods=["POST"])
     router.add_api_route("/missions/collect-tribute", collect_tribute, methods=["POST"])
     router.add_api_route("/missions/characters", get_missions_characters, methods=["GET"], dependencies=_missions_rl_u)
 

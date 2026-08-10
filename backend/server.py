@@ -974,6 +974,8 @@ class UserResponse(BaseModel):
     auto_collect_12h_tokens: int = 0
     auto_collect_24h_tokens: int = 0
     jail_bailout_tokens: int = 0
+    mission_skip_tokens: int = 0
+    robot_bodyguard_hire_tokens: int = 0
     cooldown_skip_crime_tokens: int = 0
     cooldown_skip_gta_tokens: int = 0
     cooldown_skip_booze_tokens: int = 0
@@ -3611,7 +3613,7 @@ async def _user_owns_any_property(user_id: str):
 from routers.account import auth, profile, prestige, user_progress, users
 from routers.admin import admin, security_admin, airport, investigate
 from routers.cars import gta
-from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, mp_8ball, horseracing, slots, keno, coin_flip, video_poker, mdg, sports_betting
+from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, mp_8ball, horseracing, slots, keno, coin_flip, video_poker, mdg, sports_betting, wheel_of_fortune
 from routers.crime import crimes, jail, organised_crime, oc
 from routers.game import families, leaderboard, states, stats, store, dead_alive, events, notifications, meta, entertainer, entertainer_staff, achievements
 from routers.kill import attack, armoury, bodyguards, hitlist, witness_statements
@@ -3673,6 +3675,7 @@ if SLOTS_FEATURE_ENABLED:
 keno.register(api_router)
 coin_flip.register(api_router)
 video_poker.register(api_router)
+wheel_of_fortune.register(api_router)
 mdg.register(api_router)
 stock_market.register(api_router)
 notifications.register(api_router)
