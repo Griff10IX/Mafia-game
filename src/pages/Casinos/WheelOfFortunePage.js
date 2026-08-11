@@ -277,16 +277,17 @@ export default function WheelOfFortunePage() {
       const nextRot = rotation + spins * 360 + delta;
       setRotation(nextRot);
 
-      setConfig((prev) => ({
-        ...(prev || {}),
-        ...data,
-        wedges: prev?.wedges || data.wedges || wedges,
-      }));
-      setFreeSecs(data.free_seconds_remaining ?? null);
-
+      // Do not merge prize / recent_wins into UI until the wheel finishes —
+      // otherwise Last 5 wins (and toast) spoil the result mid-spin.
       if (resultTimer.current) clearTimeout(resultTimer.current);
       resultTimer.current = setTimeout(() => {
         setLastPrize(data);
+        setConfig((prev) => ({
+          ...(prev || {}),
+          ...data,
+          wedges: prev?.wedges || data.wedges || wedges,
+        }));
+        setFreeSecs(data.free_seconds_remaining ?? null);
         toast.success(data.prize_label ? `You won ${data.prize_label}!` : 'Spin complete');
         setSpinning(false);
         spinLock.current = false;
