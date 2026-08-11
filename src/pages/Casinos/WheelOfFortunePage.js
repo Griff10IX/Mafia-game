@@ -63,7 +63,7 @@ const TIER_FALLBACK = {
 
 const TIER_ORDER = ['jackpot', 'rare', 'token', 'common'];
 const TIER_META = {
-  jackpot: { title: 'Jackpots', hint: 'Rarest', titleCls: 'text-amber-300', rowCls: 'border-amber-600/35' },
+  jackpot: { title: 'Jackpots', hint: 'Very rare', titleCls: 'text-amber-300', rowCls: 'border-amber-600/35' },
   rare: { title: 'Rares', hint: 'Hard to hit', titleCls: 'text-emerald-300', rowCls: 'border-emerald-600/35' },
   token: { title: 'Store tokens (×3)', hint: 'Perk / skip tokens', titleCls: 'text-orange-200/90', rowCls: 'border-orange-800/35' },
   common: { title: 'Commons', hint: 'Cash, points, bullets, skips', titleCls: 'text-zinc-300', rowCls: 'border-zinc-600/35' },
@@ -365,8 +365,8 @@ export default function WheelOfFortunePage() {
                     const fontSize = wheelLabelFontSize(text, highlight, n);
                     const textFill =
                       w.tier === 'jackpot'
-                        ? String(fill).toLowerCase() === '#9b59b6'
-                          ? '#f6eefe'
+                        ? String(fill).toLowerCase() === '#9b59b6' || String(fill).toLowerCase() === '#ff6b9d' || String(fill).toLowerCase() === '#ff2d55'
+                          ? '#fff5f8'
                           : '#1a1208'
                         : w.tier === 'rare'
                           ? '#06140e'

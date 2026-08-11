@@ -112,16 +112,34 @@ def _build_segments() -> List[Dict[str, Any]]:
             }
         )
 
-    add("jackpot_points", "2,500 Points", "2.5K", "jackpot", 1, {"kind": "points", "amount": 2500}, "#FFD700")
-    add("jackpot_loot", "1,000 Loot Pieces", "Loot", "jackpot", 1, {"kind": "loot_box_pieces", "amount": 1000}, "#E8C547")
+    add("rare_points_2500", "2,500 Points", "2.5K", "rare", 2, {"kind": "points", "amount": 2500}, "#FFD700")
+    add("jackpot_loot", "1,000 Loot Pieces", "Loot", "jackpot", 2, {"kind": "loot_box_pieces", "amount": 1000}, "#E8C547")
     add(
         "jackpot_mission_skip",
         "Mission Skip",
         "MSkip",
         "jackpot",
-        1,
+        2,
         {"kind": "mission_skip", "amount": 1},
         "#9b59b6",
+    )
+    add(
+        "jackpot_points_25k",
+        "25,000 Points",
+        "25K",
+        "jackpot",
+        1,
+        {"kind": "points", "amount": 25_000},
+        "#ff6b9d",
+    )
+    add(
+        "jackpot_cash_25b",
+        "$25,000,000,000",
+        "$25B",
+        "jackpot",
+        1,
+        {"kind": "money", "amount": 25_000_000_000},
+        "#ff2d55",
     )
     add(
         "rare_robot_hire",
@@ -141,6 +159,33 @@ def _build_segments() -> List[Dict[str, Any]]:
         {"kind": "money", "amount": 5_000_000_000},
         "#2ecc71",
     )
+    add(
+        "rare_points_500",
+        "500 Points",
+        "500",
+        "rare",
+        2,
+        {"kind": "points", "amount": 500},
+        "#58d68d",
+    )
+    add(
+        "rare_points_1000",
+        "1,000 Points",
+        "1K",
+        "rare",
+        2,
+        {"kind": "points", "amount": 1000},
+        "#48c9b0",
+    )
+    add(
+        "rare_cash_1_5b",
+        "$1,500,000,000",
+        "$1.5B",
+        "rare",
+        2,
+        {"kind": "money", "amount": 1_500_000_000},
+        "#1abc9c",
+    )
 
     for tt, (label, short) in TOKEN_LABELS.items():
         w = 4 if tt == "auto_rank_2h" else (6 if tt in ("auto_collect_24h", "auto_collect_12h") else 10)
@@ -150,6 +195,7 @@ def _build_segments() -> List[Dict[str, Any]]:
     add("cash_250k", "$250,000", "$250K", "common", 30, {"kind": "money", "amount": 250_000})
     add("cash_1m", "$1,000,000", "$1M", "common", 22, {"kind": "money", "amount": 1_000_000})
     add("cash_5m", "$5,000,000", "$5M", "common", 12, {"kind": "money", "amount": 5_000_000})
+    add("cash_500m", "$500,000,000", "$500M", "common", 10, {"kind": "money", "amount": 500_000_000})
 
     add("pts_25", "25 Points", "25", "common", 40, {"kind": "points", "amount": 25})
     add("pts_50", "50 Points", "50", "common", 34, {"kind": "points", "amount": 50})
