@@ -50,7 +50,7 @@ const WHEEL_STYLES = `
   .wof-rewards > summary .wof-chevron { transition: transform 0.2s ease; }
   .wof-rewards[open] > summary .wof-chevron { transform: rotate(180deg); }
   @media (max-width: 480px) {
-    .wof-intro { font-size: 10px; line-height: 1.35; }
+    .wof-intro { display: none; }
   }
 `;
 
@@ -166,6 +166,7 @@ export default function WheelOfFortunePage() {
   const [freeSecs, setFreeSecs] = useState(null);
   const spinLock = useRef(false);
   const resultTimer = useRef(null);
+  const wheelWrapRef = useRef(null);
 
   const wedges = config?.wedges || [];
   const n = wedges.length || 1;
@@ -262,6 +263,7 @@ export default function WheelOfFortunePage() {
     setSpinning(true);
     setLastPrize(null);
     try {
+      wheelWrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       const res = await api.post('/casino/wheel/spin', { pay_with: payWith });
       const data = res.data || {};
       const idx = Number(data.segment_index);
@@ -314,8 +316,8 @@ export default function WheelOfFortunePage() {
       <style>{WHEEL_STYLES}</style>
 
       <div className="wof-fade px-0.5">
-        <p className="text-[9px] text-amber-600/70 font-heading uppercase tracking-[0.28em] mb-0.5">The House</p>
-        <h1 className="text-lg sm:text-2xl font-heading font-bold text-amber-200 tracking-wider uppercase">Wheel of Fortune</h1>
+        <p className="hidden sm:block text-[9px] text-amber-600/70 font-heading uppercase tracking-[0.28em] mb-0.5">The House</p>
+        <h1 className="text-base sm:text-2xl font-heading font-bold text-amber-200 tracking-wider uppercase">Wheel of Fortune</h1>
         <p className="wof-intro text-[10px] sm:text-[11px] text-zinc-500 font-heading mt-1 max-w-xl">
           Free spin every 24h · banked spins from £10 store spend · 3 paid/day (100 pts or 300 respect)
         </p>
@@ -326,293 +328,286 @@ export default function WheelOfFortunePage() {
           Loading the wheel…
         </div>
       ) : (
-        <>
-          <div className={`${styles.panel} rounded-lg border border-amber-900/40 overflow-hidden wof-fade mobile-panel`}>
-            <div className="relative flex flex-col items-center px-1.5 pt-5 pb-3 sm:px-6 sm:pt-6 sm:pb-4">
-              <div className="wof-pointer absolute top-1.5 sm:top-2 z-20" aria-hidden>
-                <div
-                  className="w-0 h-0 mx-auto"
-                  style={{
-                    borderLeft: '9px solid transparent',
-                    borderRight: '9px solid transparent',
-                    borderTop: '16px solid #e8c547',
-                  }}
-                />
+        <div className={`${styles.panel} rounded-lg border border-amber-900/40 overflow-hidden wof-fade mobile-panel`}>
+          <div className="relative flex flex-col items-center px-1.5 pt-3 pb-3 sm:px-6 sm:pt-6 sm:pb-4">
+            <div className="wof-pointer absolute top-1 sm:top-2 z-20" aria-hidden>
+              <div
+                className="w-0 h-0 mx-auto"
+                style={{
+                  borderLeft: '9px solid transparent',
+                  borderRight: '9px solid transparent',
+                  borderTop: '16px solid #e8c547',
+                }}
+              />
+            </div>
+
+            <div
+              ref={wheelWrapRef}
+              className="wof-wheel-wrap relative w-[min(100%,min(68vw,280px))] sm:w-[min(92vw,420px)] aspect-square max-w-full"
+            >
+              <svg
+                viewBox="0 0 400 400"
+                className="wof-wheel w-full h-full rounded-full"
+                style={{
+                  transform: `rotate(${rotation}deg)`,
+                  boxShadow: '0 0 0 5px #2a1a0c, 0 0 0 7px #c9a227, 0 12px 32px rgba(0,0,0,0.55)',
+                }}
+              >
+                <defs>
+                  <filter id="wofInner" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodOpacity="0.35" />
+                  </filter>
+                </defs>
+                {wedges.map((w, i) => {
+                  const start = i * slice;
+                  const end = (i + 1) * slice;
+                  const mid = start + slice / 2;
+                  const highlight = w.tier === 'jackpot' || w.tier === 'rare';
+                  // Along-ray placement; full names use smaller fonts when long
+                  const labelR = highlight ? r * 0.58 : r * 0.70;
+                  const fill = w.color || TIER_FALLBACK[w.tier] || TIER_FALLBACK.common;
+                  const text = wheelLabelText(w);
+                  const fontSize = wheelLabelFontSize(text, highlight, n);
+                  const textFill =
+                    w.tier === 'jackpot'
+                      ? String(fill).toLowerCase() === '#9b59b6' || String(fill).toLowerCase() === '#ff6b9d' || String(fill).toLowerCase() === '#ff2d55'
+                        ? '#fff5f8'
+                        : '#1a1208'
+                      : w.tier === 'rare'
+                        ? '#06140e'
+                        : '#f0e2c4';
+                  // Left/bottom half: flip so letters aren't upside-down for the viewer
+                  const flip = mid > 90 && mid < 270;
+                  // Rotate wedge to "top", then turn text so it runs along the ray (hub ↔ rim)
+                  const textRot = flip ? 90 : -90;
+                  return (
+                    <g key={w.id || i}>
+                      <path
+                        d={wedgePath(cx, cy, r, start, end)}
+                        fill={fill}
+                        stroke="rgba(201,162,39,0.28)"
+                        strokeWidth="0.7"
+                      />
+                      {text ? (
+                        <g transform={`rotate(${mid} ${cx} ${cy})`}>
+                          <text
+                            className="wof-label"
+                            x={cx}
+                            y={cy - labelR}
+                            fill={textFill}
+                            fontSize={fontSize}
+                            fontWeight={highlight ? 800 : 650}
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                            transform={`rotate(${textRot} ${cx} ${cy - labelR})`}
+                            style={{
+                              pointerEvents: 'none',
+                              letterSpacing: text.length > 14 ? '0' : '0.02em',
+                            }}
+                          >
+                            {text}
+                          </text>
+                        </g>
+                      ) : null}
+                    </g>
+                  );
+                })}
+                <circle cx={cx} cy={cy} r={34} className="wof-hub" fill="#1a1008" stroke="#c9a227" strokeWidth="3" />
+                <text x={cx} y={cy - 3} textAnchor="middle" fill="#e8c547" fontSize="10" fontWeight="800" letterSpacing="0.14em">
+                  SPIN
+                </text>
+                <text x={cx} y={cy + 9} textAnchor="middle" fill="#a89060" fontSize="6.5" letterSpacing="0.18em">
+                  FORTUNE
+                </text>
+              </svg>
+            </div>
+
+            {/* Controls sit under the wheel so mobile can spin without scrolling past wins */}
+            <div className="mt-2.5 sm:mt-4 w-full max-w-md space-y-2" data-testid="wheel-spin-controls">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-1 sm:gap-2 text-[10px] font-heading">
+                <div className="rounded border border-white/5 bg-black/30 px-1.5 py-1 sm:px-2 sm:py-2">
+                  <p className="text-zinc-500 uppercase tracking-wider flex items-center gap-1 text-[8px] sm:text-[10px]">
+                    <Clock className="w-3 h-3 shrink-0" /> Daily
+                  </p>
+                  <p className="text-amber-100 mt-0.5 font-bold tabular-nums text-[10px] sm:text-[12px]">
+                    {statusBits?.adminUnlimited
+                      ? 'Unlimited'
+                      : statusBits?.dailyReady || (statusBits?.dailySecs != null && statusBits.dailySecs <= 0)
+                        ? 'Ready'
+                        : formatCountdown(statusBits?.dailySecs)}
+                  </p>
+                </div>
+                <div className="rounded border border-white/5 bg-black/30 px-1.5 py-1 sm:px-2 sm:py-2">
+                  <p className="text-zinc-500 uppercase tracking-wider flex items-center gap-1 text-[8px] sm:text-[10px]">
+                    <Gift className="w-3 h-3 shrink-0" /> Store
+                  </p>
+                  <p className="text-amber-100 mt-0.5 font-bold tabular-nums text-[10px] sm:text-[12px]">
+                    {statusBits?.bonus ?? 0} banked
+                  </p>
+                </div>
+                <div className="rounded border border-white/5 bg-black/30 px-1.5 py-1 sm:px-2 sm:py-2">
+                  <p className="text-zinc-500 uppercase tracking-wider flex items-center gap-1 text-[8px] sm:text-[10px]">
+                    <Zap className="w-3 h-3 shrink-0" /> Paid
+                  </p>
+                  <p className="text-amber-100 mt-0.5 font-bold tabular-nums text-[10px] sm:text-[12px]">
+                    {statusBits?.adminUnlimited
+                      ? 'No cap'
+                      : `${statusBits?.paidLeft ?? 0}/${config?.paid_spins_per_day ?? 3}`}
+                  </p>
+                </div>
+                <div className="hidden sm:block rounded border border-white/5 bg-black/30 px-2 py-2">
+                  <p className="text-zinc-500 uppercase tracking-wider flex items-center gap-1 text-[10px]">
+                    <Sparkles className="w-3 h-3 shrink-0" /> Points
+                  </p>
+                  <p className="text-amber-100 mt-0.5 font-bold tabular-nums text-[12px]">
+                    {(statusBits?.points ?? 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="hidden sm:block rounded border border-white/5 bg-black/30 px-2 py-2">
+                  <p className="text-zinc-500 uppercase tracking-wider flex items-center gap-1 text-[10px]">
+                    <CircleDollarSign className="w-3 h-3 shrink-0" /> Respect
+                  </p>
+                  <p className="text-amber-100 mt-0.5 font-bold tabular-nums text-[12px]">
+                    {(statusBits?.respect ?? 0).toLocaleString()}
+                  </p>
+                </div>
               </div>
 
-              <div className="wof-wheel-wrap relative w-[min(100%,min(88vw,360px))] sm:w-[min(92vw,420px)] aspect-square max-w-full">
-                <svg
-                  viewBox="0 0 400 400"
-                  className="wof-wheel w-full h-full rounded-full"
-                  style={{
-                    transform: `rotate(${rotation}deg)`,
-                    boxShadow: '0 0 0 5px #2a1a0c, 0 0 0 7px #c9a227, 0 12px 32px rgba(0,0,0,0.55)',
-                  }}
+              <div className="flex flex-col gap-1.5 sm:gap-2">
+                <button
+                  type="button"
+                  data-testid="wheel-spin-free"
+                  className="wof-btn w-full rounded-lg border-2 border-amber-500/70 bg-gradient-to-b from-amber-700/50 to-black/70 px-3 py-2.5 text-amber-50 font-heading font-bold uppercase tracking-wider text-xs sm:text-sm"
+                  disabled={spinning || !statusBits?.freeOk}
+                  onClick={() => spin('free')}
                 >
-                  <defs>
-                    <filter id="wofInner" x="-20%" y="-20%" width="140%" height="140%">
-                      <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodOpacity="0.35" />
-                    </filter>
-                  </defs>
-                  {wedges.map((w, i) => {
-                    const start = i * slice;
-                    const end = (i + 1) * slice;
-                    const mid = start + slice / 2;
-                    const highlight = w.tier === 'jackpot' || w.tier === 'rare';
-                    // Along-ray placement; full names use smaller fonts when long
-                    const labelR = highlight ? r * 0.58 : r * 0.70;
-                    const fill = w.color || TIER_FALLBACK[w.tier] || TIER_FALLBACK.common;
-                    const text = wheelLabelText(w);
-                    const fontSize = wheelLabelFontSize(text, highlight, n);
-                    const textFill =
-                      w.tier === 'jackpot'
-                        ? String(fill).toLowerCase() === '#9b59b6' || String(fill).toLowerCase() === '#ff6b9d' || String(fill).toLowerCase() === '#ff2d55'
-                          ? '#fff5f8'
-                          : '#1a1208'
-                        : w.tier === 'rare'
-                          ? '#06140e'
-                          : '#f0e2c4';
-                    // Left/bottom half: flip so letters aren't upside-down for the viewer
-                    const flip = mid > 90 && mid < 270;
-                    // Rotate wedge to "top", then turn text so it runs along the ray (hub ↔ rim)
-                    const textRot = flip ? 90 : -90;
+                  {freeButtonLabel}
+                </button>
+                <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                  <button
+                    type="button"
+                    data-testid="wheel-spin-points"
+                    className="wof-btn rounded-lg border border-primary/40 bg-primary/15 px-2 py-2.5 text-primary font-heading font-bold uppercase tracking-wider text-xs sm:text-sm flex items-center justify-center gap-1.5"
+                    disabled={
+                      spinning ||
+                      (statusBits?.paidLeft ?? 0) <= 0 ||
+                      (statusBits?.points ?? 0) < (statusBits?.ptsCost ?? 100)
+                    }
+                    onClick={() => spin('points')}
+                  >
+                    <CircleDollarSign className="w-3.5 h-3.5 shrink-0" />
+                    {statusBits?.ptsCost ?? 100} PTS
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="wheel-spin-respect"
+                    className="wof-btn rounded-lg border border-violet-500/40 bg-violet-950/40 px-2 py-2.5 text-violet-200 font-heading font-bold uppercase tracking-wider text-xs sm:text-sm"
+                    disabled={
+                      spinning ||
+                      (statusBits?.paidLeft ?? 0) <= 0 ||
+                      (statusBits?.respect ?? 0) < (statusBits?.respCost ?? 300)
+                    }
+                    onClick={() => spin('respect')}
+                  >
+                    {statusBits?.respCost ?? 300} Respect
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {lastPrize && (
+              <div className="mt-3 sm:mt-4 w-full max-w-md space-y-2" data-testid="wheel-last-prize">
+                <p className="text-[9px] uppercase tracking-[0.2em] text-amber-600/80 font-heading text-center">You won</p>
+                <div className={lastPrize.tier === 'jackpot' || lastPrize.tier === 'rare' ? 'wof-jackpot-glow rounded-lg' : ''}>
+                  <PrizeRow
+                    label={lastPrize.label || lastPrize.prize_label || 'Prize'}
+                    short={resultWedge?.short || shortLabel(resultWedge || lastPrize)}
+                    color={resultWedge?.color}
+                    tier={lastPrize.tier || resultWedge?.tier}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="mt-3 sm:mt-4 w-full max-w-md rounded-lg border border-amber-900/45 bg-black/35 overflow-hidden" data-testid="wheel-recent-wins">
+              <div className="px-3 py-2 border-b border-amber-900/35 flex items-center gap-1.5">
+                <Trophy className="w-3.5 h-3.5 text-amber-500/90 shrink-0" aria-hidden />
+                <p className="text-[10px] sm:text-[11px] font-heading font-bold uppercase tracking-wider text-amber-200">
+                  Last 5 wins
+                </p>
+                <span className="ml-auto text-[9px] text-zinc-600 font-heading">Game-wide</span>
+              </div>
+              {recentWins.length === 0 ? (
+                <p className="px-3 py-3 text-[11px] text-zinc-500 font-heading text-center">No spins yet — be the first.</p>
+              ) : (
+                <ul className="divide-y divide-white/5">
+                  {recentWins.slice(0, 5).map((win, idx) => {
+                    const name = String(win.username || '?');
+                    const tier = String(win.tier || 'common');
+                    const tierCls =
+                      tier === 'jackpot'
+                        ? 'text-amber-300'
+                        : tier === 'rare'
+                          ? 'text-emerald-300'
+                          : 'text-zinc-200';
                     return (
-                      <g key={w.id || i}>
-                        <path
-                          d={wedgePath(cx, cy, r, start, end)}
-                          fill={fill}
-                          stroke="rgba(201,162,39,0.28)"
-                          strokeWidth="0.7"
-                        />
-                        {text ? (
-                          <g transform={`rotate(${mid} ${cx} ${cy})`}>
-                            <text
-                              className="wof-label"
-                              x={cx}
-                              y={cy - labelR}
-                              fill={textFill}
-                              fontSize={fontSize}
-                              fontWeight={highlight ? 800 : 650}
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                              transform={`rotate(${textRot} ${cx} ${cy - labelR})`}
-                              style={{
-                                pointerEvents: 'none',
-                                letterSpacing: text.length > 14 ? '0' : '0.02em',
-                              }}
-                            >
-                              {text}
-                            </text>
-                          </g>
-                        ) : null}
-                      </g>
+                      <li key={`${win.at || ''}-${name}-${idx}`} className="px-3 py-2 flex items-start gap-2 min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <Link
+                            to={`/profile/${encodeURIComponent(name)}`}
+                            className="text-[11px] sm:text-xs font-heading font-bold text-primary hover:underline truncate inline-block max-w-full"
+                          >
+                            {name}
+                          </Link>
+                          <p className={`text-[11px] sm:text-xs font-heading font-semibold mt-0.5 truncate ${tierCls}`}>
+                            {win.prize_label || 'prize'}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-[9px] text-zinc-600 font-heading tabular-nums pt-0.5">
+                          {formatWinAge(win.at)}
+                        </span>
+                      </li>
                     );
                   })}
-                  <circle cx={cx} cy={cy} r={34} className="wof-hub" fill="#1a1008" stroke="#c9a227" strokeWidth="3" />
-                  <text x={cx} y={cy - 3} textAnchor="middle" fill="#e8c547" fontSize="10" fontWeight="800" letterSpacing="0.14em">
-                    SPIN
-                  </text>
-                  <text x={cx} y={cy + 9} textAnchor="middle" fill="#a89060" fontSize="6.5" letterSpacing="0.18em">
-                    FORTUNE
-                  </text>
-                </svg>
-              </div>
-
-              {lastPrize && (
-                <div
-                  className={`mt-3 sm:mt-4 w-full max-w-md space-y-2 ${
-                    lastPrize.tier === 'jackpot' || lastPrize.tier === 'rare' ? '' : ''
-                  }`}
-                  data-testid="wheel-last-prize"
-                >
-                  <p className="text-[9px] uppercase tracking-[0.2em] text-amber-600/80 font-heading text-center">You won</p>
-                  <div className={lastPrize.tier === 'jackpot' || lastPrize.tier === 'rare' ? 'wof-jackpot-glow rounded-lg' : ''}>
-                    <PrizeRow
-                      label={lastPrize.label || lastPrize.prize_label || 'Prize'}
-                      short={resultWedge?.short || shortLabel(resultWedge || lastPrize)}
-                      color={resultWedge?.color}
-                      tier={lastPrize.tier || resultWedge?.tier}
-                    />
-                  </div>
-                </div>
+                </ul>
               )}
+            </div>
 
-              <div className="mt-3 sm:mt-4 w-full max-w-md rounded-lg border border-amber-900/45 bg-black/35 overflow-hidden" data-testid="wheel-recent-wins">
-                <div className="px-3 py-2 border-b border-amber-900/35 flex items-center gap-1.5">
-                  <Trophy className="w-3.5 h-3.5 text-amber-500/90 shrink-0" aria-hidden />
-                  <p className="text-[10px] sm:text-[11px] font-heading font-bold uppercase tracking-wider text-amber-200">
-                    Last 5 wins
-                  </p>
-                  <span className="ml-auto text-[9px] text-zinc-600 font-heading">Game-wide</span>
-                </div>
-                {recentWins.length === 0 ? (
-                  <p className="px-3 py-3 text-[11px] text-zinc-500 font-heading text-center">No spins yet — be the first.</p>
-                ) : (
-                  <ul className="divide-y divide-white/5">
-                    {recentWins.slice(0, 5).map((win, idx) => {
-                      const name = String(win.username || '?');
-                      const tier = String(win.tier || 'common');
-                      const tierCls =
-                        tier === 'jackpot'
-                          ? 'text-amber-300'
-                          : tier === 'rare'
-                            ? 'text-emerald-300'
-                            : 'text-zinc-200';
-                      return (
-                        <li key={`${win.at || ''}-${name}-${idx}`} className="px-3 py-2 flex items-start gap-2 min-w-0">
-                          <div className="flex-1 min-w-0">
-                            <Link
-                              to={`/profile/${encodeURIComponent(name)}`}
-                              className="text-[11px] sm:text-xs font-heading font-bold text-primary hover:underline truncate inline-block max-w-full"
-                            >
-                              {name}
-                            </Link>
-                            <p className={`text-[11px] sm:text-xs font-heading font-semibold mt-0.5 truncate ${tierCls}`}>
-                              {win.prize_label || 'prize'}
-                            </p>
-                          </div>
-                          <span className="shrink-0 text-[9px] text-zinc-600 font-heading tabular-nums pt-0.5">
-                            {formatWinAge(win.at)}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-
-              <details
-                className="wof-rewards mt-3 sm:mt-4 w-full max-w-md rounded-lg border border-amber-900/50 bg-black/35 overflow-hidden"
-                data-testid="wheel-rewards-dropdown"
-              >
-                <summary className="flex items-center justify-between gap-2 px-3 py-2.5 sm:px-4 select-none hover:bg-amber-950/25">
-                  <span className="text-[11px] sm:text-xs font-heading font-bold uppercase tracking-wider text-amber-200">
-                    View all rewards
-                  </span>
-                  <span className="flex items-center gap-1.5 text-[10px] text-zinc-500 font-heading">
-                    {wedges.length} prizes
-                    <ChevronDown className="wof-chevron w-4 h-4 text-amber-500/80" aria-hidden />
-                  </span>
-                </summary>
-                <div className="border-t border-amber-900/40 px-2.5 py-2.5 sm:px-3 sm:py-3 space-y-3 max-h-[min(50vh,22rem)] overflow-y-auto overscroll-contain">
-                  {rewardsByTier.map((group) => (
-                    <div key={group.tier}>
-                      <div className="flex items-baseline justify-between gap-2 mb-1.5 px-0.5">
-                        <p className={`text-[10px] font-heading font-bold uppercase tracking-wider ${group.titleCls}`}>
-                          {group.title}
-                        </p>
-                        <p className="text-[9px] text-zinc-600 font-heading">{group.hint}</p>
-                      </div>
-                      <ul className="space-y-1">
-                        {group.items.map((w) => (
-                          <li key={w.id || w.index}>
-                            <PrizeRow label={w.label} short={w.short} color={w.color} tier={w.tier || group.tier} />
-                          </li>
-                        ))}
-                      </ul>
+            <details
+              className="wof-rewards mt-3 sm:mt-4 w-full max-w-md rounded-lg border border-amber-900/50 bg-black/35 overflow-hidden"
+              data-testid="wheel-rewards-dropdown"
+            >
+              <summary className="flex items-center justify-between gap-2 px-3 py-2.5 sm:px-4 select-none hover:bg-amber-950/25">
+                <span className="text-[11px] sm:text-xs font-heading font-bold uppercase tracking-wider text-amber-200">
+                  View all rewards
+                </span>
+                <span className="flex items-center gap-1.5 text-[10px] text-zinc-500 font-heading">
+                  {wedges.length} prizes
+                  <ChevronDown className="wof-chevron w-4 h-4 text-amber-500/80" aria-hidden />
+                </span>
+              </summary>
+              <div className="border-t border-amber-900/40 px-2.5 py-2.5 sm:px-3 sm:py-3 space-y-3 max-h-[min(50vh,22rem)] overflow-y-auto overscroll-contain">
+                {rewardsByTier.map((group) => (
+                  <div key={group.tier}>
+                    <div className="flex items-baseline justify-between gap-2 mb-1.5 px-0.5">
+                      <p className={`text-[10px] font-heading font-bold uppercase tracking-wider ${group.titleCls}`}>
+                        {group.title}
+                      </p>
+                      <p className="text-[9px] text-zinc-600 font-heading">{group.hint}</p>
                     </div>
-                  ))}
-                </div>
-              </details>
-            </div>
+                    <ul className="space-y-1">
+                      {group.items.map((w) => (
+                        <li key={w.id || w.index}>
+                          <PrizeRow label={w.label} short={w.short} color={w.color} tier={w.tier || group.tier} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </details>
           </div>
-
-          <div className={`${styles.panel} rounded-lg border border-amber-900/40 p-2.5 sm:p-4 wof-fade mobile-panel space-y-2.5 sm:space-y-3`}>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 sm:gap-2 text-[10px] font-heading">
-              <div className="rounded border border-white/5 bg-black/30 px-2 py-1.5 sm:py-2">
-                <p className="text-zinc-500 uppercase tracking-wider flex items-center gap-1 text-[8px] sm:text-[10px]">
-                  <Clock className="w-3 h-3 shrink-0" /> Daily
-                </p>
-                <p className="text-amber-100 mt-0.5 font-bold tabular-nums text-[11px] sm:text-[12px]">
-                  {statusBits?.adminUnlimited
-                    ? 'Unlimited'
-                    : statusBits?.dailyReady || (statusBits?.dailySecs != null && statusBits.dailySecs <= 0)
-                      ? 'Ready'
-                      : formatCountdown(statusBits?.dailySecs)}
-                </p>
-              </div>
-              <div className="rounded border border-white/5 bg-black/30 px-2 py-1.5 sm:py-2">
-                <p className="text-zinc-500 uppercase tracking-wider flex items-center gap-1 text-[8px] sm:text-[10px]">
-                  <Gift className="w-3 h-3 shrink-0" /> Store
-                </p>
-                <p className="text-amber-100 mt-0.5 font-bold tabular-nums text-[11px] sm:text-[12px]">
-                  {statusBits?.bonus ?? 0} banked
-                </p>
-              </div>
-              <div className="rounded border border-white/5 bg-black/30 px-2 py-1.5 sm:py-2">
-                <p className="text-zinc-500 uppercase tracking-wider flex items-center gap-1 text-[8px] sm:text-[10px]">
-                  <Zap className="w-3 h-3 shrink-0" /> Paid
-                </p>
-                <p className="text-amber-100 mt-0.5 font-bold tabular-nums text-[11px] sm:text-[12px]">
-                  {statusBits?.adminUnlimited
-                    ? 'No cap'
-                    : `${statusBits?.paidLeft ?? 0}/${config?.paid_spins_per_day ?? 3}`}
-                </p>
-              </div>
-              <div className="rounded border border-white/5 bg-black/30 px-2 py-1.5 sm:py-2">
-                <p className="text-zinc-500 uppercase tracking-wider flex items-center gap-1 text-[8px] sm:text-[10px]">
-                  <Sparkles className="w-3 h-3 shrink-0" /> Points
-                </p>
-                <p className="text-amber-100 mt-0.5 font-bold tabular-nums text-[11px] sm:text-[12px]">
-                  {(statusBits?.points ?? 0).toLocaleString()}
-                </p>
-              </div>
-              <div className="rounded border border-white/5 bg-black/30 px-2 py-1.5 sm:py-2 col-span-2 sm:col-span-1">
-                <p className="text-zinc-500 uppercase tracking-wider flex items-center gap-1 text-[8px] sm:text-[10px]">
-                  <CircleDollarSign className="w-3 h-3 shrink-0" /> Respect
-                </p>
-                <p className="text-amber-100 mt-0.5 font-bold tabular-nums text-[11px] sm:text-[12px]">
-                  {(statusBits?.respect ?? 0).toLocaleString()}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                data-testid="wheel-spin-free"
-                className="wof-btn w-full rounded-lg border-2 border-amber-500/70 bg-gradient-to-b from-amber-700/50 to-black/70 px-3 py-2.5 text-amber-50 font-heading font-bold uppercase tracking-wider text-xs sm:text-sm"
-                disabled={spinning || !statusBits?.freeOk}
-                onClick={() => spin('free')}
-              >
-                {freeButtonLabel}
-              </button>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  data-testid="wheel-spin-points"
-                  className="wof-btn rounded-lg border border-primary/40 bg-primary/15 px-2 py-2.5 text-primary font-heading font-bold uppercase tracking-wider text-xs sm:text-sm flex items-center justify-center gap-1.5"
-                  disabled={
-                    spinning ||
-                    (statusBits?.paidLeft ?? 0) <= 0 ||
-                    (statusBits?.points ?? 0) < (statusBits?.ptsCost ?? 100)
-                  }
-                  onClick={() => spin('points')}
-                >
-                  <CircleDollarSign className="w-3.5 h-3.5 shrink-0" />
-                  {statusBits?.ptsCost ?? 100} PTS
-                </button>
-                <button
-                  type="button"
-                  data-testid="wheel-spin-respect"
-                  className="wof-btn rounded-lg border border-violet-500/40 bg-violet-950/40 px-2 py-2.5 text-violet-200 font-heading font-bold uppercase tracking-wider text-xs sm:text-sm"
-                  disabled={
-                    spinning ||
-                    (statusBits?.paidLeft ?? 0) <= 0 ||
-                    (statusBits?.respect ?? 0) < (statusBits?.respCost ?? 300)
-                  }
-                  onClick={() => spin('respect')}
-                >
-                  {statusBits?.respCost ?? 300} Respect
-                </button>
-              </div>
-            </div>
-
-            <p className="text-[9px] sm:text-[10px] text-zinc-500 text-center font-heading leading-relaxed px-1">
-              Open <span className="text-amber-600/90">View all rewards</span> under the wheel for full prize names.
-            </p>
-          </div>
-        </>
+        </div>
       )}
     </div>
   );
