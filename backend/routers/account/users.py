@@ -225,6 +225,13 @@ def register(router):
                 user_item["on_hitlist"] = tc > 0 or tp > 0
                 user_item["hitlist_total_cash"] = tc
                 user_item["hitlist_total_points"] = tp
+            from routers.game.families import _batch_resolve_family_ids
+            fam_map = await _batch_resolve_family_ids(user_ids)
+            for uid, user_item in id_to_user.items():
+                user_item["in_family"] = bool(fam_map.get(uid))
+        for u in users_data:
+            if "in_family" not in u:
+                u["in_family"] = False
         # Staff first (admins, then mods only); everyone else (including HDOs) by rank_points desc
         def _sort_key(u):
             if u.get("is_admin"):

@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-11[/color][/b] — [b]Users Online: staff colours + family cue[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Names:[/b] Coloured names on Users Online are [b]staff only[/b] (Admin / Mod / Help Desk / Entertainer). Player name cosmetics no longer tint the roster.[/color]
+[*][color=#888888][b]Families:[/b] Players [b]in a family[/b] stay [b]bold white[/b]. [b]Familyless[/b] names are [b]non-bold grey[/b] so you can spot who is unattached. Staff keep their colours either way.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-11[/color][/b] — [b]Casino: Wheel of Fortune updates[/b][/size]
 [quote]
 [list]

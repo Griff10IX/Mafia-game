@@ -302,6 +302,7 @@ const RoleKeyStrip = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor,
       {item(<span className="w-2 h-2 rounded-full shrink-0 border border-white/20" style={hdoSwatchStyle} aria-hidden />, 'Help Desk')}
       {item(<span className="w-2 h-2 rounded-full shrink-0 border border-white/20" style={entertainerSwatchStyle} aria-hidden />, 'Entertainer')}
       {item(<Target size={11} className="text-red-400 shrink-0" aria-hidden />, 'Hitlist')}
+      {item(<span className="text-[10px] font-heading font-normal text-zinc-500 leading-none" aria-hidden>Aa</span>, 'No family')}
     </div>
   );
 };
@@ -310,12 +311,22 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
   const preview = profileCache[user.username];
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
   const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
-  const displayColor =
-    user.online_color ||
-    (user.is_admin ? adminColor : user.is_moderator ? modColor : user.is_entertainer ? DEFAULT_ENTERTAINER_COLOR : user.is_help_desk_operator ? DEFAULT_HDO_COLOR : undefined) ||
-    ((preview?.profile_cosmetic_active || user.profile_cosmetic_active) && (preview?.profile_name_glow_color || user.profile_name_glow_color)
-      ? (preview?.profile_name_glow_color || user.profile_name_glow_color)
-      : undefined);
+  // Staff role colours only (admin / mod / HDO / entertainer). Do not use
+  // profile cosmetic name glow here — it reads like staff and confuses the roster.
+  const isStaff =
+    !!user.is_admin || !!user.is_moderator || !!user.is_help_desk_operator || !!user.is_entertainer;
+  // Missing in_family (old cache) → treat as in-family so we don't falsely grey everyone.
+  const inFamily = user.in_family == null ? true : !!user.in_family;
+  const displayColor = isStaff
+    ? user.online_color ||
+      (user.is_admin
+        ? adminColor
+        : user.is_moderator
+          ? modColor
+          : user.is_entertainer
+            ? DEFAULT_ENTERTAINER_COLOR
+            : DEFAULT_HDO_COLOR)
+    : undefined;
   const userStatus = user.status || 'online';
   const selfFromRoster =
     myUsername &&
@@ -324,7 +335,16 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
   const profileTo = selfFromRoster
     ? `/profile/${encodeURIComponent(user.username)}?view=public`
     : `/profile/${encodeURIComponent(user.username)}`;
-  const linkClass = `relative z-10 max-w-[7.5rem] sm:max-w-[9rem] truncate text-[11px] font-heading font-bold transition-colors ${displayColor ? '' : 'text-foreground hover:text-primary'}`;
+  // Family members: bold white. Familyless (non-staff): non-bold muted grey.
+  const linkClass = [
+    'relative z-10 max-w-[7.5rem] sm:max-w-[9rem] truncate text-[11px] font-heading transition-colors',
+    displayColor
+      ? 'font-bold'
+      : inFamily
+        ? 'font-bold text-foreground hover:text-primary'
+        : 'font-normal text-zinc-500 hover:text-zinc-300',
+  ].join(' ');
+  const nameTitle = inFamily || isStaff ? user.username : `${user.username} (no family)`;
   const prefetchFullProfile = () => warmProfilePrefetchFromUsername(user.username);
 
   const profileLink = (extra = {}) => (
@@ -336,7 +356,7 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
       onPointerDown={prefetchFullProfile}
       onPointerEnter={prefetchFullProfile}
       onFocus={prefetchFullProfile}
-      title={user.username}
+      title={nameTitle}
       {...extra}
     >
       {user.username}
@@ -442,6 +462,12 @@ const InfoCard = ({ profileHoverEnabled = true }) => (
           </p>
           <p>
             Snapshot tiles count accounts with a recent <strong className="text-foreground">last seen</strong> (not the same as the live list).
+          </p>
+          <p>
+            <strong className="text-foreground">Bold white</strong> names are in a family.
+            {' '}
+            <span className="text-zinc-500 font-normal">Grey</span> names have no family.
+            Staff keep their coloured names either way.
           </p>
           <p>
             Search any user (including offline or dead) from the top bar.

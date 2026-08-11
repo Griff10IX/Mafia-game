@@ -6,7 +6,7 @@ import api from './api';
 import { readSessionJson, writeSessionJson } from './sessionPageCache';
 
 /** Must match boot key used by `pages/Game/UsersOnline.js`. */
-export const USERS_ONLINE_CACHE_KEY = 'mafia_users_online_v3';
+export const USERS_ONLINE_CACHE_KEY = 'mafia_users_online_v4';
 
 let lastWarmAt = 0;
 let inFlight = null;
