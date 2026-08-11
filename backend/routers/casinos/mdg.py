@@ -1,6 +1,6 @@
 # Casino MDG (Pot Game): create game (fee points/money/both), join, list; one winner takes pot; auto-roll when N spots filled
 from datetime import datetime, timezone, timedelta
-from typing import Any, Optional
+from typing import Any, List, Optional
 import asyncio
 import logging
 import math
@@ -65,6 +65,93 @@ def _mdg_roll_pool(entries: list) -> list:
     return list(entries or [])
 
 
+def _mdg_uses_entertainer_fund(user: dict) -> bool:
+    """Entertainer fund path — admins are exempt even if they also have the entertainer flag."""
+    return bool(_is_entertainer(user) and not _is_admin(user))
+
+
+def _mdg_entry_is_staff_flagged(entry: dict) -> bool:
+    return bool(entry and entry.get("is_staff"))
+
+
+async def _mdg_user_is_staff(user_id: str) -> bool:
+    if not user_id:
+        return False
+    u = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "email": 1, "is_moderator": 1, "is_admin": 1},
+    )
+    if not u:
+        return False
+    return bool(_is_admin(u) or _is_moderator(u))
+
+
+async def _mdg_eligible_win_pool(entries: list) -> list:
+    """Admins/mods may enter MDG but are never eligible to win."""
+    out = []
+    for e in entries or []:
+        uid = (e.get("user_id") or "").strip()
+        if not uid or uid == "__house__":
+            continue
+        if _mdg_entry_is_staff_flagged(e):
+            continue
+        if await _mdg_user_is_staff(uid):
+            continue
+        out.append(e)
+    return out
+
+
+# Admin-only side prizes (tokens / skips / unowned state assets). Granted to winner on roll.
+MDG_ADMIN_TOKEN_TYPES = (
+    # Armoury perk / skip tokens
+    "xp_crimes",
+    "xp_gta",
+    "auto_rank_2h",
+    "crew_oc_auto_3h",
+    "melt",
+    "oc_reduced",
+    "booze",
+    "racket",
+    "travel",
+    "properties",
+    "jailbust_bonus",
+    "auto_collect_12h",
+    "auto_collect_24h",
+    "cooldown_skip_crime",
+    "cooldown_skip_gta",
+    "cooldown_skip_booze",
+    "cooldown_skip_properties",
+    "rank_xp_pass",
+    # Store count-only
+    "jail_bailout",
+    "mission_skip",
+    "robot_bodyguard_hire",
+)
+MDG_STORE_TOKEN_FIELDS = {
+    "jail_bailout": "jail_bailout_tokens",
+    "mission_skip": "mission_skip_tokens",
+    "robot_bodyguard_hire": "robot_bodyguard_hire_tokens",
+}
+MDG_UNOWNED_CASINO_COLLECTIONS = {
+    "dice": "dice_ownership",
+    "roulette": "roulette_ownership",
+    "blackjack": "blackjack_ownership",
+    "horseracing": "horseracing_ownership",
+    "videopoker": "videopoker_ownership",
+    "slots": "slots_ownership",
+}
+
+
+class MDGAdminPrize(BaseModel):
+    """Admin-only prize attached to an MDG (in addition to the cash/points pot)."""
+    kind: str  # token | unowned_airport | unowned_armoury | unowned_casino
+    token_type: Optional[str] = None
+    amount: int = 1
+    state: Optional[str] = None
+    casino: Optional[str] = None  # dice|roulette|blackjack|horseracing|videopoker|slots
+    label: Optional[str] = None  # display override
+
+
 class MDGCreateRequest(BaseModel):
     fee_points: int = 0
     fee_money: float = 0
@@ -72,6 +159,7 @@ class MDGCreateRequest(BaseModel):
     auto_roll_at: Optional[int] = None  # when this many spots filled, auto roll; null = manual only (or when max_players)
     extra_pot_points: int = 0
     extra_pot_money: float = 0
+    admin_prizes: Optional[List[MDGAdminPrize]] = None
 
 
 class MDGJoinRequest(BaseModel):
@@ -82,6 +170,262 @@ class MDGJoinRequest(BaseModel):
 
 class MDGRollRequest(BaseModel):
     game_id: str
+
+
+def _mdg_normalize_admin_prizes(raw_prizes, *, is_admin: bool) -> list:
+    if not raw_prizes:
+        return []
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Only admins can attach bonus prizes to an MDG")
+    from server import STATES
+
+    out = []
+    for p in raw_prizes:
+        kind = (getattr(p, "kind", None) or (p.get("kind") if isinstance(p, dict) else None) or "").strip().lower()
+        if not kind:
+            continue
+        amount = max(1, int(getattr(p, "amount", None) or (p.get("amount") if isinstance(p, dict) else 1) or 1))
+        token_type = (getattr(p, "token_type", None) or (p.get("token_type") if isinstance(p, dict) else None) or "").strip().lower() or None
+        state = (getattr(p, "state", None) or (p.get("state") if isinstance(p, dict) else None) or "").strip() or None
+        casino = (getattr(p, "casino", None) or (p.get("casino") if isinstance(p, dict) else None) or "").strip().lower() or None
+        label = (getattr(p, "label", None) or (p.get("label") if isinstance(p, dict) else None) or "").strip() or None
+
+        if kind == "token":
+            if not token_type or token_type not in MDG_ADMIN_TOKEN_TYPES:
+                raise HTTPException(status_code=400, detail=f"Invalid admin token prize: {token_type}")
+            if amount > 100:
+                raise HTTPException(status_code=400, detail="Token prize amount max is 100")
+            label = label or f"{amount}× {token_type.replace('_', ' ')}"
+            out.append({"kind": "token", "token_type": token_type, "amount": amount, "label": label})
+        elif kind in ("unowned_airport", "unowned_armoury"):
+            if not state or state not in STATES:
+                raise HTTPException(status_code=400, detail=f"Invalid state for {kind}")
+            label = label or f"Unowned {('airport' if kind == 'unowned_airport' else 'armoury')} · {state}"
+            out.append({"kind": kind, "state": state, "label": label})
+        elif kind == "unowned_casino":
+            if not state or state not in STATES:
+                raise HTTPException(status_code=400, detail="Invalid state for unowned casino")
+            if not casino or casino not in MDG_UNOWNED_CASINO_COLLECTIONS:
+                raise HTTPException(status_code=400, detail="Invalid casino type for unowned casino prize")
+            label = label or f"Unowned {casino} · {state}"
+            out.append({"kind": "unowned_casino", "state": state, "casino": casino, "label": label})
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown admin prize kind: {kind}")
+    if len(out) > 20:
+        raise HTTPException(status_code=400, detail="Too many admin prizes (max 20)")
+    return out
+
+
+async def _mdg_grant_admin_prizes(winner_id: str, winner_username: str, prizes: list) -> list:
+    """Grant admin side-prizes. Returns list of {label, ok, detail}."""
+    results = []
+    if not prizes or not winner_id:
+        return results
+    from routers.kill.armoury import TOKEN_CONFIG
+
+    for p in prizes:
+        kind = (p.get("kind") or "").strip().lower()
+        label = p.get("label") or kind
+        try:
+            if kind == "token":
+                tt = (p.get("token_type") or "").strip().lower()
+                amount = max(1, int(p.get("amount") or 1))
+                if tt in MDG_STORE_TOKEN_FIELDS:
+                    field = MDG_STORE_TOKEN_FIELDS[tt]
+                    await db.users.update_one({"id": winner_id}, {"$inc": {field: amount}})
+                    results.append({"label": label, "ok": True, "detail": f"+{amount} {field}"})
+                elif tt in TOKEN_CONFIG:
+                    field = TOKEN_CONFIG[tt]["count_field"]
+                    await db.users.update_one({"id": winner_id}, {"$inc": {field: amount}})
+                    results.append({"label": label, "ok": True, "detail": f"+{amount} {field}"})
+                else:
+                    results.append({"label": label, "ok": False, "detail": "unknown token"})
+            elif kind == "unowned_airport":
+                state = (p.get("state") or "").strip()
+                res = await db.airport_ownership.find_one_and_update(
+                    {
+                        "state": state,
+                        "$or": [
+                            {"owner_id": None},
+                            {"owner_id": ""},
+                            {"owner_id": {"$exists": False}},
+                        ],
+                    },
+                    {"$set": {"owner_id": winner_id, "owner_username": winner_username}},
+                    return_document=ReturnDocument.AFTER,
+                )
+                if not res:
+                    results.append({"label": label, "ok": False, "detail": "already owned or missing"})
+                else:
+                    try:
+                        from routers.admin.airport import _invalidate_airports_list_cache
+                        _invalidate_airports_list_cache()
+                    except Exception:
+                        pass
+                    results.append({"label": label, "ok": True, "detail": f"airport {state}"})
+            elif kind == "unowned_armoury":
+                state = (p.get("state") or "").strip()
+                res = await db.bullet_factory.find_one_and_update(
+                    {
+                        "state": state,
+                        "$or": [
+                            {"owner_id": None},
+                            {"owner_id": ""},
+                            {"owner_id": {"$exists": False}},
+                        ],
+                    },
+                    {"$set": {"owner_id": winner_id, "owner_username": winner_username}},
+                    return_document=ReturnDocument.AFTER,
+                )
+                if not res:
+                    results.append({"label": label, "ok": False, "detail": "already owned or missing"})
+                else:
+                    results.append({"label": label, "ok": True, "detail": f"armoury {state}"})
+            elif kind == "unowned_casino":
+                state = (p.get("state") or "").strip()
+                casino = (p.get("casino") or "").strip().lower()
+                coll_name = MDG_UNOWNED_CASINO_COLLECTIONS.get(casino)
+                if not coll_name:
+                    results.append({"label": label, "ok": False, "detail": "bad casino type"})
+                    continue
+                coll = getattr(db, coll_name)
+                # Most casino ownership docs key on city/state — try both
+                loc_filter = {"$or": [{"city": state}, {"state": state}]}
+                unowned = {
+                    "$or": [
+                        {"owner_id": None},
+                        {"owner_id": ""},
+                        {"owner_id": {"$exists": False}},
+                    ]
+                }
+                res = await coll.find_one_and_update(
+                    {"$and": [loc_filter, unowned]},
+                    {"$set": {"owner_id": winner_id, "owner_username": winner_username}},
+                    return_document=ReturnDocument.AFTER,
+                )
+                if not res:
+                    results.append({"label": label, "ok": False, "detail": "already owned or missing"})
+                else:
+                    results.append({"label": label, "ok": True, "detail": f"{casino} {state}"})
+            else:
+                results.append({"label": label, "ok": False, "detail": "unknown kind"})
+        except Exception as ex:
+            _logger.exception("MDG admin prize grant failed kind=%s winner=%s", kind, winner_id)
+            results.append({"label": label, "ok": False, "detail": str(ex)[:120]})
+    return results
+
+
+async def _mdg_settle_winner(
+    *,
+    game: dict,
+    game_id: str,
+    entries: list,
+    winner_entry: dict,
+    roll: int,
+    pot_pts: int,
+    pot_money: float,
+    trigger: str,
+) -> dict:
+    """Claim game, pay pot + admin prizes, notify. Returns response fields."""
+    winner_id = winner_entry["user_id"]
+    winner_user = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
+    winner_username = (winner_user and winner_user.get("username")) or winner_entry.get("username") or "?"
+    now_iso = datetime.now(timezone.utc).isoformat()
+    prize_results = []
+    claim_res = await db.mdg_games.find_one_and_update(
+        {"id": game_id, "status": "open"},
+        {
+            "$set": {
+                "status": "completed",
+                "winner_id": winner_id,
+                "winner_username": winner_username,
+                "rolled_at": now_iso,
+                "roll": roll,
+            }
+        },
+    )
+    if not claim_res:
+        return {"already_closed": True}
+    winner_before_payout = await db.users.find_one_and_update(
+        {"id": winner_id},
+        {"$inc": {"points": pot_pts, "money": pot_money}},
+        projection={"_id": 0, "points": 1},
+        return_document=ReturnDocument.BEFORE,
+    )
+    if pot_pts > 0:
+        pts_before_payout = int((winner_before_payout or {}).get("points") or 0)
+        await log_points_event(
+            db,
+            user_id=winner_id,
+            points=pot_pts,
+            event_type="casino_mdg",
+            event_ref=f"payout:{game_id}",
+            source="casino_mdg",
+            correlation_id=game_id,
+            context={
+                "action": "winner_payout",
+                "result": "won",
+                "game_id": game_id,
+                "host": {"id": game.get("created_by"), "username": game.get("created_by_username")},
+                "opponents": [{"id": e.get("user_id"), "username": e.get("username")} for e in entries if e.get("user_id") != winner_id],
+                "stake_points": int(winner_entry.get("paid_points") or 0),
+                "payout_points": pot_pts,
+                "pot_points": pot_pts,
+                "trigger": trigger,
+            },
+            meta={"action": "winner_payout", "game_id": game_id, "pot_points": pot_pts, "trigger": trigger},
+            wallet_points_before=pts_before_payout,
+            wallet_points_after=pts_before_payout + pot_pts,
+        )
+    await log_gambling(
+        winner_id,
+        winner_username,
+        "mdg",
+        {"action": "payout", "game_id": game_id, "pot_points": pot_pts, "pot_money": pot_money, "trigger": trigger},
+    )
+    admin_prizes = list(game.get("admin_prizes") or [])
+    if admin_prizes:
+        prize_results = await _mdg_grant_admin_prizes(winner_id, winner_username, admin_prizes)
+        try:
+            await db.mdg_games.update_one(
+                {"id": game_id},
+                {"$set": {"admin_prize_results": prize_results}},
+            )
+        except Exception:
+            pass
+    prize_ok = [r["label"] for r in prize_results if r.get("ok")]
+    prize_fail = [r["label"] for r in prize_results if not r.get("ok")]
+    msg_bits = [f"You won the pot: {pot_pts} pts, ${pot_money:,.0f}"]
+    if prize_ok:
+        msg_bits.append("Bonus: " + ", ".join(prize_ok))
+    if prize_fail:
+        msg_bits.append("Could not grant: " + ", ".join(prize_fail))
+    await send_notification(winner_id, "🎲 MDG Won", ". ".join(msg_bits), "reward")
+    # Notify losers
+    sent_to = {winner_id}
+    for e in entries or []:
+        uid = (e.get("user_id") or "").strip()
+        if not uid or uid in sent_to:
+            continue
+        sent_to.add(uid)
+        try:
+            await send_notification(
+                uid,
+                "🎲 MDG Result",
+                f"You lost this MDG. Winner: {winner_username}. Final pot: {pot_pts} pts, ${pot_money:,.0f}.",
+                "system",
+            )
+        except Exception:
+            continue
+    return {
+        "already_closed": False,
+        "winner_id": winner_id,
+        "winner_username": winner_username,
+        "roll": roll,
+        "pot_points": pot_pts,
+        "pot_money": pot_money,
+        "admin_prize_results": prize_results,
+    }
 
 
 def _mdg_parse_iso(raw) -> Optional[datetime]:
@@ -404,7 +748,7 @@ def register(router):
         """List open MDG games (joinable)."""
         cursor = db.mdg_games.find(
             {"status": "open"},
-            {"_id": 0, "id": 1, "created_by": 1, "created_by_username": 1, "created_at": 1, "fee_points": 1, "fee_money": 1, "max_players": 1, "auto_roll_at": 1, "extra_pot_points": 1, "extra_pot_money": 1, "entries": 1, "pot_points": 1, "pot_money": 1, "status": 1, "is_automated": 1, "house_pot": 1, "auto_roll_deadline": 1},
+            {"_id": 0, "id": 1, "created_by": 1, "created_by_username": 1, "created_at": 1, "fee_points": 1, "fee_money": 1, "max_players": 1, "auto_roll_at": 1, "extra_pot_points": 1, "extra_pot_money": 1, "entries": 1, "pot_points": 1, "pot_money": 1, "status": 1, "is_automated": 1, "house_pot": 1, "auto_roll_deadline": 1, "admin_prizes": 1, "staff_cannot_win": 1},
         ).sort("created_at", -1)
         games = await cursor.to_list(100)
         # Anti-bot: hand out a fresh single-use join token with the list (consumed by the next join).
@@ -422,6 +766,64 @@ def register(router):
             _logger.exception("mdg join token issue failed")
             join_token = None
         return {"games": [_mdg_sanitize_for_json(g) for g in games], "join_token": join_token}
+
+    @router.get("/casino/mdg/admin-prize-options")
+    async def mdg_admin_prize_options(current_user: dict = Depends(get_current_user_verified)):
+        """Admin-only: token types + currently unowned state assets for MDG bonus prizes."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        from server import STATES
+
+        unowned = {"airport": [], "armoury": [], "casino": []}
+        for state in STATES:
+            air = await db.airport_ownership.find_one(
+                {
+                    "state": state,
+                    "$or": [{"owner_id": None}, {"owner_id": ""}, {"owner_id": {"$exists": False}}],
+                },
+                {"_id": 0, "state": 1, "slot": 1},
+            )
+            if air:
+                unowned["airport"].append({"state": state, "slot": air.get("slot")})
+            arm = await db.bullet_factory.find_one(
+                {
+                    "state": state,
+                    "$or": [{"owner_id": None}, {"owner_id": ""}, {"owner_id": {"$exists": False}}],
+                },
+                {"_id": 0, "state": 1},
+            )
+            if arm:
+                unowned["armoury"].append({"state": state})
+            for casino, coll_name in MDG_UNOWNED_CASINO_COLLECTIONS.items():
+                coll = getattr(db, coll_name)
+                doc = await coll.find_one(
+                    {
+                        "$and": [
+                            {"$or": [{"city": state}, {"state": state}]},
+                            {"$or": [{"owner_id": None}, {"owner_id": ""}, {"owner_id": {"$exists": False}}]},
+                        ]
+                    },
+                    {"_id": 0, "city": 1, "state": 1},
+                )
+                if doc:
+                    unowned["casino"].append({"state": state, "casino": casino})
+
+        token_labels = {
+            "mission_skip": "Mission Skip",
+            "jail_bailout": "Jail Bailout",
+            "robot_bodyguard_hire": "Free Robot Bodyguard hire",
+            "cooldown_skip_properties": "Properties Collect Skip",
+            "cooldown_skip_crime": "Crime Cooldown Skip",
+            "cooldown_skip_gta": "GTA Cooldown Skip",
+            "cooldown_skip_booze": "Booze Cooldown Skip",
+            "auto_rank_2h": "Auto Rank 2h",
+            "rank_xp_pass": "Game Pass (rank XP)",
+        }
+        tokens = [
+            {"token_type": t, "label": token_labels.get(t, t.replace("_", " ").title())}
+            for t in MDG_ADMIN_TOKEN_TYPES
+        ]
+        return {"states": list(STATES), "tokens": tokens, "unowned": unowned}
 
     @router.get("/casino/mdg/auto-stats")
     async def mdg_auto_stats(current_user: dict = Depends(get_current_user_verified)):
@@ -448,7 +850,8 @@ def register(router):
         if fee_pts > MDG_MAX_FEE_POINTS or fee_money > MDG_MAX_FEE_MONEY:
             raise HTTPException(status_code=400, detail="Fee exceeds maximum allowed")
         max_players = max(MDG_MIN_PLAYERS, min(MDG_MAX_PLAYERS, int(request.max_players or 10)))
-        if _is_entertainer(current_user) and max_players < ENTERTAINER_MDG_MIN_MAX_PLAYERS:
+        use_ent_fund = _mdg_uses_entertainer_fund(current_user)
+        if use_ent_fund and max_players < ENTERTAINER_MDG_MIN_MAX_PLAYERS:
             raise HTTPException(
                 status_code=400,
                 detail=f"Entertainer-created MDG games must allow at least {ENTERTAINER_MDG_MIN_MAX_PLAYERS} players (set Max players ≥ {ENTERTAINER_MDG_MIN_MAX_PLAYERS}).",
@@ -464,18 +867,26 @@ def register(router):
         # Creator is auto-joined: must have enough to pay fee + extra pot
         total_pts = fee_pts + extra_pts
         total_money = fee_money + extra_money
-        if _is_entertainer(current_user) and total_pts > ENTERTAINER_MDG_MAX_POINTS_PER_GAME:
+        if use_ent_fund and total_pts > ENTERTAINER_MDG_MAX_POINTS_PER_GAME:
             raise HTTPException(
                 status_code=400,
                 detail=f"Entertainer MDG: fee points + extra pot points cannot exceed {ENTERTAINER_MDG_MAX_POINTS_PER_GAME:,} (from your entertainer fund).",
             )
+        admin_prizes = _mdg_normalize_admin_prizes(request.admin_prizes, is_admin=_is_admin(current_user))
         user = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
         if not user:
             raise HTTPException(status_code=400, detail="User not found")
 
         game_id = str(uuid.uuid4())
         now_iso = datetime.now(timezone.utc).isoformat()
-        creator_entry = {"user_id": uid, "username": user.get("username") or "?", "paid_points": fee_pts, "paid_money": fee_money}
+        creator_is_staff = bool(_is_admin(current_user) or _is_moderator(current_user))
+        creator_entry = {
+            "user_id": uid,
+            "username": user.get("username") or "?",
+            "paid_points": fee_pts,
+            "paid_money": fee_money,
+            "is_staff": creator_is_staff,
+        }
         doc = {
             "id": game_id,
             "created_by": uid,
@@ -495,8 +906,10 @@ def register(router):
             "winner_username": None,
             "rolled_at": None,
             "entertainer_funded": False,
+            "admin_prizes": admin_prizes,
+            "staff_cannot_win": True,
         }
-        if _is_entertainer(current_user):
+        if use_ent_fund:
             ok = await try_debit_entertainer_fund(db, uid, total_money, total_pts)
             if not ok:
                 raise HTTPException(
@@ -601,7 +1014,14 @@ def register(router):
         if not user:
             raise HTTPException(status_code=400, detail="User not found")
 
-        entry = {"user_id": uid, "username": user.get("username") or "?", "paid_points": fee_pts, "paid_money": fee_money}
+        joiner_is_staff = bool(_is_admin(current_user) or _is_moderator(current_user))
+        entry = {
+            "user_id": uid,
+            "username": user.get("username") or "?",
+            "paid_points": fee_pts,
+            "paid_money": fee_money,
+            "is_staff": joiner_is_staff,
+        }
         new_entries = entries + [entry]
         new_pot_pts = int(game.get("pot_points") or 0) + fee_pts
         new_pot_money = float(game.get("pot_money") or 0) + fee_money
@@ -702,54 +1122,34 @@ def register(router):
                     }
                 return {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money}
 
-            # Regular (non-automated) game roll — uniform over all entrants
-            pool = _mdg_roll_pool(new_entries)
+            # Regular (non-automated) game roll — staff excluded from win pool
+            pool = await _mdg_eligible_win_pool(new_entries)
+            if not pool:
+                return {
+                    "message": "Joined. Game is full of staff only — cannot roll until a non-staff player joins.",
+                    "players": len(new_entries),
+                    "pot_points": new_pot_pts,
+                    "pot_money": new_pot_money,
+                }
             roll = _rng.randrange(1, len(pool) + 1)
             winner_entry = pool[roll - 1]
-            winner_id = winner_entry["user_id"]
-            winner_user = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
-            winner_username = (winner_user and winner_user.get("username")) or winner_entry.get("username") or "?"
-            now_iso = datetime.now(timezone.utc).isoformat()
-            claim_res = await db.mdg_games.find_one_and_update(
-                {"id": request.game_id, "status": "open"},
-                {"$set": {"status": "completed", "winner_id": winner_id, "winner_username": winner_username, "rolled_at": now_iso, "roll": roll}},
+            settled = await _mdg_settle_winner(
+                game=game,
+                game_id=request.game_id,
+                entries=new_entries,
+                winner_entry=winner_entry,
+                roll=roll,
+                pot_pts=new_pot_pts,
+                pot_money=new_pot_money,
+                trigger="auto_roll",
             )
-            if not claim_res:
+            if settled.get("already_closed"):
                 return {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money}
-            winner_before_payout = await db.users.find_one_and_update(
-                {"id": winner_id},
-                {"$inc": {"points": new_pot_pts, "money": new_pot_money}},
-                projection={"_id": 0, "points": 1},
-                return_document=ReturnDocument.BEFORE,
-            )
-            if new_pot_pts > 0:
-                pts_before_payout = int((winner_before_payout or {}).get("points") or 0)
-                await log_points_event(
-                    db,
-                    user_id=winner_id,
-                    points=new_pot_pts,
-                    event_type="casino_mdg",
-                    event_ref=f"payout:{request.game_id}",
-                    source="casino_mdg",
-                    correlation_id=request.game_id,
-                    context={"action": "winner_payout", "result": "won", "game_id": request.game_id, "host": {"id": game.get("created_by"), "username": game.get("created_by_username")}, "opponents": [{"id": e.get("user_id"), "username": e.get("username")} for e in new_entries if e.get("user_id") != winner_id], "stake_points": int(winner_entry.get("paid_points") or 0), "payout_points": new_pot_pts, "pot_points": new_pot_pts, "trigger": "auto_roll"},
-                    meta={"action": "winner_payout", "game_id": request.game_id, "pot_points": new_pot_pts, "trigger": "auto_roll"},
-                    wallet_points_before=pts_before_payout,
-                    wallet_points_after=pts_before_payout + new_pot_pts,
-                )
-            await log_gambling(
-                winner_id,
-                winner_username,
-                "mdg",
-                {"action": "payout", "game_id": request.game_id, "pot_points": new_pot_pts, "pot_money": new_pot_money, "trigger": "auto_roll"},
-            )
-            await send_notification(winner_id, "🎲 MDG Won", f"You won the pot: {new_pot_pts} pts, ${new_pot_money:,.0f}", "reward")
-            await _notify_mdg_losers(new_entries, winner_id, winner_username, new_pot_pts, new_pot_money)
             if game.get("entertainer_funded"):
-                fee_pts = int(game.get("fee_points") or 0)
-                extra_pts = int(game.get("extra_pot_points") or 0)
-                fee_money = float(game.get("fee_money") or 0)
-                extra_money = float(game.get("extra_pot_money") or 0)
+                fee_pts_g = int(game.get("fee_points") or 0)
+                extra_pts_g = int(game.get("extra_pot_points") or 0)
+                fee_money_g = float(game.get("fee_money") or 0)
+                extra_money_g = float(game.get("extra_pot_money") or 0)
                 await on_funded_game_completed(
                     db,
                     ref_id=request.game_id,
@@ -757,15 +1157,23 @@ def register(router):
                     send_notification=send_notification,
                     log_points_event=log_points_event,
                     outcome={
-                        "winner_username": winner_username,
-                        "winner_id": winner_id,
+                        "winner_username": settled["winner_username"],
+                        "winner_id": settled["winner_id"],
                         "total_winnings_points": int(new_pot_pts),
                         "total_winnings_cash": float(new_pot_money),
-                        "from_entertainer_fund_points": fee_pts + extra_pts,
-                        "from_entertainer_fund_cash": fee_money + extra_money,
+                        "from_entertainer_fund_points": fee_pts_g + extra_pts_g,
+                        "from_entertainer_fund_cash": fee_money_g + extra_money_g,
                     },
                 )
-            return {"message": "Joined; game rolled. One winner takes the pot.", "roll": roll, "winner_id": winner_id, "winner_username": winner_username, "pot_points": new_pot_pts, "pot_money": new_pot_money}
+            return {
+                "message": "Joined; game rolled. One winner takes the pot.",
+                "roll": settled["roll"],
+                "winner_id": settled["winner_id"],
+                "winner_username": settled["winner_username"],
+                "pot_points": new_pot_pts,
+                "pot_money": new_pot_money,
+                "admin_prize_results": settled.get("admin_prize_results") or [],
+            }
 
         return {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money}
 
@@ -783,51 +1191,28 @@ def register(router):
         if len(entries) < 1:
             raise HTTPException(status_code=400, detail="No players in game")
 
-        # Uniform over all entrants (order preserved: 1 = first in entries list, etc.)
-        pool = _mdg_roll_pool(entries)
+        pool = await _mdg_eligible_win_pool(entries)
+        if not pool:
+            raise HTTPException(
+                status_code=400,
+                detail="No eligible winners — admins/mods can enter but cannot win. Need at least one non-staff player.",
+            )
         roll = _rng.randrange(1, len(pool) + 1)
-        winner_entry = pool[roll - 1]  # roll is 1-indexed, list is 0-indexed
-        winner_id = winner_entry["user_id"]
-        winner_user = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
-        winner_username = (winner_user and winner_user.get("username")) or winner_entry.get("username") or "?"
-        now_iso = datetime.now(timezone.utc).isoformat()
+        winner_entry = pool[roll - 1]
         pot_pts = int(game.get("pot_points") or 0)
         pot_money = float(game.get("pot_money") or 0)
-        claim_res = await db.mdg_games.find_one_and_update(
-            {"id": request.game_id, "status": "open"},
-            {"$set": {"status": "completed", "winner_id": winner_id, "winner_username": winner_username, "rolled_at": now_iso, "roll": roll}},
+        settled = await _mdg_settle_winner(
+            game=game,
+            game_id=request.game_id,
+            entries=entries,
+            winner_entry=winner_entry,
+            roll=roll,
+            pot_pts=pot_pts,
+            pot_money=pot_money,
+            trigger="manual_roll",
         )
-        if not claim_res:
+        if settled.get("already_closed"):
             raise HTTPException(status_code=400, detail="Game already closed")
-        winner_before_payout = await db.users.find_one_and_update(
-            {"id": winner_id},
-            {"$inc": {"points": pot_pts, "money": pot_money}},
-            projection={"_id": 0, "points": 1},
-            return_document=ReturnDocument.BEFORE,
-        )
-        if pot_pts > 0:
-            pts_before_payout = int((winner_before_payout or {}).get("points") or 0)
-            await log_points_event(
-                db,
-                user_id=winner_id,
-                points=pot_pts,
-                event_type="casino_mdg",
-                event_ref=f"payout:{request.game_id}",
-                source="casino_mdg",
-                correlation_id=request.game_id,
-                context={"action": "winner_payout", "result": "won", "game_id": request.game_id, "host": {"id": game.get("created_by"), "username": game.get("created_by_username")}, "opponents": [{"id": e.get("user_id"), "username": e.get("username")} for e in entries if e.get("user_id") != winner_id], "stake_points": int(winner_entry.get("paid_points") or 0), "payout_points": pot_pts, "pot_points": pot_pts, "trigger": "manual_roll"},
-                meta={"action": "winner_payout", "game_id": request.game_id, "pot_points": pot_pts, "trigger": "manual_roll"},
-                wallet_points_before=pts_before_payout,
-                wallet_points_after=pts_before_payout + pot_pts,
-            )
-        await log_gambling(
-            winner_id,
-            winner_username,
-            "mdg",
-            {"action": "payout", "game_id": request.game_id, "pot_points": pot_pts, "pot_money": pot_money, "trigger": "manual_roll"},
-        )
-        await send_notification(winner_id, "🎲 MDG Won", f"You won the pot: {pot_pts} pts, ${pot_money:,.0f}", "reward")
-        await _notify_mdg_losers(entries, winner_id, winner_username, pot_pts, pot_money)
         if game.get("entertainer_funded"):
             fee_pts = int(game.get("fee_points") or 0)
             extra_pts = int(game.get("extra_pot_points") or 0)
@@ -840,12 +1225,20 @@ def register(router):
                 send_notification=send_notification,
                 log_points_event=log_points_event,
                 outcome={
-                    "winner_username": winner_username,
-                    "winner_id": winner_id,
+                    "winner_username": settled["winner_username"],
+                    "winner_id": settled["winner_id"],
                     "total_winnings_points": int(pot_pts),
                     "total_winnings_cash": float(pot_money),
                     "from_entertainer_fund_points": fee_pts + extra_pts,
                     "from_entertainer_fund_cash": fee_money + extra_money,
                 },
             )
-        return {"message": "Roll complete. One winner takes the pot.", "roll": roll, "winner_id": winner_id, "winner_username": winner_username, "pot_points": pot_pts, "pot_money": pot_money}
+        return {
+            "message": "Roll complete. One winner takes the pot.",
+            "roll": settled["roll"],
+            "winner_id": settled["winner_id"],
+            "winner_username": settled["winner_username"],
+            "pot_points": pot_pts,
+            "pot_money": pot_money,
+            "admin_prize_results": settled.get("admin_prize_results") or [],
+        }

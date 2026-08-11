@@ -6,6 +6,35 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-11[/color][/b] — [b]Store: permanent +100% card points[/b][/size]
+[quote]
+[list]
+[*][color=#888888]Card point purchases now always include [b]+100%[/b] bonus points at checkout (double) — this is [b]standard pricing[/b], not a limited event.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-11[/color][/b] — [b]MDG: staff cannot win + admin prizes[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Staff:[/b] Admins and mods can still [b]enter[/b] MDGs, but they are [b]never eligible to win[/b] the draw (player games).[/color]
+[*][color=#888888][b]Entertainer fund:[/b] Admin accounts are [b]exempt[/b] from Entertainer fund caps / debit when creating MDGs (paid from main wallet).[/color]
+[*][color=#888888][b]Admin prizes:[/b] Admins can attach bonus prizes on create — tokens & skips (mission skip, properties collect skip, store tokens, etc.) and [b]unowned[/b] States assets (airport, armoury, casinos). Awarded to the winner with the pot.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-11[/color][/b] — [b]Vault relics: return on sacrifice / staff kill[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] Unique loot vault relics (e.g. [b]Union Card[/b]) now return to the vault when someone dies via [b]Dead → Alive sacrifice[/b] or [b]staff kill[/b] — not only on normal PvP kills. They do not transfer to the killer; they go back into the loot pool.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-11[/color][/b] — [b]Users Online: staff colours + family cue[/b][/size]
 [quote]
 [list]

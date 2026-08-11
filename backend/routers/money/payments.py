@@ -34,7 +34,8 @@ STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK = 100
 STORE_POINTS_LOOT_PIECES_PER_BLOCK = 75
 # GBP store points: 1 bonus Wheel of Fortune free spin per whole £10 charged (per purchase; leftover under £10 does not carry).
 STORE_POINTS_WHEEL_GBP_MINOR_PER_SPIN = 1000
-STORE_POINTS_EVENT_BONUS_RATE = 0.75
+# Permanent card-points multiplier (+100% = double points vs listed/base amount).
+STORE_POINTS_EVENT_BONUS_RATE = 1.0
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
 AUTO_RANK_PERMANENT_PACKAGE_ID = "auto_rank_permanent_2000"
@@ -353,16 +354,16 @@ def _store_points_event_payload(
     enabled: bool = True,
     force_until: Optional[str] = None,
 ) -> dict:
-    """Deterministic store points sale: ~random daily schedule, never off two UTC days in a row."""
+    """Permanent store points bonus (+100% when enabled). Schedule helpers kept for payload shape only."""
     n = now or datetime.now(timezone.utc)
     if n.tzinfo is None:
         n = n.replace(tzinfo=timezone.utc)
     n = n.astimezone(timezone.utc)
     iso = n.isocalendar()
     week_key = f"{iso.year}-W{iso.week:02d}"
-    epoch_day = _utc_epoch_day(n)
-    schedule_active = _store_points_event_active_on_epoch_day(epoch_day)
-    active_weekdays = _store_points_event_active_weekdays_for_week(iso.year, iso.week)
+    # Always-on pricing (no random sale days). Admin `enabled` remains a kill switch.
+    schedule_active = True
+    active_weekdays = list(range(7))
     forced_until_dt = _parse_utc(force_until)
     forced_active = bool(enabled) and bool(forced_until_dt and forced_until_dt > n)
     active = bool(enabled) and (forced_active or schedule_active)
@@ -371,7 +372,7 @@ def _store_points_event_payload(
     return {
         "id": f"store_points_bonus_{week_key}",
         "name": "Store Points Bonus",
-        "message": f"Store point purchases get +{bonus_pct}% extra points today.",
+        "message": f"Card point purchases include +{bonus_pct}% extra points (standard pricing).",
         "enabled": bool(enabled),
         "active": active,
         "forced_active": forced_active,
@@ -380,6 +381,7 @@ def _store_points_event_payload(
         "multiplier": mult,
         "active_weekdays": active_weekdays,
         "week_key": week_key,
+        "permanent": True,
     }
 
 

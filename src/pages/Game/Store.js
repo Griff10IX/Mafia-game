@@ -212,10 +212,10 @@ function buildStoreRecommendations(user, { pointsTabLocked, storePointsEvent } =
   if (!pointsTabLocked && storePointsEvent?.active) {
     recs.push({
       id: 'rec-points-event',
-      title: 'Points bonus live',
-      reason: `+${Math.round(Number(storePointsEvent.bonus_rate ?? 0.75) * 100)}% on card point buys right now.`,
+      title: 'Double points',
+      reason: `+${Math.round(Number(storePointsEvent.bonus_rate ?? 1) * 100)}% on every card point buy.`,
       tab: 'points',
-      price: 'Sale',
+      price: '2×',
       Icon: Sparkles,
     });
   } else if (!pointsTabLocked && pts < 100) {
@@ -1559,10 +1559,10 @@ export default function Store() {
             {storePointsEvent?.active && pointsPaymentMode === 'card' && (
               <div className="mx-3 mt-3 rounded border border-emerald-500/25 bg-emerald-500/10 px-3 py-2">
                 <p className="text-[10px] font-heading font-bold uppercase tracking-[0.14em] text-emerald-400">
-                  Store event live: +{Math.round(Number(storePointsEvent.bonus_rate ?? 0.75) * 100)}% points
+                  +{Math.round(Number(storePointsEvent.bonus_rate ?? 1) * 100)}% points on card buys
                 </p>
                 <p className="text-[9px] font-heading text-zinc-400 mt-0.5">
-                  Buy points today and get +{Math.round(Number(storePointsEvent.bonus_rate ?? 0.75) * 100)}% added on top at checkout.
+                  Standard pricing: +{Math.round(Number(storePointsEvent.bonus_rate ?? 1) * 100)}% is added on top at checkout.
                 </p>
               </div>
             )}
@@ -1667,7 +1667,7 @@ export default function Store() {
                           </span>
                         </>
                       )}
-                      <span className="block text-[8px] text-mutedForeground mt-0.5">GBP mode charges the shown amount (largest whole base points that fit your budget; event bonus is added on top).</span>
+                      <span className="block text-[8px] text-mutedForeground mt-0.5">GBP mode charges the shown amount (largest whole base points that fit your budget; +100% points bonus is added on top).</span>
                     </>
                   )}
                 </p>

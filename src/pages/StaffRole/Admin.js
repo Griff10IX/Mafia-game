@@ -13110,13 +13110,13 @@ export default function Admin() {
               <div className="h-px bg-zinc-700/30" />
 
               <div className="space-y-3">
-                <p className="text-[10px] font-heading font-bold text-emerald-400 uppercase tracking-wider">Store Points Sale Event</p>
+                <p className="text-[10px] font-heading font-bold text-emerald-400 uppercase tracking-wider">Store Points Bonus (+100%)</p>
                 <p className="text-[10px] text-mutedForeground">
-                  Random 2-day UTC schedule: the sale is on at least once every 2 days (sometimes both days in a pair). When active, card point purchases get +75% extra points and players see a Sale badge on the Store menu.
+                  Permanent card pricing: when enabled, card point purchases get +100% extra points (double) and players see a 2× badge on the Store menu. Disable only as a kill switch.
                 </p>
                 {storePointsEventForceUntil && (
                   <p className="rounded border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-300 font-heading">
-                    Forced sale is active until {String(storePointsEventForceUntil).replace('T', ' ').slice(0, 16)} UTC.
+                    Legacy force-until is set until {String(storePointsEventForceUntil).replace('T', ' ').slice(0, 16)} UTC (bonus is already always on when enabled).
                   </p>
                 )}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -13130,12 +13130,12 @@ export default function Admin() {
                         : 'bg-zinc-700/30 text-zinc-400 border-zinc-600/60 hover:bg-zinc-700/50'
                     }`}
                   >
-                    {storePointsEventEnabled ? 'Sale event: enabled' : 'Sale event: disabled'}
+                    {storePointsEventEnabled ? 'Bonus: enabled' : 'Bonus: disabled'}
                   </button>
                   <p className="text-[10px] text-mutedForeground flex-1">
                     {storePointsEventEnabled
-                      ? 'The weekly random sale schedule can activate automatically.'
-                      : 'The sale schedule is paused and no bonus points will be added.'}
+                      ? '+100% is applied on every eligible card points checkout.'
+                      : 'Bonus paused — players only receive base points.'}
                   </p>
                 </div>
                 <button
@@ -13144,7 +13144,7 @@ export default function Admin() {
                   disabled={launchSettingsSaving}
                   className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 disabled:opacity-50"
                 >
-                  {launchSettingsSaving ? 'Saving...' : 'Save sale event'}
+                  {launchSettingsSaving ? 'Saving...' : 'Save points bonus'}
                 </button>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
@@ -13153,7 +13153,7 @@ export default function Admin() {
                     disabled={launchSettingsSaving}
                     className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
                   >
-                    Force sale today
+                    Force on today (legacy)
                   </button>
                   <button
                     type="button"
@@ -13161,7 +13161,7 @@ export default function Admin() {
                     disabled={launchSettingsSaving || !storePointsEventForceUntil}
                     className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-zinc-700/30 text-zinc-300 border border-zinc-600/60 hover:bg-zinc-700/50 disabled:opacity-50"
                   >
-                    Clear forced sale
+                    Clear forced flag
                   </button>
                 </div>
               </div>

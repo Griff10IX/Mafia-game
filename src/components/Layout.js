@@ -2292,9 +2292,9 @@ export default function Layout({ children }) {
           {item.saleBadge && (
             <span
               className="inline-flex items-center gap-0.5 bg-emerald-600/20 text-emerald-300 text-[8px] px-1 py-0.5 rounded font-bold border border-emerald-500/35 uppercase shrink-0"
-              title="Store points sale active"
+              title="+100% points on card buys"
             >
-              <Sparkles size={8} /> Sale
+              <Sparkles size={8} /> 2×
             </span>
           )}
           {item.badge > 0 && (
@@ -3777,8 +3777,8 @@ export default function Layout({ children }) {
                         {isGtaExclusive && <span className="text-violet-400 font-bold shrink-0" aria-hidden>★</span>}
                         <span className="leading-tight">{sub.label}</span>
                         {sub.saleBadge && (
-                          <span className="shrink-0 rounded border border-emerald-500/40 bg-emerald-600/25 px-1 py-0.5 text-[8px] font-bold text-emerald-200">
-                            Sale
+                          <span className="shrink-0 rounded border border-emerald-500/40 bg-emerald-600/25 px-1 py-0.5 text-[8px] font-bold text-emerald-200" title="+100% points on card buys">
+                            2×
                           </span>
                         )}
                         {typeof sub.onlineCountBadge === 'number' && (
@@ -3854,7 +3854,7 @@ export default function Layout({ children }) {
                           <Icon size={13} strokeWidth={2} />
                           {showInboxBadge && <span className="absolute -top-0.5 -right-1 min-w-[10px] h-[10px] rounded-full bg-red-600 text-[8px] font-bold text-white flex items-center justify-center px-0.5">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                           {showGtaExclusiveStar && <span className="absolute -top-0.5 -left-1 text-violet-400 text-[10px] font-bold" aria-hidden title="Exclusive car in GTA pool">★</span>}
-                          {showStoreSale && <span className="absolute -top-1 -right-1 text-emerald-300 text-[10px] font-bold" aria-hidden title="Store points sale active">★</span>}
+                          {showStoreSale && <span className="absolute -top-1 -right-1 text-emerald-300 text-[10px] font-bold" aria-hidden title="+100% points on card buys">★</span>}
                         </span>
                         <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.mobileShortLabel ?? item.label}</span>
                       </button>

@@ -227,6 +227,13 @@ function NextCycleCountdown({ deadline, large = false }) {
 /** Entertainer MDG: max points (fee + extra pot) from fund per game — keep in sync with backend `ENTERTAINER_MDG_MAX_POINTS_PER_GAME`. */
 const ENTERTAINER_MDG_MAX_POINTS = 1_000;
 
+const ADMIN_PRIZE_KIND_OPTIONS = [
+  { kind: 'token', label: 'Token / skip' },
+  { kind: 'unowned_airport', label: 'Unowned airport' },
+  { kind: 'unowned_armoury', label: 'Unowned armoury' },
+  { kind: 'unowned_casino', label: 'Unowned casino' },
+];
+
 export default function MDGPage() {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -244,13 +251,23 @@ export default function MDGPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [autoStats, setAutoStats] = useState(null);
-  /** Entertainer segregated fund — MDG create debits fee + extra pot from here when role is entertainer */
+  const [adminPrizeOptions, setAdminPrizeOptions] = useState(null);
+  const [adminPrizes, setAdminPrizes] = useState([]);
+  const [adminPrizeDraft, setAdminPrizeDraft] = useState({
+    kind: 'token',
+    token_type: 'mission_skip',
+    amount: '1',
+    state: '',
+    casino: 'dice',
+  });
+  /** Entertainer segregated fund — MDG create debits fee + extra pot from here when role is entertainer (admins exempt) */
   const [entFund, setEntFund] = useState({
     is_entertainer: false,
     cash: 0,
     points: 0,
   });
 
+  const usesEntFund = entFund.is_entertainer && !isAdmin;
   const refreshAuthMe = useCallback(() => {
     api
       .get('/auth/me')
@@ -282,6 +299,29 @@ export default function MDGPage() {
       setIsModerator(!!r.data?.is_moderator);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!createOpen || !isAdmin) return undefined;
+    let cancelled = false;
+    api
+      .get('/casino/mdg/admin-prize-options')
+      .then((r) => {
+        if (cancelled) return;
+        setAdminPrizeOptions(r.data || null);
+        const states = r.data?.states || [];
+        setAdminPrizeDraft((prev) => ({
+          ...prev,
+          state: prev.state || states[0] || '',
+          token_type: prev.token_type || r.data?.tokens?.[0]?.token_type || 'mission_skip',
+        }));
+      })
+      .catch(() => {
+        if (!cancelled) setAdminPrizeOptions(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [createOpen, isAdmin]);
 
   const fetchAutoStats = useCallback(() => {
     api.get('/casino/mdg/auto-stats').then((r) => setAutoStats(r.data)).catch(() => {});
@@ -375,12 +415,12 @@ export default function MDGPage() {
       return;
     }
     const maxPlayers = Math.max(2, Math.min(100, parseInt(createMaxPlayers, 10) || 10));
-    if (entFund.is_entertainer && maxPlayers < 4) {
+    if (usesEntFund && maxPlayers < 4) {
       toast.error('Entertainer-created MDG games must allow at least 4 players (increase Max players).');
       return;
     }
     const extraPts = parseInt(createExtraPotPoints, 10) || 0;
-    if (entFund.is_entertainer && feePoints + extraPts > ENTERTAINER_MDG_MAX_POINTS) {
+    if (usesEntFund && feePoints + extraPts > ENTERTAINER_MDG_MAX_POINTS) {
       toast.error(
         `Entertainer MDG: fee points + extra pot points cannot exceed ${ENTERTAINER_MDG_MAX_POINTS.toLocaleString()} (from your entertainer fund).`,
       );
@@ -395,6 +435,7 @@ export default function MDGPage() {
         auto_roll_at: createAutoRollAt.trim() ? Math.max(2, parseInt(createAutoRollAt, 10) || 2) : null,
         extra_pot_points: extraPts,
         extra_pot_money: parseFloat(createExtraPotMoney) || 0,
+        ...(isAdmin && adminPrizes.length > 0 ? { admin_prizes: adminPrizes } : {}),
       });
       await refreshUser();
       refreshAuthMe();
@@ -406,6 +447,7 @@ export default function MDGPage() {
       setCreateAutoRollAt('');
       setCreateExtraPotPoints('');
       setCreateExtraPotMoney('');
+      setAdminPrizes([]);
       fetchGames();
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Could not create game');
@@ -414,6 +456,43 @@ export default function MDGPage() {
     }
   };
 
+  const addAdminPrize = () => {
+    if (!isAdmin) return;
+    const kind = adminPrizeDraft.kind;
+    if (kind === 'token') {
+      const amount = Math.max(1, parseInt(adminPrizeDraft.amount, 10) || 1);
+      const token_type = adminPrizeDraft.token_type;
+      if (!token_type) {
+        toast.error('Pick a token type');
+        return;
+      }
+      const label =
+        adminPrizeOptions?.tokens?.find((t) => t.token_type === token_type)?.label || token_type;
+      setAdminPrizes((prev) => [...prev, { kind: 'token', token_type, amount, label: `${amount}× ${label}` }]);
+      return;
+    }
+    const state = adminPrizeDraft.state;
+    if (!state) {
+      toast.error('Pick a state');
+      return;
+    }
+    if (kind === 'unowned_casino') {
+      const casino = adminPrizeDraft.casino || 'dice';
+      setAdminPrizes((prev) => [
+        ...prev,
+        { kind, state, casino, label: `Unowned ${casino} · ${state}` },
+      ]);
+      return;
+    }
+    setAdminPrizes((prev) => [
+      ...prev,
+      {
+        kind,
+        state,
+        label: `Unowned ${kind === 'unowned_airport' ? 'airport' : 'armoury'} · ${state}`,
+      },
+    ]);
+  };
   const autoGames = games.filter((g) => g.is_automated);
   const playerGames = games.filter((g) => !g.is_automated);
   const houseNet = autoStats ? (autoStats.total_fees_collected ?? 0) - ((autoStats.total_paid_to_winners ?? 0) - (autoStats.total_pot_created ?? 0)) : 0;
@@ -425,11 +504,11 @@ export default function MDGPage() {
   const previewTotalPts = previewFeePts + previewExtraPts;
   const previewTotalMoney = previewFeeMoney + previewExtraMoney;
   const entInsufficient =
-    entFund.is_entertainer &&
+    usesEntFund &&
     createOpen &&
     (previewTotalPts > entFund.points || previewTotalMoney > entFund.cash);
   const entMdgPointsOverCap =
-    entFund.is_entertainer && createOpen && previewTotalPts > ENTERTAINER_MDG_MAX_POINTS;
+    usesEntFund && createOpen && previewTotalPts > ENTERTAINER_MDG_MAX_POINTS;
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mdg-page">
@@ -440,7 +519,9 @@ export default function MDGPage() {
         <div>
           <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Pot Game</p>
           <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">MDG</h1>
-          <p className="text-[10px] text-mutedForeground font-heading italic mt-1">Set a fee, fill spots, one winner takes the pot. Points or money — or both.</p>
+          <p className="text-[10px] text-mutedForeground font-heading italic mt-1">
+            Set a fee, fill spots, one winner takes the pot. Points or money — or both. Admins/mods can enter but cannot win.
+          </p>
         </div>
         <div className="hidden sm:flex items-end gap-1 opacity-30">
           <DiceArt size={36} className="text-primary" />
@@ -471,16 +552,21 @@ export default function MDGPage() {
                 <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Game options</h2>
                 <p className="text-[9px] text-mutedForeground font-heading mt-0.5">
                   Fee (points and/or money), max players, auto-roll when N spots filled, optional extra pot. Max 3 open games. You are auto-joined.
-                  {entFund.is_entertainer ? (
+                  {usesEntFund ? (
                     <>
                       {' '}
                       As an Entertainer, your creation fee plus extra pot are paid from your Entertainer fund — not your main wallet. Max players must be at least <strong className="text-violet-200">4</strong>. Points from the fund (fee + extra pot) are capped at <strong className="text-violet-200">{ENTERTAINER_MDG_MAX_POINTS.toLocaleString()}</strong> per game.
+                    </>
+                  ) : isAdmin && entFund.is_entertainer ? (
+                    <>
+                      {' '}
+                      <span className="text-amber-200/90">Admin: Entertainer fund caps do not apply — paid from your main wallet.</span>
                     </>
                   ) : null}
                 </p>
               </div>
               <div className="p-3 space-y-3">
-                {entFund.is_entertainer && (
+                {usesEntFund && (
                   <div className="rounded-lg border border-violet-500/35 bg-violet-950/25 px-3 py-2.5 space-y-2">
                     <div className="flex items-center gap-2 text-[10px] font-heading font-bold text-violet-200 uppercase tracking-wider">
                       <Mic2 size={14} className="text-violet-400 shrink-0" />
@@ -547,11 +633,11 @@ export default function MDGPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">
-                      Max players{entFund.is_entertainer ? ' (min 4)' : ''}
+                      Max players{usesEntFund ? ' (min 4)' : ''}
                     </label>
                     <input
                       type="number"
-                      min={entFund.is_entertainer ? 4 : 2}
+                      min={usesEntFund ? 4 : 2}
                       max={100}
                       value={createMaxPlayers}
                       onChange={(e) => setCreateMaxPlayers(e.target.value)}
@@ -591,10 +677,96 @@ export default function MDGPage() {
                     />
                   </div>
                 </div>
+                {isAdmin && (
+                  <div className="rounded-lg border border-amber-600/35 bg-amber-950/20 px-3 py-2.5 space-y-2">
+                    <p className="text-[10px] font-heading font-bold text-amber-200 uppercase tracking-wider">
+                      Admin bonus prizes (optional)
+                    </p>
+                    <p className="text-[9px] text-zinc-400 font-heading leading-snug">
+                      Awarded to the winner with the pot. Unowned assets fail gracefully if claimed before roll.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <select
+                        value={adminPrizeDraft.kind}
+                        onChange={(e) => setAdminPrizeDraft((p) => ({ ...p, kind: e.target.value }))}
+                        className="w-full px-2 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-[11px]"
+                      >
+                        {ADMIN_PRIZE_KIND_OPTIONS.map((o) => (
+                          <option key={o.kind} value={o.kind}>{o.label}</option>
+                        ))}
+                      </select>
+                      {adminPrizeDraft.kind === 'token' ? (
+                        <>
+                          <select
+                            value={adminPrizeDraft.token_type}
+                            onChange={(e) => setAdminPrizeDraft((p) => ({ ...p, token_type: e.target.value }))}
+                            className="w-full px-2 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-[11px]"
+                          >
+                            {(adminPrizeOptions?.tokens || [{ token_type: 'mission_skip', label: 'Mission Skip' }]).map((t) => (
+                              <option key={t.token_type} value={t.token_type}>{t.label}</option>
+                            ))}
+                          </select>
+                          <FormattedNumberInput
+                            value={adminPrizeDraft.amount}
+                            onChange={(v) => setAdminPrizeDraft((p) => ({ ...p, amount: v }))}
+                            placeholder="1"
+                            className="w-full px-2 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-[11px]"
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <select
+                            value={adminPrizeDraft.state}
+                            onChange={(e) => setAdminPrizeDraft((p) => ({ ...p, state: e.target.value }))}
+                            className="w-full px-2 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-[11px]"
+                          >
+                            {(adminPrizeOptions?.states || []).map((s) => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                          {adminPrizeDraft.kind === 'unowned_casino' && (
+                            <select
+                              value={adminPrizeDraft.casino}
+                              onChange={(e) => setAdminPrizeDraft((p) => ({ ...p, casino: e.target.value }))}
+                              className="w-full px-2 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-[11px]"
+                            >
+                              {['dice', 'roulette', 'blackjack', 'horseracing', 'videopoker', 'slots'].map((c) => (
+                                <option key={c} value={c}>{c}</option>
+                              ))}
+                            </select>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addAdminPrize}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-100 font-heading text-[10px] uppercase"
+                    >
+                      <PlusCircle size={12} /> Add prize
+                    </button>
+                    {adminPrizes.length > 0 && (
+                      <ul className="space-y-1">
+                        {adminPrizes.map((p, i) => (
+                          <li key={`${p.label}-${i}`} className="flex items-center justify-between gap-2 text-[10px] font-heading text-amber-100/90">
+                            <span className="truncate">{p.label}</span>
+                            <button
+                              type="button"
+                              className="text-zinc-500 hover:text-red-400 shrink-0"
+                              onClick={() => setAdminPrizes((prev) => prev.filter((_, j) => j !== i))}
+                            >
+                              Remove
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
                 <div className="flex items-center gap-2 pt-1">
                   <button
                     type="button"
-                    disabled={creating || (entFund.is_entertainer && (entInsufficient || entMdgPointsOverCap))}
+                    disabled={creating || (usesEntFund && (entInsufficient || entMdgPointsOverCap))}
                     onClick={handleCreate}
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded border border-primary/40 bg-primary/20 text-primary font-heading font-bold text-[10px] uppercase hover:bg-primary/30 disabled:opacity-50 transition-colors"
                   >
@@ -637,6 +809,11 @@ export default function MDGPage() {
                           <span className="text-mutedForeground">Potential Win: </span>
                           <span className="font-semibold text-primary">{formatPot(g)}</span>
                         </p>
+                        {Array.isArray(g.admin_prizes) && g.admin_prizes.length > 0 && (
+                          <p className="text-[9px] font-heading text-amber-200/90">
+                            Bonus prizes: {g.admin_prizes.map((p) => p.label || p.kind).join(' · ')}
+                          </p>
+                        )}
                         <p className="text-[9px] font-heading text-foreground/90">
                           <span className={rollMode.label === 'Auto-roll' ? 'text-primary/95 font-bold' : 'text-mutedForeground'}>
                             {rollMode.label}:

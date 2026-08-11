@@ -304,8 +304,8 @@ class AdminSettingsUpdate(BaseModel):
     preorder_points_release_date: Optional[str] = None  # ISO datetime - points held until this date
     store_points_auto_credit: Optional[bool] = None  # False = staff credits store points manually after payment
     store_points_manual_credit_eta: Optional[str] = None  # ISO datetime shown to users (informational)
-    store_points_event_enabled: Optional[bool] = None  # Random store points sale event toggle (+75% bonus)
-    store_points_event_force_today: Optional[bool] = None  # True = force sale until end of current UTC day; False = clear force
+    store_points_event_enabled: Optional[bool] = None  # Permanent +100% card points bonus kill switch
+    store_points_event_force_today: Optional[bool] = None  # Legacy force-until flag (bonus is always on when enabled)
     vip_pass_car_purchase_limit: Optional[int] = None  # Max store VIP Pass Cars game-wide (default 5; GP free excluded)
     casino_global_max_bet: Optional[int] = None  # Max bet cap for all casinos (default 1B)
     casino_buyback_max_points: Optional[int] = None  # Max points for buy-back reward (default 15000)
@@ -7999,6 +7999,21 @@ def register(router):
                 "$inc": {"total_deaths": 1},
             },
         )
+        try:
+            from utils.loot_reclaimable_passives import reclaim_on_kill
+
+            await reclaim_on_kill(
+                db,
+                victim_id=target["id"],
+                victim_username=target.get("username") or target_username,
+                killer_id=current_user.get("id"),
+                send_notification=send_notification,
+            )
+        except Exception:
+            logging.exception(
+                "reclaimable vault relic reclaim failed on admin kill victim=%s",
+                target.get("id"),
+            )
         try:
             from utils.redeem_code_lifecycle import release_redeem_slots_for_deceased_user
 

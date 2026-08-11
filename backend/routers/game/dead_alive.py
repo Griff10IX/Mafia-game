@@ -382,6 +382,22 @@ async def execute_paid_revive(
             },
         )
         try:
+            from utils.loot_reclaimable_passives import reclaim_on_kill
+
+            # Sacrifice death skips PvP attack flow — still return vault relics to the pool.
+            await reclaim_on_kill(
+                db,
+                victim_id=reviver["id"],
+                victim_username=reviver.get("username"),
+                killer_id=None,
+                send_notification=send_notification,
+            )
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "reclaimable vault relic reclaim failed on revive sacrifice reviver=%s",
+                reviver.get("id"),
+            )
+        try:
             await release_redeem_slots_for_deceased_user(db, reviver["id"])
         except Exception:
             logging.getLogger(__name__).exception(

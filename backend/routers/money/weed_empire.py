@@ -1419,6 +1419,45 @@ def _scavenged_seed_available(farm: dict) -> bool:
     )
 
 
+def _grant_scavenge_restart_kit(farm: dict) -> List[str]:
+    """
+    After raids wipe installed gear to {}, Scavenge must still let someone restart.
+    Grants bare starter kit pieces (level 1) needed to plant — does not restore full rebuy tiers.
+    """
+    granted: List[str] = []
+    equip = dict(farm.get("equipment") or {}) if isinstance(farm.get("equipment"), dict) else {}
+    levels = _equip_levels(farm)
+    if not levels.get("pots") and not levels.get("hydro_system"):
+        equip["pots"] = 1
+        granted.append("pots")
+    has_light = any(
+        levels.get(k) or int(equip.get(k) or 0)
+        for k in ("lights_cfl", "lights_led", "lights_hps", "lights_quantum", "lights_uv", "lights_bar_led")
+    )
+    if not has_light:
+        equip["lights_cfl"] = 1
+        granted.append("lights_cfl")
+    # Starter shop unlocks so soil purchase / planting basics work after a full wipe
+    for starter, label in (
+        ("soil_conventional", "soil_conventional"),
+        ("tents", "tents"),
+        ("irrigation", "irrigation"),
+        ("nutes_base", "nutes_base"),
+    ):
+        if int(equip.get(starter) or 0) < 1:
+            equip[starter] = 1
+            granted.append(label)
+    farm["equipment"] = equip
+    stock = dict(farm.get("soil_stock") or {})
+    if int(stock.get("soil_conventional") or 0) < SOIL_CHARGE_PER_PLANT:
+        # Scavenge plant doesn't charge soil, but leave a spare so UI isn't stuck on "0 Basic"
+        stock["soil_conventional"] = max(int(stock.get("soil_conventional") or 0), SOIL_CHARGE_PER_PLANT)
+        if "soil" not in granted:
+            granted.append("soil")
+    farm["soil_stock"] = stock
+    return granted
+
+
 def _cleanliness_decay_per_hour(farm: dict, stats: dict) -> float:
     active = _active_plot_count(farm)
     reduction = min(0.48, max(0.0, 1.0 - float(stats.get("cleanliness_decay_mult") or 1.0)))
@@ -2370,6 +2409,9 @@ async def weed_plant(body: PlantBody, http_request: Request, current_user: dict 
         if len(target_ids) > 1:
             raise HTTPException(status_code=400, detail="Scavenged seed can only plant one pot")
         await _require_weed_action_code(http_request, current_user)
+        scavenge_kit = _grant_scavenge_restart_kit(farm)
+    else:
+        scavenge_kit = []
     if not _equip_levels(farm).get("pots") and not _equip_levels(farm).get("hydro_system"):
         raise HTTPException(status_code=400, detail="Need pots or a hydro system")
     if not any(
@@ -2400,7 +2442,7 @@ async def weed_plant(body: PlantBody, http_request: Request, current_user: dict 
             )
         _spend(farm, seed_cost * count)
         stock[soil_type] = int(stock.get(soil_type) or 0) - need_soil
-    farm["soil_stock"] = stock
+        farm["soil_stock"] = stock
 
     base_q = 48.0 + (8.0 if soil_type == "soil_organic" else 0.0)
     q_ceiling = float(stats.get("quality_ceiling") or 55)
@@ -2429,21 +2471,23 @@ async def weed_plant(body: PlantBody, http_request: Request, current_user: dict 
     farm["plots"] = plots
     if scavenged_seed:
         farm["bust_restart_seed"] = False
-    await _save_farm(
-        farm,
-        {
-            "plots": plots,
-            "business_cash": farm["business_cash"],
-            "soil_stock": stock,
-            "unlocks": farm.get("unlocks"),
-            "bust_restart_seed": farm.get("bust_restart_seed"),
-        },
-    )
+    save_fields = {
+        "plots": plots,
+        "business_cash": farm["business_cash"],
+        "soil_stock": stock if not scavenged_seed else farm.get("soil_stock"),
+        "unlocks": farm.get("unlocks"),
+        "bust_restart_seed": farm.get("bust_restart_seed"),
+    }
+    if scavenged_seed:
+        save_fields["equipment"] = farm.get("equipment")
+        save_fields["soil_stock"] = farm.get("soil_stock")
+    await _save_farm(farm, save_fields)
     return {
         "ok": True,
         "farm": _public_farm(farm, username=current_user.get("username") or ""),
         "fx": "plant",
         "scavenged_seed": scavenged_seed,
+        "scavenge_restart_kit": scavenge_kit,
         "planted": count,
     }
 

@@ -495,7 +495,9 @@ export default function WeedEmpire() {
       const n = Number(data.planted || ids.length);
       toast.success(
         data.scavenged_seed
-          ? "Found some rough seeds — Ditch Weed planted"
+          ? Array.isArray(data.scavenge_restart_kit) && data.scavenge_restart_kit.length
+            ? `Scavenged a restart kit (${data.scavenge_restart_kit.join(", ")}) — Ditch Weed planted`
+            : "Found some rough seeds — Ditch Weed planted"
           : n > 1
             ? `Planted ${n} pots`
             : "Planted"
