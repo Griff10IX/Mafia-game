@@ -114,6 +114,49 @@ function shortLabel(w) {
   return raw.length > max ? raw.slice(0, max) : raw;
 }
 
+/** Full prize name for on-wheel labels; font scales down so it still fits the ray. */
+function wheelLabelText(w) {
+  return String(w?.label || w?.short || '').trim();
+}
+
+function wheelLabelFontSize(text, highlight, segmentCount) {
+  const len = Math.max(1, String(text || '').length);
+  const n = Math.max(1, Number(segmentCount) || 1);
+  const maxFs = highlight ? 7.2 : n > 32 ? 5.4 : 6;
+  const minFs = highlight ? 3.6 : 3.1;
+  // Approximate usable length along the radius in SVG units
+  const run = highlight ? 108 : 92;
+  const fitted = run / (len * 0.56);
+  return Math.max(minFs, Math.min(maxFs, fitted));
+}
+
+function PrizeRow({ label, short, color, tier, className = '' }) {
+  const fill = color || TIER_FALLBACK[tier] || TIER_FALLBACK.common;
+  const rowCls =
+    tier === 'jackpot'
+      ? 'border-amber-600/40'
+      : tier === 'rare'
+        ? 'border-emerald-600/35'
+        : 'border-zinc-600/35';
+  return (
+    <div className={`flex items-center gap-2 rounded border bg-black/40 px-2.5 py-2 ${rowCls} ${className}`}>
+      <span
+        className="w-2.5 h-2.5 rounded-sm shrink-0 border border-black/40"
+        style={{ background: fill }}
+        aria-hidden
+      />
+      <span className="flex-1 min-w-0 text-[12px] sm:text-sm font-heading font-bold text-zinc-100 truncate">
+        {label}
+      </span>
+      {short ? (
+        <span className="shrink-0 text-[9px] font-heading uppercase tracking-wide text-zinc-500 tabular-nums">
+          {short}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 export default function WheelOfFortunePage() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -128,6 +171,17 @@ export default function WheelOfFortunePage() {
   const n = wedges.length || 1;
   const slice = 360 / n;
   const recentWins = Array.isArray(config?.recent_wins) ? config.recent_wins : [];
+
+  const resultWedge = useMemo(() => {
+    if (!lastPrize) return null;
+    const byId = lastPrize.segment_id
+      ? wedges.find((w) => w.id === lastPrize.segment_id)
+      : null;
+    if (byId) return byId;
+    const idx = Number(lastPrize.segment_index);
+    if (Number.isFinite(idx) && wedges[idx]) return wedges[idx];
+    return null;
+  }, [lastPrize, wedges]);
 
   const loadConfig = useCallback(async () => {
     try {
@@ -304,11 +358,11 @@ export default function WheelOfFortunePage() {
                     const end = (i + 1) * slice;
                     const mid = start + slice / 2;
                     const highlight = w.tier === 'jackpot' || w.tier === 'rare';
-                    // Farther out = longer usable label length along the ray
-                    const labelR = highlight ? r * 0.62 : r * 0.74;
+                    // Along-ray placement; full names use smaller fonts when long
+                    const labelR = highlight ? r * 0.58 : r * 0.70;
                     const fill = w.color || TIER_FALLBACK[w.tier] || TIER_FALLBACK.common;
-                    const text = shortLabel(w);
-                    const fontSize = highlight ? 6.8 : n > 32 ? 4.4 : 5;
+                    const text = wheelLabelText(w);
+                    const fontSize = wheelLabelFontSize(text, highlight, n);
                     const textFill =
                       w.tier === 'jackpot'
                         ? String(fill).toLowerCase() === '#9b59b6'
@@ -341,7 +395,10 @@ export default function WheelOfFortunePage() {
                               textAnchor="middle"
                               dominantBaseline="middle"
                               transform={`rotate(${textRot} ${cx} ${cy - labelR})`}
-                              style={{ pointerEvents: 'none', letterSpacing: '0.04em' }}
+                              style={{
+                                pointerEvents: 'none',
+                                letterSpacing: text.length > 14 ? '0' : '0.02em',
+                              }}
                             >
                               {text}
                             </text>
@@ -362,13 +419,20 @@ export default function WheelOfFortunePage() {
 
               {lastPrize && (
                 <div
-                  className={`mt-3 sm:mt-4 w-full max-w-md rounded-lg border border-amber-700/50 bg-black/40 px-3 py-2.5 sm:px-4 sm:py-3 text-center ${
-                    lastPrize.tier === 'jackpot' || lastPrize.tier === 'rare' ? 'wof-jackpot-glow' : ''
+                  className={`mt-3 sm:mt-4 w-full max-w-md space-y-2 ${
+                    lastPrize.tier === 'jackpot' || lastPrize.tier === 'rare' ? '' : ''
                   }`}
                   data-testid="wheel-last-prize"
                 >
-                  <p className="text-[9px] uppercase tracking-[0.2em] text-amber-600/80 font-heading">Result</p>
-                  <p className="text-amber-100 font-heading font-bold text-sm sm:text-lg mt-0.5">{lastPrize.prize_label}</p>
+                  <p className="text-[9px] uppercase tracking-[0.2em] text-amber-600/80 font-heading text-center">You won</p>
+                  <div className={lastPrize.tier === 'jackpot' || lastPrize.tier === 'rare' ? 'wof-jackpot-glow rounded-lg' : ''}>
+                    <PrizeRow
+                      label={lastPrize.label || lastPrize.prize_label || 'Prize'}
+                      short={resultWedge?.short || shortLabel(resultWedge || lastPrize)}
+                      color={resultWedge?.color}
+                      tier={lastPrize.tier || resultWedge?.tier}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -440,23 +504,8 @@ export default function WheelOfFortunePage() {
                       </div>
                       <ul className="space-y-1">
                         {group.items.map((w) => (
-                          <li
-                            key={w.id || w.index}
-                            className={`flex items-center gap-2 rounded border bg-black/25 px-2 py-1.5 ${group.rowCls}`}
-                          >
-                            <span
-                              className="w-2.5 h-2.5 rounded-sm shrink-0 border border-black/40"
-                              style={{ background: w.color || TIER_FALLBACK[w.tier] || TIER_FALLBACK.common }}
-                              aria-hidden
-                            />
-                            <span className="flex-1 min-w-0 text-[11px] sm:text-xs font-heading text-zinc-100 truncate">
-                              {w.label}
-                            </span>
-                            {w.short ? (
-                              <span className="shrink-0 text-[9px] font-heading uppercase tracking-wide text-zinc-500 tabular-nums">
-                                {w.short}
-                              </span>
-                            ) : null}
+                          <li key={w.id || w.index}>
+                            <PrizeRow label={w.label} short={w.short} color={w.color} tier={w.tier || group.tier} />
                           </li>
                         ))}
                       </ul>
