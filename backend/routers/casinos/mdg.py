@@ -1044,7 +1044,9 @@ def register(router):
     @router.post("/casino/mdg/create")
     async def mdg_create(request: MDGCreateRequest, current_user: dict = Depends(get_current_user_verified)):
         """Create a new MDG. You are auto-joined. Fee and extra pot can be points, money, or both. Max 3 open games per user."""
-        raise_if_gambling_self_banned(current_user)
+        # Admins/mods may still host MDGs while self-excluded (player casinos stay locked).
+        if not (_is_admin(current_user) or _is_moderator(current_user)):
+            raise_if_gambling_self_banned(current_user)
         uid = current_user["id"]
         is_admin_creator = bool(_is_admin(current_user))
         open_count = await db.mdg_games.count_documents({"created_by": uid, "status": "open"})
