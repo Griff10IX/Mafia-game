@@ -24,6 +24,7 @@ import VerifyComplete from "./pages/Auth/VerifyComplete";
 import SpotifyCallback from "./pages/Auth/SpotifyCallback";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
+import GamblingSelfBanGate from "./components/GamblingSelfBanGate";
 import ServerUnavailableOverlay from "./components/ServerUnavailableOverlay";
 import { ThemeProvider } from "./context/ThemeContext";
 import { initToastObservability } from "./components/ui/sonner";
@@ -155,6 +156,11 @@ const MPBlackjackGame = lazy(() => import("./pages/Casinos/MPBlackjackGamePage")
 const MPPoker = lazy(() => import("./pages/Casinos/MPPokerPage"));
 const MPPokerGame = lazy(() => import("./pages/Casinos/MPPokerGamePage"));
 const SportsBetting = lazy(() => import("./pages/Casinos/SportsBetting"));
+
+/** Lock casino/sports wager UIs while gambling self-exclusion is active. */
+const withGamblingBan = (node, mode = 'hard') => (
+  <GamblingSelfBanGate mode={mode}>{node}</GamblingSelfBanGate>
+);
 
 /**
  * Suspense gap while a lazy chunk downloads.
@@ -783,71 +789,81 @@ function App() {
             <Route
               path="/sports-betting"
               element={
-              <SportsBetting />
+              withGamblingBan(<SportsBetting />)
               }
             />
             <Route
               path="/casino/dice"
               element={
+              withGamblingBan(
               <ErrorBoundary>
                 <Dice />
               </ErrorBoundary>
+              )
               }
             />
             <Route
               path="/casino/rlt"
               element={
-              <Rlt />
+              withGamblingBan(<Rlt />)
               }
             />
             <Route
               path="/casino/blackjack"
               element={
-              <Blackjack />
+              withGamblingBan(<Blackjack />)
               }
             />
             <Route
               path="/casino/horseracing"
               element={
+              withGamblingBan(
               <ErrorBoundary>
                 <HorseRacing />
               </ErrorBoundary>
+              )
               }
             />
             <Route
               path="/casino/keno"
               element={
+              withGamblingBan(
               <ErrorBoundary>
                 <Keno />
               </ErrorBoundary>
+              )
               }
             />
             <Route
               path="/casino/coin-flip"
               element={
+              withGamblingBan(
               <ErrorBoundary>
                 <CoinFlip />
               </ErrorBoundary>
+              )
               }
             />
             <Route
               path="/casino/wheel"
               element={
+              withGamblingBan(
               <ErrorBoundary>
                 <WheelOfFortune />
               </ErrorBoundary>
+              )
               }
             />
             <Route
               path="/casino/videopoker"
               element={
-              <VideoPoker />
+              withGamblingBan(<VideoPoker />)
               }
             />
             <Route
               path="/casino/mdg"
               element={
-              <MDG />
+              withGamblingBan(<MDG />, 'notice')
               }
             />
             <Route
@@ -861,25 +877,25 @@ function App() {
             <Route
               path="/casino/mp-blackjack"
               element={
-              <MPBlackjack />
+              withGamblingBan(<MPBlackjack />)
               }
             />
             <Route
               path="/casino/mp-blackjack/game/:gameId"
               element={
-              <MPBlackjackGame />
+              withGamblingBan(<MPBlackjackGame />)
               }
             />
             <Route
               path="/casino/mp-poker"
               element={
-              <MPPoker />
+              withGamblingBan(<MPPoker />)
               }
             />
             <Route
               path="/casino/mp-poker/game/:gameId"
               element={
-              <MPPokerGame />
+              withGamblingBan(<MPPokerGame />)
               }
             />
             <Route
@@ -1176,7 +1192,7 @@ function App() {
             <Route
               path="/casino/slots"
               element={
-                SLOTS_FEATURE_ENABLED ? <Slots /> : <Navigate to="/casino" replace />
+                SLOTS_FEATURE_ENABLED ? withGamblingBan(<Slots />) : <Navigate to="/casino" replace />
               }
             />
           </Route>

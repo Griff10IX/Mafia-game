@@ -2,6 +2,11 @@ import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Users, Lay
 import { Link } from 'react-router-dom';
 import styles from '../../styles/noir.module.css';
 import { SLOTS_FEATURE_ENABLED } from '../../config/gameFeatures';
+import { useAuthUser } from '../../context/AuthContext';
+import {
+  formatGamblingSelfBanRemaining,
+  isGamblingSelfBanned,
+} from '../../utils/gamblingSelfBan';
 
 const CASINO_STYLES = `
   @keyframes cas-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -28,9 +33,29 @@ const GAMES = [
 ];
 
 export default function Casino() {
+  const user = useAuthUser();
+  const banned = isGamblingSelfBanned(user);
+  const banLeft = formatGamblingSelfBanRemaining(user);
+
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="casino-page">
       <style>{CASINO_STYLES}</style>
+
+      {banned && (
+        <div
+          role="alert"
+          className="rounded-md border border-red-500/40 bg-red-950/70 px-3 py-2.5 text-[11px] text-red-100 font-heading leading-snug cas-fade-in"
+        >
+          <p className="font-bold text-red-200 uppercase tracking-wider text-[10px] mb-1">Gambling self-exclusion active</p>
+          <p>
+            Casino and sports betting are locked{banLeft ? <> for <span className="font-bold tabular-nums">{banLeft}</span></> : null}.
+            Opening a game will not let you place bets.{' '}
+            <Link to="/casino/gambling-ban" className="underline underline-offset-2 text-red-200/90 hover:text-red-100">
+              View status
+            </Link>
+          </p>
+        </div>
+      )}
 
       <div className="relative cas-fade-in">
         <div className="flex items-start justify-between gap-3">

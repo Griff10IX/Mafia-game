@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Coins, ArrowLeftRight, Users, Building2, TrendingUp, TrendingDown, HelpCircle, Zap, Puzzle } from 'lucide-react';
+import { Coins, ArrowLeftRight, Users, Building2, TrendingUp, TrendingDown, HelpCircle, Zap, Puzzle, Minus, Plus } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -32,6 +32,62 @@ const qtActionBtn = 'relative z-[2] touch-manipulation';
 
 /** ~10 compact offer rows before scroll (was max-h-96 ≈4 rows with tall cards). */
 const qtOffersListScroll = 'max-h-[min(52rem,92vh)] overflow-y-auto';
+
+const QT_OFFER_COUNT_MAX = 10;
+
+const clampQtOfferCount = (raw) => {
+  const n = parseInt(String(raw ?? '').replace(/\D/g, ''), 10);
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(QT_OFFER_COUNT_MAX, n);
+};
+
+/** Mobile-friendly 1–10 stepper; avoids type=number clamping mid-edit to only 1 or 10. */
+function QtOfferCountInput({ id, value, onChange }) {
+  const n = clampQtOfferCount(value === '' || value == null ? 1 : value);
+  const display = value === '' || value == null ? '' : String(value);
+  return (
+    <div className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        aria-label="Fewer offers"
+        disabled={n <= 1}
+        onClick={() => onChange(Math.max(1, n - 1))}
+        className="inline-flex items-center justify-center w-9 h-9 min-w-[36px] rounded border border-zinc-600/60 bg-zinc-800/50 text-foreground touch-manipulation disabled:opacity-40"
+      >
+        <Minus size={14} />
+      </button>
+      <input
+        id={id}
+        inputMode="numeric"
+        pattern="[0-9]*"
+        autoComplete="off"
+        value={display}
+        onFocus={(e) => e.target.select()}
+        onChange={(e) => {
+          const digits = e.target.value.replace(/\D/g, '').slice(0, 2);
+          if (digits === '') {
+            onChange('');
+            return;
+          }
+          const parsed = parseInt(digits, 10);
+          if (!Number.isFinite(parsed)) return;
+          onChange(parsed > QT_OFFER_COUNT_MAX ? QT_OFFER_COUNT_MAX : parsed);
+        }}
+        onBlur={() => onChange(clampQtOfferCount(value))}
+        className="w-12 min-h-[36px] bg-zinc-900/50 border border-zinc-700/50 rounded px-1 text-sm text-foreground font-heading text-center touch-manipulation"
+      />
+      <button
+        type="button"
+        aria-label="More offers"
+        disabled={n >= QT_OFFER_COUNT_MAX}
+        onClick={() => onChange(Math.min(QT_OFFER_COUNT_MAX, n + 1))}
+        className="inline-flex items-center justify-center w-9 h-9 min-w-[36px] rounded border border-zinc-600/60 bg-zinc-800/50 text-foreground touch-manipulation disabled:opacity-40"
+      >
+        <Plus size={14} />
+      </button>
+    </div>
+  );
+}
 
 export default function QuickTrade() {
   const animateIn = useState(() => !_qtIntroPlayed)[0];
@@ -193,7 +249,8 @@ export default function QuickTrade() {
       toast.error('Minimum price is $50,000 per point.');
       return;
     }
-    const count = Math.max(1, Math.min(10, parseInt(String(sellOfferCount), 10) || 1));
+    const count = clampQtOfferCount(sellOfferCount);
+    setSellOfferCount(count);
     setCreatingOffers(true);
     let created = 0;
     try {
@@ -249,7 +306,8 @@ export default function QuickTrade() {
       toast.error('Minimum price is $50,000 per point.');
       return;
     }
-    const count = Math.max(1, Math.min(10, parseInt(String(buyOfferCount), 10) || 1));
+    const count = clampQtOfferCount(buyOfferCount);
+    setBuyOfferCount(count);
     setCreatingOffers(true);
     let created = 0;
     try {
@@ -588,26 +646,18 @@ export default function QuickTrade() {
               <input type="checkbox" id="hideNameSell" checked={hideNameSell} onChange={(e) => setHideNameSell(e.target.checked)} className="rounded border-zinc-600" />
               <label htmlFor="hideNameSell" className="text-[10px] text-mutedForeground font-heading cursor-pointer">Hide name</label>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <label htmlFor="sellOfferCount" className="text-[10px] text-mutedForeground font-heading whitespace-nowrap">Number of offers</label>
-              <input
-                id="sellOfferCount"
-                type="number"
-                min={1}
-                max={10}
-                value={sellOfferCount}
-                onChange={(e) => setSellOfferCount(Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 1)))}
-                className="w-16 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-sm text-foreground font-heading text-center"
-              />
-              <span className="text-[10px] text-mutedForeground font-heading">(x{sellOfferCount})</span>
+              <QtOfferCountInput id="sellOfferCount" value={sellOfferCount} onChange={setSellOfferCount} />
+              <span className="text-[10px] text-mutedForeground font-heading">(x{clampQtOfferCount(sellOfferCount)} · max {QT_OFFER_COUNT_MAX})</span>
             </div>
             <button
               onClick={handleCreateSellOffer}
               disabled={!sellPoints || !sellCost || creatingOffers}
               className="w-full px-4 py-2 rounded bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {creatingOffers ? `Adding ${sellOfferCount}…` : `Add ${sellOfferCount > 1 ? `x${sellOfferCount} ` : ''}$${sellTotal ? formatNumber(sellTotal) : '0'}`}
-              {!creatingOffers && sellPoints && sellOfferCount === 1 && <span className="text-[10px] opacity-90 ml-1">({formatNumber(sellAfterFee)} after fee)</span>}
+              {creatingOffers ? `Adding ${clampQtOfferCount(sellOfferCount)}…` : `Add ${clampQtOfferCount(sellOfferCount) > 1 ? `x${clampQtOfferCount(sellOfferCount)} ` : ''}$${sellTotal ? formatNumber(sellTotal) : '0'}`}
+              {!creatingOffers && sellPoints && clampQtOfferCount(sellOfferCount) === 1 && <span className="text-[10px] opacity-90 ml-1">({formatNumber(sellAfterFee)} after fee)</span>}
             </button>
           </div>
           <div className="qt-art-line text-primary mx-3" />
@@ -663,26 +713,18 @@ export default function QuickTrade() {
               <input type="checkbox" id="hideNameBuy" checked={hideNameBuy} onChange={(e) => setHideNameBuy(e.target.checked)} className="rounded border-zinc-600" />
               <label htmlFor="hideNameBuy" className="text-[10px] text-mutedForeground font-heading cursor-pointer">Hide name</label>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <label htmlFor="buyOfferCount" className="text-[10px] text-mutedForeground font-heading whitespace-nowrap">Number of offers</label>
-              <input
-                id="buyOfferCount"
-                type="number"
-                min={1}
-                max={10}
-                value={buyOfferCount}
-                onChange={(e) => setBuyOfferCount(Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 1)))}
-                className="w-16 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-sm text-foreground font-heading text-center"
-              />
-              <span className="text-[10px] text-mutedForeground font-heading">(x{buyOfferCount})</span>
+              <QtOfferCountInput id="buyOfferCount" value={buyOfferCount} onChange={setBuyOfferCount} />
+              <span className="text-[10px] text-mutedForeground font-heading">(x{clampQtOfferCount(buyOfferCount)} · max {QT_OFFER_COUNT_MAX})</span>
             </div>
             <button
               onClick={handleCreateBuyOffer}
               disabled={!buyPoints || !buyOffer || creatingOffers}
               className="w-full px-4 py-2 rounded bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {creatingOffers ? `Adding ${buyOfferCount}…` : `Add ${buyOfferCount > 1 ? `x${buyOfferCount} ` : ''}$${buyTotal ? formatNumber(buyTotal) : '0'}`}
-              {!creatingOffers && buyPoints && buyOfferCount === 1 && <span className="text-[10px] opacity-90 ml-1">({formatNumber(buyAfterFee)} after fee)</span>}
+              {creatingOffers ? `Adding ${clampQtOfferCount(buyOfferCount)}…` : `Add ${clampQtOfferCount(buyOfferCount) > 1 ? `x${clampQtOfferCount(buyOfferCount)} ` : ''}$${buyTotal ? formatNumber(buyTotal) : '0'}`}
+              {!creatingOffers && buyPoints && clampQtOfferCount(buyOfferCount) === 1 && <span className="text-[10px] opacity-90 ml-1">({formatNumber(buyAfterFee)} after fee)</span>}
             </button>
           </div>
           <div className="qt-art-line text-primary mx-3" />
