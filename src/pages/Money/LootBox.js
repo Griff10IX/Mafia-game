@@ -410,7 +410,16 @@ function rewardLabel(reward) {
       return `${fmtInt(amt)} loot box piece${Number(amt) === 1 ? '' : 's'}`;
     }
     case 'perk':      return reward.name || 'Perk';
-    case 'token':     return `${fmtInt(reward.amount ?? reward.value ?? 1)} ${(reward.token_type || 'bonus').replace(/_/g, ' ')} token(s)`;
+    case 'token': {
+      const tokenLabels = {
+        mission_skip: 'Mission Skip',
+        robot_bodyguard_hire: 'Free Robot Bodyguard',
+        auto_rank_2h: 'Auto Rank (2h)',
+      };
+      const tt = reward.token_type || 'bonus';
+      const label = tokenLabels[tt] || String(tt).replace(/_/g, ' ');
+      return `${fmtInt(reward.amount ?? reward.value ?? 1)} ${label} token(s)`;
+    }
     default:          return JSON.stringify(reward);
   }
 }
@@ -435,6 +444,7 @@ function LootRewardGuide({ rewardInfo, odds }) {
     standard_note,
     exclusives,
     exclusive_note,
+    standard_token_note,
     tiers,
   } = rewardInfo;
   const costs = open_cost_by_tier || DEFAULT_OPEN_COST_BY_TIER;
@@ -529,8 +539,11 @@ function LootRewardGuide({ rewardInfo, odds }) {
             <span className="group-open:rotate-90 transition-transform inline-block">▸</span>
             Token pool (random on roll)
           </summary>
+          {standard_token_note && (
+            <p className="text-[7px] text-mutedForeground italic mt-1 mb-1">{standard_token_note}</p>
+          )}
           <ul className="mt-1 max-h-24 overflow-y-auto list-disc pl-4 text-mutedForeground space-y-0.5 text-[7px]">
-            {(tiers.common?.tokens?.types || []).map((x) => (
+            {(tiers.ultra_rare?.tokens?.types || tiers.common?.tokens?.types || []).map((x) => (
               <li key={x.id}>{x.label}</li>
             ))}
           </ul>

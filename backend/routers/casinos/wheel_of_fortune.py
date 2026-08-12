@@ -192,15 +192,15 @@ def _build_segments() -> List[Dict[str, Any]]:
         w = 4 if tt == "auto_rank_2h" else (6 if tt in ("auto_collect_24h", "auto_collect_12h") else 10)
         add(f"token_{tt}", label, short, "token", w, {"kind": "token", "token_type": tt, "amount": 3})
 
-    add("cash_50k", "$50,000", "$50K", "common", 36, {"kind": "money", "amount": 50_000})
-    add("cash_250k", "$250,000", "$250K", "common", 30, {"kind": "money", "amount": 250_000})
-    add("cash_1m", "$1,000,000", "$1M", "common", 22, {"kind": "money", "amount": 1_000_000})
-    add("cash_5m", "$5,000,000", "$5M", "common", 12, {"kind": "money", "amount": 5_000_000})
-    add("cash_500m", "$500,000,000", "$500M", "common", 10, {"kind": "money", "amount": 500_000_000})
+    add("cash_250k", "$250,000", "$250K", "common", 36, {"kind": "money", "amount": 250_000})
+    add("cash_5m", "$5,000,000", "$5M", "common", 30, {"kind": "money", "amount": 5_000_000})
+    add("cash_10m", "$10,000,000", "$10M", "common", 22, {"kind": "money", "amount": 10_000_000})
+    add("cash_25m", "$25,000,000", "$25M", "common", 12, {"kind": "money", "amount": 25_000_000})
+    add("cash_750m", "$750,000,000", "$750M", "common", 10, {"kind": "money", "amount": 750_000_000})
 
-    add("pts_25", "25 Points", "25", "common", 40, {"kind": "points", "amount": 25})
-    add("pts_50", "50 Points", "50", "common", 34, {"kind": "points", "amount": 50})
-    add("pts_100", "100 Points", "100", "common", 28, {"kind": "points", "amount": 100})
+    add("pts_50", "50 Points", "50", "common", 40, {"kind": "points", "amount": 50})
+    add("pts_100", "100 Points", "100", "common", 34, {"kind": "points", "amount": 100})
+    add("pts_200", "200 Points", "200", "common", 28, {"kind": "points", "amount": 200})
 
     add("loot_5", "5 Loot Pieces", "5L", "common", 40, {"kind": "loot_box_pieces", "amount": 5})
 

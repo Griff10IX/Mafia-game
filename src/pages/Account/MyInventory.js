@@ -63,8 +63,8 @@ const tokenLabels = {
   cooldown_skip_booze: { name: 'Booze travel skip', icon: Zap, desc: 'Activate to skip one booze-run travel wait (200/day cap).' },
   cooldown_skip_properties: { name: 'Properties collect skip', icon: Zap, desc: 'Skip property collect cooldowns — ⚡ Skip Collect All covers every business for 1 token (3/day).' },
   jail_bailout: { name: 'Jail bailout token', icon: Target, desc: 'Instant leave jail — use it from the Jail page (500 uses/day UTC; does not bypass OC lockdown).' },
-  mission_skip: { name: 'Mission Skip', icon: Zap, desc: 'Ultra rare — instantly complete your current open mission and claim its rewards. Use from the Missions page. Wheel of Fortune only.' },
-  robot_bodyguard_hire: { name: 'Free Robot Bodyguard', icon: Shield, desc: 'Rare — hire one robot bodyguard for free (instead of paying points). Auto-used on Kill → Bodyguards when you hire. Wheel of Fortune only.' },
+  mission_skip: { name: 'Mission Skip', icon: Zap, desc: 'Ultra rare — instantly complete your current open mission and claim its rewards. Use from the Missions page. From Wheel of Fortune or Ultra Rare loot boxes.' },
+  robot_bodyguard_hire: { name: 'Free Robot Bodyguard', icon: Shield, desc: 'Rare — hire one robot bodyguard for free (instead of paying points). Auto-used on Kill → Bodyguards when you hire. From Wheel of Fortune or Ultra Rare loot boxes.' },
   rank_xp_pass: { name: 'Game Pass', icon: Package, desc: 'Activate in Armoury/My Inventory to claim one-time Game Pass rewards. Expires in 1 month if unused.' },
 };
 

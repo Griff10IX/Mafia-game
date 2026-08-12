@@ -644,6 +644,48 @@ def _mdg_parse_iso(raw) -> Optional[datetime]:
         return None
 
 
+async def _mdg_issue_join_token(uid: str, *, ready_immediately: bool = False) -> Optional[str]:
+    """Store a new join token for uid. If ready_immediately, backdate issued_at past min-age."""
+    uid = str(uid or "").strip()
+    if not uid:
+        return None
+    token = secrets.token_urlsafe(24)
+    now = datetime.now(timezone.utc)
+    if ready_immediately:
+        issued_at = (now - timedelta(seconds=MDG_JOIN_TOKEN_MIN_AGE_SECONDS + 0.05)).isoformat()
+    else:
+        issued_at = now.isoformat()
+    await db.mdg_join_tokens.update_one(
+        {"user_id": uid},
+        {"$set": {"token": token, "issued_at": issued_at}},
+        upsert=True,
+    )
+    return token
+
+
+async def _mdg_get_or_issue_join_token(uid: str) -> Optional[str]:
+    """Return existing unexpired join token, or issue a new one.
+
+    Reusing avoids the games-list poll rotating the token under an in-flight Join
+    (which caused false 'invalid' alerts while a later tap with the new token still joined).
+    """
+    uid = str(uid or "").strip()
+    if not uid:
+        return None
+    row = await db.mdg_join_tokens.find_one(
+        {"user_id": uid},
+        {"_id": 0, "token": 1, "issued_at": 1},
+    )
+    stored = str((row or {}).get("token") or "").strip()
+    if stored:
+        issued_at = _mdg_parse_iso((row or {}).get("issued_at"))
+        if issued_at is not None:
+            age = (datetime.now(timezone.utc) - issued_at).total_seconds()
+            if 0 <= age <= MDG_JOIN_TOKEN_TTL_SECONDS:
+                return stored
+    return await _mdg_issue_join_token(uid)
+
+
 async def _require_mdg_join_token(
     http_request: Request,
     current_user: dict,
@@ -651,7 +693,8 @@ async def _require_mdg_join_token(
     join_token: Optional[str],
 ) -> None:
     """Layer-1 anti-bot (same as entertainer E-Game joins): validate + consume the single-use
-    join token issued with the games list. Enforces a minimum human delay between list fetch and join."""
+    join token issued with the games list. Enforces a minimum human delay between list fetch and join.
+    Join never proceeds past this without a successful token consume."""
     uid = str(current_user.get("id") or "")
     token = (join_token or "").strip()
     fail_reason = None
@@ -660,7 +703,8 @@ async def _require_mdg_join_token(
     else:
         row = await db.mdg_join_tokens.find_one({"user_id": uid}, {"_id": 0, "token": 1, "issued_at": 1})
         stored = str((row or {}).get("token") or "")
-        if not stored or not secrets.compare_digest(stored, token):
+        # compare_digest requires equal length — treat mismatch as invalid (not 500).
+        if not stored or len(stored) != len(token) or not secrets.compare_digest(stored, token):
             fail_reason = "invalid"
         else:
             issued_at = _mdg_parse_iso((row or {}).get("issued_at"))
@@ -670,8 +714,12 @@ async def _require_mdg_join_token(
             elif age < MDG_JOIN_TOKEN_MIN_AGE_SECONDS:
                 fail_reason = "too_fresh"
             else:
-                consumed = await db.mdg_join_tokens.delete_one({"user_id": uid, "token": token})
-                if consumed.deleted_count == 0:
+                # Atomic consume: only one concurrent join can win this token.
+                consumed = await db.mdg_join_tokens.find_one_and_delete(
+                    {"user_id": uid, "token": token},
+                    projection={"_id": 1},
+                )
+                if not consumed:
                     fail_reason = "invalid"
     if not fail_reason:
         return
@@ -957,17 +1005,12 @@ def register(router):
             {"_id": 0, "id": 1, "created_by": 1, "created_by_username": 1, "created_at": 1, "fee_points": 1, "fee_money": 1, "max_players": 1, "auto_roll_at": 1, "extra_pot_points": 1, "extra_pot_money": 1, "entries": 1, "pot_points": 1, "pot_money": 1, "status": 1, "is_automated": 1, "house_pot": 1, "auto_roll_deadline": 1, "admin_prizes": 1, "staff_cannot_win": 1},
         ).sort("created_at", -1)
         games = await cursor.to_list(100)
-        # Anti-bot: hand out a fresh single-use join token with the list (consumed by the next join).
+        # Anti-bot: reuse unexpired join token across list polls (consumed only on successful join).
         join_token = None
         try:
             uid = str(current_user.get("id") or "")
             if uid:
-                join_token = secrets.token_urlsafe(24)
-                await db.mdg_join_tokens.update_one(
-                    {"user_id": uid},
-                    {"$set": {"token": join_token, "issued_at": datetime.now(timezone.utc).isoformat()}},
-                    upsert=True,
-                )
+                join_token = await _mdg_get_or_issue_join_token(uid)
         except Exception:
             _logger.exception("mdg join token issue failed")
             join_token = None

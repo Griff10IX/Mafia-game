@@ -80,6 +80,15 @@ LOOT_EXCLUSIVE_SJ_RATES: Dict[str, float] = {
     "rare": 0.05,
     "ultra_rare": 0.10,
 }
+# Ultra Rare box token pool extras (not in common/uncommon/rare token rolls).
+LOOT_BOX_UR_ONLY_TOKEN_FIELDS: Dict[str, str] = {
+    "mission_skip": "mission_skip_tokens",
+    "robot_bodyguard_hire": "robot_bodyguard_hire_tokens",
+}
+LOOT_BOX_UR_ONLY_TOKEN_LABELS: Dict[str, str] = {
+    "mission_skip": "Mission Skip",
+    "robot_bodyguard_hire": "Free Robot Bodyguard",
+}
 LOOT_EXCLUSIVE_ARMOUR_LEVEL = 7
 ARMOUR_LEVEL_7_NAME = "Steel Plate Bulletproof Vest (1922)"
 # Back-compat alias (old code referenced level 6 loot name)
@@ -142,6 +151,8 @@ def _loot_box_token_count_field(token_type: str) -> Optional[str]:
     tt = (token_type or "").strip()
     if not tt or tt in _LOOT_BOX_TOKEN_EXCLUDE:
         return None
+    if tt in LOOT_BOX_UR_ONLY_TOKEN_FIELDS:
+        return LOOT_BOX_UR_ONLY_TOKEN_FIELDS[tt]
     if tt in STORE_COUNT_ONLY_TOKEN_FIELDS:
         return STORE_COUNT_ONLY_TOKEN_FIELDS[tt]
     cfg = TOKEN_CONFIG.get(tt)
@@ -158,6 +169,23 @@ LOOT_BOX_TOKEN_TYPES = [
     t for t in _LOOT_BOX_TOKEN_CANDIDATES
     if t not in _LOOT_BOX_TOKEN_EXCLUDE and _loot_box_token_count_field(t)
 ]
+LOOT_BOX_UR_ONLY_TOKEN_TYPES = [
+    t for t in LOOT_BOX_UR_ONLY_TOKEN_FIELDS.keys() if _loot_box_token_count_field(t)
+]
+
+
+def _loot_token_pool_for_tier(paid_tier: str) -> List[str]:
+    """Standard store token pool; Ultra Rare boxes also include Mission Skip / Robot Bodyguard."""
+    pool = [t for t in LOOT_BOX_TOKEN_TYPES if _loot_box_token_count_field(t)]
+    if _normalize_reward_tier(paid_tier) == "ultra_rare":
+        for t in LOOT_BOX_UR_ONLY_TOKEN_TYPES:
+            if t not in pool:
+                pool.append(t)
+    return pool
+
+
+def _loot_token_type_label(token_type: str) -> str:
+    return LOOT_BOX_UR_ONLY_TOKEN_LABELS.get(token_type) or str(token_type).replace("_", " ")
 PERK_TYPES = [
     "property_income_10",
     "rp_10",
@@ -712,9 +740,6 @@ def _loot_token_amount_range(box_quality: str) -> Tuple[int, int]:
 def _loot_public_reward_info() -> Dict[str, Any]:
     """Static ranges + lists for Loot Box UI (must match open_loot_box / _loot_tier_profile)."""
     standard_prizes = [{"id": k, "label": STANDARD_PRIZE_LABELS.get(k, k)} for k, _ in STANDARD_REWARD_WEIGHTS]
-    token_types = []
-    for tt in LOOT_BOX_TOKEN_TYPES:
-        token_types.append({"id": tt, "label": str(tt).replace("_", " ")})
     exclusives = [
         {"id": "weapon", "label": "Exclusive weapon", "cap_global": _exclusive_cap("weapon")},
         {"id": "armour", "label": f"Exclusive armour ({ARMOUR_LEVEL_7_NAME})", "cap_global": _exclusive_cap("armour")},
@@ -746,6 +771,9 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         excl = t.get("perk_exclude") or frozenset()
         perk_labels = [PERK_LABELS[p] for p in PERK_TYPES if p not in excl]
         guaranteed = list(_guaranteed_standard_types(q))
+        tier_token_types = [
+            {"id": tt, "label": _loot_token_type_label(tt)} for tt in _loot_token_pool_for_tier(q)
+        ]
         tiers[q] = {
             "prize_count": list(BOX_TIER_PRIZE_COUNTS[q]),
             "guaranteed_standard_types": guaranteed,
@@ -754,7 +782,7 @@ def _loot_public_reward_info() -> Dict[str, Any]:
             "rank_points": [int(r0), int(r1)],
             "bullets": [int(b0), int(b1)],
             "loot_pieces": [int(l0), int(l1)],
-            "tokens": {"amount": [t_lo, t_hi], "types": token_types},
+            "tokens": {"amount": [t_lo, t_hi], "types": tier_token_types},
             "perks": perk_labels,
         }
     jackpot_tiers: Dict[str, Any] = {}
@@ -783,6 +811,9 @@ def _loot_public_reward_info() -> Dict[str, Any]:
             "Duesenberg Model SJ 1 (Rare boxes 5% / Ultra Rare 10% only; 2s travel). "
             "If a type is full or you already own that exclusive, the roll tries another exclusive or becomes a standard prize. "
             "Weed exclusives and Model SJ transfer on PvP kill once claimed."
+        ),
+        "standard_token_note": (
+            "Ultra Rare boxes can also roll Mission Skip and Free Robot Bodyguard from the token prize pool."
         ),
         "tiers": tiers,
     }
@@ -1269,7 +1300,7 @@ async def open_loot_box(
                 _append_standard({"type": "loot_pieces", "amount": amount})
             elif chosen == "tokens":
                 amt = _loot_token_amount(reward_tier)
-                pool = [t for t in LOOT_BOX_TOKEN_TYPES if _loot_box_token_count_field(t)]
+                pool = _loot_token_pool_for_tier(paid_tier)
                 if not pool:
                     c_lo, c_hi = tier["cash"]
                     amount = _clamp_loot_cash(_rng.randint(int(c_lo), int(c_hi)))
@@ -1279,7 +1310,12 @@ async def open_loot_box(
                     token_type = _rng.choice(pool)
                     field = _loot_box_token_count_field(token_type)
                     merged_inc[field] = merged_inc.get(field, 0) + amt
-                    _append_standard({"type": "token", "token_type": token_type, "amount": amt})
+                    _append_standard({
+                        "type": "token",
+                        "token_type": token_type,
+                        "name": _loot_token_type_label(token_type),
+                        "amount": amt,
+                    })
             else:
                 excl = tier.get("perk_exclude") or frozenset()
                 perk_pool = [p for p in PERK_TYPES if p not in excl]

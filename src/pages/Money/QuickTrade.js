@@ -176,9 +176,10 @@ export default function QuickTrade() {
   const [tokenBalances, setTokenBalances] = useState(() => qtBoot?.tokenBalances ?? {});
   const [lootPieceBalance, setLootPieceBalance] = useState(() => qtBoot?.lootPieceBalance ?? { total: 0, sellable: 0 });
 
-  const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'auto_rank_2h', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus'];
+  const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'auto_rank_2h', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus', 'mission_skip'];
   const TOKEN_TYPE_LABELS = {
     auto_rank_2h: 'Auto Rank (2h)',
+    mission_skip: 'Mission Skip',
   };
   const formatTokenName = (t) => TOKEN_TYPE_LABELS[t] || t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   
@@ -204,6 +205,9 @@ export default function QuickTrade() {
   const [creatingLootPiece, setCreatingLootPiece] = useState(false);
 
   const TOKEN_MIN_CASH_PER_TOKEN = 250_000;
+  /** Store tokens that can only be listed for points (server-enforced). */
+  const TOKEN_POINTS_ONLY = new Set(['mission_skip']);
+  const TOKEN_MIN_POINTS_PER_TOKEN = { mission_skip: 1000 };
   const LOOT_PIECE_MIN_QUANTITY = 10;
   const LOOT_MIN_CASH_PER_PIECE = 25_000;
 
@@ -475,12 +479,26 @@ export default function QuickTrade() {
       );
       return;
     }
+    const pointsOnly =
+      TOKEN_POINTS_ONLY.has(tokenType) || Boolean(tokenBalances[tokenType]?.points_only);
+    const minPtsPer =
+      Number(tokenBalances[tokenType]?.min_points_per_token) ||
+      TOKEN_MIN_POINTS_PER_TOKEN[tokenType] ||
+      0;
+    const currency = pointsOnly ? 'points' : tokenPriceCurrency;
     const minCash = TOKEN_MIN_CASH_PER_TOKEN * qty;
     let body;
-    if (tokenPriceCurrency === 'points') {
+    if (currency === 'points') {
       const price = Math.max(1, parseInt(String(tokenPrice).replace(/,/g, ''), 10) || 0);
+      const minPts = minPtsPer * qty;
       if (!price) {
         toast.error('Enter price in points');
+        return;
+      }
+      if (minPts > 0 && price < minPts) {
+        toast.error(
+          `Minimum points for ${qty} token(s) is ${formatNumber(minPts)} (${formatNumber(minPtsPer)} per token)`,
+        );
         return;
       }
       body = { token_type: tokenType, quantity: qty, price_currency: 'points', price_points: price, price_money: 0 };
@@ -655,6 +673,13 @@ export default function QuickTrade() {
     sellTokBal && sellTokBal.founding_locks_trade != null
       ? Number(sellTokBal.founding_locks_trade)
       : sellFoundingRaw;
+  const tokenPointsOnly =
+    TOKEN_POINTS_ONLY.has(tokenType) || Boolean(sellTokBal?.points_only);
+  const tokenMinPtsPer =
+    Number(sellTokBal?.min_points_per_token) || TOKEN_MIN_POINTS_PER_TOKEN[tokenType] || 0;
+  const tokenEffectiveCurrency = tokenPointsOnly ? 'points' : tokenPriceCurrency;
+  const tokenQtyForMin = Math.max(1, parseInt(String(tokenQuantity).replace(/,/g, ''), 10) || 1);
+  const tokenMinPtsTotal = tokenMinPtsPer * tokenQtyForMin;
 
   return (
     <div className={`space-y-6 ${styles.pageContent} mobile-page-root`} data-testid="quicktrade-page">
@@ -1035,7 +1060,13 @@ export default function QuickTrade() {
               <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Token type</label>
               <select
                 value={tokenType}
-                onChange={(e) => setTokenType(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setTokenType(next);
+                  if (TOKEN_POINTS_ONLY.has(next) || tokenBalances[next]?.points_only) {
+                    setTokenPriceCurrency('points');
+                  }
+                }}
                 className="w-full bg-zinc-900 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none cursor-pointer capitalize"
               >
                 {TOKEN_TYPES.map((t) => {
@@ -1057,17 +1088,21 @@ export default function QuickTrade() {
             {sellTokBal != null && (
               <div className="flex flex-col gap-1 rounded-md px-3 py-2 bg-zinc-800/40 border border-zinc-700/30 text-[10px] font-heading">
                 <span className="text-mutedForeground">Your balance: <span className="text-foreground font-bold">{sellTokBal.total}</span> total</span>
-                <span className="text-mutedForeground">Referral: <span className="text-foreground font-bold">{sellTokBal.referral}</span> (cannot be sold)</span>
-                {Number(sellTokBal.entertainer || 0) > 0 && (
-                  <span className="text-mutedForeground">Entertainer: <span className="text-foreground font-bold">{sellTokBal.entertainer}</span> (cannot be sold)</span>
-                )}
-                {sellFoundingRaw > 0 && (
-                  <span className="text-mutedForeground">
-                    Founding Member drops: <span className="text-foreground font-bold">{sellFoundingRaw}</span>
-                    {sellFoundingLock > 0
-                      ? ' (cannot be sold on Quick Trade)'
-                      : ' (this type can still be sold — same pool as Game Pass / store)'}
-                  </span>
+                {!tokenPointsOnly && (
+                  <>
+                    <span className="text-mutedForeground">Referral: <span className="text-foreground font-bold">{sellTokBal.referral}</span> (cannot be sold)</span>
+                    {Number(sellTokBal.entertainer || 0) > 0 && (
+                      <span className="text-mutedForeground">Entertainer: <span className="text-foreground font-bold">{sellTokBal.entertainer}</span> (cannot be sold)</span>
+                    )}
+                    {sellFoundingRaw > 0 && (
+                      <span className="text-mutedForeground">
+                        Founding Member drops: <span className="text-foreground font-bold">{sellFoundingRaw}</span>
+                        {sellFoundingLock > 0
+                          ? ' (cannot be sold on Quick Trade)'
+                          : ' (this type can still be sold — same pool as Game Pass / store)'}
+                      </span>
+                    )}
+                  </>
                 )}
                 <span className="text-primary font-bold">Tradable on Quick Trade: {sellTokBal.sellable}</span>
               </div>
@@ -1089,31 +1124,46 @@ export default function QuickTrade() {
                   <input
                     type="radio"
                     name="tokenPriceCurrency"
-                    checked={tokenPriceCurrency === 'points'}
+                    checked={tokenEffectiveCurrency === 'points'}
                     onChange={() => setTokenPriceCurrency('points')}
                     className="rounded border-zinc-600"
                   />
                   Points
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-heading text-foreground">
-                  <input
-                    type="radio"
-                    name="tokenPriceCurrency"
-                    checked={tokenPriceCurrency === 'money'}
-                    onChange={() => setTokenPriceCurrency('money')}
-                    className="rounded border-zinc-600"
-                  />
-                  Cash ($)
-                </label>
+                {!tokenPointsOnly && (
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-heading text-foreground">
+                    <input
+                      type="radio"
+                      name="tokenPriceCurrency"
+                      checked={tokenEffectiveCurrency === 'money'}
+                      onChange={() => setTokenPriceCurrency('money')}
+                      className="rounded border-zinc-600"
+                    />
+                    Cash ($)
+                  </label>
+                )}
               </div>
+              {tokenPointsOnly && (
+                <p className="text-[9px] text-mutedForeground font-heading mb-1.5">
+                  {formatTokenName(tokenType)} listings are <span className="text-primary font-bold">points only</span>
+                  {tokenMinPtsPer > 0 ? (
+                    <>
+                      {' '}
+                      (min <span className="text-primary font-bold">{formatNumber(tokenMinPtsPer)}</span> pts per token).
+                    </>
+                  ) : (
+                    '.'
+                  )}
+                </p>
+              )}
               <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
-                {tokenPriceCurrency === 'points' ? 'Price (points)' : 'Price (total $ for this listing)'}
+                {tokenEffectiveCurrency === 'points' ? 'Price (points)' : 'Price (total $ for this listing)'}
               </label>
-              {tokenPriceCurrency === 'points' ? (
+              {tokenEffectiveCurrency === 'points' ? (
                 <FormattedNumberInput
                   value={tokenPrice}
                   onChange={setTokenPrice}
-                  placeholder="e.g. 100"
+                  placeholder={tokenMinPtsTotal > 0 ? `min ${formatNumber(tokenMinPtsTotal)}` : 'e.g. 100'}
                   className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
                 />
               ) : (
@@ -1125,10 +1175,16 @@ export default function QuickTrade() {
                   className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
                 />
               )}
-              {tokenPriceCurrency === 'money' && (
+              {tokenEffectiveCurrency === 'points' && tokenMinPtsPer > 0 && (
+                <p className="text-[9px] text-mutedForeground font-heading mt-1">
+                  Minimum <span className="text-primary font-bold">{formatNumber(tokenMinPtsPer)}</span> pts per token
+                  (e.g. {tokenQuantity || '1'} token(s) → min {formatNumber(tokenMinPtsTotal)} pts).
+                </p>
+              )}
+              {tokenEffectiveCurrency === 'money' && (
                 <p className="text-[9px] text-mutedForeground font-heading mt-1">
                   Minimum <span className="text-primary font-bold">${formatNumber(TOKEN_MIN_CASH_PER_TOKEN)}</span> per token
-                  (e.g. {tokenQuantity || '1'} token(s) → min ${formatNumber(TOKEN_MIN_CASH_PER_TOKEN * Math.max(1, parseInt(String(tokenQuantity).replace(/,/g, ''), 10) || 1))}).
+                  (e.g. {tokenQuantity || '1'} token(s) → min ${formatNumber(TOKEN_MIN_CASH_PER_TOKEN * tokenQtyForMin)}).
                 </p>
               )}
             </div>
@@ -1139,7 +1195,7 @@ export default function QuickTrade() {
             >
               {creatingToken
                 ? 'Creating…'
-                : tokenPriceCurrency === 'points'
+                : tokenEffectiveCurrency === 'points'
                   ? `List ${tokenQuantity || '0'} ${formatTokenName(tokenType)} for ${tokenPrice ? formatNumber(tokenPrice) : '0'} pts`
                   : `List ${tokenQuantity || '0'} ${formatTokenName(tokenType)} for $${tokenPrice ? formatNumber(tokenPrice) : '0'}`}
             </button>

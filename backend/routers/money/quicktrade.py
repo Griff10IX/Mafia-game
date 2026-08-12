@@ -71,8 +71,34 @@ LOOT_PIECE_MIN_QUANTITY = 10
 LOOT_MIN_CASH_PER_PIECE = 25_000
 LOOT_BOX_PIECES_FIELD = "loot_box_pieces"
 
+# Store count-only tokens (not armoury TOKEN_CONFIG) that can be listed on Quick Trade.
+QT_STORE_TOKEN_CONFIG = {
+    "mission_skip": {
+        "count_field": "mission_skip_tokens",
+        "label": "Mission Skip",
+        "points_only": True,
+        "min_points_per_token": 1000,
+    },
+}
+
+QT_TRADEABLE_TOKEN_TYPES = tuple(TOKEN_TYPES) + tuple(QT_STORE_TOKEN_CONFIG.keys())
+
+
+def _qt_token_count_field(token_type: str) -> Optional[str]:
+    if token_type in TOKEN_CONFIG:
+        return TOKEN_CONFIG[token_type]["count_field"]
+    cfg = QT_STORE_TOKEN_CONFIG.get(token_type)
+    return (cfg or {}).get("count_field")
+
+
+def _qt_store_token_rules(token_type: str) -> dict:
+    return dict(QT_STORE_TOKEN_CONFIG.get(token_type) or {})
+
 
 def _token_type_label(token_type: str) -> str:
+    store = QT_STORE_TOKEN_CONFIG.get(token_type)
+    if store and store.get("label"):
+        return str(store["label"])
     return (token_type or "").replace("_", " ").strip().title() or token_type
 
 
@@ -334,7 +360,7 @@ async def cancel_offers_on_death(user_id: str):
             pass
     token_offers = await db.trade_token_offers.find({"user_id": user_id, "status": "active"}).to_list(100)
     for offer in token_offers:
-        field = TOKEN_CONFIG.get(offer["token_type"], {}).get("count_field")
+        field = _qt_token_count_field(offer.get("token_type") or "")
         if field:
             await db.users.update_one({"id": user_id}, {"$inc": {field: offer["quantity"]}})
     await db.trade_token_offers.update_many(
@@ -773,6 +799,8 @@ async def get_my_token_balances(current_user: dict = Depends(get_current_user)):
     projection = {"_id": 0, "referral_tokens": 1, "entertainer_tokens": 1, "founding_tokens": 1}
     for cfg in TOKEN_CONFIG.values():
         projection[cfg["count_field"]] = 1
+    for cfg in QT_STORE_TOKEN_CONFIG.values():
+        projection[cfg["count_field"]] = 1
     user = await db.users.find_one({"id": user_id}, projection)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -780,13 +808,20 @@ async def get_my_token_balances(current_user: dict = Depends(get_current_user)):
     entertainer_tokens = user.get("entertainer_tokens") or {}
     founding_tokens = user.get("founding_tokens") or {}
     result = {}
-    for token_type in TOKEN_TYPES:
-        field = TOKEN_CONFIG[token_type]["count_field"]
+    for token_type in QT_TRADEABLE_TOKEN_TYPES:
+        field = _qt_token_count_field(token_type)
+        if not field:
+            continue
         total = int(user.get(field) or 0)
         referral = int(referral_tokens.get(field) or 0)
         entertainer = int(entertainer_tokens.get(field) or 0)
         founding_stored = int(founding_tokens.get(field) or 0)
         founding_lock = 0 if field in _FOUNDING_LOCK_EXEMPT_COUNT_FIELDS else founding_stored
+        # Store tokens (e.g. mission_skip) have no referral/entertainer lock buckets today.
+        if token_type in QT_STORE_TOKEN_CONFIG:
+            referral = 0
+            entertainer = 0
+            founding_lock = 0
         unsellable = referral + entertainer + founding_lock
         sellable = max(0, total - unsellable)
         result[token_type] = {
@@ -797,6 +832,8 @@ async def get_my_token_balances(current_user: dict = Depends(get_current_user)):
             "founding_locks_trade": founding_lock,
             "unsellable": unsellable,
             "sellable": sellable,
+            "points_only": bool(_qt_store_token_rules(token_type).get("points_only")),
+            "min_points_per_token": int(_qt_store_token_rules(token_type).get("min_points_per_token") or 0),
         }
     return result
 
@@ -805,18 +842,27 @@ async def create_token_offer(offer: CreateTokenOffer, current_user: dict = Depen
     """Create a token sell offer. Deducts tokens from seller; buyer pays points or cash and receives tokens."""
     user_id = current_user["id"]
     username = current_user.get("username", "Unknown")
-    if offer.token_type not in TOKEN_TYPES:
+    if offer.token_type not in QT_TRADEABLE_TOKEN_TYPES:
         raise HTTPException(status_code=400, detail="Invalid token type")
     if offer.quantity <= 0:
         raise HTTPException(status_code=400, detail="Quantity must be positive")
+    store_rules = _qt_store_token_rules(offer.token_type)
     cur = (offer.price_currency or "points").strip().lower()
+    if store_rules.get("points_only"):
+        cur = "points"
     if cur not in ("points", "money"):
         raise HTTPException(status_code=400, detail="price_currency must be 'points' or 'money'")
     price_points = int(offer.price_points or 0)
     price_money = int(offer.price_money or 0)
     if cur == "points":
+        min_pts = int(store_rules.get("min_points_per_token") or 0) * int(offer.quantity)
         if price_points <= 0:
             raise HTTPException(status_code=400, detail="Price in points must be positive")
+        if min_pts > 0 and price_points < min_pts:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Minimum points for this listing is {min_pts:,} ({int(store_rules.get('min_points_per_token') or 0):,} per token × {offer.quantity})",
+            )
         price_money = 0
     else:
         min_cash = TOKEN_MIN_CASH_PER_TOKEN * offer.quantity
@@ -829,7 +875,9 @@ async def create_token_offer(offer: CreateTokenOffer, current_user: dict = Depen
     active_token_offers = await db.trade_token_offers.count_documents({"user_id": user_id, "status": "active"})
     if active_token_offers >= 10:
         raise HTTPException(status_code=400, detail="Maximum 10 token offers at once")
-    field = TOKEN_CONFIG[offer.token_type]["count_field"]
+    field = _qt_token_count_field(offer.token_type)
+    if not field:
+        raise HTTPException(status_code=400, detail="Invalid token type")
     referral_key = f"referral_tokens.{field}"
     entertainer_key = f"entertainer_tokens.{field}"
     founding_key = f"founding_tokens.{field}"
@@ -837,8 +885,11 @@ async def create_token_offer(offer: CreateTokenOffer, current_user: dict = Depen
         {"$ifNull": ["$" + referral_key, 0]},
         {"$ifNull": ["$" + entertainer_key, 0]},
     ]
-    if field not in _FOUNDING_LOCK_EXEMPT_COUNT_FIELDS:
+    if field not in _FOUNDING_LOCK_EXEMPT_COUNT_FIELDS and offer.token_type not in QT_STORE_TOKEN_CONFIG:
         locked_parts.append({"$ifNull": ["$" + founding_key, 0]})
+    if offer.token_type in QT_STORE_TOKEN_CONFIG:
+        # No lock buckets for store tokens — sellable = total held.
+        locked_parts = [{"$literal": 0}]
     result = await db.users.update_one(
         {
             "id": user_id,
@@ -914,7 +965,9 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
         )
         raise HTTPException(status_code=400, detail="Buyer not found")
     token_type = offer["token_type"]
-    field = TOKEN_CONFIG[token_type]["count_field"]
+    field = _qt_token_count_field(token_type)
+    if not field:
+        raise HTTPException(status_code=400, detail="Unknown token type on offer")
     currency = offer.get("price_currency") or "points"
     price_points = int(offer.get("price_points") or 0)
     price_money = int(offer.get("price_money") or 0)
@@ -1080,7 +1133,9 @@ async def cancel_token_offer(offer_id: str, current_user: dict = Depends(get_cur
     )
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found or already cancelled")
-    field = TOKEN_CONFIG[offer["token_type"]]["count_field"]
+    field = _qt_token_count_field(offer["token_type"])
+    if not field:
+        raise HTTPException(status_code=400, detail="Unknown token type on offer")
     await db.users.update_one({"id": user_id}, {"$inc": {field: offer["quantity"]}})
     _invalidate_trade_caches()
     return {"message": f"Offer cancelled. {offer['quantity']} {offer['token_type']} token(s) returned."}
@@ -2188,8 +2243,7 @@ async def force_cancel_token_offer_by_id(
     if not offer:
         raise ValueError("Token offer not found or already cancelled")
     token_type = offer.get("token_type")
-    cfg = TOKEN_CONFIG.get(token_type) or {}
-    field = cfg.get("count_field")
+    field = _qt_token_count_field(token_type)
     if not field:
         raise ValueError("Unknown token type on offer")
     user_id = offer["user_id"]
