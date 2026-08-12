@@ -2242,6 +2242,22 @@ const RosterTab = ({
 // ALL FAMILIES TAB
 // ============================================================================
 
+/** Matches backend CREW_OC_TOPIC_WINDOW_MINUTES — list Apply OC shows when ready or within this window. */
+const CREW_OC_LIST_APPLY_PRE_MINUTES = 10;
+
+function crewOcListApplyWindowOpen(isoUntil) {
+  if (!isoUntil) return true;
+  try {
+    const until = new Date(isoUntil).getTime();
+    if (Number.isNaN(until)) return true;
+    const msLeft = until - Date.now();
+    if (msLeft <= 0) return true;
+    return msLeft <= CREW_OC_LIST_APPLY_PRE_MINUTES * 60 * 1000;
+  } catch {
+    return true;
+  }
+}
+
 function FamilyListCrewOCHint({ isoUntil }) {
   const text = formatRaidCountdown(isoUntil);
   const ready = !isoUntil || !text || text === 'Ready';
@@ -2261,6 +2277,8 @@ function FamilyListCrewOCHint({ isoUntil }) {
 const FamiliesTab = ({ families, myFamilyId, onRefresh, refreshing = false }) => {
   const [, setFamiliesOcTick] = useState(0);
   const [query, setQuery] = useState('');
+  const [applyingFamilyId, setApplyingFamilyId] = useState(null);
+  const [localOcAppStatus, setLocalOcAppStatus] = useState({});
   useEffect(() => {
     if (!families?.length) return undefined;
     const id = setInterval(() => setFamiliesOcTick((x) => x + 1), 1000);
@@ -2285,6 +2303,31 @@ const FamiliesTab = ({ families, myFamilyId, onRefresh, refreshing = false }) =>
       return String(a.name || '').localeCompare(String(b.name || ''));
     });
   }, [activeFamilies, myFamilyId, query]);
+
+  const handleApplyCrewOc = async (f) => {
+    const fid = f?.id;
+    if (!fid || applyingFamilyId) return;
+    const fee = Math.max(0, Math.floor(Number(f.crew_oc_join_fee) || 0));
+    if (fee > 0) {
+      const ok = window.confirm(
+        `Apply to ${f.name || 'this crew'} Crew OC for $${fee.toLocaleString()}? Fee goes to their vault.`,
+      );
+      if (!ok) return;
+    }
+    setApplyingFamilyId(fid);
+    try {
+      const res = await api.post('/families/crew-oc/apply', { family_id: fid });
+      toast.success(res.data?.message || 'Applied.');
+      const st = (res.data?.status || 'pending').toLowerCase();
+      setLocalOcAppStatus((prev) => ({ ...prev, [fid]: st === 'accepted' ? 'accepted' : 'pending' }));
+      refreshUser();
+      if (typeof onRefresh === 'function') onRefresh();
+    } catch (e) {
+      toast.error(apiDetail(e) || 'Failed to apply');
+    } finally {
+      setApplyingFamilyId(null);
+    }
+  };
 
   return (
     <div className="space-y-2">
@@ -2331,14 +2374,20 @@ const FamiliesTab = ({ families, myFamilyId, onRefresh, refreshing = false }) =>
           <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-wider">No crews match “{query.trim()}”</p>
         </div>
       ) : (
-        visibleFamilies.map((f, idx) => (
+        visibleFamilies.map((f, idx) => {
+          const isMine = myFamilyId === f.id;
+          const myOcStatus = localOcAppStatus[f.id] || f.crew_oc_my_application_status || null;
+          const showApply = !isMine && crewOcListApplyWindowOpen(f.crew_oc_cooldown_until);
+          const fee = Math.max(0, Math.floor(Number(f.crew_oc_join_fee) || 0));
+          const applying = applyingFamilyId === f.id;
+          return (
           <Link
             key={f.id}
             to={`/families/${encodeURIComponent(f.id)}`}
-            className={`relative flex items-center justify-between gap-2 px-2.5 sm:px-3 py-2 min-h-[44px] sm:min-h-0 rounded-lg transition-all group fam-member-row fam-fade-in overflow-hidden touch-manipulation ${myFamilyId === f.id ? 'bg-primary/5 border border-primary/25' : 'bg-zinc-800/30 border border-zinc-700/30 hover:border-zinc-600/50'}`}
+            className={`relative flex items-center justify-between gap-2 px-2.5 sm:px-3 py-2 min-h-[44px] sm:min-h-0 rounded-lg transition-all group fam-member-row fam-fade-in overflow-hidden touch-manipulation ${isMine ? 'bg-primary/5 border border-primary/25' : 'bg-zinc-800/30 border border-zinc-700/30 hover:border-zinc-600/50'}`}
             style={{ animationDelay: `${idx * 0.03}s` }}
           >
-            {myFamilyId === f.id && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary/60" />}
+            {isMine && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary/60" />}
             <div className="min-w-0 flex-1 flex items-start gap-2">
               <div className="w-8 h-8 shrink-0 flex items-center justify-center self-start mt-0.5" aria-hidden>
                 {f.emblem_preset_id || (f.avatar_url && String(f.avatar_url).startsWith('data:')) ? (
@@ -2351,7 +2400,7 @@ const FamiliesTab = ({ families, myFamilyId, onRefresh, refreshing = false }) =>
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="font-heading font-bold text-foreground text-xs group-hover:text-primary transition-colors tracking-wide">{f.name}</span>
                 <span className="text-primary/50 text-[10px]">[{f.tag}]</span>
-                {myFamilyId === f.id && <span className="text-[9px] text-primary font-heading font-bold">(Yours)</span>}
+                {isMine && <span className="text-[9px] text-primary font-heading font-bold">(Yours)</span>}
                 {f.at_war && (
                   <span className="inline-flex items-center gap-0.5 text-[8px] font-heading font-bold text-red-400 bg-red-500/10 border border-red-500/20 rounded px-1 py-0.5 animate-pulse">
                     <Swords size={8} /> AT WAR
@@ -2367,6 +2416,32 @@ const FamiliesTab = ({ families, myFamilyId, onRefresh, refreshing = false }) =>
                     {f.join_mode === 'approval' ? <Lock size={8} /> : <Unlock size={8} />}
                     {f.join_mode === 'approval' ? 'Apply to join' : 'Open'}
                   </span>
+                  {showApply && (
+                    myOcStatus ? (
+                      <span
+                        className="inline-flex items-center gap-0.5 text-[8px] font-heading font-bold text-emerald-400/90"
+                        title={myOcStatus === 'accepted' ? 'You are in for their next Crew OC' : 'Crew OC application pending'}
+                      >
+                        <UserPlus size={8} className="shrink-0 opacity-80" />
+                        {myOcStatus === 'accepted' ? 'OC in' : 'OC applied'}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleApplyCrewOc(f);
+                        }}
+                        disabled={!!applyingFamilyId}
+                        className="inline-flex items-center gap-0.5 min-h-[22px] px-1.5 rounded border border-primary/35 bg-primary/10 text-[8px] font-heading font-bold uppercase tracking-wide text-primary hover:bg-primary/20 disabled:opacity-50"
+                        title={fee > 0 ? `Apply to Crew OC ($${fee.toLocaleString()})` : 'Apply to Crew OC (free)'}
+                      >
+                        <UserPlus size={8} className="shrink-0" />
+                        {applying ? '…' : fee > 0 ? `OC ${formatMoney(fee)}` : 'Apply OC'}
+                      </button>
+                    )
+                  )}
                 </div>
               </div>
               </div>
@@ -2377,7 +2452,8 @@ const FamiliesTab = ({ families, myFamilyId, onRefresh, refreshing = false }) =>
               <ChevronRight size={12} className="text-zinc-600 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
             </div>
           </Link>
-        ))
+          );
+        })
       )}
       </div>
     </div>

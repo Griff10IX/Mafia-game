@@ -1,4 +1,4 @@
-import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Users, LayoutGrid, Sparkles } from 'lucide-react';
+import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Users, LayoutGrid, Sparkles, Ban } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import styles from '../../styles/noir.module.css';
 import { SLOTS_FEATURE_ENABLED } from '../../config/gameFeatures';
@@ -33,9 +33,21 @@ export default function Casino() {
       <style>{CASINO_STYLES}</style>
 
       <div className="relative cas-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The House</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Casino</h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Wheel of Fortune, Roulette, Blackjack, Dice, and more.</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The House</p>
+            <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Casino</h1>
+            <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Wheel of Fortune, Roulette, Blackjack, Dice, and more.</p>
+          </div>
+          <Link
+            to="/casino/gambling-ban"
+            className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[9px] font-heading font-bold uppercase tracking-wider hover:bg-amber-500/20"
+            data-testid="casino-hub-gambling-ban"
+          >
+            <Ban size={12} />
+            Gambling Ban
+          </Link>
+        </div>
       </div>
 
       <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cas-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>

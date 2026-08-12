@@ -14,6 +14,7 @@ from server import db, get_current_user, get_current_user_verified, maybe_proces
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 from utils.point_provenance import log_points_event
+from utils.gambling_self_ban import raise_if_gambling_self_banned
 from routers.minigames.minigame_leaderboard import log_minigame_play
 
 _rng = random.SystemRandom()
@@ -1067,6 +1068,7 @@ def register(router):
         request: Request,
         current_user: dict = Depends(get_current_user_verified),
     ):
+        raise_if_gambling_self_banned(current_user)
         await require_turnstile_for_minigame_start(
             db,
             request=request,
@@ -1115,6 +1117,7 @@ def register(router):
 
     @router.post("/casino/mp-8ball/games/{game_id}/join")
     async def pool_join_game(game_id: str, request: Request, current_user: dict = Depends(get_current_user_verified)):
+        raise_if_gambling_self_banned(current_user)
         captcha_token: Optional[str] = None
         try:
             raw = await request.json()
@@ -1229,6 +1232,7 @@ def register(router):
 
     @router.post("/casino/mp-8ball/games/{game_id}/ready")
     async def pool_ready_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
+        raise_if_gambling_self_banned(current_user)
         uid = current_user["id"]
         game = await db.mp_8ball_games.find_one({"id": game_id})
         if not game:
@@ -1250,6 +1254,7 @@ def register(router):
 
     @router.post("/casino/mp-8ball/games/{game_id}/start")
     async def pool_start_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
+        raise_if_gambling_self_banned(current_user)
         uid = current_user["id"]
         game = await db.mp_8ball_games.find_one({"id": game_id})
         if not game:
@@ -1323,6 +1328,7 @@ def register(router):
 
     @router.post("/casino/mp-8ball/games/{game_id}/shoot")
     async def pool_shoot(game_id: str, body: PoolShootRequest, current_user: dict = Depends(get_current_user_verified)):
+        raise_if_gambling_self_banned(current_user)
         uid = str(current_user["id"])
         game = await db.mp_8ball_games.find_one({"id": game_id})
         if not game:
@@ -1473,6 +1479,7 @@ def register(router):
 
     @router.post("/casino/mp-8ball/vs-ai/start")
     async def pool_ai_start(request: Request, current_user: dict = Depends(get_current_user_verified)):
+        raise_if_gambling_self_banned(current_user)
         captcha_token: Optional[str] = None
         try:
             raw = await request.json()
@@ -1647,6 +1654,7 @@ def register(router):
 
     @router.post("/casino/mp-8ball/vs-ai/shoot")
     async def pool_ai_shoot(body: PoolShootRequest, current_user: dict = Depends(get_current_user_verified)):
+        raise_if_gambling_self_banned(current_user)
         uid = current_user["id"]
         game = await db.mp_8ball_games.find_one(
             {"mode": "vs_ai", "owner_user_id": uid, "status": "in_progress"},

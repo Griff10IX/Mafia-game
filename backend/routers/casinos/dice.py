@@ -61,6 +61,7 @@ from utils.quicktrade_casino_cleanup import (
     ensure_no_duplicate_casino_quicktrade_listing,
 )
 from utils.casino_page_rl import casinos_sustained_rl_dependencies
+from utils.gambling_self_ban import raise_if_gambling_self_banned
 
 _casinos_rl_u = casinos_sustained_rl_dependencies(db, get_current_user)
 
@@ -279,6 +280,7 @@ def register(router):
         """Place a dice bet. Win if roll == chosen_number.
         UI/payout use sides; win chance is secretly slightly worse than 1/sides (owner favor).
         Payout = stake * sides * (1 - house_edge)."""
+        raise_if_gambling_self_banned(current_user)
         _invalidate_ownership_cache(current_user.get("id") or "")
         raw_city = (current_user.get("current_state") or STATES[0] if STATES else "").strip()
         city = _normalize_city_for_dice(raw_city) if raw_city else (STATES[0] if STATES else "")

@@ -2479,6 +2479,7 @@ def register(router):
                 melt_until=u.get("melt_until"),
                 oc_reduced_until=u.get("oc_reduced_until"),
                 booze_until=u.get("booze_until"),
+                gambling_self_ban_until=u.get("gambling_self_ban_until"),
                 racket_until=u.get("racket_until"),
                 travel_until=u.get("travel_until"),
                 properties_until=u.get("properties_until"),

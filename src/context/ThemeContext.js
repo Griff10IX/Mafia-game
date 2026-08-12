@@ -450,12 +450,14 @@ function shouldApplyMobileCompositorBackdropWorkaround() {
   const ua = navigator.userAgent || '';
   if (!/Android/i.test(ua)) return false;
   if (/Firefox/i.test(ua)) return false;
-  return /Chrome\/|SamsungBrowser|Version\/[\d.]+.*Chrome|CriOS|EdgA/i.test(ua);
+  // Chrome, Samsung Internet, Edge/Opera Android, WebView — any non-Firefox Android Blink.
+  return true;
 }
 
 function applyMobileCompositorSafeToDocument() {
   const body = document.body;
   const root = document.documentElement;
+  if (!body || !root) return;
   if (shouldApplyMobileCompositorBackdropWorkaround()) {
     body.setAttribute('data-mobile-compositor-safe', 'on');
     root.setAttribute('data-mobile-compositor-safe', 'on');
@@ -693,6 +695,9 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     applyMobileCompositorSafeToDocument();
+    const onPageShow = () => applyMobileCompositorSafeToDocument();
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
   }, []);
 
   const themeLoadedRef = useRef(false);

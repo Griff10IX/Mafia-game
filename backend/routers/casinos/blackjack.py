@@ -66,6 +66,7 @@ from utils.casino_page_rl import casinos_sustained_rl_dependencies
 
 _casinos_rl_u = casinos_sustained_rl_dependencies(db, get_current_user)
 from utils.user_mid_travel import raise_if_user_mid_travel
+from utils.gambling_self_ban import raise_if_gambling_self_banned
 
 # ----- Constants -----
 BLACKJACK_MAX_BET = 50_000_000
@@ -832,6 +833,7 @@ def register(router):
 
     @router.post("/casino/blackjack/start")
     async def casino_blackjack_start(request: BlackjackStartRequest, current_user: dict = Depends(get_current_user_verified)):
+        raise_if_gambling_self_banned(current_user)
         raise_if_user_mid_travel(
             current_user,
             detail="You are still traveling. Wait until you arrive before playing blackjack.",
@@ -1086,6 +1088,7 @@ def register(router):
 
     @router.post("/casino/blackjack/hit")
     async def casino_blackjack_hit(current_user: dict = Depends(get_current_user_verified)):
+        raise_if_gambling_self_banned(current_user)
         game = await db.blackjack_games.find_one({"user_id": current_user.get("id") or ""})
         if not game:
             raise HTTPException(status_code=400, detail="No active game")
@@ -1157,6 +1160,7 @@ def register(router):
 
     @router.post("/casino/blackjack/stand")
     async def casino_blackjack_stand(current_user: dict = Depends(get_current_user_verified)):
+        raise_if_gambling_self_banned(current_user)
         game = await db.blackjack_games.find_one_and_delete({"user_id": current_user.get("id") or ""})
         if not game:
             raise HTTPException(status_code=400, detail="No active game")

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Zap, Clock, Package, Gift } from 'lucide-react';
+import { Zap, Clock, Gift } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../utils/api';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -92,7 +92,6 @@ const REFRESH_MS = 60_000;
 
 export default function GameEvents() {
   const [eventData, setEventData] = useState(null);
-  const [storeSale, setStoreSale] = useState(null);
   const [myPerks, setMyPerks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [countdown, setCountdown] = useState('');
@@ -113,14 +112,6 @@ export default function GameEvents() {
         if (!silent) setLoading(false);
       });
 
-    const saleReq = api.get('/payments/store-points-event')
-      .then((saleRes) => {
-        setStoreSale(saleRes?.data?.event ?? null);
-      })
-      .catch(() => {
-        if (!silent) setStoreSale(null);
-      });
-
     const perksReq = api.get('/loot-box/status')
       .then((lootRes) => {
         const rewards = Array.isArray(lootRes?.data?.active_rewards) ? lootRes.data.active_rewards : [];
@@ -130,7 +121,7 @@ export default function GameEvents() {
         if (!silent) setMyPerks([]);
       });
 
-    return Promise.all([eventsReq, saleReq, perksReq]);
+    return Promise.all([eventsReq, perksReq]);
   }, []);
 
   useEffect(() => {
@@ -166,8 +157,6 @@ export default function GameEvents() {
     && activeEvents.length > 0;
 
   const combinedChips = multiplierChips(eventData?.event);
-  const saleBonusPct = Math.round(Number(storeSale?.bonus_rate ?? storeSale?.percent ?? 0) * (storeSale?.bonus_rate != null ? 100 : 1));
-  const saleActive = !!(storeSale && storeSale.active !== false && (saleBonusPct > 0 || storeSale.message || storeSale.label));
   const myGains = eventData?.my_gains || {};
   const combinedEv = eventData?.event || {};
   const n = (v) => Number(v || 0);
@@ -345,25 +334,6 @@ export default function GameEvents() {
           )}
         </section>
 
-        {saleActive && (
-          <section className="space-y-2 ge-fade-in" style={{ animationDelay: '0.08s' }}>
-            <div className="flex items-center gap-2 px-0.5">
-              <Package size={12} className="text-primary" />
-              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Store pricing</h2>
-            </div>
-            <Link
-              to="/game/store"
-              className={`${styles.panel} rounded-md border border-amber-500/30 bg-amber-500/5 mobile-panel p-2.5 block hover:border-amber-500/50 transition-colors`}
-            >
-              <div className="text-[11px] font-heading font-bold text-amber-200">
-                {storeSale.label
-                  || storeSale.message
-                  || `Card points +${saleBonusPct || 100}% (standard)`}
-              </div>
-              <p className="text-[9px] text-mutedForeground font-heading mt-0.5">Open Store →</p>
-            </Link>
-          </section>
-        )}
       </div>
     </div>
   );

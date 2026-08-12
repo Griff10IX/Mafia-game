@@ -93,6 +93,15 @@ removeEmergentBadge();
 setTimeout(removeEmergentBadge, 500);
 setTimeout(removeEmergentBadge, 2000);
 
+// Android (esp. Samsung): disable backdrop-filter before first paint to avoid GPU tile static.
+try {
+  const ua = typeof navigator !== 'undefined' ? (navigator.userAgent || '') : '';
+  if (/Android/i.test(ua) && !/Firefox/i.test(ua)) {
+    document.documentElement.setAttribute('data-mobile-compositor-safe', 'on');
+    if (document.body) document.body.setAttribute('data-mobile-compositor-safe', 'on');
+  }
+} catch (_) { /* ignore */ }
+
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>

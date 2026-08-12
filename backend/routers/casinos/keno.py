@@ -17,6 +17,7 @@ from server import (
 )
 from utils.keno_settings import DEFAULT_KENO_MAX_BET, load_keno_max_bet
 from utils.casino_page_rl import casinos_sustained_rl_dependencies
+from utils.gambling_self_ban import raise_if_gambling_self_banned
 
 _casinos_rl_u = casinos_sustained_rl_dependencies(db, get_current_user_verified)
 
@@ -109,6 +110,7 @@ def register(router):
     @router.post("/casino/keno/play")
     async def casino_keno_play(request: KenoPlayRequest, current_user: dict = Depends(get_current_user_verified)):
         """Single round: debit, server draw 20 from 80, credit net win, house skim to state head."""
+        raise_if_gambling_self_banned(current_user)
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         state = _normalize_state(raw) if raw else (STATES[0] if STATES else "")
         if state not in (STATES or []):

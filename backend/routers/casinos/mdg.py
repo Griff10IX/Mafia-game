@@ -13,8 +13,6 @@ from pymongo import ReturnDocument
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException, Request
 
-from utils.point_provenance import log_points_event
-
 from server import db, get_current_user, get_current_user_verified, send_notification, log_gambling, _is_admin, _is_moderator, _is_entertainer
 from utils.entertainer_service import (
     ENTERTAINER_MDG_MAX_POINTS_PER_GAME,
@@ -22,6 +20,8 @@ from utils.entertainer_service import (
     insert_funded_game_row,
     on_funded_game_completed,
 )
+from utils.gambling_self_ban import is_gambling_self_banned, raise_if_gambling_self_banned
+from utils.point_provenance import log_points_event
 
 MDG_MIN_PLAYERS = 2
 MDG_MAX_PLAYERS = 100
@@ -838,6 +838,7 @@ def register(router):
     @router.post("/casino/mdg/create")
     async def mdg_create(request: MDGCreateRequest, current_user: dict = Depends(get_current_user_verified)):
         """Create a new MDG. You are auto-joined. Fee and extra pot can be points, money, or both. Max 3 open games per user."""
+        raise_if_gambling_self_banned(current_user)
         uid = current_user["id"]
         open_count = await db.mdg_games.count_documents({"created_by": uid, "status": "open"})
         if open_count >= MDG_MAX_OPEN_GAMES_PER_USER:
@@ -987,6 +988,19 @@ def register(router):
     async def mdg_join(request: MDGJoinRequest, http_request: Request, current_user: dict = Depends(get_current_user_verified)):
         """Join an open game. Pay fee (points/money); if auto_roll_at is reached, roll runs and one winner takes the pot.
         Anti-bot: requires the single-use join_token from the games list (+ optional Turnstile when enabled)."""
+        if is_gambling_self_banned(current_user):
+            preview = await db.mdg_games.find_one(
+                {"id": request.game_id, "status": "open"},
+                {"_id": 0, "created_by": 1, "entries": 1},
+            )
+            creator_id = str((preview or {}).get("created_by") or "")
+            creator_entry = next(
+                (e for e in ((preview or {}).get("entries") or []) if e.get("user_id") == creator_id),
+                None,
+            )
+            staff_created = _mdg_entry_is_staff_flagged(creator_entry or {}) or await _mdg_user_is_staff(creator_id)
+            if not staff_created:
+                raise_if_gambling_self_banned(current_user)
         game = await db.mdg_games.find_one({"id": request.game_id, "status": "open"}, {"_id": 0})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found or already closed")

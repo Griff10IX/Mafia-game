@@ -1053,21 +1053,48 @@ body > #root {
 }
 
 /*
- * Android Blink (Chrome, Samsung Internet, in-app WebViews): backdrop-filter on fixed layers
- * over scrolling content often produces rectangular "static" / color-noise corruption (common on Samsung).
- * ThemeContext sets data-mobile-compositor-safe="on" on html/body when UA matches.
+ * Android Blink (Chrome, Samsung Internet, in-app WebViews): backdrop-filter on fixed /
+ * sticky / overlay layers over scrolling content produces rectangular "static" / tiled
+ * GPU texture corruption (very common on Samsung Galaxy). ThemeContext sets
+ * data-mobile-compositor-safe="on" on html/body when UA matches.
+ *
+ * Kill every backdrop blur on those devices; keep solid/opaque chrome instead.
  */
-body[data-mobile-compositor-safe="on"] [data-layout="topbar"] {
+html[data-mobile-compositor-safe="on"] *,
+body[data-mobile-compositor-safe="on"] * {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
-body[data-mobile-compositor-safe="on"] [data-layout="bottom-nav-submenu"] {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+
+/* Fixed chrome: force opaque paints so layers don't sample scrolling content. */
+body[data-mobile-compositor-safe="on"] [data-layout="topbar"],
+body[data-mobile-compositor-safe="on"] [data-layout="bottom-nav"] nav,
+body[data-mobile-compositor-safe="on"] [data-layout="bottom-nav-submenu"],
+body[data-mobile-compositor-safe="on"] [data-layout="mobile-bottom-bar"],
+body[data-mobile-compositor-safe="on"] [data-layout="pocket-dock"],
+body[data-mobile-compositor-safe="on"] [data-layout="pocket-hud"],
+body[data-mobile-compositor-safe="on"] [data-layout="touch-ball"] button,
+body[data-mobile-compositor-safe="on"] [data-layout="touch-ball-panel"] {
+  background: var(--noir-content, #121214) !important;
+  transform: none !important;
+  filter: none !important;
+  -webkit-filter: none !important;
 }
-body[data-mobile-compositor-safe="on"] [data-testid="inbox-page"] .backdrop-blur-sm {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+
+/* Sonner toasts: animated translateY layers frequently leave corrupt tiles on Samsung. */
+body[data-mobile-compositor-safe="on"] [data-sonner-toaster],
+body[data-mobile-compositor-safe="on"] [data-sonner-toast],
+body[data-mobile-compositor-safe="on"] [data-sonner-toast][data-mounted],
+body[data-mobile-compositor-safe="on"] [data-sonner-toast][data-expanded],
+body[data-mobile-compositor-safe="on"] [data-sonner-toast][data-removed] {
+  transform: none !important;
+  transition: opacity 0.15s ease !important;
+  animation: none !important;
+}
+
+body[data-mobile-compositor-safe="on"] .app-dialog-overlay,
+body[data-mobile-compositor-safe="on"] .glass-effect {
+  background-color: rgba(10, 10, 12, 0.94) !important;
 }
 
 /* Hide Emergent hosting badge/overlays */

@@ -165,7 +165,7 @@ const TOKEN_CATEGORY_BY_TYPE = {
   cooldown_skip_properties: 'skip',
 };
 
-function buildStoreRecommendations(user, { pointsTabLocked, storePointsEvent } = {}) {
+function buildStoreRecommendations(user, { pointsTabLocked } = {}) {
   if (!user) return [];
   const recs = [];
   const health = Number(user.health ?? 100);
@@ -209,16 +209,7 @@ function buildStoreRecommendations(user, { pointsTabLocked, storePointsEvent } =
       Icon: Crosshair,
     });
   }
-  if (!pointsTabLocked && storePointsEvent?.active) {
-    recs.push({
-      id: 'rec-points-event',
-      title: 'Double points',
-      reason: `+${Math.round(Number(storePointsEvent.bonus_rate ?? 1) * 100)}% on every card point buy.`,
-      tab: 'points',
-      price: '2×',
-      Icon: Sparkles,
-    });
-  } else if (!pointsTabLocked && pts < 100) {
+  if (!pointsTabLocked && pts < 100) {
     recs.push({
       id: 'rec-buy-points',
       title: 'Buy Points',
@@ -679,7 +670,6 @@ export default function Store() {
   const [familySafeDepositSummary, setFamilySafeDepositSummary] = useState(() => storeBoot?.familySafeDepositSummary ?? null);
   const [event, setEvent] = useState(() => storeBoot?.event ?? null);
   const [eventsEnabled, setEventsEnabled] = useState(() => !!storeBoot?.eventsEnabled);
-  const [storePointsEvent, setStorePointsEvent] = useState(() => storeBoot?.storePointsEvent ?? null);
   const [customCarName, setCustomCarName] = useState('');
   const [activeTab, setActiveTab] = useState('points');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -927,13 +917,12 @@ export default function Store() {
 
   const fetchData = useCallback(async ({ silent = false } = {}) => {
     try {
-      const [userRes, boozeRes, weedRes, familySafeRes, eventsRes, storePointsEventRes, adminRes, locksRes, pendingRes, flagsRes] = await Promise.all([
+      const [userRes, boozeRes, weedRes, familySafeRes, eventsRes, adminRes, locksRes, pendingRes, flagsRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/booze-run/config').catch(() => ({ data: null })),
         api.get('/store/weed-empire-summary').catch(() => ({ data: null })),
         api.get('/store/family-safe-deposit-summary').catch(() => ({ data: null })),
         apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
-        api.get('/payments/store-points-event').catch(() => ({ data: { event: null } })),
         api.get('/auth/staff-flags').catch(() => ({ data: { is_admin: false } })),
         api.get('/page-locks').catch(() => ({ data: { paths: {} } })),
         api.get('/payments/pending-points').catch(() => ({ data: { pending_points: 0 } })),
@@ -950,8 +939,6 @@ export default function Store() {
       const nextEventsEnabled = !!eventsRes.data?.events_enabled;
       setEvent(nextEvent);
       setEventsEnabled(nextEventsEnabled);
-      const nextStorePointsEvent = storePointsEventRes.data?.event ?? null;
-      setStorePointsEvent(nextStorePointsEvent);
       const nextIsAdmin = !!adminRes.data?.is_admin;
       const nextIsMod = !!adminRes.data?.is_moderator;
       const nextHasAdminEmail = !!adminRes.data?.has_admin_email;
@@ -989,7 +976,6 @@ export default function Store() {
         familySafeDepositSummary: nextFamilySafe,
         event: nextEvent,
         eventsEnabled: nextEventsEnabled,
-        storePointsEvent: nextStorePointsEvent,
         isAdmin: nextIsAdmin,
         pointsTabLocked: pointsLocked,
         pointsTabLockMessage: pointsLockMsg,
@@ -1317,7 +1303,7 @@ export default function Store() {
     }
   };
 
-  const storeRecs = buildStoreRecommendations(user, { pointsTabLocked, storePointsEvent });
+  const storeRecs = buildStoreRecommendations(user, { pointsTabLocked });
   const storeQueryNorm = storeQuery.trim().toLowerCase();
   const showStoreCars =
     (upgradeFilter === 'all' || upgradeFilter === 'income' || upgradeFilter === 'looks')
@@ -1556,16 +1542,6 @@ export default function Store() {
                   )}
               </p>
             </div>
-            {storePointsEvent?.active && pointsPaymentMode === 'card' && (
-              <div className="mx-3 mt-3 rounded border border-emerald-500/25 bg-emerald-500/10 px-3 py-2">
-                <p className="text-[10px] font-heading font-bold uppercase tracking-[0.14em] text-emerald-400">
-                  +{Math.round(Number(storePointsEvent.bonus_rate ?? 1) * 100)}% points on card buys
-                </p>
-                <p className="text-[9px] font-heading text-zinc-400 mt-0.5">
-                  Standard pricing: +{Math.round(Number(storePointsEvent.bonus_rate ?? 1) * 100)}% is added on top at checkout.
-                </p>
-              </div>
-            )}
             <div className="p-3 space-y-2">
               <div className="flex gap-1">
                 <button
@@ -1623,9 +1599,6 @@ export default function Store() {
                   {customPurchaseMode === 'points' ? (
                     <>
                       <span className="text-primary font-bold">{Number(customQuote.points).toLocaleString()} pts</span>
-                      {Number(customQuote.bonus_points || 0) > 0 && (
-                        <span className="text-emerald-400/90"> ({Number(customQuote.base_points || 0).toLocaleString()} + {Number(customQuote.bonus_points || 0).toLocaleString()} bonus)</span>
-                      )}
                       {' · '}
                       <span className="text-emerald-400/90">£{Number(customQuote.price_gbp).toFixed(2)}</span>
                       {Number(customQuote.loot_box_pieces || 0) > 0 && (
@@ -1649,9 +1622,6 @@ export default function Store() {
                       Pay <span className="text-emerald-400/90 font-bold">£{Number(customQuote.price_gbp).toFixed(2)}</span>
                       {' → '}
                       <span className="text-primary font-bold">{Number(customQuote.points).toLocaleString()} pts</span>
-                      {Number(customQuote.bonus_points || 0) > 0 && (
-                        <span className="text-emerald-400/90"> ({Number(customQuote.base_points || 0).toLocaleString()} + {Number(customQuote.bonus_points || 0).toLocaleString()} bonus)</span>
-                      )}
                       {Number(customQuote.loot_box_pieces || 0) > 0 && (
                         <>
                           {' · '}
@@ -1667,7 +1637,7 @@ export default function Store() {
                           </span>
                         </>
                       )}
-                      <span className="block text-[8px] text-mutedForeground mt-0.5">GBP mode charges the shown amount (largest whole base points that fit your budget; +100% points bonus is added on top).</span>
+                      <span className="block text-[8px] text-mutedForeground mt-0.5">GBP mode charges the shown amount (largest whole points pack that fits your budget).</span>
                     </>
                   )}
                 </p>

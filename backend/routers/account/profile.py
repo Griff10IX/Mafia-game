@@ -71,6 +71,11 @@ from utils.civilian_protection import (
     maybe_revoke_civilian_protection,
     require_protection_revoke_confirm,
 )
+from utils.gambling_self_ban import (
+    GAMBLING_SELF_BAN_DURATIONS_HOURS,
+    gambling_self_ban_status_payload,
+    is_gambling_self_banned,
+)
 from utils.hitlist_resolution import resolve_user_hitlist_kill
 from utils.bbcode_normalize import normalize_bbcode_media_typos
 from utils.imgbb_resolve import rewrite_imgbb_urls_in_banner_text
@@ -2340,3 +2345,51 @@ def register(router):
         )
         merged = {**current_user, **(u or {})}
         return civilian_protection_status_payload(merged)
+
+    class GamblingSelfBanBody(BaseModel):
+        duration_hours: int = Field(..., description="12, 24, 48, or 72")
+
+    @router.get("/account/gambling-self-ban")
+    async def get_gambling_self_ban(current_user: dict = Depends(get_current_user)):
+        u = await db.users.find_one(
+            {"id": current_user["id"]},
+            {"_id": 0, "gambling_self_ban_until": 1},
+        )
+        merged = {**current_user, **(u or {})}
+        return gambling_self_ban_status_payload(merged)
+
+    @router.post("/account/gambling-self-ban")
+    async def post_gambling_self_ban(
+        body: GamblingSelfBanBody,
+        current_user: dict = Depends(get_current_user_verified),
+    ):
+        hours = int(body.duration_hours)
+        if hours not in GAMBLING_SELF_BAN_DURATIONS_HOURS:
+            raise HTTPException(
+                status_code=400,
+                detail="Choose 12 hours, 1 day, 2 days, or 3 days.",
+            )
+        u = await db.users.find_one(
+            {"id": current_user["id"]},
+            {"_id": 0, "gambling_self_ban_until": 1},
+        )
+        merged = {**current_user, **(u or {})}
+        if is_gambling_self_banned(merged):
+            raise HTTPException(
+                status_code=400,
+                detail="You already have an active gambling self-exclusion. It cannot be changed or removed.",
+            )
+        now = datetime.now(timezone.utc)
+        until = now + timedelta(hours=hours)
+        until_iso = until.isoformat()
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {
+                "$set": {
+                    "gambling_self_ban_until": until_iso,
+                    "gambling_self_ban_started_at": now.isoformat(),
+                    "gambling_self_ban_duration_hours": hours,
+                }
+            },
+        )
+        return gambling_self_ban_status_payload({**merged, "gambling_self_ban_until": until_iso}, now)

@@ -147,6 +147,7 @@ const CoinFlip = lazy(() => import("./pages/Casinos/CoinFlipPage"));
 const VideoPoker = lazy(() => import("./pages/Casinos/VideoPokerPage"));
 const WheelOfFortune = lazy(() => import("./pages/Casinos/WheelOfFortunePage"));
 const MDG = lazy(() => import("./pages/Casinos/MDGPage"));
+const GamblingBan = lazy(() => import("./pages/Casinos/GamblingBan"));
 const EntertainerHub = lazy(() => import("./pages/Game/EntertainerHub"));
 const HelpDeskHub = lazy(() => import("./pages/Game/HelpDeskHub"));
 const MPBlackjack = lazy(() => import("./pages/Casinos/MPBlackjackPage"));
@@ -847,6 +848,14 @@ function App() {
               path="/casino/mdg"
               element={
               <MDG />
+              }
+            />
+            <Route
+              path="/casino/gambling-ban"
+              element={
+              <ErrorBoundary>
+                <GamblingBan />
+              </ErrorBoundary>
               }
             />
             <Route

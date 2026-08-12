@@ -63,6 +63,7 @@ from utils.sports_betting_ownership import (
 )
 from utils.global_property_owner_shares import load_global_property_owner_shares
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_SPORTS_BETTING
+from utils.gambling_self_ban import raise_if_gambling_self_banned
 
 logger = logging.getLogger(__name__)
 
@@ -2774,6 +2775,7 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
 
 
 async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dict = Depends(get_current_user_verified)):
+    raise_if_gambling_self_banned(current_user)
     event_id = (request.event_id or "").strip()
     option_id = (request.option_id or "").strip()
     stake = int(request.stake or 0)

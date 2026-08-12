@@ -15,6 +15,7 @@ from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator, require_staff_issued_if_staff_capable
 from utils.user_mid_travel import raise_if_user_mid_travel
+from utils.gambling_self_ban import raise_if_gambling_self_banned
 
 MP_BJ_SUITS = ["H", "D", "C", "S"]
 MP_BJ_VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
@@ -743,6 +744,7 @@ def register(router):
     @router.post("/casino/mp-blackjack/games")
     async def mp_bj_create(request: MPCreateRequest, current_user: dict = Depends(get_current_user_verified)):
         """Create a new multiplayer blackjack game. Creator is first player; pays buy_in + extra_prize."""
+        raise_if_gambling_self_banned(current_user)
         raise_if_user_mid_travel(
             current_user,
             detail="You are still traveling. Wait until you arrive before starting a multiplayer blackjack game.",
@@ -932,6 +934,7 @@ def register(router):
     @router.post("/casino/mp-blackjack/games/{game_id}/join")
     async def mp_bj_join(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Join an open game. Pay buy_in. Game moves to ready phase when full."""
+        raise_if_gambling_self_banned(current_user)
         raise_if_user_mid_travel(
             current_user,
             detail="You are still traveling. Wait until you arrive before joining a multiplayer blackjack game.",
@@ -1003,6 +1006,7 @@ def register(router):
     @router.post("/casino/mp-blackjack/games/{game_id}/ready")
     async def mp_bj_ready(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Mark self as ready. When all active players ready, sets all_ready_at timestamp."""
+        raise_if_gambling_self_banned(current_user)
         uid = current_user.get("id") or ""
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
@@ -1029,6 +1033,7 @@ def register(router):
         Called by frontend after countdown expires (all_ready_at + MP_BJ_START_COUNTDOWN seconds).
         Deals cards and begins the playing phase.
         """
+        raise_if_gambling_self_banned(current_user)
         uid = current_user.get("id") or ""
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
@@ -1105,6 +1110,7 @@ def register(router):
     @router.post("/casino/mp-blackjack/games/{game_id}/hit")
     async def mp_bj_hit(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Current player hits."""
+        raise_if_gambling_self_banned(current_user)
         uid = current_user.get("id") or ""
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
@@ -1154,6 +1160,7 @@ def register(router):
     @router.post("/casino/mp-blackjack/games/{game_id}/stand")
     async def mp_bj_stand(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Current player stands."""
+        raise_if_gambling_self_banned(current_user)
         uid = current_user.get("id") or ""
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:

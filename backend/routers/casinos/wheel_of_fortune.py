@@ -19,6 +19,7 @@ from server import (
 )
 from utils.casino_page_rl import casinos_sustained_rl_dependencies
 from utils.point_provenance import consume_points_fifo
+from utils.gambling_self_ban import raise_if_gambling_self_banned
 
 logger = logging.getLogger(__name__)
 _rng = secrets.SystemRandom()
@@ -453,6 +454,7 @@ def register(router):
         body: WheelSpinRequest,
         current_user: dict = Depends(get_current_user_verified),
     ):
+        raise_if_gambling_self_banned(current_user)
         uid = current_user.get("id") or ""
         if not uid:
             raise HTTPException(status_code=401, detail="Not authenticated")

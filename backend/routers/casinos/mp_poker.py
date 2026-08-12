@@ -12,6 +12,7 @@ from fastapi import Depends, HTTPException, Body
 
 from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator, _is_entertainer, send_notification, require_admin_verified
 from utils.point_provenance import log_points_event
+from utils.gambling_self_ban import raise_if_gambling_self_banned
 from utils.entertainer_service import (
     ENTERTAINER_MP_POKER_MAX_POINTS_PER_GAME,
     try_debit_entertainer_fund,
@@ -934,6 +935,7 @@ def register(router):
         blind: Optional[int] = Body(None, embed=True),
     ):
         """Start a new 1v1 vs dealer game. Body: { blind?: number }."""
+        raise_if_gambling_self_banned(current_user)
         uid = current_user.get("id") or ""
         max_blind = min(await _get_mp_poker_max_blind(), MP_POKER_VS_DEALER_MAX_SMALL_BLIND)
         blind = blind or 5000
@@ -1033,6 +1035,7 @@ def register(router):
         game_id: Optional[str] = Body(None, embed=True),
     ):
         """Act in vs-dealer game: fold, check, call, bet, raise, all_in. amount required for bet/raise. Optional game_id to target specific game."""
+        raise_if_gambling_self_banned(current_user)
         uid = current_user.get("id") or ""
         action = _classify_player_action(action)
         amount = amount or 0
@@ -1445,6 +1448,7 @@ def register(router):
         request: PokerTournamentCreateRequest,
         current_user: dict = Depends(get_current_user_verified),
     ):
+        raise_if_gambling_self_banned(current_user)
         uid = current_user.get("id") or ""
         username = current_user.get("username") or "Player"
         buy_in = int(request.buy_in)
@@ -1615,6 +1619,7 @@ def register(router):
 
     @router.post("/casino/mp-poker/tournaments/{game_id}/join")
     async def join_tournament(game_id: str, current_user: dict = Depends(get_current_user_verified)):
+        raise_if_gambling_self_banned(current_user)
         uid = current_user.get("id") or ""
         username = current_user.get("username") or "Player"
         g = await db.mp_poker_games.find_one({"id": game_id})
@@ -2049,6 +2054,7 @@ def register(router):
         current_user: dict = Depends(get_current_user_verified),
     ):
         """Create a new multiplayer poker table."""
+        raise_if_gambling_self_banned(current_user)
         max_players = max(MP_POKER_MIN_PLAYERS, min(MP_POKER_MAX_PLAYERS, request.max_players))
         buy_in = max(0, min(MP_POKER_MAX_BUY_IN, request.buy_in))
         extra_prize = max(0, min(MP_POKER_MAX_EXTRA_PRIZE, request.extra_prize))
@@ -2178,6 +2184,7 @@ def register(router):
     @router.post("/casino/mp-poker/games/{game_id}/join")
     async def join_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Join an open poker game."""
+        raise_if_gambling_self_banned(current_user)
         uid = current_user.get("id") or ""
         username = current_user.get("username") or "Player"
         g = await db.mp_poker_games.find_one({"id": game_id})
@@ -2459,6 +2466,7 @@ def register(router):
     @router.post("/casino/mp-poker/games/{game_id}/ready")
     async def ready_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Mark yourself ready. When all are ready, all_ready_at is set."""
+        raise_if_gambling_self_banned(current_user)
         uid = current_user.get("id") or ""
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or g.get("mode") not in ("vs_players", "tournament") or g.get("phase") not in ("lobby", "ready"):
@@ -2859,6 +2867,7 @@ def register(router):
     @router.post("/casino/mp-poker/games/{game_id}/start")
     async def start_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Start the hand (deal, post blinds). Call after countdown when all ready."""
+        raise_if_gambling_self_banned(current_user)
         uid = current_user.get("id") or ""
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or g.get("mode") not in ("vs_players", "tournament") or g.get("phase") != "ready":
@@ -2890,6 +2899,7 @@ def register(router):
         amount: Optional[int] = Body(None, embed=True),
     ):
         """Fold, check, call, bet, raise, all_in."""
+        raise_if_gambling_self_banned(current_user)
         uid = current_user.get("id") or ""
         action = (action or "").strip().lower()
         amount = amount or 0

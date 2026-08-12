@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment, lazy, Suspense } from 'react';
 import { Link, useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 import { SAME_ROUTE_NAV_CLICK } from '../constants/navigationEvents';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Flame, Leaf } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Flame, Leaf, Ban } from 'lucide-react';
 import api, {
   getApiErrorMessage,
   onCooldownChange,
@@ -149,6 +149,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/casino/mp-poker', label: 'Poker' },
         { path: '/sports-betting', label: 'Sports Betting' },
         { path: '/my-properties', label: 'My Properties' },
+        { path: '/casino/gambling-ban', label: 'Gambling Ban' },
       ],
     },
     {
@@ -467,7 +468,6 @@ export default function Layout({ children }) {
   const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
   const [sportsBettingEventCount, setSportsBettingEventCount] = useState(0);
   const [weedEmpireReadyCount, setWeedEmpireReadyCount] = useState(0);
-  const [storePointsEventActive, setStorePointsEventActive] = useState(false);
   const [gtaExclusiveInPool, setGtaExclusiveInPool] = useState(false);
   const [ocStatus, setOcStatus] = useState(null);
   const [atWar, setAtWar] = useState(false);
@@ -702,9 +702,6 @@ export default function Layout({ children }) {
           ...i,
           items: i.items.map((sub) => {
             let next = sub;
-            if (sub.path === '/game/store') {
-              next = { ...next, saleBadge: storePointsEventActive };
-            }
             if (sub.path === '/money/weed-empire' && weedEmpireReadyCount > 0) {
               next = { ...next, badge: weedEmpireReadyCount, badgeTone: 'emerald' };
             }
@@ -737,7 +734,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, weedEmpireReadyCount, storePointsEventActive, hitmanForHireVisible, weedEmpireNavVisible, gameChatVisible, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
+  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, weedEmpireReadyCount, hitmanForHireVisible, weedEmpireNavVisible, gameChatVisible, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -1322,25 +1319,11 @@ export default function Layout({ children }) {
     }
   };
 
-  const fetchStorePointsEvent = async () => {
-    try {
-      const res = await api.get('/payments/store-points-event');
-      setStorePointsEventActive(!!res.data?.event?.active);
-    } catch {
-      setStorePointsEventActive(false);
-    }
-  };
-
   useEffect(() => { const t = setTimeout(() => { api.get('/objectives').catch(() => {}); }, 3500); return () => clearTimeout(t); }, []);
 
   useEffect(() => {
     const t = setTimeout(() => fetchFlashNews(), 4000);
     const id = setInterval(fetchFlashNews, 60000);
-    return () => { clearTimeout(t); clearInterval(id); };
-  }, []); // eslint-disable-line
-  useEffect(() => {
-    const t = setTimeout(() => fetchStorePointsEvent(), 4500);
-    const id = setInterval(fetchStorePointsEvent, 60000);
     return () => { clearTimeout(t); clearInterval(id); };
   }, []); // eslint-disable-line
 
@@ -1851,7 +1834,7 @@ export default function Layout({ children }) {
     ...(user?.is_entertainer ? [{ path: '/game/entertainer', icon: Mic2, label: 'Entertainer Hub' }] : []),
     ...(user?.is_help_desk_operator ? [{ path: '/game/help-desk-hub', icon: Headphones, label: 'Help Desk Hub' }] : []),
     { path: '/game/leaderboard', icon: Trophy, label: 'Leaderboard' },
-    { path: '/game/store', icon: ShoppingBag, label: 'Store', saleBadge: storePointsEventActive },
+    { path: '/game/store', icon: ShoppingBag, label: 'Store' },
     { path: '/game-pass', icon: Package, label: 'Game Pass' },
     { path: '/money/quick-trade', icon: ArrowLeftRight, label: 'Quick Trade' },
     { path: '/game/family/list', icon: Building2, label: 'Families' },
@@ -2160,6 +2143,7 @@ export default function Layout({ children }) {
             { to: '/casino/mp-poker', label: 'Poker', testId: 'nav-mp-poker', matchPrefix: true, Icon: Crown },
             { to: '/sports-betting', label: 'Sports Betting', testId: 'nav-sports-betting', Icon: LineChart },
             { to: '/my-properties', label: 'My Properties', testId: 'nav-my-properties', Icon: Building2 },
+            { to: '/casino/gambling-ban', label: 'Gambling Ban', testId: 'nav-gambling-ban', Icon: Ban },
           ].map((item, idx) => {
             const isActive = item.matchPrefix ? (location.pathname === item.to || location.pathname.startsWith(item.to + '/')) : location.pathname === item.to;
             const IconComp = item.Icon;
@@ -2287,14 +2271,6 @@ export default function Layout({ children }) {
               title="Players online"
             >
               {item.countBadge.toLocaleString()}
-            </span>
-          )}
-          {item.saleBadge && (
-            <span
-              className="inline-flex items-center gap-0.5 bg-emerald-600/20 text-emerald-300 text-[8px] px-1 py-0.5 rounded font-bold border border-emerald-500/35 uppercase shrink-0"
-              title="+100% points on card buys"
-            >
-              <Sparkles size={8} /> 2×
             </span>
           )}
           {item.badge > 0 && (
@@ -2647,7 +2623,7 @@ export default function Layout({ children }) {
       )}
 
       {/* ── TOP BAR ─────────────────────────────────────────────────────────── */}
-      <div data-layout="topbar" className={`fixed top-0 right-0 left-0 safe-area-pt ${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:left-40' : 'md:left-48') : ''} min-h-[36px] md:min-h-0 md:h-12 ${styles.topBar} ${isOldSchool ? '' : 'backdrop-blur-md'} z-30 flex flex-col md:flex-row md:items-center px-2 py-1 md:px-3 md:py-0 gap-1 md:gap-2 ${user && mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout && !isPocketDeck ? (themeVariant === 'modern' ? 'md:right-60' : 'md:right-52') : ''}`}>
+      <div data-layout="topbar" className={`fixed top-0 right-0 left-0 safe-area-pt ${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:left-40' : 'md:left-48') : ''} min-h-[36px] md:min-h-0 md:h-12 ${styles.topBar} ${isOldSchool ? '' : 'md:backdrop-blur-md'} z-30 flex flex-col md:flex-row md:items-center px-2 py-1 md:px-3 md:py-0 gap-1 md:gap-2 ${user && mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout && !isPocketDeck ? (themeVariant === 'modern' ? 'md:right-60' : 'md:right-52') : ''}`}>
         <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0 overflow-hidden md:justify-end">
           {mobileNavStyle !== 'bottom' && !isPocketDeck && (
             <button onClick={() => setSidebarOpen(!sidebarOpen)} data-testid="mobile-menu-toggle"
@@ -3370,7 +3346,7 @@ export default function Layout({ children }) {
                 { path: '/money/bank', label: 'Bank', Icon: Landmark },
                 { path: '/money/stocks', label: 'Stocks', Icon: TrendingUp },
                 { path: '/money/quick-trade', label: 'Quick Trade', Icon: ArrowLeftRight },
-                { path: '/game/store', label: 'Store', Icon: ShoppingBag, badge: storePointsEventActive ? 1 : 0 },
+                { path: '/game/store', label: 'Store', Icon: ShoppingBag },
                 { path: '/game-pass', label: 'Game Pass', Icon: Package },
                 { path: '/game/daily-rewards', label: 'Daily Rewards', Icon: Gift },
                 { path: '/money/lottery', label: 'Lottery', Icon: Ticket },
@@ -3476,6 +3452,7 @@ export default function Layout({ children }) {
                 { path: '/casino/blackjack', label: 'Blackjack', Icon: Spade },
                 ...(SLOTS_FEATURE_ENABLED ? [{ path: '/casino/slots', label: 'Slots', Icon: SquareStack }] : []),
                 { path: '/sports-betting', label: 'Sports', Icon: LineChart },
+                { path: '/casino/gambling-ban', label: 'Gambling Ban', Icon: Ban },
                 { path: '/mini-games', label: 'Mini Games', Icon: Gamepad2 },
                 ...(user?.is_entertainer ? [{ path: '/game/entertainer', label: 'Entertainer', Icon: Mic2 }] : []),
               ],
@@ -3776,11 +3753,6 @@ export default function Layout({ children }) {
                         title={isGtaExclusive ? 'Exclusive car in GTA pool!' : undefined}>
                         {isGtaExclusive && <span className="text-violet-400 font-bold shrink-0" aria-hidden>★</span>}
                         <span className="leading-tight">{sub.label}</span>
-                        {sub.saleBadge && (
-                          <span className="shrink-0 rounded border border-emerald-500/40 bg-emerald-600/25 px-1 py-0.5 text-[8px] font-bold text-emerald-200" title="+100% points on card buys">
-                            2×
-                          </span>
-                        )}
                         {typeof sub.onlineCountBadge === 'number' && (
                           <span className="shrink-0 min-w-[16px] h-[16px] rounded px-0.5 bg-emerald-600/25 text-emerald-400 text-[9px] font-bold border border-emerald-500/40 flex items-center justify-center tabular-nums">
                             {sub.onlineCountBadge.toLocaleString()}
@@ -3845,7 +3817,6 @@ export default function Layout({ children }) {
                     });
                     const showInboxBadge = item.items.some((sub) => sub.path === '/social/inbox') && unreadCount > 0;
                     const showGtaExclusiveStar = item.id === 'rank' && gtaExclusiveInPool;
-                    const showStoreSale = item.items.some((sub) => sub.saleBadge);
                     return (
                       <button key={item.id} type="button" onClick={(e) => { e.stopPropagation(); setMobileBottomMenuOpen(isOpen ? null : item.id); }}
                         className={boxBase} style={isOpen || isActive ? boxActive : boxInactive}
@@ -3854,7 +3825,6 @@ export default function Layout({ children }) {
                           <Icon size={13} strokeWidth={2} />
                           {showInboxBadge && <span className="absolute -top-0.5 -right-1 min-w-[10px] h-[10px] rounded-full bg-red-600 text-[8px] font-bold text-white flex items-center justify-center px-0.5">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                           {showGtaExclusiveStar && <span className="absolute -top-0.5 -left-1 text-violet-400 text-[10px] font-bold" aria-hidden title="Exclusive car in GTA pool">★</span>}
-                          {showStoreSale && <span className="absolute -top-1 -right-1 text-emerald-300 text-[10px] font-bold" aria-hidden title="+100% points on card buys">★</span>}
                         </span>
                         <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.mobileShortLabel ?? item.label}</span>
                       </button>

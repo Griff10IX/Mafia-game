@@ -40,6 +40,7 @@ from server import (
     notify_casino_seizure,
 )
 from utils.casino_page_rl import casinos_sustained_rl_dependencies
+from utils.gambling_self_ban import raise_if_gambling_self_banned
 
 _casinos_rl_u = casinos_sustained_rl_dependencies(db, get_current_user)
 
@@ -457,6 +458,7 @@ def register(router):
     @router.post("/casino/slots/enter")
     async def casino_slots_enter(request: SlotsEnterRequest, current_user: dict = Depends(get_current_user_verified)):
         """Enter the lottery to possibly own slots in this state for 3 hours. One random entrant wins when current ownership ends."""
+        raise_if_gambling_self_banned(current_user)
         _invalidate_slots_ownership_cache(current_user.get("id") or "")
         state = _normalize_state((request.state or "").strip())
         if not state or state not in (STATES or []):
@@ -661,6 +663,7 @@ def register(router):
     @router.post("/casino/slots/spin")
     async def casino_slots_spin(request: SlotsSpinRequest, current_user: dict = Depends(get_current_user_verified)):
         """Spin the slots. State-owned = house pays. Owner-owned = owner pays wins (or loses ownership if can't pay; buy-back offer)."""
+        raise_if_gambling_self_banned(current_user)
         _invalidate_slots_ownership_cache(current_user.get("id") or "")
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         state = _normalize_state(raw) if raw else (STATES[0] if STATES else "")

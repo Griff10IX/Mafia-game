@@ -1932,11 +1932,13 @@ async def families_list(current_user: dict = Depends(get_current_user)):
         ACTIVE_FAMILY_FILTER,
         {
             "_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "join_mode": 1, "crew_oc_cooldown_until": 1,
-            "emblem_preset_id": 1, "avatar_url": 1,
+            "crew_oc_join_fee": 1, "emblem_preset_id": 1, "avatar_url": 1,
         },
     )
     fams = await cursor.to_list(FAMILY_LIST_QUERY_LIMIT)
     out = []
+    my_oc_app_by_family: dict = {}
+    uid_me = _uid_str(current_user.get("id"))
     if fams:
         family_ids = [f["id"] for f in fams]
         # Batched queries: avoid 1 + N families + N*M users round-trips (was killing small Mongo tiers)
@@ -1960,6 +1962,16 @@ async def families_list(current_user: dict = Depends(get_current_user)):
             )
             for uid_s, u in users_by_id.items():
                 alive_by_user_id[uid_s] = not u.get("is_dead", False)
+        if uid_me:
+            my_apps = await db.family_crew_oc_applications.find(
+                {"user_id": uid_me, "family_id": {"$in": family_ids}, "status": {"$in": ["pending", "accepted"]}},
+                {"_id": 0, "family_id": 1, "status": 1},
+            ).to_list(max(200, FAMILY_LIST_QUERY_LIMIT))
+            for app in my_apps:
+                fid_a = app.get("family_id")
+                st = (app.get("status") or "").strip().lower()
+                if fid_a and st in ("pending", "accepted"):
+                    my_oc_app_by_family[str(fid_a)] = st
         for f in fams:
             fid = f["id"]
             living_count = sum(
@@ -1968,15 +1980,20 @@ async def families_list(current_user: dict = Depends(get_current_user)):
                 if alive_by_user_id.get(_uid_str(uid))
             )
             if living_count > 0:
-                out.append({
+                row = {
                     "id": fid, "name": f["name"], "tag": f["tag"],
                     "member_count": living_count, "treasury": f.get("treasury", 0),
                     "at_war": False,
                     "join_mode": f.get("join_mode") or "open",
                     "crew_oc_cooldown_until": f.get("crew_oc_cooldown_until"),
+                    "crew_oc_join_fee": int(f.get("crew_oc_join_fee") or 0),
                     "emblem_preset_id": f.get("emblem_preset_id"),
                     "avatar_url": f.get("avatar_url"),
-                })
+                }
+                my_st = my_oc_app_by_family.get(str(fid))
+                if my_st:
+                    row["crew_oc_my_application_status"] = my_st
+                out.append(row)
     # Tag families that are currently in an active war
     active_wars = await db.family_wars.find(
         {"status": {"$in": ["active", "truce_offered"]}},

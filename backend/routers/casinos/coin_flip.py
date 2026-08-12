@@ -13,6 +13,7 @@ from server import (
     get_current_user_verified,
     log_gambling,
 )
+from utils.gambling_self_ban import raise_if_gambling_self_banned
 
 _rng = secrets.SystemRandom()
 
@@ -155,6 +156,7 @@ def register(router):
 
     @router.post("/casino/coin-flip/play")
     async def casino_coin_flip_play(request: CoinFlipPlayRequest, current_user: dict = Depends(get_current_user_verified)):
+        raise_if_gambling_self_banned(current_user)
         state = _current_state(current_user)
         bet = int(request.bet or 0)
         if bet < 1:

@@ -62,6 +62,7 @@ from utils.quicktrade_casino_cleanup import (
     ensure_no_duplicate_casino_quicktrade_listing,
 )
 from utils.casino_page_rl import casinos_sustained_rl_dependencies
+from utils.gambling_self_ban import raise_if_gambling_self_banned
 
 _casinos_rl_u = casinos_sustained_rl_dependencies(db, get_current_user)
 
@@ -629,6 +630,7 @@ def register(router):
     @router.post("/casino/roulette/spin")
     async def casino_roulette_spin(request: RouletteSpinRequest, current_user: dict = Depends(get_current_user_verified)):
         """Spin the roulette wheel with the provided bets."""
+        raise_if_gambling_self_banned(current_user)
         _invalidate_ownership_cache(current_user.get("id") or "")
         bets = request.bets or []
         if not bets:

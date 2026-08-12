@@ -955,6 +955,7 @@ class UserResponse(BaseModel):
     melt_until: Optional[str] = None
     oc_reduced_until: Optional[str] = None
     booze_until: Optional[str] = None
+    gambling_self_ban_until: Optional[str] = None  # player self-exclusion from casino/sports wagering
     racket_until: Optional[str] = None
     travel_until: Optional[str] = None
     properties_until: Optional[str] = None
