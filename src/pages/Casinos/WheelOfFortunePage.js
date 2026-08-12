@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { ChevronDown, CircleDollarSign, Clock, Gift, Sparkles, Trophy, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getApiErrorMessage, refreshUser } from '../../utils/api';
+import { useAuthUser } from '../../context/AuthContext';
+import { isGamblingSelfBanned } from '../../utils/gamblingSelfBan';
 import styles from '../../styles/noir.module.css';
 
 const WHEEL_STYLES = `
@@ -158,6 +160,8 @@ function PrizeRow({ label, short, color, tier, className = '' }) {
 }
 
 export default function WheelOfFortunePage() {
+  const authUser = useAuthUser();
+  const gamblingBanned = isGamblingSelfBanned(authUser);
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [spinning, setSpinning] = useState(false);
@@ -259,6 +263,10 @@ export default function WheelOfFortunePage() {
 
   const spin = async (payWith) => {
     if (spinLock.current || spinning) return;
+    if (gamblingBanned && payWith !== 'free') {
+      toast.error('Paid wheel spins are blocked during gambling self-exclusion. Free spins still work.');
+      return;
+    }
     spinLock.current = true;
     setSpinning(true);
     setLastPrize(null);
@@ -490,9 +498,11 @@ export default function WheelOfFortunePage() {
                     className="wof-btn rounded-lg border border-primary/40 bg-primary/15 px-2 py-2.5 text-primary font-heading font-bold uppercase tracking-wider text-xs sm:text-sm flex items-center justify-center gap-1.5"
                     disabled={
                       spinning ||
+                      gamblingBanned ||
                       (statusBits?.paidLeft ?? 0) <= 0 ||
                       (statusBits?.points ?? 0) < (statusBits?.ptsCost ?? 100)
                     }
+                    title={gamblingBanned ? 'Blocked during gambling self-exclusion' : undefined}
                     onClick={() => spin('points')}
                   >
                     <CircleDollarSign className="w-3.5 h-3.5 shrink-0" />
@@ -504,14 +514,21 @@ export default function WheelOfFortunePage() {
                     className="wof-btn rounded-lg border border-violet-500/40 bg-violet-950/40 px-2 py-2.5 text-violet-200 font-heading font-bold uppercase tracking-wider text-xs sm:text-sm"
                     disabled={
                       spinning ||
+                      gamblingBanned ||
                       (statusBits?.paidLeft ?? 0) <= 0 ||
                       (statusBits?.respect ?? 0) < (statusBits?.respCost ?? 300)
                     }
+                    title={gamblingBanned ? 'Blocked during gambling self-exclusion' : undefined}
                     onClick={() => spin('respect')}
                   >
                     {statusBits?.respCost ?? 300} Respect
                   </button>
                 </div>
+                {gamblingBanned && (
+                  <p className="text-[10px] text-amber-200/80 font-heading text-center leading-snug">
+                    Free / banked spins still work. Points &amp; respect spins stay locked until your exclusion ends.
+                  </p>
+                )}
               </div>
             </div>
 

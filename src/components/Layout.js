@@ -3669,7 +3669,7 @@ export default function Layout({ children }) {
             if (!group || group.type !== 'group') return null;
             return (
               <div data-layout="bottom-nav-submenu" className="absolute bottom-full left-0 right-0 z-[52] border-t border-primary/20 shadow-2xl max-h-[60vh] overflow-y-auto"
-                style={{ backgroundColor: 'var(--noir-content)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--noir-border-mid)', touchAction: 'manipulation' }}
+                style={{ backgroundColor: 'var(--noir-content)', borderBottom: '1px solid var(--noir-border-mid)', touchAction: 'manipulation' }}
                 role="menu"
                 onClick={(e) => e.stopPropagation()}>
                 {/* Group title */}
@@ -4072,7 +4072,7 @@ export default function Layout({ children }) {
         <div style={{
           position: 'fixed', inset: 0, zIndex: 99999,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+          backgroundColor: 'rgba(0,0,0,0.7)',
         }}>
           <div style={{
             textAlign: 'center', padding: '32px 48px', borderRadius: 16,

@@ -6,14 +6,16 @@
 
 [hr]
 
-[size=1.5][b][color=#2ECC71]2026-08-12[/color][/b] — [b]Families Apply OC, Gambling Ban, Samsung GPU, QT offer count[/b][/size]
+[size=1.5][b][color=#2ECC71]2026-08-12[/color][/b] — [b]Families Apply OC, Gambling Ban, Samsung GPU, QT, Auto Rank exchange[/b][/size]
 [quote]
 [list]
 [*][color=#888888][b]Families:[/b] On [b]Families → FAMILIES[/b], other crews show a small [b]Apply OC[/b] button when their Crew OC is [b]ready[/b] or within [b]10 minutes[/b] (same early window as forum Crew OC ads). Paid fees match the crew’s join fee; after apply the row shows [b]OC applied[/b] / [b]OC in[/b].[/color]
 [*][color=#888888][b]Gambling Ban:[/b] New page under Casino menus (and the Casino hub). Choose [b]12 hours / 1 day / 2 days / 3 days[/b] to self-exclude from casino games and sports betting. The ban [b]cannot be undone[/b] (staff will not lift it). While banned you can still join [b]admin/mod MDGs[/b]; player MDGs and other wagering stay blocked until it expires.[/color]
-[*][color=#888888][b]Mobile:[/b] Android phones (especially Samsung Chrome / Samsung Internet) no longer show the scrambled “static” / tiled corruption over the top of the page. Blur on fixed UI is disabled there; toasts use a simpler fade.[/color]
-[*][color=#888888][b]Quick Trade:[/b] [b]Number of offers[/b] on mobile no longer jumps only between [b]1[/b] and [b]10[/b] — use [b]+ / −[/b] or type [b]2–9[/b] (still max 10 identical listings).[/color]
-[*][color=#888888][b]Gambling Ban:[/b] While self-excluded, casino games and sports betting UIs are [b]locked[/b] (no placing bets / spinning) — not only blocked by the server after you try.[/color]
+[*][color=#888888][b]Mobile:[/b] Android phones (Honor, Samsung, and other Chrome / system browsers) no longer show the scrambled “static” / tiled corruption over the page. Blur on fixed UI is disabled there; toasts use a simpler fade. Follow-up: page fade animations that caused mid-screen static (e.g. on Quick Trade) are also disabled on those devices.[/color]
+[*][color=#888888][b]Quick Trade:[/b] [b]Number of offers[/b] and loot/token [b]quantity[/b] on mobile use [b]+ / −[/b] (and Max) so values are no longer stuck at 1 or 10.[/color]
+[*][color=#888888][b]Gambling Ban:[/b] While self-excluded, casino games and sports betting UIs are [b]locked[/b] (no placing bets / spinning) — not only blocked by the server after you try. [b]Wheel of Fortune[/b] free / banked spins still work; points &amp; respect spins stay locked.[/color]
+[*][color=#888888][b]Fixed:[/b] Redeem codes that include a [b]Custom Car[/b] (and other listed cars) now actually put the car in your garage — they were advertised but skipped on redeem.[/color]
+[*][color=#888888][b]Inventory:[/b] [b]Exchange Auto Rank[/b] lets you set an amount (up to 50) so you don’t have to click one-by-one — each token still yields 2 random boosts.[/color]
 [/list]
 [/quote]
 

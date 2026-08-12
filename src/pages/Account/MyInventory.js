@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, Swords, Shield, Gift, Car, Building2, Zap, Target, ArrowLeftRight, Users, Clock } from 'lucide-react';
+import { Package, Swords, Shield, Gift, Car, Building2, Zap, Target, ArrowLeftRight, Users, Clock, Minus, Plus } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -15,6 +15,9 @@ const INV_STYLES = `
 let _cachedInventory = null;
 let _invLastFetch = 0;
 const INV_REFRESH = 30_000;
+
+/** Keep in sync with backend armoury.AUTO_RANK_EXCHANGE_MAX_COUNT. */
+const AUTO_RANK_EXCHANGE_MAX = 50;
 
 /** Keep in sync with backend armoury.TOKEN_TYPES (+ jail_bailout which is count-only, used on the Jail page). */
 const TOKEN_TYPES = [
@@ -165,6 +168,7 @@ export default function MyInventory() {
   const [autoRankRunning, setAutoRankRunning] = useState(null);
   const [collectingSpeakeasy, setCollectingSpeakeasy] = useState(false);
   const [exchangingAutoRank, setExchangingAutoRank] = useState(false);
+  const [autoRankExchangeCount, setAutoRankExchangeCount] = useState('1');
   const [giftUsername, setGiftUsername] = useState('');
   const [giftTokenType, setGiftTokenType] = useState('');
   const [giftAmount, setGiftAmount] = useState(1);
@@ -505,19 +509,42 @@ export default function MyInventory() {
     && !gifting;
 
   const exchangeAutoRank = async () => {
+    const held = tokens.auto_rank_2h?.count ?? 0;
+    const count = Math.max(1, Math.min(AUTO_RANK_EXCHANGE_MAX, held, parseInt(String(autoRankExchangeCount).replace(/\D/g, ''), 10) || 1));
+    if (held < 1) {
+      toast.error('No Auto Rank (2h) tokens to exchange.');
+      return;
+    }
+    if (count > held) {
+      toast.error(`You only have ${held} Auto Rank (2h) token${held === 1 ? '' : 's'}.`);
+      return;
+    }
     setExchangingAutoRank(true);
     try {
-      const res = await api.post('/inventory/tokens/exchange-auto-rank', { count: 1 });
+      const res = await api.post('/inventory/tokens/exchange-auto-rank', { count });
       if (res?.data?.tokens) setData((d) => (d ? { ...d, tokens: res.data.tokens } : d));
       const ex = res?.data?.exchange;
-      const rows = ex?.granted_tokens || [];
-      const n = rows.length;
-      const names = rows.map((g) => tokenLabels[g.type]?.name || g.type).join(', ');
+      const consumed = Number(ex?.consumed_auto_rank_2h || count) || count;
+      const summary = ex?.granted_summary || [];
+      const rows = summary.length
+        ? summary
+        : (ex?.granted_tokens || []);
+      const n = summary.length
+        ? summary.reduce((s, g) => s + (Number(g.amount) || 0), 0)
+        : rows.length;
+      const names = summary.length
+        ? summary.map((g) => `${g.amount || 1}× ${tokenLabels[g.type]?.name || g.type}`).join(', ')
+        : rows.map((g) => tokenLabels[g.type]?.name || g.type).join(', ');
       if (n > 0 && names) {
-        toast.success(`Traded 1 Auto Rank (2h) for ${n} boost tokens`, { description: names });
+        toast.success(
+          `Traded ${consumed} Auto Rank (2h) for ${n} boost token${n === 1 ? '' : 's'}`,
+          { description: names },
+        );
       } else {
         toast.success(res?.data?.message || 'Exchange complete.');
       }
+      const nextHeld = Math.max(0, held - consumed);
+      setAutoRankExchangeCount(String(Math.min(count, Math.max(1, nextHeld || 1))));
       refreshUser();
       fetchInventory();
     } catch (e) {
@@ -1016,17 +1043,79 @@ export default function MyInventory() {
             </div>
             <div className="p-2.5 space-y-2">
               <p className="text-[8px] text-mutedForeground font-heading leading-snug">
-                Trade <span className="text-foreground">1× Auto Rank (2h)</span> for <span className="text-foreground">2 random</span> other boost tokens. No cash or rank points.{' '}
+                Trade <span className="text-foreground">1× Auto Rank (2h)</span> for <span className="text-foreground">2 random</span> other boost tokens (each). No cash or rank points.{' '}
                 <Link to="/money/quick-trade" className="text-primary hover:underline">Sell on Quick Trade →</Link>
               </p>
-              <button
-                type="button"
-                disabled={exchangingAutoRank || (tokens.auto_rank_2h?.count ?? 0) < 1}
-                onClick={exchangeAutoRank}
-                className="px-2.5 py-1.5 rounded text-[9px] font-heading font-bold border border-amber-500/50 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
-              >
-                {exchangingAutoRank ? '…' : 'Exchange 1 token'}
-              </button>
+              {(() => {
+                const held = tokens.auto_rank_2h?.count ?? 0;
+                const maxEx = Math.max(1, Math.min(AUTO_RANK_EXCHANGE_MAX, held));
+                const n = Math.max(1, Math.min(maxEx, parseInt(String(autoRankExchangeCount).replace(/\D/g, ''), 10) || 1));
+                return (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label htmlFor="autoRankExchangeCount" className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground whitespace-nowrap">
+                      Amount
+                    </label>
+                    <div className="inline-flex items-center gap-1">
+                      <button
+                        type="button"
+                        aria-label="Fewer tokens"
+                        disabled={exchangingAutoRank || n <= 1}
+                        onClick={() => setAutoRankExchangeCount(String(Math.max(1, n - 1)))}
+                        className="inline-flex items-center justify-center w-8 h-8 rounded border border-zinc-600/60 bg-zinc-800/50 text-foreground touch-manipulation disabled:opacity-40"
+                      >
+                        <Minus size={13} />
+                      </button>
+                      <input
+                        id="autoRankExchangeCount"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoComplete="off"
+                        value={autoRankExchangeCount}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => {
+                          const digits = e.target.value.replace(/\D/g, '').slice(0, 3);
+                          if (digits === '') {
+                            setAutoRankExchangeCount('');
+                            return;
+                          }
+                          const parsed = parseInt(digits, 10);
+                          if (!Number.isFinite(parsed)) return;
+                          setAutoRankExchangeCount(String(Math.min(maxEx, parsed)));
+                        }}
+                        onBlur={() => setAutoRankExchangeCount(String(Math.max(1, Math.min(maxEx, parseInt(String(autoRankExchangeCount), 10) || 1))))}
+                        className="w-12 min-h-[32px] bg-zinc-900/50 border border-zinc-700/50 rounded px-1 text-[11px] text-foreground font-heading text-center touch-manipulation"
+                      />
+                      <button
+                        type="button"
+                        aria-label="More tokens"
+                        disabled={exchangingAutoRank || n >= maxEx}
+                        onClick={() => setAutoRankExchangeCount(String(Math.min(maxEx, n + 1)))}
+                        className="inline-flex items-center justify-center w-8 h-8 rounded border border-zinc-600/60 bg-zinc-800/50 text-foreground touch-manipulation disabled:opacity-40"
+                      >
+                        <Plus size={13} />
+                      </button>
+                      {held > 1 && (
+                        <button
+                          type="button"
+                          disabled={exchangingAutoRank}
+                          onClick={() => setAutoRankExchangeCount(String(maxEx))}
+                          className="px-2 min-h-[32px] rounded border border-primary/30 bg-primary/10 text-[8px] font-heading font-bold uppercase tracking-wider text-primary touch-manipulation disabled:opacity-50"
+                        >
+                          Max ({maxEx})
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={exchangingAutoRank || held < 1}
+                      onClick={exchangeAutoRank}
+                      className="px-2.5 py-1.5 rounded text-[9px] font-heading font-bold border border-amber-500/50 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
+                    >
+                      {exchangingAutoRank ? '…' : `Exchange ${n} token${n === 1 ? '' : 's'} → ${n * 2} boosts`}
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}

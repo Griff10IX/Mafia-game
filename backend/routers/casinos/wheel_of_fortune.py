@@ -454,13 +454,15 @@ def register(router):
         body: WheelSpinRequest,
         current_user: dict = Depends(get_current_user_verified),
     ):
-        raise_if_gambling_self_banned(current_user)
         uid = current_user.get("id") or ""
         if not uid:
             raise HTTPException(status_code=401, detail="Not authenticated")
         pay = (body.pay_with or "").strip().lower()
         if pay not in ("free", "points", "respect"):
             raise HTTPException(status_code=400, detail="pay_with must be free, points, or respect")
+        # Free / banked / admin free spins stay available during gambling self-exclusion.
+        if pay in ("points", "respect"):
+            raise_if_gambling_self_banned(current_user)
 
         user = await db.users.find_one({"id": uid}, {"_id": 0})
         if not user:

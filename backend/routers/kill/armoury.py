@@ -247,6 +247,7 @@ AUTO_RANK_EXCHANGE_POOL = (
     "jailbust_bonus",
 )
 AUTO_RANK_EXCHANGE_TOKEN_COUNT = 2
+AUTO_RANK_EXCHANGE_MAX_COUNT = 50  # max Auto Rank tokens per exchange click
 
 # Gift perks: sum of token amounts sent per UTC day (Game Pass / rank_xp_pass not giftable).
 TOKEN_GIFT_DAILY_UNITS_MAX = 20
@@ -560,7 +561,7 @@ class CrewOcAutoApplyMaxFeeBody(BaseModel):
 
 
 class ExchangeAutoRankRequest(BaseModel):
-    count: int = 1  # v1: must be 1 (one Auto Rank token consumed per exchange)
+    count: int = Field(default=1, ge=1, le=AUTO_RANK_EXCHANGE_MAX_COUNT)
 
 
 class GiftTokenRequest(BaseModel):
@@ -3048,9 +3049,13 @@ async def update_crew_oc_auto_apply_max_fee(
 
 
 async def exchange_auto_rank_tokens(req: ExchangeAutoRankRequest, current_user: dict = Depends(get_current_user)):
-    """Burn 1× Auto Rank (2h) token for 2 random distinct other tokens (no cash/points)."""
-    if int(req.count or 1) != 1:
-        raise HTTPException(status_code=400, detail="Exchange exactly 1 Auto Rank (2h) token at a time.")
+    """Burn N× Auto Rank (2h) tokens for 2N random boost tokens (2 distinct per Auto Rank; no cash/points)."""
+    count = int(req.count or 1)
+    if count < 1 or count > AUTO_RANK_EXCHANGE_MAX_COUNT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Exchange between 1 and {AUTO_RANK_EXCHANGE_MAX_COUNT} Auto Rank (2h) tokens at a time.",
+        )
     pool = list(AUTO_RANK_EXCHANGE_POOL)
     for t in pool:
         if t not in TOKEN_CONFIG:
@@ -3058,16 +3063,28 @@ async def exchange_auto_rank_tokens(req: ExchangeAutoRankRequest, current_user: 
     if len(pool) < 2:
         raise HTTPException(status_code=500, detail="Exchange is unavailable.")
     k = min(AUTO_RANK_EXCHANGE_TOKEN_COUNT, len(pool))
-    chosen = random.sample(pool, k)
 
-    inc: Dict[str, int] = {"auto_rank_2h_tokens": -1}
-    for t in chosen:
+    granted_flat: List[str] = []
+    for _ in range(count):
+        granted_flat.extend(random.sample(pool, k))
+
+    from collections import Counter
+
+    grant_counts = Counter(granted_flat)
+    inc: Dict[str, int] = {"auto_rank_2h_tokens": -count}
+    for t, amt in grant_counts.items():
         cf = TOKEN_CONFIG[t]["count_field"]
-        inc[cf] = inc.get(cf, 0) + 1
+        inc[cf] = inc.get(cf, 0) + int(amt)
 
     uid = current_user["id"]
-    result = await db.users.update_one({"id": uid, "auto_rank_2h_tokens": {"$gte": 1}}, {"$inc": inc})
+    result = await db.users.update_one({"id": uid, "auto_rank_2h_tokens": {"$gte": count}}, {"$inc": inc})
     if result.modified_count == 0:
+        held = int((await db.users.find_one({"id": uid}, {"_id": 0, "auto_rank_2h_tokens": 1}) or {}).get("auto_rank_2h_tokens") or 0)
+        if held < count:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Not enough Auto Rank (2h) tokens (have {held}, need {count}).",
+            )
         raise HTTPException(status_code=400, detail="No Auto Rank (2h) tokens available.")
 
     uname = (current_user.get("username") or "").strip() or "?"
@@ -3075,18 +3092,23 @@ async def exchange_auto_rank_tokens(req: ExchangeAutoRankRequest, current_user: 
         uid,
         uname,
         "inventory_auto_rank_exchange",
-        {"granted_tokens": chosen, "granted_count": len(chosen)},
+        {
+            "consumed_auto_rank_2h": count,
+            "granted_tokens": granted_flat,
+            "granted_count": len(granted_flat),
+        },
     )
 
     fresh = await db.users.find_one({"id": uid}, {"_id": 0})
     tokens = _tokens_from_user(fresh or {})
-    n = len(chosen)
+    n = len(granted_flat)
     return {
-        "message": f"Traded 1 Auto Rank (2h) for {n} boost tokens.",
+        "message": f"Traded {count} Auto Rank (2h) for {n} boost tokens.",
         "tokens": tokens,
         "exchange": {
-            "consumed_auto_rank_2h": 1,
-            "granted_tokens": [{"type": t, "amount": 1} for t in chosen],
+            "consumed_auto_rank_2h": count,
+            "granted_tokens": [{"type": t, "amount": 1} for t in granted_flat],
+            "granted_summary": [{"type": t, "amount": int(a)} for t, a in sorted(grant_counts.items())],
         },
     }
 

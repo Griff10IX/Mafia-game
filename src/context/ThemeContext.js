@@ -444,7 +444,7 @@ function applyModernPerfFlagToDocument(themeVariant, modernVisualQuality) {
   }
 }
 
-/** Android Blink/WebView: backdrop-filter on fixed/floating UI + scroll often shows GPU "static" (e.g. Samsung Chrome). */
+/** Android Blink/WebView (Honor, Samsung, stock Chrome, etc.): backdrop-filter on fixed/floating UI + scroll often shows GPU "static". */
 function shouldApplyMobileCompositorBackdropWorkaround() {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent || '';

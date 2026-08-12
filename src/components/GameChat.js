@@ -485,6 +485,7 @@ export default function GameChat({
 
   return (
     <div
+      data-layout="game-chat-fab"
       className={`game-chat-root ${mobileBottomClearance ? 'game-chat-clear-mobile-nav' : ''}`}
     >
       <style>{`

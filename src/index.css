@@ -1053,10 +1053,10 @@ body > #root {
 }
 
 /*
- * Android Blink (Chrome, Samsung Internet, in-app WebViews): backdrop-filter on fixed /
- * sticky / overlay layers over scrolling content produces rectangular "static" / tiled
- * GPU texture corruption (very common on Samsung Galaxy). ThemeContext sets
- * data-mobile-compositor-safe="on" on html/body when UA matches.
+ * Android Blink (Chrome, Honor / Huawei browsers, Samsung Internet, in-app WebViews):
+ * backdrop-filter on fixed / sticky / overlay layers over scrolling content produces
+ * rectangular "static" / tiled GPU texture corruption. ThemeContext sets
+ * data-mobile-compositor-safe="on" on html/body when UA matches Android (non-Firefox).
  *
  * Kill every backdrop blur on those devices; keep solid/opaque chrome instead.
  */
@@ -1090,6 +1090,34 @@ body[data-mobile-compositor-safe="on"] [data-sonner-toast][data-removed] {
   transform: none !important;
   transition: opacity 0.15s ease !important;
   animation: none !important;
+}
+
+/*
+ * Entrance / pulse animations that use transform leave corrupt rectangular tiles over
+ * scrolling content on Samsung GPUs (seen mid-page on Quick Trade, Families, etc.).
+ */
+html[data-mobile-compositor-safe="on"] .qt-fade-in,
+html[data-mobile-compositor-safe="on"] .cas-fade-in,
+html[data-mobile-compositor-safe="on"] .fam-fade-in,
+html[data-mobile-compositor-safe="on"] .m-fade-in,
+html[data-mobile-compositor-safe="on"] .wof-fade,
+html[data-mobile-compositor-safe="on"] .ge-fade-in,
+html[data-mobile-compositor-safe="on"] .cg-fade-in,
+html[data-mobile-compositor-safe="on"] .token-badge-pulse,
+html[data-mobile-compositor-safe="on"] .game-chat-notification-dot-mention {
+  animation: none !important;
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+/* Prefer opaque paints for floating launchers over the scroll plane. */
+body[data-mobile-compositor-safe="on"] [data-layout="game-chat-fab"],
+body[data-mobile-compositor-safe="on"] [data-layout="notification-ball"],
+body[data-mobile-compositor-safe="on"] [data-layout="touch-ball"] {
+  filter: none !important;
+  -webkit-filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 body[data-mobile-compositor-safe="on"] .app-dialog-overlay,

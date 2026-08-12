@@ -89,6 +89,75 @@ function QtOfferCountInput({ id, value, onChange }) {
   );
 }
 
+/** Quantity stepper for loot / token listings (min–max); select-on-focus so mobile typing replaces cleanly. */
+function QtQuantityStepper({ id, value, onChange, min = 1, max = null, step = 1, className = '' }) {
+  const minN = Math.max(0, Math.floor(Number(min) || 0));
+  const maxN = max == null || max === '' ? null : Math.max(minN, Math.floor(Number(max) || minN));
+  const clamp = (raw) => {
+    let n = parseInt(String(raw ?? '').replace(/\D/g, ''), 10);
+    if (!Number.isFinite(n)) n = minN;
+    if (n < minN) n = minN;
+    if (maxN != null && n > maxN) n = maxN;
+    return n;
+  };
+  const n = clamp(value === '' || value == null ? minN : value);
+  const display = value === '' || value == null ? '' : String(value).replace(/\D/g, '');
+  const atMin = n <= minN;
+  const atMax = maxN != null && n >= maxN;
+  return (
+    <div className={`flex items-center gap-1.5 ${className}`}>
+      <button
+        type="button"
+        aria-label="Decrease quantity"
+        disabled={atMin}
+        onClick={() => onChange(String(Math.max(minN, n - step)))}
+        className="inline-flex items-center justify-center w-10 h-10 min-w-[40px] rounded border border-zinc-600/60 bg-zinc-800/50 text-foreground touch-manipulation disabled:opacity-40"
+      >
+        <Minus size={15} />
+      </button>
+      <input
+        id={id}
+        inputMode="numeric"
+        pattern="[0-9]*"
+        autoComplete="off"
+        value={display}
+        onFocus={(e) => e.target.select()}
+        onChange={(e) => {
+          const digits = e.target.value.replace(/\D/g, '').slice(0, 9);
+          if (digits === '') {
+            onChange('');
+            return;
+          }
+          const parsed = parseInt(digits, 10);
+          if (!Number.isFinite(parsed)) return;
+          if (maxN != null && parsed > maxN) onChange(String(maxN));
+          else onChange(String(parsed));
+        }}
+        onBlur={() => onChange(String(clamp(value)))}
+        className="flex-1 min-w-0 min-h-[40px] bg-zinc-900/50 border border-zinc-700/50 rounded px-3 text-sm text-foreground font-heading text-center touch-manipulation"
+      />
+      <button
+        type="button"
+        aria-label="Increase quantity"
+        disabled={atMax}
+        onClick={() => onChange(String(maxN != null ? Math.min(maxN, n + step) : n + step))}
+        className="inline-flex items-center justify-center w-10 h-10 min-w-[40px] rounded border border-zinc-600/60 bg-zinc-800/50 text-foreground touch-manipulation disabled:opacity-40"
+      >
+        <Plus size={15} />
+      </button>
+      {maxN != null && maxN > minN && (
+        <button
+          type="button"
+          onClick={() => onChange(String(maxN))}
+          className="shrink-0 px-2 min-h-[40px] rounded border border-primary/30 bg-primary/10 text-[9px] font-heading font-bold uppercase tracking-wider text-primary touch-manipulation"
+        >
+          Max
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function QuickTrade() {
   const animateIn = useState(() => !_qtIntroPlayed)[0];
   useEffect(() => { _qtIntroPlayed = true; }, []);
@@ -1004,12 +1073,13 @@ export default function QuickTrade() {
               </div>
             )}
             <div>
-              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Quantity{tokenBalances[tokenType]?.sellable != null ? ` (max ${tokenBalances[tokenType].sellable})` : ''}</label>
-              <FormattedNumberInput
+              <label htmlFor="tokenQuantity" className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Quantity{tokenBalances[tokenType]?.sellable != null ? ` (max ${tokenBalances[tokenType].sellable})` : ''}</label>
+              <QtQuantityStepper
+                id="tokenQuantity"
                 value={tokenQuantity}
                 onChange={setTokenQuantity}
-                placeholder="1"
-                className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                min={1}
+                max={tokenBalances[tokenType]?.sellable != null ? Math.max(1, Number(tokenBalances[tokenType].sellable) || 1) : null}
               />
             </div>
             <div>
@@ -1153,15 +1223,16 @@ export default function QuickTrade() {
               <span className="text-mutedForeground">Minimum listing: {LOOT_PIECE_MIN_QUANTITY} pieces (100 pieces = 1 loot box open)</span>
             </div>
             <div>
-              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
+              <label htmlFor="lootPieceQuantity" className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
                 Quantity (min {LOOT_PIECE_MIN_QUANTITY}
                 {lootPieceBalance?.sellable != null ? `, max ${lootPieceBalance.sellable}` : ''})
               </label>
-              <FormattedNumberInput
+              <QtQuantityStepper
+                id="lootPieceQuantity"
                 value={lootPieceQuantity}
                 onChange={setLootPieceQuantity}
-                placeholder="10"
-                className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                min={LOOT_PIECE_MIN_QUANTITY}
+                max={Math.max(LOOT_PIECE_MIN_QUANTITY, Number(lootPieceBalance?.sellable ?? lootPieceBalance?.total ?? LOOT_PIECE_MIN_QUANTITY) || LOOT_PIECE_MIN_QUANTITY)}
               />
             </div>
             <div>

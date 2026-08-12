@@ -851,7 +851,7 @@ function App() {
               <ErrorBoundary>
                 <WheelOfFortune />
               </ErrorBoundary>
-              )
+              , 'notice')
               }
             />
             <Route

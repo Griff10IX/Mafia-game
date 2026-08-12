@@ -9,13 +9,98 @@ for any is_dead user still listed in used_by.
 """
 
 import logging
-from typing import Any
+from typing import Any, List
 
 logger = logging.getLogger(__name__)
 
 
 class RedeemCodeError(ValueError):
     """A player-facing redeem-code failure."""
+
+
+async def _grant_redeem_code_cars(db: Any, *, user_id: str, car_ids: List[str]) -> List[str]:
+    """Grant catalog / custom cars from a redeem code. Returns player-facing labels."""
+    import uuid
+    from datetime import datetime, timezone
+
+    from routers.admin.airport import _invalidate_travel_info_cache
+    from server import CARS
+
+    labels: List[str] = []
+    now_iso = datetime.now(timezone.utc).isoformat()
+    catalog = {c.get("id"): c for c in (CARS or []) if c.get("id")}
+    # Globally unique exclusives (same rules as admin add-car).
+    unique_car_ids = {"car20", "car21", "car23"}
+
+    for raw_id in car_ids:
+        car_id = (raw_id or "").strip()
+        if not car_id:
+            continue
+        car_info = catalog.get(car_id)
+        if car_id != "car_custom" and not car_info:
+            logger.warning("redeem code: unknown car_id=%s user=%s", car_id, user_id)
+            continue
+
+        if car_id == "car_custom":
+            user = await db.users.find_one(
+                {"id": user_id},
+                {"_id": 0, "custom_car_name": 1, "username": 1},
+            ) or {}
+            name = (user.get("custom_car_name") or "").strip()
+            if not name:
+                uname = (user.get("username") or "Custom").strip() or "Custom"
+                name = uname[:30]
+                await db.users.update_one({"id": user_id}, {"$set": {"custom_car_name": name}})
+            existing = await db.user_cars.find_one(
+                {"user_id": user_id, "car_id": "car_custom"},
+                {"_id": 1},
+            )
+            if not existing:
+                await db.user_cars.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "car_id": "car_custom",
+                    "custom_name": name,
+                    "custom_image_url": None,
+                    "acquired_at": now_iso,
+                    "damage_percent": 0,
+                })
+            labels.append(f"Custom Car ({name})")
+            continue
+
+        if car_id in unique_car_ids:
+            other = await db.user_cars.find_one(
+                {"car_id": car_id, "user_id": {"$ne": user_id}},
+                {"_id": 1},
+            )
+            if other:
+                logger.warning(
+                    "redeem code: skipped unique car_id=%s user=%s (already owned elsewhere)",
+                    car_id,
+                    user_id,
+                )
+                continue
+            already = await db.user_cars.find_one({"user_id": user_id, "car_id": car_id}, {"_id": 1})
+            if already:
+                labels.append(car_info.get("name") or car_id)
+                continue
+
+        await db.user_cars.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "car_id": car_id,
+            "car_name": (car_info or {}).get("name") or car_id,
+            "acquired_at": now_iso,
+            "damage_percent": 0,
+        })
+        labels.append((car_info or {}).get("name") or car_id)
+
+    if labels:
+        try:
+            _invalidate_travel_info_cache(user_id)
+        except Exception:
+            pass
+    return labels
 
 
 async def apply_redeem_code(db: Any, user: dict, code: str) -> dict:
@@ -82,8 +167,8 @@ async def apply_redeem_code(db: Any, user: dict, code: str) -> dict:
     inc["redeem_stats_total_respect_points"] = int(rewards.get("respect_points") or 0)
     inc["redeem_stats_total_loot_box_pieces"] = int(rewards.get("loot_box_pieces") or 0)
     inc["redeem_stats_total_bullets"] = int(rewards.get("bullets") or 0)
-    # Cars no longer granted via redeem codes (GTA / dealer / store / admin only).
-    inc["redeem_stats_total_cars"] = 0
+    car_ids = [str(cid).strip() for cid in (rewards.get("cars") or []) if str(cid).strip()]
+    inc["redeem_stats_total_cars"] = len(car_ids)
     inc["redeem_stats_total_tokens"] = sum(
         int(amount)
         for token_type, amount in (rewards.get("tokens") or {}).items()
@@ -103,6 +188,10 @@ async def apply_redeem_code(db: Any, user: dict, code: str) -> dict:
             event_ref=code_normalized,
             meta={"code": code_normalized},
         )
+
+    car_granted_labels: list[str] = []
+    if car_ids:
+        car_granted_labels = await _grant_redeem_code_cars(db, user_id=user_id, car_ids=car_ids)
 
     topic_id = doc.get("forum_topic_id")
     if topic_id and max_uses is not None and new_used >= int(max_uses):
@@ -128,8 +217,7 @@ async def apply_redeem_code(db: Any, user: dict, code: str) -> dict:
     for token_type, amount in (rewards.get("tokens") or {}).items():
         if token_type != "rank_xp_pass" and amount:
             granted.append(f"{amount} {token_type.replace('_', ' ')} token(s)")
-    if rewards.get("cars"):
-        granted.append("(car rewards skipped — cars only from GTA / dealer / store)")
+    granted.extend(car_granted_labels)
     return {
         "message": "Code redeemed successfully",
         "code": code_normalized,
