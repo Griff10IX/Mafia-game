@@ -12,6 +12,11 @@ from fastapi import Depends, HTTPException, Request
 
 from utils.claim_costs import load_claim_costs
 from utils.point_provenance import log_points_event
+from utils.mdg_prize_holds import (
+    MDG_PRIZE_HOLD_DISPLAY_NAME,
+    casino_economy_owner_id,
+    is_mdg_prize_hold_owner,
+)
 from utils.civilian_protection import (
     cleanup_expired_buyback_offers_for_user,
     maybe_revoke_civilian_protection,
@@ -255,13 +260,15 @@ def register(router):
         owner_wealth_rank_name = None
         owner_wealth_rank_color = None
         owner_wealth_rank_range = None
-        if owner_id:
+        if is_mdg_prize_hold_owner(owner_id):
+            owner_name = MDG_PRIZE_HOLD_DISPLAY_NAME
+        elif owner_id:
             u = await db.users.find_one({"id": owner_id}, {"username": 1, "money": 1})
             owner_name = u.get("username") if u else None
             if u:
                 _, owner_wealth_rank_name, owner_wealth_rank_color = get_wealth_rank(int((u.get("money") or 0) or 0))
                 owner_wealth_rank_range = get_wealth_rank_range(int((u.get("money") or 0) or 0))
-        is_owner = owner_id == current_user.get("id") or ""
+        is_owner = (not is_mdg_prize_hold_owner(owner_id)) and (owner_id == current_user.get("id") or "")
         oid = (str(owner_id).strip() or None) if owner_id is not None else None
         max_bet = effective_public_casino_max_bet(oid, doc.get("max_bet"), default_when_owned_positive=HORSERACING_MAX_BET)
         total_earnings = doc.get("total_earnings", 0)
@@ -595,7 +602,7 @@ def register(router):
         city = _normalize_city_for_horseracing(raw) if raw else (STATES[0] if STATES else "")
         stored_city, doc = await _get_horseracing_ownership_doc(city) if city else (None, None)
         raw_owner = doc.get("owner_id") if doc else None
-        owner_id = raw_owner
+        owner_id = casino_economy_owner_id(raw_owner)
         oid = (str(raw_owner).strip() or None) if raw_owner is not None else None
         max_bet = effective_public_casino_max_bet(
             oid,

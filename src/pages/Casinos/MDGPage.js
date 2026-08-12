@@ -812,6 +812,11 @@ export default function MDGPage() {
                         {Array.isArray(g.admin_prizes) && g.admin_prizes.length > 0 && (
                           <p className="text-[9px] font-heading text-amber-200/90">
                             Bonus prizes: {g.admin_prizes.map((p) => p.label || p.kind).join(' · ')}
+                            {g.admin_prizes.some((p) => ['unowned_airport', 'unowned_armoury', 'unowned_casino'].includes(p.kind)) && (
+                              <span className="block text-amber-200/60 mt-0.5">
+                                Asset prizes reserved for this MDG — casino / airport / armoury owners cannot join.
+                              </span>
+                            )}
                           </p>
                         )}
                         <p className="text-[9px] font-heading text-foreground/90">

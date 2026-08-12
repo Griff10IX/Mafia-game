@@ -667,19 +667,21 @@ async def _start_travel_impl(
             meta={"state": current_location, "slot": slot, "destination": destination},
         )
         if owner_id:
-            await db.users.update_one({"id": owner_id}, {"$inc": {"points": airport_price}})
-            await log_points_event(
-                db,
-                user_id=owner_id,
-                points=airport_price,
-                event_type="airport_owner_income",
-                event_ref=f"airport:{current_location}:{slot}",
-                meta={"state": current_location, "slot": slot, "traveller_id": user["id"]},
-            )
-            await db.airport_ownership.update_one(
-                {"state": current_location, "slot": slot},
-                {"$inc": {"total_earnings": airport_price}}
-            )
+            from utils.mdg_prize_holds import is_mdg_prize_hold_owner
+            if not is_mdg_prize_hold_owner(owner_id):
+                await db.users.update_one({"id": owner_id}, {"$inc": {"points": airport_price}})
+                await log_points_event(
+                    db,
+                    user_id=owner_id,
+                    points=airport_price,
+                    event_type="airport_owner_income",
+                    event_ref=f"airport:{current_location}:{slot}",
+                    meta={"state": current_location, "slot": slot, "traveller_id": user["id"]},
+                )
+                await db.airport_ownership.update_one(
+                    {"state": current_location, "slot": slot},
+                    {"$inc": {"total_earnings": airport_price}}
+                )
     elif travel_method == "custom":
         custom_rows = await db.user_cars.find(
             {"user_id": user["id"], "car_id": "car_custom"}

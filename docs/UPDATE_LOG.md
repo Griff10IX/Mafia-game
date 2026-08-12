@@ -6,7 +6,7 @@
 
 [hr]
 
-[size=1.5][b][color=#2ECC71]2026-08-12[/color][/b] — [b]Families Apply OC, Gambling Ban, Samsung GPU, QT, Auto Rank exchange[/b][/size]
+[size=1.5][b][color=#2ECC71]2026-08-12[/color][/b] — [b]Families Apply OC, Gambling Ban, Samsung GPU, QT, Auto Rank exchange, MDG prize holds[/b][/size]
 [quote]
 [list]
 [*][color=#888888][b]Families:[/b] On [b]Families → FAMILIES[/b], other crews show a small [b]Apply OC[/b] button when their Crew OC is [b]ready[/b] or within [b]10 minutes[/b] (same early window as forum Crew OC ads). Paid fees match the crew’s join fee; after apply the row shows [b]OC applied[/b] / [b]OC in[/b].[/color]
@@ -16,6 +16,8 @@
 [*][color=#888888][b]Gambling Ban:[/b] While self-excluded, casino games and sports betting UIs are [b]locked[/b] (no placing bets / spinning) — not only blocked by the server after you try. [b]Wheel of Fortune[/b] free / banked spins still work; points &amp; respect spins stay locked.[/color]
 [*][color=#888888][b]Fixed:[/b] Redeem codes that include a [b]Custom Car[/b] (and other listed cars) now actually put the car in your garage — they were advertised but skipped on redeem.[/color]
 [*][color=#888888][b]Inventory:[/b] [b]Exchange Auto Rank[/b] lets you set an amount (up to 50) so you don’t have to click one-by-one — each token still yields 2 random boosts.[/color]
+[*][color=#888888][b]MDG:[/b] Admin bonus prizes that award an [b]unowned[/b] airport, armoury, or casino are [b]reserved for that MDG[/b] until the game finishes (nobody else can claim them). Reserved casinos stay at the [b]minimum max bet[/b]. Players who already own a casino, airport, or armoury [b]cannot join[/b] those prize games.[/color]
+[*][color=#888888][b]MDG:[/b] Admins are [b]not capped[/b] on create fee / extra pot (points or cash) or open-game count — e.g. 15k pts or multi-billion cash tables.[/color]
 [/list]
 [/quote]
 

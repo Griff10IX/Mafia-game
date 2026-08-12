@@ -13,7 +13,20 @@ from pymongo import ReturnDocument
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException, Request
 
-from server import db, get_current_user, get_current_user_verified, send_notification, log_gambling, _is_admin, _is_moderator, _is_entertainer
+from server import (
+    db,
+    get_current_user,
+    get_current_user_verified,
+    send_notification,
+    log_gambling,
+    _is_admin,
+    _is_moderator,
+    _is_entertainer,
+    CASINO_MIN_OWNER_MAX_BET,
+    _user_owns_any_casino,
+    _user_owns_airport,
+    _user_owns_bullet_factory,
+)
 from utils.entertainer_service import (
     ENTERTAINER_MDG_MAX_POINTS_PER_GAME,
     try_debit_entertainer_fund,
@@ -21,6 +34,11 @@ from utils.entertainer_service import (
     on_funded_game_completed,
 )
 from utils.gambling_self_ban import is_gambling_self_banned, raise_if_gambling_self_banned
+from utils.mdg_prize_holds import (
+    MDG_PRIZE_HOLD_DISPLAY_NAME,
+    mdg_prize_hold_owner_id,
+    mongo_unowned_owner_clause,
+)
 from utils.point_provenance import log_points_event
 
 MDG_MIN_PLAYERS = 2
@@ -216,12 +234,174 @@ def _mdg_normalize_admin_prizes(raw_prizes, *, is_admin: bool) -> list:
     return out
 
 
-async def _mdg_grant_admin_prizes(winner_id: str, winner_username: str, prizes: list) -> list:
+def _mdg_prizes_include_assets(prizes: list) -> bool:
+    for p in prizes or []:
+        kind = (p.get("kind") or "").strip().lower()
+        if kind in ("unowned_airport", "unowned_armoury", "unowned_casino"):
+            return True
+    return False
+
+
+def _mdg_asset_claimable_filter(*, hold_id: Optional[str] = None, extra: Optional[dict] = None) -> dict:
+    """Match unowned rows, or optionally the MDG hold for this game."""
+    if hold_id:
+        owner_clause = {"$or": [mongo_unowned_owner_clause(), {"owner_id": hold_id}]}
+    else:
+        owner_clause = mongo_unowned_owner_clause()
+    if extra:
+        return {"$and": [extra, owner_clause]}
+    return owner_clause
+
+
+async def _mdg_release_admin_asset_holds(game_id: str) -> None:
+    """Clear MDG prize holds so assets become claimable again."""
+    if not game_id:
+        return
+    hold_id = mdg_prize_hold_owner_id(game_id)
+    release_set = {"owner_id": None, "owner_username": None}
+    unset_doc = {"below_capo_acquired_at": ""}
+    try:
+        await db.airport_ownership.update_many(
+            {"owner_id": hold_id},
+            {"$set": release_set, "$unset": unset_doc},
+        )
+        await db.bullet_factory.update_many(
+            {"owner_id": hold_id},
+            {"$set": release_set, "$unset": unset_doc},
+        )
+        casino_set = {**release_set, "max_bet": CASINO_MIN_OWNER_MAX_BET}
+        for coll_name in MDG_UNOWNED_CASINO_COLLECTIONS.values():
+            coll = getattr(db, coll_name)
+            await coll.update_many(
+                {"owner_id": hold_id},
+                {"$set": casino_set, "$unset": unset_doc},
+            )
+        try:
+            from routers.admin.airport import _invalidate_airports_list_cache
+
+            _invalidate_airports_list_cache()
+        except Exception:
+            pass
+    except Exception:
+        _logger.exception("MDG release asset holds failed game_id=%s", game_id)
+
+
+async def _mdg_reserve_admin_asset_prizes(game_id: str, prizes: list) -> None:
+    """Atomically claim unowned airport/armoury/casino prizes for this MDG so nobody else can own them."""
+    assets = [
+        p
+        for p in (prizes or [])
+        if (p.get("kind") or "").strip().lower() in ("unowned_airport", "unowned_armoury", "unowned_casino")
+    ]
+    if not assets:
+        return
+    hold_id = mdg_prize_hold_owner_id(game_id)
+    hold_name = MDG_PRIZE_HOLD_DISPLAY_NAME
+    try:
+        for p in assets:
+            kind = (p.get("kind") or "").strip().lower()
+            state = (p.get("state") or "").strip()
+            label = p.get("label") or kind
+            if kind == "unowned_airport":
+                res = await db.airport_ownership.find_one_and_update(
+                    {"$and": [{"state": state}, mongo_unowned_owner_clause()]},
+                    {
+                        "$set": {"owner_id": hold_id, "owner_username": hold_name},
+                        "$unset": {"below_capo_acquired_at": ""},
+                    },
+                    return_document=ReturnDocument.AFTER,
+                )
+                if not res:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Cannot reserve {label}: airport in {state} is no longer unowned",
+                    )
+            elif kind == "unowned_armoury":
+                res = await db.bullet_factory.find_one_and_update(
+                    {"$and": [{"state": state}, mongo_unowned_owner_clause()]},
+                    {
+                        "$set": {"owner_id": hold_id, "owner_username": hold_name},
+                        "$unset": {"below_capo_acquired_at": ""},
+                    },
+                    return_document=ReturnDocument.AFTER,
+                )
+                if not res:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Cannot reserve {label}: armoury in {state} is no longer unowned",
+                    )
+            elif kind == "unowned_casino":
+                casino = (p.get("casino") or "").strip().lower()
+                coll_name = MDG_UNOWNED_CASINO_COLLECTIONS.get(casino)
+                if not coll_name:
+                    raise HTTPException(status_code=400, detail=f"Cannot reserve {label}: bad casino type")
+                coll = getattr(db, coll_name)
+                loc_filter = {"$or": [{"city": state}, {"state": state}]}
+                res = await coll.find_one_and_update(
+                    {"$and": [loc_filter, mongo_unowned_owner_clause()]},
+                    {
+                        "$set": {
+                            "owner_id": hold_id,
+                            "owner_username": hold_name,
+                            "max_bet": CASINO_MIN_OWNER_MAX_BET,
+                        },
+                        "$unset": {"below_capo_acquired_at": ""},
+                    },
+                    return_document=ReturnDocument.AFTER,
+                )
+                if not res:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Cannot reserve {label}: {casino} in {state} is no longer unowned",
+                    )
+        try:
+            from routers.admin.airport import _invalidate_airports_list_cache
+
+            _invalidate_airports_list_cache()
+        except Exception:
+            pass
+    except Exception:
+        await _mdg_release_admin_asset_holds(game_id)
+        raise
+
+
+async def _mdg_raise_if_blocked_from_asset_prize_game(user_id: str, user: dict, prizes: list) -> None:
+    """Players who already own a casino, airport, or armoury cannot join MDGs that award those assets."""
+    if not _mdg_prizes_include_assets(prizes):
+        return
+    if _is_admin(user) or _is_moderator(user):
+        return
+    if await _user_owns_any_casino(user_id):
+        raise HTTPException(
+            status_code=400,
+            detail="You already own a casino — you cannot join an MDG that awards casino / airport / armoury prizes.",
+        )
+    if await _user_owns_airport(user_id):
+        raise HTTPException(
+            status_code=400,
+            detail="You already own an airport — you cannot join an MDG that awards casino / airport / armoury prizes.",
+        )
+    if await _user_owns_bullet_factory(user_id):
+        raise HTTPException(
+            status_code=400,
+            detail="You already own an armoury — you cannot join an MDG that awards casino / airport / armoury prizes.",
+        )
+
+
+async def _mdg_grant_admin_prizes(
+    winner_id: str,
+    winner_username: str,
+    prizes: list,
+    *,
+    game_id: Optional[str] = None,
+) -> list:
     """Grant admin side-prizes. Returns list of {label, ok, detail}."""
     results = []
     if not prizes or not winner_id:
         return results
     from routers.kill.armoury import TOKEN_CONFIG
+
+    hold_id = mdg_prize_hold_owner_id(game_id) if game_id else None
 
     for p in prizes:
         kind = (p.get("kind") or "").strip().lower()
@@ -242,41 +422,56 @@ async def _mdg_grant_admin_prizes(winner_id: str, winner_username: str, prizes: 
                     results.append({"label": label, "ok": False, "detail": "unknown token"})
             elif kind == "unowned_airport":
                 state = (p.get("state") or "").strip()
-                res = await db.airport_ownership.find_one_and_update(
-                    {
-                        "state": state,
-                        "$or": [
-                            {"owner_id": None},
-                            {"owner_id": ""},
-                            {"owner_id": {"$exists": False}},
-                        ],
-                    },
-                    {"$set": {"owner_id": winner_id, "owner_username": winner_username}},
-                    return_document=ReturnDocument.AFTER,
-                )
+                res = None
+                if hold_id:
+                    res = await db.airport_ownership.find_one_and_update(
+                        {"state": state, "owner_id": hold_id},
+                        {
+                            "$set": {"owner_id": winner_id, "owner_username": winner_username},
+                            "$unset": {"below_capo_acquired_at": ""},
+                        },
+                        return_document=ReturnDocument.AFTER,
+                    )
+                if not res:
+                    res = await db.airport_ownership.find_one_and_update(
+                        _mdg_asset_claimable_filter(extra={"state": state}),
+                        {
+                            "$set": {"owner_id": winner_id, "owner_username": winner_username},
+                            "$unset": {"below_capo_acquired_at": ""},
+                        },
+                        return_document=ReturnDocument.AFTER,
+                    )
                 if not res:
                     results.append({"label": label, "ok": False, "detail": "already owned or missing"})
                 else:
                     try:
                         from routers.admin.airport import _invalidate_airports_list_cache
+
                         _invalidate_airports_list_cache()
                     except Exception:
                         pass
                     results.append({"label": label, "ok": True, "detail": f"airport {state}"})
             elif kind == "unowned_armoury":
                 state = (p.get("state") or "").strip()
-                res = await db.bullet_factory.find_one_and_update(
-                    {
-                        "state": state,
-                        "$or": [
-                            {"owner_id": None},
-                            {"owner_id": ""},
-                            {"owner_id": {"$exists": False}},
-                        ],
-                    },
-                    {"$set": {"owner_id": winner_id, "owner_username": winner_username}},
-                    return_document=ReturnDocument.AFTER,
-                )
+                res = None
+                if hold_id:
+                    res = await db.bullet_factory.find_one_and_update(
+                        {"state": state, "owner_id": hold_id},
+                        {
+                            "$set": {"owner_id": winner_id, "owner_username": winner_username},
+                            "$unset": {"below_capo_acquired_at": ""},
+                        },
+                        return_document=ReturnDocument.AFTER,
+                    )
+                if not res:
+                    res = await db.bullet_factory.find_one_and_update(
+                        _mdg_asset_claimable_filter(extra={"state": state}),
+                        {
+                            "$set": {"owner_id": winner_id, "owner_username": winner_username},
+                            "$unset": {"below_capo_acquired_at": ""},
+                        },
+                        return_document=ReturnDocument.AFTER,
+                    )
                 if not res:
                     results.append({"label": label, "ok": False, "detail": "already owned or missing"})
                 else:
@@ -289,20 +484,25 @@ async def _mdg_grant_admin_prizes(winner_id: str, winner_username: str, prizes: 
                     results.append({"label": label, "ok": False, "detail": "bad casino type"})
                     continue
                 coll = getattr(db, coll_name)
-                # Most casino ownership docs key on city/state — try both
                 loc_filter = {"$or": [{"city": state}, {"state": state}]}
-                unowned = {
-                    "$or": [
-                        {"owner_id": None},
-                        {"owner_id": ""},
-                        {"owner_id": {"$exists": False}},
-                    ]
+                casino_set = {
+                    "owner_id": winner_id,
+                    "owner_username": winner_username,
+                    "max_bet": CASINO_MIN_OWNER_MAX_BET,
                 }
-                res = await coll.find_one_and_update(
-                    {"$and": [loc_filter, unowned]},
-                    {"$set": {"owner_id": winner_id, "owner_username": winner_username}},
-                    return_document=ReturnDocument.AFTER,
-                )
+                res = None
+                if hold_id:
+                    res = await coll.find_one_and_update(
+                        {"$and": [loc_filter, {"owner_id": hold_id}]},
+                        {"$set": casino_set, "$unset": {"below_capo_acquired_at": ""}},
+                        return_document=ReturnDocument.AFTER,
+                    )
+                if not res:
+                    res = await coll.find_one_and_update(
+                        _mdg_asset_claimable_filter(extra=loc_filter),
+                        {"$set": casino_set, "$unset": {"below_capo_acquired_at": ""}},
+                        return_document=ReturnDocument.AFTER,
+                    )
                 if not res:
                     results.append({"label": label, "ok": False, "detail": "already owned or missing"})
                 else:
@@ -312,6 +512,8 @@ async def _mdg_grant_admin_prizes(winner_id: str, winner_username: str, prizes: 
         except Exception as ex:
             _logger.exception("MDG admin prize grant failed kind=%s winner=%s", kind, winner_id)
             results.append({"label": label, "ok": False, "detail": str(ex)[:120]})
+    if game_id:
+        await _mdg_release_admin_asset_holds(game_id)
     return results
 
 
@@ -385,7 +587,9 @@ async def _mdg_settle_winner(
     )
     admin_prizes = list(game.get("admin_prizes") or [])
     if admin_prizes:
-        prize_results = await _mdg_grant_admin_prizes(winner_id, winner_username, admin_prizes)
+        prize_results = await _mdg_grant_admin_prizes(
+            winner_id, winner_username, admin_prizes, game_id=game_id
+        )
         try:
             await db.mdg_games.update_one(
                 {"id": game_id},
@@ -393,6 +597,8 @@ async def _mdg_settle_winner(
             )
         except Exception:
             pass
+    else:
+        await _mdg_release_admin_asset_holds(game_id)
     prize_ok = [r["label"] for r in prize_results if r.get("ok")]
     prize_fail = [r["label"] for r in prize_results if not r.get("ok")]
     msg_bits = [f"You won the pot: {pot_pts} pts, ${pot_money:,.0f}"]
@@ -840,15 +1046,16 @@ def register(router):
         """Create a new MDG. You are auto-joined. Fee and extra pot can be points, money, or both. Max 3 open games per user."""
         raise_if_gambling_self_banned(current_user)
         uid = current_user["id"]
+        is_admin_creator = bool(_is_admin(current_user))
         open_count = await db.mdg_games.count_documents({"created_by": uid, "status": "open"})
-        if open_count >= MDG_MAX_OPEN_GAMES_PER_USER:
+        if not is_admin_creator and open_count >= MDG_MAX_OPEN_GAMES_PER_USER:
             raise HTTPException(status_code=400, detail=f"You can only have {MDG_MAX_OPEN_GAMES_PER_USER} open games at once. Roll or wait for existing games to fill.")
 
         fee_pts = max(0, int(request.fee_points or 0))
         fee_money = max(0.0, float(request.fee_money or 0))
         if fee_pts <= 0 and fee_money <= 0:
             raise HTTPException(status_code=400, detail="Set a fee: points and/or money must be greater than 0")
-        if fee_pts > MDG_MAX_FEE_POINTS or fee_money > MDG_MAX_FEE_MONEY:
+        if not is_admin_creator and (fee_pts > MDG_MAX_FEE_POINTS or fee_money > MDG_MAX_FEE_MONEY):
             raise HTTPException(status_code=400, detail="Fee exceeds maximum allowed")
         max_players = max(MDG_MIN_PLAYERS, min(MDG_MAX_PLAYERS, int(request.max_players or 10)))
         use_ent_fund = _mdg_uses_entertainer_fund(current_user)
@@ -862,7 +1069,7 @@ def register(router):
             auto_roll_at = max(MDG_MIN_PLAYERS, min(max_players, int(request.auto_roll_at)))
         extra_pts = max(0, int(request.extra_pot_points or 0))
         extra_money = max(0.0, float(request.extra_pot_money or 0))
-        if extra_pts > MDG_MAX_EXTRA_POT_POINTS or extra_money > MDG_MAX_EXTRA_POT_MONEY:
+        if not is_admin_creator and (extra_pts > MDG_MAX_EXTRA_POT_POINTS or extra_money > MDG_MAX_EXTRA_POT_MONEY):
             raise HTTPException(status_code=400, detail="Extra pot exceeds maximum allowed")
 
         # Creator is auto-joined: must have enough to pay fee + extra pot
@@ -877,8 +1084,10 @@ def register(router):
         user = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
         if not user:
             raise HTTPException(status_code=400, detail="User not found")
+        await _mdg_raise_if_blocked_from_asset_prize_game(uid, current_user, admin_prizes)
 
         game_id = str(uuid.uuid4())
+        await _mdg_reserve_admin_asset_prizes(game_id, admin_prizes)
         now_iso = datetime.now(timezone.utc).isoformat()
         creator_is_staff = bool(_is_admin(current_user) or _is_moderator(current_user))
         creator_entry = {
@@ -913,6 +1122,7 @@ def register(router):
         if use_ent_fund:
             ok = await try_debit_entertainer_fund(db, uid, total_money, total_pts)
             if not ok:
+                await _mdg_release_admin_asset_holds(game_id)
                 raise HTTPException(
                     status_code=400,
                     detail="Insufficient entertainer fund (fee + extra pot must be covered by your entertainer fund balance).",
@@ -959,6 +1169,7 @@ def register(router):
                 return_document=ReturnDocument.BEFORE,
             )
             if not user_before_create:
+                await _mdg_release_admin_asset_holds(game_id)
                 raise HTTPException(status_code=400, detail="Insufficient points or money to create and join (fee + extra pot)")
             if total_pts > 0:
                 pts_before_create = int(user_before_create.get("points") or 0)
@@ -1005,6 +1216,7 @@ def register(router):
         if not game:
             raise HTTPException(status_code=404, detail="Game not found or already closed")
         uid = current_user["id"]
+        await _mdg_raise_if_blocked_from_asset_prize_game(uid, current_user, list(game.get("admin_prizes") or []))
         await _require_mdg_join_token(http_request, current_user, request.game_id, request.join_token)
         from utils.minigame_captcha_gate import require_turnstile_for_ent_join
 

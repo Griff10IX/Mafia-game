@@ -12,6 +12,11 @@ from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException, Request
 
 from utils.point_provenance import log_points_event
+from utils.mdg_prize_holds import (
+    MDG_PRIZE_HOLD_DISPLAY_NAME,
+    casino_economy_owner_id,
+    is_mdg_prize_hold_owner,
+)
 from utils.civilian_protection import maybe_revoke_civilian_protection, require_protection_revoke_confirm
 
 from server import (
@@ -172,6 +177,23 @@ async def _run_slots_draw_if_needed(state: str):
         logging.getLogger().info("Slots draw running for state=%s (doc=%s, next_draw_at=%s)", state, bool(doc), next_draw_at)
         next_draw_iso = _next_draw_utc().isoformat()
         previous_owner_id = doc.get("owner_id") if doc else None
+        if is_mdg_prize_hold_owner(previous_owner_id):
+            # MDG prize hold: keep reserved ownership; only advance the draw clock.
+            logging.getLogger().info("Slots draw skipped ownership change (MDG prize hold) state=%s", state)
+            await db.slots_ownership.update_one(
+                {"state": filter_state},
+                {
+                    "$set": {
+                        "next_draw_at": next_draw_iso,
+                        "expires_at": next_draw_iso,
+                        "max_bet": CASINO_MIN_OWNER_MAX_BET,
+                        "owner_username": MDG_PRIZE_HOLD_DISPLAY_NAME,
+                    }
+                },
+                upsert=True,
+            )
+            await db.slots_entries.update_one({"state": st}, {"$set": {"user_ids": []}}, upsert=True)
+            return
         # Get entries and filter by cooldown only. Slots: one active state per user (cleared on win); other casinos unchanged.
         # Match slots_entries by exact state first, then case-insensitive so we find entries regardless of casing
         entries_doc = await db.slots_entries.find_one({"state": st}, {"_id": 0, "user_ids": 1, "state": 1})
@@ -401,11 +423,14 @@ def register(router):
         await _run_slots_draw_if_needed(state)
         stored_state, doc = await _get_slots_ownership_doc(state)
         owner_id = doc.get("owner_id") if doc else None
-        is_valid_owner = owner_id and not _is_slots_ownership_expired(doc)
+        mdg_held = is_mdg_prize_hold_owner(owner_id)
+        is_valid_owner = bool(owner_id) and not mdg_held and not _is_slots_ownership_expired(doc)
         cap_owner = None
         if is_valid_owner:
             raw_o = owner_id
             cap_owner = (str(raw_o).strip() or None) if raw_o is not None else None
+        elif mdg_held:
+            cap_owner = owner_id
         max_bet = effective_public_casino_max_bet(
             cap_owner,
             doc.get("max_bet") if doc else None,
@@ -414,9 +439,9 @@ def register(router):
         buy_back_reward = (doc.get("buy_back_reward") or 0) if doc else 0
         expires_at = doc.get("expires_at") if doc else None
         is_owner = is_valid_owner and owner_id == current_user.get("id") or ""
-        # Can enter: not current owner, not in cooldown, state is this state
+        # Can enter: not current owner, not in cooldown, state is this state, not MDG-held
         can_enter = False
-        if not is_owner and state:
+        if not mdg_held and not is_owner and state:
             cooldown = current_user.get("slots_cooldown_until")
             if cooldown:
                 try:
@@ -443,8 +468,13 @@ def register(router):
         return {
             "state": stored_state or state,
             "owner_id": owner_id if is_valid_owner else None,
-            "owner_username": doc.get("owner_username") if is_valid_owner else None,
+            "owner_username": (
+                MDG_PRIZE_HOLD_DISPLAY_NAME
+                if mdg_held
+                else (doc.get("owner_username") if is_valid_owner else None)
+            ),
             "is_owner": is_owner,
+            "mdg_prize_held": mdg_held,
             "max_bet": max_bet,
             "buy_back_reward": buy_back_reward,
             "expires_at": expires_at,
@@ -465,6 +495,8 @@ def register(router):
             raise HTTPException(status_code=400, detail="Invalid state")
         await _run_slots_draw_if_needed(state)
         stored_state, doc = await _get_slots_ownership_doc(state)
+        if is_mdg_prize_hold_owner((doc or {}).get("owner_id")):
+            raise HTTPException(status_code=400, detail="Slots in this state are reserved as an MDG prize")
         if doc and doc.get("owner_id") == current_user.get("id") and not _is_slots_ownership_expired(doc):
             raise HTTPException(status_code=400, detail="You already own the slots here")
         if await _active_slots_ownership_elsewhere(str(current_user.get("id") or ""), state):
@@ -671,12 +703,14 @@ def register(router):
             raise HTTPException(status_code=400, detail="Invalid state")
         await _run_slots_draw_if_needed(state)
         stored_state, doc = await _get_slots_ownership_doc(state)
-        owner_id = doc.get("owner_id") if doc else None
-        is_valid_owner = owner_id and not _is_slots_ownership_expired(doc)
+        raw_owner = doc.get("owner_id") if doc else None
+        owner_id = casino_economy_owner_id(raw_owner)
+        is_valid_owner = bool(owner_id) and not _is_slots_ownership_expired(doc)
         cap_owner = None
         if is_valid_owner:
-            raw_o = owner_id
-            cap_owner = (str(raw_o).strip() or None) if raw_o is not None else None
+            cap_owner = owner_id
+        elif is_mdg_prize_hold_owner(raw_owner):
+            cap_owner = raw_owner
         max_bet = effective_public_casino_max_bet(
             cap_owner,
             doc.get("max_bet") if doc else None,

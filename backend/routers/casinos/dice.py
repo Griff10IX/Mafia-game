@@ -13,6 +13,11 @@ from fastapi import Depends, HTTPException, Request
 
 from utils.claim_costs import load_claim_costs
 from utils.point_provenance import log_points_event
+from utils.mdg_prize_holds import (
+    MDG_PRIZE_HOLD_DISPLAY_NAME,
+    casino_economy_owner_id,
+    is_mdg_prize_hold_owner,
+)
 from utils.civilian_protection import (
     cleanup_expired_buyback_offers_for_user,
     maybe_revoke_civilian_protection,
@@ -229,9 +234,16 @@ def register(router):
         oid = (str(owner_id).strip() or None) if owner_id is not None else None
         max_bet = effective_public_casino_max_bet(oid, doc.get("max_bet"), default_when_owned_positive=DICE_MAX_BET)
         buy_back_reward = doc.get("buy_back_reward")
-        is_owner = (current_user.get("id") or "") == owner_id
+        is_owner = (current_user.get("id") or "") == owner_id and not is_mdg_prize_hold_owner(oid)
         owner = None
-        if owner_id:
+        if is_mdg_prize_hold_owner(oid):
+            owner = {
+                "username": MDG_PRIZE_HOLD_DISPLAY_NAME,
+                "wealth_rank_name": None,
+                "wealth_rank_color": None,
+                "wealth_rank_range": None,
+            }
+        elif owner_id:
             u = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "money": 1})
             if u:
                 _, wealth_rank_name, wealth_rank_color = get_wealth_rank(int((u.get("money") or 0) or 0))
@@ -300,9 +312,9 @@ def register(router):
         stored_city, doc = await _get_dice_ownership_doc(city)
         db_city = stored_city or city
         raw_owner = doc.get("owner_id") if doc else None
-        owner_id = (str(raw_owner).strip() or None) if raw_owner is not None else None
+        owner_id = casino_economy_owner_id(raw_owner)
         max_bet = effective_public_casino_max_bet(
-            owner_id,
+            raw_owner,
             doc.get("max_bet") if doc else None,
             default_when_owned_positive=DICE_MAX_BET,
         )

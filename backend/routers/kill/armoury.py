@@ -783,22 +783,26 @@ async def get_bullet_factory(
     cc = await load_claim_costs(db)
     factory = await _get_or_create_factory(state)
     owner_id = factory.get("owner_id")
-    if owner_id:
+    from utils.mdg_prize_holds import casino_economy_owner_id, is_mdg_prize_hold_owner, MDG_PRIZE_HOLD_DISPLAY_NAME
+    economy_owner_id = casino_economy_owner_id(owner_id)
+    if economy_owner_id:
         factory = await _tick_armoury_production(state, factory)
     owner_username = factory.get("owner_username")
-    if owner_id and not owner_username:
-        user = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1})
+    if is_mdg_prize_hold_owner(owner_id):
+        owner_username = MDG_PRIZE_HOLD_DISPLAY_NAME
+    elif economy_owner_id and not owner_username:
+        user = await db.users.find_one({"id": economy_owner_id}, {"_id": 0, "username": 1})
         owner_username = user.get("username") if user else "?"
     accumulated = _accumulated_bullets(factory)
-    cap_24 = _bullet_cap_24h(factory)
+    cap_24 = _bullet_cap_24h({**factory, "owner_id": economy_owner_id})
     prod_per_hour = _bullet_production_per_hour(factory)
     buy_max = min(BULLET_FACTORY_BUY_MAX_PER_PURCHASE, cap_24)
-    is_owner = str(current_user.get("id") or "") == str(owner_id or "")
+    is_owner = str(current_user.get("id") or "") == str(economy_owner_id or "")
     price = factory.get("price_per_bullet")
     unowned_price = factory.get("unowned_price")
     if unowned_price is None:
         unowned_price = random.randint(BULLET_FACTORY_UNOWNED_PRICE_MIN, BULLET_FACTORY_UNOWNED_PRICE_MAX)
-    if owner_id:
+    if economy_owner_id:
         can_buy = price is not None and price >= BULLET_FACTORY_PRICE_MIN and not is_owner and accumulated > 0
         effective_price = price
     else:
@@ -820,7 +824,7 @@ async def get_bullet_factory(
         "production_per_24h": cap_24,
         "production_tick_minutes": BULLET_FACTORY_TICK_MINUTES,
         "claim_cost": cc["armoury"],
-        "owner_id": owner_id,
+        "owner_id": economy_owner_id,
         "owner_username": owner_username,
         "accumulated_bullets": accumulated,
         "can_buy": can_buy,
@@ -829,7 +833,7 @@ async def get_bullet_factory(
         "price_max": BULLET_FACTORY_PRICE_MAX,
         "unowned_price_min": BULLET_FACTORY_UNOWNED_PRICE_MIN,
         "unowned_price_max": BULLET_FACTORY_UNOWNED_PRICE_MAX,
-        "is_unowned": owner_id is None,
+        "is_unowned": economy_owner_id is None and not is_mdg_prize_hold_owner(owner_id),
         "last_collected_at": factory.get("last_collected_at"),
         "is_owner": is_owner,
         "buy_max_per_purchase": buy_max,
@@ -837,7 +841,7 @@ async def get_bullet_factory(
         "next_buy_available_at": next_buy_available_at,
     }
     # Armoury (owner only): multi-production hours + produce-all costs
-    if owner_id:
+    if economy_owner_id:
         out["owner_pending_profit"] = int(factory.get("owner_pending_profit") or 0)
         out["owner_pending_profit_points"] = int(factory.get("owner_pending_profit_points") or 0)
         armour_hrs = factory.get("armour_production_hours") or {}
@@ -1398,7 +1402,8 @@ async def buy_bullets(
     """Buy bullets from the factory in this state. When unowned, pay system price ($2,500–$4,000). When owned, pay owner's price. Max 3000 per purchase, once every 15 minutes."""
     state = _normalize_state(request.state or current_user.get("current_state"))
     factory = await _get_or_create_factory(state)
-    owner_id = factory.get("owner_id")
+    from utils.mdg_prize_holds import casino_economy_owner_id
+    owner_id = casino_economy_owner_id(factory.get("owner_id"))
     amount = request.amount
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")

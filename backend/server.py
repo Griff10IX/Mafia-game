@@ -2387,10 +2387,13 @@ CASINO_MIN_OWNER_MAX_BET = 50_000
 def effective_public_casino_max_bet(owner_id, stored_max_bet, *, default_when_owned_positive: int) -> int:
     """
     No owner: public play is capped at CASINO_MIN_OWNER_MAX_BET only (no one backs larger limits).
+    MDG prize holds behave as unowned for public max bet (reserved asset, min table).
     Owned: preserve explicit max_bet, including 0 after a buy-back; missing/invalid legacy rows use default.
     """
-    oid = owner_id
-    if oid is None or oid == "":
+    from utils.mdg_prize_holds import casino_economy_owner_id
+
+    oid = casino_economy_owner_id(owner_id)
+    if oid is None:
         return int(CASINO_MIN_OWNER_MAX_BET)
     if stored_max_bet is None:
         return int(default_when_owned_positive)
