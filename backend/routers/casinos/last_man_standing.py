@@ -172,6 +172,12 @@ async def lms_join(season_id: str, current_user: dict = Depends(get_current_user
     return await lms.join_season(db, current_user, season_id)
 
 
+async def lms_pick(season_id: str, body: LmsPickBody, current_user: dict = Depends(get_current_user_verified)):
+    raise_if_gambling_self_banned(current_user)
+    _action_rl(current_user.get("id") or "", "pick")
+    return await lms.submit_pick(db, current_user, season_id, body.gw, body.team_id)
+
+
 async def lms_extra_life(season_id: str, current_user: dict = Depends(get_current_user_verified)):
     raise_if_gambling_self_banned(current_user)
     _action_rl(current_user.get("id") or "", "life")
