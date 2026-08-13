@@ -75,6 +75,7 @@ BODYGUARD_ROBOT_KILLED_HIRE_COOLDOWN_SECONDS = 60
 
 # --- Robot hire gate (v2): short-lived reminted random tokens + rotating JSON field names ---
 # Old bots that POST hire_code_name / bgc_* fail and are logged as legacy_code_attempt.
+# Token is NOT one-shot on hire (players hire multiple slots in parallel); remints on GET.
 _BODYGUARD_RVK_PREFIX = "rvk_"
 _BODYGUARD_RVK_NAME_KEY = "rvk_name"
 _BODYGUARD_RVK_BUCKET_KEY = "rvk_b"
@@ -194,16 +195,6 @@ async def _ensure_bodyguard_rvk_token(user_id: str) -> str:
         update["bodyguard_rvk_prev"] = cur
     await db.users.update_one({"id": uid}, {"$set": update})
     return new_tok
-
-
-async def _consume_bodyguard_rvk_token(user_id: str) -> None:
-    uid = (user_id or "").strip()
-    if not uid:
-        return
-    await db.users.update_one(
-        {"id": uid},
-        {"$unset": {"bodyguard_rvk": "", "bodyguard_rvk_prev": "", "bodyguard_rvk_at": ""}},
-    )
 
 
 async def _bodyguard_rvk_payload(user_id: str) -> Dict[str, Any]:
@@ -889,10 +880,14 @@ async def hire_bodyguard(payload: BodyguardHireRequest, req: Request, current_us
             },
         )
     result = await _do_hire_bodyguard(payload.slot, payload.is_robot, current_user)
-    try:
-        await _consume_bodyguard_rvk_token(uid)
-    except Exception:
-        logger.exception("bodyguard rvk consume failed uid=%s", uid)
+    # Do not consume the rvk token on hire: players often fire several hires in parallel
+    # (one POST per slot). One-shot consume caused false code_invalid logs. Token still
+    # remints on GET (~60s) and field names rotate; bots on legacy shapes still fingerprint.
+    if isinstance(result, dict):
+        try:
+            result.update(await _bodyguard_rvk_payload(uid))
+        except Exception:
+            logger.exception("bodyguard rvk payload after hire failed uid=%s", uid)
     try:
         await _log_bodyguard_hire_attempt(
             user_id=uid,

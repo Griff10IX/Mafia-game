@@ -465,6 +465,10 @@ export default function Bodyguards() {
       if (typeof response?.data?.robot_bodyguard_hire_tokens === 'number') {
         setRobotHireTokens(response.data.robot_bodyguard_hire_tokens);
       }
+      const nextHireCode = getBodyguardHireCodePayload(response?.data);
+      if (nextHireCode.rvk_name) {
+        hireCodePayloadRef.current = nextHireCode;
+      }
       showHireBanner('success', response?.data?.message ?? 'Bodyguard hired');
     } catch (error) {
       claimedSlotsRef.current.delete(slot);

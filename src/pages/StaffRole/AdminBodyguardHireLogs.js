@@ -138,7 +138,7 @@ export default function AdminBodyguardHireLogs() {
 
       <p className="text-[10px] text-mutedForeground font-heading">
         <b className="text-amber-200/90">legacy_code_attempt</b> = still posting old <code>hire_code_name</code> / <code>bgc_*</code> (bot fingerprint).
-        <b className="text-rose-300/90"> code_invalid</b> = missing/stale rvk gate.
+        <b className="text-rose-300/90"> code_invalid</b> = missing/wrong rvk (not rapid multi-slot hire — same token stays valid until remint).
       </p>
 
       <div className="flex flex-wrap gap-2 items-end">
