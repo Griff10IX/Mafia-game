@@ -2714,6 +2714,28 @@ def register(router):
             "total_cars": int(current_user.get("redeem_stats_total_cars") or 0),
             "total_tokens": int(current_user.get("redeem_stats_total_tokens") or 0),
         }
+        referees = []
+        if user_id:
+            referees_raw = await db.users.find(
+                {
+                    "referred_by": str(user_id),
+                    "is_dead": {"$ne": True},
+                    "is_npc": {"$ne": True},
+                    "is_bodyguard": {"$ne": True},
+                },
+                {"_id": 0, "username": 1, "email_verified": 1},
+            ).to_list(300)
+            referees = sorted(
+                [
+                    {
+                        "username": (r.get("username") or "").strip(),
+                        "email_verified": r.get("email_verified") is not False,
+                    }
+                    for r in referees_raw
+                    if (r.get("username") or "").strip()
+                ],
+                key=lambda r: r["username"].lower(),
+            )
         return {
             "username": username,
             "referred_by_username": referred_by_username,
@@ -2722,6 +2744,8 @@ def register(router):
             "earnings": earnings,
             "weekly_points": weekly_stats,
             "redeem_stats": redeem_stats,
+            "referees": referees,
+            "referee_count": len(referees),
         }
 
     class RedeemRequestBody(BaseModel):

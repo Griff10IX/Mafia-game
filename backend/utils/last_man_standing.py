@@ -767,20 +767,34 @@ async def join_season(db, user: dict, season_id: str) -> dict:
     except Exception:
         await _refund_points(db, uid, fee, event_ref=f"lms:{season_id}:join-fail", meta={"season_id": season_id})
         raise
-    await db[COL_SEASONS].update_one(
-        {"id": season_id},
-        {"$inc": {"pot": fee, "entry_count": 1}},
-    )
-    await log_points_event(
-        db,
-        user_id=uid,
-        points=-fee,
-        event_type="lms_entry",
-        event_ref=f"lms:{season_id}:entry:{entry['id']}",
-        meta={"season_id": season_id, "fee": fee},
-    )
-    entry.pop("_id", None)
-    return {"already_joined": False, "entry": entry}
+    # Seat is committed. Pot/ledger must not 500 the client into thinking join failed.
+    try:
+        await db[COL_SEASONS].update_one(
+            {"id": season_id},
+            {"$inc": {"pot": fee, "entry_count": 1}},
+        )
+    except Exception:
+        logger.exception("lms join pot increment failed season=%s user=%s", season_id, uid)
+        try:
+            await db[COL_SEASONS].update_one(
+                {"id": season_id},
+                {"$inc": {"pot": fee, "entry_count": 1}},
+            )
+        except Exception:
+            logger.exception("lms join pot increment retry failed season=%s", season_id)
+    try:
+        await log_points_event(
+            db,
+            user_id=uid,
+            points=-fee,
+            event_type="lms_entry",
+            event_ref=f"lms:{season_id}:entry:{entry['id']}",
+            meta={"season_id": season_id, "fee": fee},
+        )
+    except Exception:
+        logger.exception("lms join ledger failed season=%s user=%s", season_id, uid)
+    out = {k: v for k, v in entry.items() if k != "_id"}
+    return {"already_joined": False, "entry": out}
 
 
 async def buy_extra_life(db, user: dict, season_id: str) -> dict:

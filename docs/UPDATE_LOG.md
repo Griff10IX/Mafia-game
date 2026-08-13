@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-13[/color][/b] — [b]Referral: living players on your link[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Referral & Redeem:[/b] You can now see living players currently using your referral link. Dead accounts are not listed.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-13[/color][/b] — [b]Last Man Standing (Premier League)[/b][/size]
 [quote]
 [list]
@@ -13,6 +22,7 @@
 [*][color=#888888][b]Weekly:[/b] Survive a week for [b]1,000 pts[/b] plus [b]250 × streak[/b] (house-funded, not taken from the pot).[/color]
 [*][color=#888888][b]One seat per email[/b] — if you die, the entry (picks, burned teams, streak) moves to your next character. You cannot run two seats.[/color]
 [*][color=#888888][b]Staff:[/b] Admins and mods can join. They pay the entry fee, but take [b]none[/b] of the weekly bonuses or the season pot.[/color]
+[*][color=#888888][b]Fixed:[/b] Join no longer flashes [b]Join failed[/b] when the seat actually went through (refresh used to show you were already in).[/color]
 [/list]
 [/quote]
 

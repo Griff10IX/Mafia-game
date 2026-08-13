@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { UserPlus, Copy, Crosshair, DollarSign, Car, Building2, BarChart3, Link2, Wine, KeyRound, Gift, RefreshCw } from 'lucide-react';
+import { UserPlus, Users, Copy, Crosshair, DollarSign, Car, Building2, BarChart3, Link2, Wine, KeyRound, Gift, RefreshCw } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
-const REF_CACHE_KEY = 'mafia_account_referral_v1';
+const REF_CACHE_KEY = 'mafia_account_referral_v2';
 const REF_FETCH_TIMEOUT_MS = 25_000;
 
 /** Reject corrupt sessionStorage so we never stick on Loading with a silent refresh loop. */
@@ -215,6 +215,45 @@ export default function Referral() {
                 <Copy size={12} className="sm:w-3.5 sm:h-3.5" /> Copy link
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Living players currently on this referral */}
+        <div className={cardClass} style={{ animationDelay: '0.08s' }}>
+          <div className={cardHeaderClass}>
+            <h2 className={`${cardTitleClass} w-full`}>
+              <Users size={14} className="sm:w-4 sm:h-4" />
+              Using your link
+              <span className="ml-auto font-mono text-primary normal-case tracking-normal">
+                {Number(data?.referee_count ?? (data?.referees || []).length).toLocaleString()}
+              </span>
+            </h2>
+          </div>
+          <div className="p-2.5 sm:p-3 space-y-2">
+            <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>
+              Living accounts currently referred by you. Dead characters are not listed.
+            </p>
+            {(data?.referees || []).length ? (
+              <ul className="columns-2 sm:columns-3 gap-x-3 max-h-56 overflow-y-auto text-[11px] sm:text-xs font-heading text-foreground">
+                {(data.referees || []).map((r) => {
+                  const name = typeof r === 'string' ? r : r?.username;
+                  if (!name) return null;
+                  const verified = typeof r === 'object' ? r.email_verified !== false : true;
+                  return (
+                    <li key={name} className="break-inside-avoid py-0.5 min-h-[28px] flex items-center">
+                      <Link to={`/profile/${encodeURIComponent(name)}`} className="text-primary hover:underline truncate">
+                        {name}
+                      </Link>
+                      {!verified && (
+                        <span className={`ml-1 shrink-0 text-[9px] ${styles.gmMuted}`}>unverified</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className={`text-[10px] sm:text-xs font-heading ${styles.gmMuted}`}>Nobody living is using your link yet.</p>
+            )}
           </div>
         </div>
 

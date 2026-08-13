@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Skull, Flame, Users, Clock, ChevronDown, ChevronUp, Heart } from 'lucide-react';
 import { toast } from 'sonner';
-import api, { refreshUser } from '../../utils/api';
+import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
 const LMS_CSS = `
@@ -96,12 +96,18 @@ export default function LastManStanding() {
 
   const load = useCallback(async () => {
     const res = await api.get('/lms/seasons');
-    setData(res.data || null);
-    const sid = res.data?.season?.id;
+    const payload = res.data || null;
+    setData(payload);
+    const sid = payload?.season?.id;
     if (sid) {
-      const f = await api.get(`/lms/seasons/${sid}/picks-feed`);
-      setFeed(f.data || null);
+      try {
+        const f = await api.get(`/lms/seasons/${sid}/picks-feed`);
+        setFeed(f.data || null);
+      } catch (_) {
+        /* season payload is enough to show join / lives / pick UI */
+      }
     }
+    return payload;
   }, []);
 
   useEffect(() => {
@@ -144,16 +150,36 @@ export default function LastManStanding() {
   const lives = entry ? intSafe(entry.lives ?? season?.starting_lives ?? 2) : 0;
   const lifeCost = intSafe(season?.extra_life_cost ?? 2500);
 
+  function applyEntry(entry) {
+    if (!entry) return;
+    setData((prev) => (prev ? { ...prev, entry, can_join: false } : prev));
+  }
+
+  async function reloadQuiet() {
+    try {
+      return await load();
+    } catch (_) {
+      return null;
+    }
+  }
+
   async function onJoin() {
     if (busy || !season?.id) return;
     setBusy(true);
     try {
-      await api.post(`/lms/seasons/${season.id}/join`);
-      toast.success('You are in.');
+      const res = await api.post(`/lms/seasons/${season.id}/join`);
+      applyEntry(res.data?.entry);
+      toast.success(res.data?.already_joined ? 'You are already in.' : 'You are in.');
       refreshUser().catch(() => {});
-      await load();
+      await reloadQuiet();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Join failed');
+      const payload = await reloadQuiet();
+      if (payload?.entry) {
+        toast.success('You are in.');
+        refreshUser().catch(() => {});
+      } else {
+        toast.error(getApiErrorMessage(e) || 'Join failed');
+      }
     } finally {
       setBusy(false);
     }
@@ -163,12 +189,19 @@ export default function LastManStanding() {
     if (busy || !season?.id) return;
     setBusy(true);
     try {
-      await api.post(`/lms/seasons/${season.id}/extra-life`);
+      const res = await api.post(`/lms/seasons/${season.id}/extra-life`);
+      applyEntry(res.data?.entry);
       toast.success('Extra life bought.');
       refreshUser().catch(() => {});
-      await load();
+      await reloadQuiet();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Could not buy a life');
+      const payload = await reloadQuiet();
+      if (payload?.entry?.extra_life_bought) {
+        toast.success('Extra life bought.');
+        refreshUser().catch(() => {});
+      } else {
+        toast.error(getApiErrorMessage(e) || 'Could not buy a life');
+      }
     } finally {
       setBusy(false);
     }
@@ -181,9 +214,16 @@ export default function LastManStanding() {
       await api.post(`/lms/seasons/${season.id}/picks`, { gw: gw.gw, team_id: selectedId });
       toast.success('Pick locked in until you change it.');
       setSelected(selectedId);
-      await load();
+      await reloadQuiet();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Pick failed');
+      const payload = await reloadQuiet();
+      const saved = payload?.my_pick?.team_id || null;
+      if (saved && saved === selectedId) {
+        toast.success('Pick locked in until you change it.');
+        setSelected(selectedId);
+      } else {
+        toast.error(getApiErrorMessage(e) || 'Pick failed');
+      }
     } finally {
       setBusy(false);
     }
