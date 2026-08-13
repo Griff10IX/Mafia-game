@@ -96,6 +96,13 @@ async def create_revive_payment_intent(
         raise HTTPException(status_code=400, detail="That account is not dead.")
     if dead_user.get("account_locked"):
         raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
+    from utils.modkill_wipe import account_blocks_dead_alive_revive
+
+    if account_blocks_dead_alive_revive(dead_user):
+        raise HTTPException(
+            status_code=400,
+            detail="That account cannot be revived with Dead > Alive (£10).",
+        )
     dead_email = (dead_user.get("email") or "").strip().lower()
     if dead_email != email:
         if not (dead_password and str(dead_password).strip()):
@@ -161,6 +168,13 @@ async def execute_paid_revive(
         raise HTTPException(status_code=400, detail="Target account is no longer dead.")
     if dead_user.get("account_locked"):
         raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
+    from utils.modkill_wipe import account_blocks_dead_alive_revive
+
+    if account_blocks_dead_alive_revive(dead_user):
+        raise HTTPException(
+            status_code=400,
+            detail="That account cannot be revived with Dead > Alive (£10).",
+        )
 
     email = (intent.get("reviver_email") or reviver.get("email") or "").strip().lower()
     points_balance = int(reviver.get("points") or 0)
@@ -1057,18 +1071,32 @@ def register(router):
             }
         dead_same_email = await db.users.find(
             {"email": email, "is_dead": True},
-            {"_id": 0, "username": 1, "account_locked": 1},
+            {"_id": 0, "username": 1, "account_locked": 1, "modkill_wipe": 1},
         ).to_list(50)
-        dead_accounts_same_email = [
-            {"username": u.get("username")}
-            for u in dead_same_email
-            if u.get("username") and not u.get("account_locked")
+        from utils.modkill_wipe import account_blocks_dead_alive_revive
+
+        eligible_dead = [
+            u for u in dead_same_email
+            if u.get("username") and not u.get("account_locked") and not account_blocks_dead_alive_revive(u)
         ]
+        wipe_blocked = [
+            u for u in dead_same_email
+            if u.get("username") and account_blocks_dead_alive_revive(u)
+        ]
+        dead_accounts_same_email = [{"username": u.get("username")} for u in eligible_dead]
         if not dead_accounts_same_email and any(bool(u.get("account_locked")) for u in dead_same_email):
             return {
                 **base,
                 "can_revive": False,
                 "reason": ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL,
+                "revive_used": False,
+                "dead_accounts_same_email": [],
+            }
+        if not dead_accounts_same_email and wipe_blocked:
+            return {
+                **base,
+                "can_revive": False,
+                "reason": "That account cannot be revived with Dead > Alive (£10).",
                 "revive_used": False,
                 "dead_accounts_same_email": [],
             }

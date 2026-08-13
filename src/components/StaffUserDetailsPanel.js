@@ -15,7 +15,6 @@ import {
   Award,
   Mail,
   LogOut,
-  Users,
 } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
@@ -465,6 +464,43 @@ export default function StaffUserDetailsPanel({
                               }
                             >
                               {actionLoading.kill ? '…' : 'Kill'}
+                            </button>
+                          </ToolRow>
+                          <ToolRow label="Kill (wipe)">
+                            <button
+                              type="button"
+                              className={btnDangerClass}
+                              disabled={actionLoading.killWipe}
+                              onClick={() => {
+                                const reason = window.prompt(
+                                  `Modkill (wipe) ${username}? Enter a short Topic of Shame reason.`
+                                );
+                                if (reason == null) return;
+                                const trimmed = String(reason).trim();
+                                if (!trimmed) {
+                                  toast.error('Enter a short reason for Topic of Shame');
+                                  return;
+                                }
+                                if (
+                                  !window.confirm(
+                                    `Wipe ${username}? Honours, cash, points, Game Pass stripped. Rat. No £10 revive.`
+                                  )
+                                ) {
+                                  return;
+                                }
+                                runAction('killWipe', async () => {
+                                  const res = await api.post('/admin/kill-player', null, {
+                                    params: {
+                                      target_username: username,
+                                      wipe: true,
+                                      reason: trimmed,
+                                    },
+                                  });
+                                  toast.success(res.data?.message);
+                                });
+                              }}
+                            >
+                              {actionLoading.killWipe ? '…' : 'Wipe'}
                             </button>
                           </ToolRow>
                           <ToolRow label="Revive">

@@ -5,8 +5,9 @@ Ensures banned IPs are blocked before account-locked / other auth-derived 403s.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
 from starlette.requests import Request
@@ -17,6 +18,10 @@ from utils.ip_normalize import normalize_ip_string
 logger = logging.getLogger(__name__)
 
 IP_BAN_DETAIL = "Your IP has been banned from this server."
+IP_BAN_CODE = "ip_banned"
+_REASON_MAX = 400
+_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"\s+")
 
 
 def client_ip_from_request(request: Request) -> str:
@@ -36,14 +41,39 @@ def client_ip_from_request(request: Request) -> str:
     return ""
 
 
-async def json_response_if_ip_banned(db, client_ip: str) -> Optional[JSONResponse]:
-    """Return 403 JSON if this IP is actively banned; None if allowed. Deactivates expired bans."""
+def sanitize_ip_ban_reason(raw: Any) -> str:
+    s = str(raw or "")
+    s = _TAG_RE.sub("", s)
+    s = s.replace("\r", " ").replace("\n", " ")
+    s = _WS_RE.sub(" ", s).strip()
+    if len(s) > _REASON_MAX:
+        s = s[:_REASON_MAX].rstrip()
+    return s
+
+
+def ip_ban_payload(ban: Optional[dict] = None) -> Dict[str, Any]:
+    """Public 403 body. String `detail` kept for existing clients; no staff/IP fields."""
+    out: Dict[str, Any] = {
+        "detail": IP_BAN_DETAIL,
+        "code": IP_BAN_CODE,
+    }
+    reason = sanitize_ip_ban_reason((ban or {}).get("reason"))
+    if reason:
+        out["reason"] = reason
+    expires_at = (ban or {}).get("expires_at")
+    if expires_at:
+        out["expires_at"] = str(expires_at)
+    return out
+
+
+async def active_ip_ban(db, client_ip: str) -> Optional[dict]:
+    """Active ban doc for this IP, or None. Deactivates expired bans."""
     if not client_ip:
         return None
     try:
         ban = await db.ip_bans.find_one(
             {"ip": client_ip, "active": True},
-            {"_id": 0, "expires_at": 1},
+            {"_id": 0, "expires_at": 1, "reason": 1},
         )
         if not ban:
             return None
@@ -60,16 +90,25 @@ async def json_response_if_ip_banned(db, client_ip: str) -> Optional[JSONRespons
                     )
                     return None
             except Exception:
-                return JSONResponse(status_code=403, content={"detail": IP_BAN_DETAIL})
-            return JSONResponse(status_code=403, content={"detail": IP_BAN_DETAIL})
-        return JSONResponse(status_code=403, content={"detail": IP_BAN_DETAIL})
+                return ban
+        return ban
     except Exception as e:
         logger.warning("IP ban check failed: %s", e)
         return None
 
 
+async def json_response_if_ip_banned(db, client_ip: str) -> Optional[JSONResponse]:
+    """Return 403 JSON if this IP is actively banned; None if allowed."""
+    ban = await active_ip_ban(db, client_ip)
+    if not ban:
+        return None
+    return JSONResponse(status_code=403, content=ip_ban_payload(ban))
+
+
 async def raise_http_if_ip_banned(db, request: Request) -> None:
-    """403 with IP ban message if client IP is banned (runs before account_locked and other user checks)."""
-    resp = await json_response_if_ip_banned(db, client_ip_from_request(request))
-    if resp is not None:
-        raise HTTPException(status_code=403, detail=IP_BAN_DETAIL)
+    """403 with IP ban payload if client IP is banned (before account_locked and other user checks)."""
+    ban = await active_ip_ban(db, client_ip_from_request(request))
+    if ban is None:
+        return
+    # FastAPI wraps this as {"detail": <payload>}; parseIpBanFromError accepts both shapes.
+    raise HTTPException(status_code=403, detail=ip_ban_payload(ban))

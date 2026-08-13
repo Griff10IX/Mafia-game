@@ -569,6 +569,7 @@ def register(router):
                 "prestige_level": 1,
                 "money": 1,
                 "founding_member": 1,
+                "modkill_wipe": 1,
                 "family_id": 1,
                 "war_rat_badge_until": 1,
                 "war_rat_family_id": 1,
@@ -725,6 +726,7 @@ def register(router):
             "prestige_level": _prestige_level,
             "prestige_name": _prestige_name or None,
             "founding_member": bool(user.get("founding_member")),
+            "modkill_wipe": bool(user.get("modkill_wipe")),
             **profile_cosmetic_public_fields(user),
         }
 
@@ -1051,6 +1053,7 @@ def register(router):
             "profile_notepad_color": _notepad_color_for_api_response(user.get("profile_notepad_color")),
             "badges": user.get("badges") or [],
             "founding_member": bool(user.get("founding_member")),
+            "modkill_wipe": bool(user.get("modkill_wipe")),
             **profile_cosmetic_public_fields(user),
             "achievement_badges": achievement_badges,
         }

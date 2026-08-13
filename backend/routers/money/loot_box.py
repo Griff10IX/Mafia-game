@@ -240,6 +240,43 @@ async def _increment_claimed_count(typ: str):
     )
 
 
+async def resync_loot_exclusive_claimed_counts_from_live() -> Dict[str, int]:
+    """Align loot-box 1/1 counters with live ownership after a wipe/release."""
+    from server import LOOT_EXCLUSIVE_ARMOUR_LEVEL
+
+    weapon_n = int(
+        await db.user_weapons.count_documents({"weapon_id": LOOT_EXCLUSIVE_WEAPON_ID, "quantity": {"$gte": 1}})
+    )
+    car_n = int(await db.user_cars.count_documents({"car_id": LOOT_EXCLUSIVE_CAR_ID}))
+    armour_n = int(
+        await db.users.count_documents(
+            {
+                "$or": [
+                    {"armour_level": {"$gte": LOOT_EXCLUSIVE_ARMOUR_LEVEL}},
+                    {"armour_owned_level_max": {"$gte": LOOT_EXCLUSIVE_ARMOUR_LEVEL}},
+                ]
+            }
+        )
+    )
+    property_n = int(
+        await db.exclusive_properties.count_documents(
+            {"owner_id": {"$nin": [None, ""]}}
+        )
+    )
+    counts = {
+        "weapon": min(_exclusive_cap("weapon"), max(0, 1 if weapon_n > 0 else 0)),
+        "car": min(_exclusive_cap("car"), max(0, 1 if car_n > 0 else 0)),
+        "armour": min(_exclusive_cap("armour"), max(0, 1 if armour_n > 0 else 0)),
+        "property": min(_exclusive_cap("property"), max(0, 1 if property_n > 0 else 0)),
+    }
+    await db.game_settings.update_one(
+        {"key": GAME_SETTINGS_LOOT_COUNTS_KEY},
+        {"$set": {f"value.{k}": v for k, v in counts.items()}},
+        upsert=True,
+    )
+    return counts
+
+
 async def _get_loot_rarity_config() -> Dict[str, Any]:
     """Return current loot box rarity config (exclusive_chance 0-1, common_pct, uncommon_pct, rare_pct). Uses defaults if not set."""
     doc = await db.game_settings.find_one({"key": GAME_SETTINGS_LOOT_RARITY_KEY}, {"_id": 0, "value": 1})

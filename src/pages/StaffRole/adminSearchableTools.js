@@ -26,6 +26,7 @@ export const SEARCHABLE_TOOLS = [
   { label: "Ghost Mode", categoryId: "admin-players", collapseKey: "ghost", keywords: ["ghost","invisible","hide"] },
   { label: "Lock Account", categoryId: "admin-moderation", collapseKey: "moderationPlayer", keywords: ["lock","ban","account","player","investigation"] },
   { label: "Kill Player", categoryId: "admin-moderation", collapseKey: "moderationPlayer", keywords: ["kill","death","player","modkill"] },
+  { label: "Modkill (wipe)", categoryId: "admin-moderation", collapseKey: "moderationPlayer", keywords: ["modkill","wipe","shame","honours","leaderboard","rat","prestige","game pass","revive"] },
   { label: "Revive Player", categoryId: "admin-moderation", collapseKey: "moderationPlayer", keywords: ["revive","resurrect","alive"], adminOnly: true },
   { label: "User Details", categoryId: "admin-players", collapseKey: "userDetails", keywords: ["user","details","info","profile","jail","bust","reward"] },
   { label: "User give / take & leaderboards", categoryId: "admin-players", collapseKey: "userAdjustHub", keywords: ["leaderboard","adjust","strip","username","crimes","scores","gta","busts","kills","minigame","money","points","respect","bullets","weekly","alltime","preview","partial","bootleg","racing lifetime","lifetime earnings"] },

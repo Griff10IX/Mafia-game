@@ -9,10 +9,13 @@ from utils.profile_cosmetics import custom_profile_badge_strip_on_death_pull, cu
 
 
 def player_death_set_fields() -> dict:
+    from utils.referral_ids import referral_unlink_on_death_set
+
     return {
         **AUTO_RANK_PAUSE_ON_DEATH,
         **founding_member_strip_on_death_set(),
         **custom_profile_badge_strip_on_death_set(),
+        **referral_unlink_on_death_set(),
     }
 
 

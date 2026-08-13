@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown, Star } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown, Star, Eraser } from 'lucide-react';
 import api, { apiGetWithResumeRetries, getApiErrorMessage, isTransientResumeLoadError, shouldSuppressResumeNetworkToast } from '../../utils/api';
 import {
   apiPostWithCivilianProtectionConfirm,
@@ -238,6 +238,36 @@ const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone })
       toast.error(e.response?.data?.detail || 'Failed');
     } finally { setLoading(null); }
   };
+  const handleKillWipe = async () => {
+    const reason = window.prompt(
+      `Modkill (wipe) ${username}? Enter a short Topic of Shame reason (honours, cash, points, Game Pass stripped; Rat; no £10 revive).`
+    );
+    if (reason == null) return;
+    const trimmed = String(reason).trim();
+    if (!trimmed) {
+      toast.error('Enter a short reason for Topic of Shame');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Wipe ${username}? This cannot be undone via Dead > Alive (£10).`
+      )
+    ) {
+      return;
+    }
+    setLoading('kill-wipe');
+    try {
+      await api.post('/admin/kill-player', null, {
+        params: { target_username: username, wipe: true, reason: trimmed },
+      });
+      toast.success('Player wiped');
+      onDone?.();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setLoading(null);
+    }
+  };
   const handleRevive = async () => {
     if (!window.confirm(`Revive ${username}?`)) return;
     setLoading('revive');
@@ -281,6 +311,7 @@ const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone })
         {isAdmin && (
           <>
             <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleKill} disabled={!!loading || isDead} className={btn} title="Kill (modkill)"><Skull size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Kill player</TooltipContent></Tooltip>
+            <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleKillWipe} disabled={!!loading} className={btn} title="Modkill (wipe)"><Eraser size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Modkill (wipe)</TooltipContent></Tooltip>
             <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleRevive} disabled={!!loading || !isDead} className={btn} title="Revive"><Heart size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Revive player</TooltipContent></Tooltip>
           </>
         )}
@@ -520,6 +551,7 @@ const ProfileInfoCard = ({
   const isFoundingMember = profile.founding_member || (profile.badges || []).includes('Founding Member');
   const isCustomBadge = profile.custom_profile_badge || (profile.badges || []).includes('Custom Profile Badge');
   const isWarRat = Boolean(profile.show_war_rat_badge) || (profile.badges || []).includes('Rat');
+  const isModkilled = Boolean(profile.modkill_wipe) || (profile.badges || []).includes('Modkilled');
   const nameGlowStyle = profile.profile_cosmetic_active && profile.profile_name_glow_color
     ? { color: profile.profile_name_glow_color, textShadow: `0 0 8px ${profile.profile_name_glow_color}88` }
     : undefined;
@@ -666,6 +698,15 @@ const ProfileInfoCard = ({
                 <span className="inline-flex items-center h-6 md:h-7 gap-1 px-2 rounded-md border border-amber-500/40 bg-amber-500/15 text-[9px] md:text-[10px] font-heading font-bold uppercase tracking-wide text-amber-200 shrink-0">
                   <Crown size={12} className="text-amber-300 shrink-0" aria-hidden />
                   Founder
+                </span>
+              )}
+              {isModkilled && (
+                <span
+                  className="inline-flex items-center h-6 md:h-7 gap-1 px-2 rounded-md border border-red-500/50 bg-red-500/20 text-[9px] md:text-[10px] font-heading font-bold uppercase tracking-wide text-red-200 shrink-0"
+                  title="Staff wipe for rule breaking"
+                >
+                  <Skull size={12} className="text-red-300 shrink-0" aria-hidden />
+                  Modkilled
                 </span>
               )}
               {isWarRat && (

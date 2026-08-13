@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { invalidateApiCache, getApiErrorMessage } from '../../utils/api';
+import { useIpBanGate } from '../../hooks/useIpBanGate';
+import IpBannedPanel from '../../components/IpBannedPanel';
 import styles from '../../styles/noir.module.css';
 
 export default function StaffLogin({ setIsAuthenticated }) {
   const navigate = useNavigate();
+  const { ban: ipBan, banned: ipBanned, checking: ipBanChecking } = useIpBanGate();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
 
@@ -60,6 +63,14 @@ export default function StaffLogin({ setIsAuthenticated }) {
           className={`${styles.panel} rounded-xl overflow-hidden p-6`}
           style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.18)' }}
         >
+          {ipBanned ? (
+            <IpBannedPanel ban={ipBan} />
+          ) : ipBanChecking ? (
+            <p className="text-center text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
+              Checking…
+            </p>
+          ) : (
+          <>
           <p
             className="text-[8px] font-heading uppercase tracking-[0.5em] mb-4 text-center"
             style={{ color: 'var(--noir-primary)', opacity: 0.6 }}
@@ -121,6 +132,8 @@ export default function StaffLogin({ setIsAuthenticated }) {
           >
             ← Back to main page
           </button>
+          </>
+          )}
         </div>
       </div>
     </div>

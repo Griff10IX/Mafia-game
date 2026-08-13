@@ -8,6 +8,9 @@ import { Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { Turnstile } from '@marsidev/react-turnstile';
 import api, { getBaseURL, AUTH_ERROR_KEY } from '../../utils/api';
+import { parseIpBanFromError } from '../../utils/ipBan';
+import { useIpBanGate } from '../../hooks/useIpBanGate';
+import IpBannedPanel from '../../components/IpBannedPanel';
 import styles from '../../styles/noir.module.css';
 
 const landingGangsterImg = `${process.env.PUBLIC_URL || ''}/images/landing-gangster.png`;
@@ -58,6 +61,7 @@ function friendlyAuthSessionMessage(msg) {
 export default function Landing({ setIsAuthenticated, defaultTab }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { ban: ipBan, banned: ipBanned, checking: ipBanChecking } = useIpBanGate();
   const [isLogin, setIsLogin] = useState(defaultTab !== 'register');
   const [verifySentForEmail, setVerifySentForEmail] = useState(null);
   const [authInlineError, setAuthInlineError] = useState(null);
@@ -120,8 +124,10 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
       .then((r) => {
         if (!cancelled) setLoginTurnstileCfg(r.data || { enabled: false });
       })
-      .catch(() => {
-        if (!cancelled) setLoginTurnstileCfg({ enabled: false });
+      .catch((error) => {
+        if (cancelled) return;
+        if (parseIpBanFromError(error)) return;
+        setLoginTurnstileCfg({ enabled: false });
       });
     return () => {
       cancelled = true;
@@ -169,6 +175,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
 
   // Track login/landing visits for admin stats.
   useEffect(() => {
+    if (ipBanned || ipBanChecking) return undefined;
     if (
       location.pathname === '/login'
       || location.pathname === '/'
@@ -177,11 +184,12 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     ) {
       api.post('/auth/track-login-page-view').catch(() => {});
     }
-  }, [location.pathname]);
+    return undefined;
+  }, [location.pathname, ipBanned, ipBanChecking]);
 
   // Username availability feedback (register tab only)
   useEffect(() => {
-    if (isLogin) {
+    if (ipBanned || ipBanChecking || isLogin) {
       setUsernameCheck({ status: 'idle', isTaken: null, message: '' });
       return;
     }
@@ -236,7 +244,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [formData.username, formData.email, isLogin]);
+  }, [formData.username, formData.email, isLogin, ipBanned, ipBanChecking]);
 
   const DEFAULT_BANNER_MESSAGE = 'Beta round end: March 24 6pm. Full game release March 28th 6pm. This beta lets you try the game and features before launch.';
 
@@ -623,7 +631,29 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
             )}
           </header>
 
-          {/* Auth form — interaction container only */}
+          {/* Auth form — hidden while IP-banned (no login/register tabs) */}
+          {ipBanned ? (
+            <div className="landing-fade-up-2">
+              <IpBannedPanel ban={ipBan} />
+            </div>
+          ) : ipBanChecking ? (
+            <div
+              className={`landing-fade-up-2 landing-auth-panel overflow-hidden rounded-xl border ${styles.panel}`}
+              data-testid="ip-ban-checking"
+              style={{
+                borderColor: 'rgba(var(--noir-primary-rgb,14,165,233),0.16)',
+                background: 'linear-gradient(180deg, rgba(14,14,16,0.94) 0%, rgba(8,8,10,0.96) 100%)',
+                boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+              }}
+            >
+              <p
+                className="p-5 text-center text-[10px] font-heading uppercase tracking-wider"
+                style={{ color: 'var(--noir-muted)' }}
+              >
+                Checking…
+              </p>
+            </div>
+          ) : (
           <div
             className={`landing-fade-up-2 landing-auth-panel overflow-hidden rounded-xl border ${styles.panel}`}
             style={{
@@ -927,6 +957,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
               </form>
             )}
           </div>
+          )}
 
           <p
             className="mt-8 text-center font-heading text-[9px] uppercase tracking-[0.2em]"

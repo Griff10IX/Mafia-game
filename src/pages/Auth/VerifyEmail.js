@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { toast } from 'sonner';
+import { useIpBanGate } from '../../hooks/useIpBanGate';
+import IpBannedPanel from '../../components/IpBannedPanel';
 import styles from '../../styles/noir.module.css';
 
 /** One-time verification POST per token. React 18 Strict Mode runs effects twice in dev — without this the 2nd call consumes nothing and shows "invalid link". */
@@ -42,6 +44,7 @@ function finishVerified(navigate, setStatus, setMessage, setIsAuthenticated, dat
 
 export default function VerifyEmail({ setIsAuthenticated }) {
   const navigate = useNavigate();
+  const { ban: ipBan, banned: ipBanned, checking: ipBanChecking } = useIpBanGate();
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState('loading'); // 'loading' | 'success' | 'error' | 'unverified' | 'already'
   const [message, setMessage] = useState('');
@@ -164,6 +167,12 @@ export default function VerifyEmail({ setIsAuthenticated }) {
       <div className="absolute inset-0 bg-black/60 pointer-events-none" aria-hidden />
       <div className="relative min-h-screen flex items-center justify-center px-4">
         <div className={`${styles.panel} rounded-sm p-8 max-w-md w-full text-center`}>
+          {ipBanned ? (
+            <IpBannedPanel ban={ipBan} />
+          ) : ipBanChecking ? (
+            <p className="text-sm" style={{ color: 'var(--noir-muted)' }}>Checking…</p>
+          ) : (
+          <>
           <h1 className="text-xl font-heading font-bold uppercase tracking-wider mb-4" style={{ color: 'var(--noir-foreground)' }}>
             Verify your email
           </h1>
@@ -223,6 +232,8 @@ export default function VerifyEmail({ setIsAuthenticated }) {
                 Back to Login
               </Link>
             </>
+          )}
+          </>
           )}
         </div>
       </div>

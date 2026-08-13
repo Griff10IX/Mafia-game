@@ -21,12 +21,46 @@ class UnbanUserRequest(BaseModel):
     user_id: str
 
 
+_IP_BAN_UNIT_HOURS = {
+    "hours": 1,
+    "days": 24,
+    "weeks": 168,
+    "months": 30 * 24,
+    "years": 365 * 24,
+}
+
+
 class BanIPRequest(BaseModel):
     """Ban by username (all known IPs for that account) or by a single IP. Prefer `username` when set."""
     ip: Optional[str] = None
     username: Optional[str] = None
     reason: str = ""
-    duration_hours: Optional[int] = None  # None = permanent
+    duration_hours: Optional[int] = None  # None = permanent (legacy; prefer duration_amount + duration_unit)
+    duration_amount: Optional[int] = None
+    duration_unit: Optional[str] = None  # hours, days, weeks, months, years, permanent
+
+
+def _resolve_ip_ban_duration(request: BanIPRequest) -> tuple[Optional[int], str]:
+    """Return (duration_hours, label). hours is None for a permanent ban."""
+    unit = (request.duration_unit or "").strip().lower()
+    if unit == "permanent":
+        return None, "permanent"
+    if unit in _IP_BAN_UNIT_HOURS:
+        amount = request.duration_amount
+        if amount is None or int(amount) < 1:
+            raise HTTPException(status_code=400, detail="Enter how long the IP ban lasts")
+        amount = int(amount)
+        if amount > 1000:
+            raise HTTPException(status_code=400, detail="Duration amount is too large")
+        hours = amount * _IP_BAN_UNIT_HOURS[unit]
+        noun = unit[:-1] if amount == 1 and unit.endswith("s") else unit
+        return hours, f"{amount} {noun}"
+    if request.duration_hours is not None:
+        hours = int(request.duration_hours)
+        if hours < 1:
+            raise HTTPException(status_code=400, detail="duration_hours must be at least 1")
+        return hours, f"{hours}h"
+    return None, "permanent"
 
 
 class UnbanIPRequest(BaseModel):
@@ -104,10 +138,8 @@ def register(router):
         raw_ip = (request.ip or "").strip()
         now = datetime.now(timezone.utc)
         reason = (request.reason or "").strip() or "Banned by admin"
-        expires_at = None
-        if request.duration_hours is not None:
-            expires_at = (now + timedelta(hours=request.duration_hours)).isoformat()
-        duration_str = f"{request.duration_hours}h" if request.duration_hours else "permanent"
+        duration_hours, duration_str = _resolve_ip_ban_duration(request)
+        expires_at = (now + timedelta(hours=duration_hours)).isoformat() if duration_hours is not None else None
         banned_by = current_user.get("username", "Admin")
 
         def _ban_doc(ip_val: str, extra: Optional[dict] = None) -> dict:
@@ -117,6 +149,7 @@ def register(router):
                 "banned_by": banned_by,
                 "created_at": now.isoformat(),
                 "active": True,
+                "duration_label": duration_str,
             }
             if expires_at:
                 doc["expires_at"] = expires_at
@@ -173,7 +206,7 @@ def register(router):
 
             uid = user["id"]
             await _deactivate_prior_bans(db, uid)
-            await _ban_user_impl(db, uid, display_name, reason, request.duration_hours, banned_by)
+            await _ban_user_impl(db, uid, display_name, reason, duration_hours, banned_by)
             wipe_summary = await wipe_user_for_account_ban(db, uid)
             await apply_ban_and_invalidate_sessions(db, uid)
             msg = (

@@ -104,6 +104,7 @@ async def record_email_freed_from_dead_account(
                 "email": f"dead_{dead_user_id}@deleted",
                 "email_before_freed": email_clean,
                 "email_freed_at": now_iso,
+                "referred_by": [],
             }
         },
     )

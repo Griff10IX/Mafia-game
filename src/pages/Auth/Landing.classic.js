@@ -9,6 +9,9 @@ import { Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { Turnstile } from '@marsidev/react-turnstile';
 import api, { getBaseURL, AUTH_ERROR_KEY } from '../../utils/api';
+import { parseIpBanFromError } from '../../utils/ipBan';
+import { useIpBanGate } from '../../hooks/useIpBanGate';
+import IpBannedPanel from '../../components/IpBannedPanel';
 import styles from '../../styles/noir.module.css';
 
 const landingGangsterImg = `${process.env.PUBLIC_URL || ''}/images/landing-gangster.png`;
@@ -36,6 +39,7 @@ function friendlyAuthSessionMessage(msg) {
 export default function Landing({ setIsAuthenticated, defaultTab }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { ban: ipBan, banned: ipBanned, checking: ipBanChecking } = useIpBanGate();
   const [isLogin, setIsLogin] = useState(defaultTab !== 'register');
   const [verifySentForEmail, setVerifySentForEmail] = useState(null);
   const [authInlineError, setAuthInlineError] = useState(null);
@@ -92,8 +96,10 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
       .then((r) => {
         if (!cancelled) setLoginTurnstileCfg(r.data || { enabled: false });
       })
-      .catch(() => {
-        if (!cancelled) setLoginTurnstileCfg({ enabled: false });
+      .catch((error) => {
+        if (cancelled) return;
+        if (parseIpBanFromError(error)) return;
+        setLoginTurnstileCfg({ enabled: false });
       });
     return () => {
       cancelled = true;
@@ -115,6 +121,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
 
   // Track login/landing visits for admin stats.
   useEffect(() => {
+    if (ipBanned || ipBanChecking) return undefined;
     if (
       location.pathname === '/login'
       || location.pathname === '/'
@@ -123,11 +130,12 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     ) {
       api.post('/auth/track-login-page-view').catch(() => {});
     }
-  }, [location.pathname]);
+    return undefined;
+  }, [location.pathname, ipBanned, ipBanChecking]);
 
   // Username availability feedback (register tab only)
   useEffect(() => {
-    if (isLogin) {
+    if (ipBanned || ipBanChecking || isLogin) {
       setUsernameCheck({ status: 'idle', isTaken: null, message: '' });
       return;
     }
@@ -182,7 +190,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [formData.username, formData.email, isLogin]);
+  }, [formData.username, formData.email, isLogin, ipBanned, ipBanChecking]);
 
   const DEFAULT_BANNER_MESSAGE = 'Beta round end: March 24 6pm. Full game release March 28th 6pm. This beta lets you try the game and features before launch.';
 
@@ -505,6 +513,27 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
           </div>
 
           {/* ── AUTH PANEL ──────────────────────────────────────── */}
+          {ipBanned ? (
+            <div className="landing-fade-up-2">
+              <IpBannedPanel ban={ipBan} />
+            </div>
+          ) : ipBanChecking ? (
+            <div
+              className={`${styles.panel} rounded-b-xl overflow-hidden landing-fade-up-2`}
+              data-testid="ip-ban-checking"
+              style={{
+                borderTop: 'none',
+                borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.18)',
+              }}
+            >
+              <p
+                className="p-5 text-center text-[10px] font-heading uppercase tracking-wider"
+                style={{ color: 'var(--noir-muted)' }}
+              >
+                Checking…
+              </p>
+            </div>
+          ) : (
           <div
             className={`${styles.panel} rounded-b-xl overflow-hidden landing-fade-up-2`}
             style={{
@@ -846,6 +875,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
               ))}
             </div>
           </div>
+          )}
 
           {/* ── TAGLINE ─────────────────────────────────────── */}
           <p

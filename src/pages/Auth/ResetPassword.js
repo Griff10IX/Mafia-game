@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '../../utils/api';
+import { useIpBanGate } from '../../hooks/useIpBanGate';
+import IpBannedPanel from '../../components/IpBannedPanel';
 import styles from '../../styles/noir.module.css';
 
 export default function ResetPassword() {
+  const { ban: ipBan, banned: ipBanned, checking: ipBanChecking } = useIpBanGate();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [token, setToken] = useState('');
@@ -84,6 +87,14 @@ export default function ResetPassword() {
             <p className="text-primary/90 text-xs font-heading tracking-[0.35em] uppercase">Reset Password</p>
           </div>
 
+          {ipBanned ? (
+            <IpBannedPanel ban={ipBan} />
+          ) : ipBanChecking ? (
+            <p className="text-center text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
+              Checking…
+            </p>
+          ) : (
+          <>
           {/* Reset Form */}
           <div className={`${styles.panel} rounded-sm overflow-hidden shadow-2xl shadow-primary/10`}>
             <div className="px-4 py-3 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
@@ -157,6 +168,8 @@ export default function ResetPassword() {
               ) : null}
             </form>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>

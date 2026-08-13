@@ -378,8 +378,6 @@ async def apply_manual_referral_remove(
     )
     if not referee:
         raise ValueError("Referee not found")
-    if referee.get("is_dead"):
-        raise ValueError("Cannot modify referral link on a dead account")
     rid = str(referee.get("id") or "").strip()
     if not rid:
         raise ValueError("Invalid referee record")
@@ -399,8 +397,6 @@ async def apply_manual_referral_remove(
         )
         if not referrer:
             raise ValueError("Referrer username not found")
-        if referrer.get("is_dead"):
-            raise ValueError("Cannot reference a dead account as referrer")
         zid = str(referrer.get("id") or "").strip()
         if not zid:
             raise ValueError("Invalid referrer record")

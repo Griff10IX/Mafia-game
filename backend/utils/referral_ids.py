@@ -3,9 +3,50 @@ from __future__ import annotations
 
 import logging
 import math
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
+
+_TOMB_EMAIL_RE = r"^dead_.*@deleted$"
+
+
+def referred_by_present_query() -> Dict[str, Any]:
+    """Match users with a non-empty referred_by string or list."""
+    return {
+        "$or": [
+            {"$and": [{"referred_by": {"$type": "string"}}, {"referred_by": {"$ne": ""}}]},
+            {"referred_by.0": {"$exists": True}},
+        ]
+    }
+
+
+def referral_unlink_on_death_set() -> Dict[str, Any]:
+    """Clear referral links. Does not claw back lifetime earnings on the referrer."""
+    return {
+        "referred_by": [],
+        "referral_unlinked_on_death_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+async def unlink_dead_and_tombstone_referral_links(db) -> int:
+    """Drop referred_by on dead accounts and Dead > Alive tombstones (email dead_*@deleted)."""
+    q = {
+        "$and": [
+            referred_by_present_query(),
+            {
+                "$or": [
+                    {"is_dead": True},
+                    {"email": {"$regex": _TOMB_EMAIL_RE, "$options": "i"}},
+                ]
+            },
+        ]
+    }
+    res = await db.users.update_many(q, {"$set": referral_unlink_on_death_set()})
+    n = int(res.modified_count or 0)
+    if n:
+        logger.info("unlinked referred_by on %s dead/tombstone accounts", n)
+    return n
 
 
 def normalize_referred_by_ids(raw: Any) -> List[str]:

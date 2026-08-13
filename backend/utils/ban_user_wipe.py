@@ -31,7 +31,7 @@ async def user_has_active_account_ban(db, user_id: str) -> bool:
     return False
 
 
-async def wipe_user_for_account_ban(db, user_id: str) -> Dict[str, Any]:
+async def wipe_user_for_account_ban(db, user_id: str, *, preserve_dead: bool = False) -> Dict[str, Any]:
     """
     Remove leaderboard rows, minigame history, inventories, and reset core user stats.
     Keeps the users document (id, username, email, password) for audit; does not touch ip_bans.
@@ -138,6 +138,34 @@ async def wipe_user_for_account_ban(db, user_id: str) -> Dict[str, Any]:
     if getattr(db, "slots_entries", None) is not None:
         await db.slots_entries.update_many({}, {"$pull": {"user_ids": uid}})
 
+    for key in (
+        "roulette_ownership",
+        "blackjack_ownership",
+        "horseracing_ownership",
+        "videopoker_ownership",
+        "airport_ownership",
+        "bullet_factory",
+        "garage_dealership",
+        "sports_betting_ownership",
+    ):
+        coll = getattr(db, key, None)
+        if coll is None:
+            continue
+        r = await coll.update_many(
+            {"owner_id": uid},
+            {"$set": {"owner_id": None, "owner_username": None}},
+        )
+        deleted[f"{key}_cleared"] = int(r.modified_count or 0)
+    if getattr(db, "exclusive_properties", None) is not None:
+        r = await db.exclusive_properties.update_many(
+            {"owner_id": uid},
+            {"$set": {"owner_id": None}},
+        )
+        deleted["exclusive_properties_cleared"] = int(r.modified_count or 0)
+    if getattr(db, "weed_farms", None) is not None:
+        r = await db.weed_farms.delete_many({"user_id": uid})
+        deleted["weed_farms"] = int(r.deleted_count or 0)
+
     # --- Reset user document: keep identity fields; strip progression ---
     reset: Dict[str, Any] = {
         "money": 0,
@@ -145,9 +173,18 @@ async def wipe_user_for_account_ban(db, user_id: str) -> Dict[str, Any]:
         "respect_points": 0,
         "rank": 1,
         "rank_points": 0,
+        "prestige_level": 0,
+        "prestige_rank_multiplier": 1.0,
         "health": 100,
         "armour_level": 0,
         "total_crimes": 0,
+        "total_gta": 0,
+        "jail_busts": 0,
+        "lifetime_points_spent": 0,
+        "total_oc_heists": 0,
+        "bullets_melted": 0,
+        "booze_runs_count": 0,
+        "hitlist_npc_kills": 0,
         "crime_profit": 0,
         "total_kills": 0,
         "total_kills_excludes_npc_v1": True,
@@ -163,6 +200,7 @@ async def wipe_user_for_account_ban(db, user_id: str) -> Dict[str, Any]:
         "family_id": None,
         "family_role": None,
         "gang_name": None,
+        "referred_by": [],
         "sessions": [],
         "is_dead": False,
         "dead_at": None,
@@ -186,7 +224,21 @@ async def wipe_user_for_account_ban(db, user_id: str) -> Dict[str, Any]:
         "rank_xp_pass_rewards_granted": False,
         "rank_xp_pass_last_granted_micro_tier": 0,
         "rank_xp_pass_prestige_carry_rp": 0,
+        "rank_xp_pass_season_rp": 0,
+        "rank_xp_pass_free_last_micro_tier_granted": 0,
+        "game_pass_prestige_count": 0,
+        "game_pass_prestige_pending": 0,
+        "game_pass_weed_strain_ids": [],
+        "auto_rank_purchased": False,
+        "auto_rank_permanent": False,
+        "auto_rank_enabled": False,
+        "auto_rank_trial": False,
+        "loot_reclaimable_passive_ids": [],
+        "armour_owned_level_max": 0,
     }
+    if preserve_dead:
+        reset.pop("is_dead", None)
+        reset.pop("dead_at", None)
     unset_fields = [
         "xp_crimes_until",
         "xp_gta_until",
@@ -200,6 +252,8 @@ async def wipe_user_for_account_ban(db, user_id: str) -> Dict[str, Any]:
         "rank_xp_pass_bonus_until",
         "rank_xp_pass_token_expires_at",
         "rank_xp_pass_tier_snapshot",
+        "rank_xp_pass_pending_tier_snapshot",
+        "game_pass_season_id",
         "travel_arrives_at",
         "jail_until",
         "account_locked",

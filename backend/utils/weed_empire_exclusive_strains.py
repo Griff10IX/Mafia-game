@@ -136,6 +136,70 @@ async def list_unowned_exclusive_strain_ids(db) -> List[str]:
     return [sid for sid in EXCLUSIVE_STRAIN_IDS if sid not in owned_set]
 
 
+async def release_exclusive_weed_strains_to_pool(db, user_id: str) -> List[str]:
+    """Delete this player's exclusive strain ownership so they can drop from loot again."""
+    uid = (user_id or "").strip()
+    if not uid:
+        return []
+    rows = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
+        {"owner_id": uid},
+        {"_id": 0, "strain_id": 1},
+    ).to_list(20)
+    strain_ids = [str(r["strain_id"]) for r in (rows or []) if r.get("strain_id")]
+    if not strain_ids:
+        return []
+    strain_set = set(strain_ids)
+    try:
+        farm = await db.weed_farms.find_one({"user_id": uid}, {"_id": 0, "plots": 1, "stash": 1, "curing": 1})
+        if farm:
+            farm_set: Dict[str, Any] = {}
+            if farm.get("plots"):
+                plots = []
+                changed = False
+                for p in farm.get("plots") or []:
+                    if p.get("strain_id") in strain_set and p.get("state") in ("growing", "harvest_ready"):
+                        plots.append(
+                            {
+                                "id": p.get("id"),
+                                "state": "empty",
+                                "strain_id": None,
+                                "planted_at": None,
+                                "last_watered_at": None,
+                                "last_fed_at": None,
+                                "quality": 0,
+                                "soil_type": None,
+                                "medium": None,
+                                "stage": None,
+                                "progress": 0,
+                                "mite_infestation_pct": 0.0,
+                                "mite_infested": False,
+                            }
+                        )
+                        changed = True
+                    else:
+                        plots.append(p)
+                if changed:
+                    farm_set["plots"] = plots
+            stash = dict(farm.get("stash") or {})
+            stash_changed = False
+            for sid in strain_ids:
+                if sid in stash:
+                    stash.pop(sid, None)
+                    stash_changed = True
+            if stash_changed:
+                farm_set["stash"] = stash
+            curing = list(farm.get("curing") or [])
+            kept = [b for b in curing if (b or {}).get("strain_id") not in strain_set]
+            if len(kept) != len(curing):
+                farm_set["curing"] = kept
+            if farm_set:
+                await db.weed_farms.update_one({"user_id": uid}, {"$set": farm_set})
+    except Exception:
+        logger.exception("release exclusive weed farm clear failed user=%s", uid)
+    await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].delete_many({"owner_id": uid})
+    return strain_ids
+
+
 async def exclusive_strain_ownership_summary(db) -> Dict[str, Any]:
     rows = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
         {},

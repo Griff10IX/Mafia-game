@@ -8,6 +8,7 @@ import {
 } from './staffPortalSession';
 import { clearProfileSessionLastMeUsername } from './prefetchCache';
 import { inFlightGet, clearInFlightGets } from './inFlightGet';
+import { parseIpBanFromError } from './ipBan';
 
 // Empty or unset = same origin (e.g. Linode: Nginx serves app and proxies /api)
 const raw = (process.env.REACT_APP_BACKEND_URL && process.env.REACT_APP_BACKEND_URL.trim())
@@ -586,6 +587,10 @@ api.interceptors.response.use(
 /** Get a user-friendly error message from an API error (use in catch blocks and toasts). */
 export function getApiErrorMessage(error) {
   if (!error) return 'Something went wrong.';
+  const ban = parseIpBanFromError(error);
+  if (ban) {
+    return ban.reason ? `${ban.detail} Reason: ${ban.reason}` : ban.detail;
+  }
   const data = error.response?.data;
   const detail = data?.detail;
   if (typeof detail === 'string') return detail;

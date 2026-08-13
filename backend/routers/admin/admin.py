@@ -19,7 +19,11 @@ from pydantic import BaseModel, Field
 
 from middleware.security import is_proxy_or_vpn, get_ip_info
 from utils.disposable_email import is_disposable_email
-from utils.referral_ids import normalize_referred_by_ids
+from utils.referral_ids import (
+    normalize_referred_by_ids,
+    referred_by_present_query,
+    unlink_dead_and_tombstone_referral_links,
+)
 from utils.ip_normalize import normalize_ip_string
 from utils.analytics_events import VALID_BUCKETS, bucket_start
 from utils.cheat_detection_utils import (
@@ -6992,14 +6996,17 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
 
+        dead_unlinked = await unlink_dead_and_tombstone_referral_links(db)
+
         prereg_with_ref = await db.preregistrations.count_documents(
             {"referral_code": {"$exists": True, "$nin": [None, ""]}}
         )
 
         q: Dict[str, object] = {
-            "$or": [
-                {"$and": [{"referred_by": {"$type": "string"}}, {"referred_by": {"$ne": ""}}]},
-                {"referred_by.0": {"$exists": True}},
+            "$and": [
+                referred_by_present_query(),
+                {"is_dead": {"$ne": True}},
+                {"email": {"$not": {"$regex": r"^dead_.*@deleted$", "$options": "i"}}},
             ]
         }
         ref_id_filter: Optional[str] = None
@@ -7080,7 +7087,8 @@ def register(router):
 
         return {
             "preregistrations_with_referral_code_stored": prereg_with_ref,
-            "note": "Earnings are lifetime totals on the referrer account. A referee may have multiple referrers (referred_by list); referral cuts are split evenly among them on each payout.",
+            "dead_referees_unlinked": dead_unlinked,
+            "note": "Living referees only. Dead / tombstoned accounts are unlinked (lifetime earnings on the referrer stay). A referee may have multiple referrers; referral cuts are split evenly among them on each payout.",
             "referrer_filter": ref_id_filter,
             "total_referee_links": total_referee_edges,
             "groups": groups,
@@ -7936,43 +7944,55 @@ def register(router):
         return {"message": f"Message sent to {target.get('username', body.target_username)}.", "account_locked_admin_message_at": now_iso}
 
     @router.post("/admin/kill-player")
-    async def admin_kill_player(target_username: str, current_user: dict = Depends(require_admin_or_mod)):
+    async def admin_kill_player(
+        target_username: str,
+        wipe: bool = False,
+        reason: Optional[str] = None,
+        current_user: dict = Depends(require_admin_or_mod),
+    ):
         from utils.staff_mod_protection import assert_mod_may_target_user
+        from utils.modkill_wipe import apply_modkill_wipe_after_kill, sanitize_modkill_wipe_reason
 
         username_pattern = _username_pattern(target_username)
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
         assert_mod_may_target_user(current_user, target)
-        if target.get("is_dead"):
-            raise HTTPException(status_code=400, detail="That account is already dead")
         if target.get("id") == current_user.get("id"):
             raise HTTPException(status_code=400, detail="Use another tool to manage your own account.")
+        wipe_reason = sanitize_modkill_wipe_reason(reason) if wipe else ""
+        if wipe and not wipe_reason:
+            raise HTTPException(status_code=400, detail="Enter a short reason for the Topic of Shame.")
+        if target.get("is_dead") and not wipe:
+            raise HTTPException(status_code=400, detail="That account is already dead")
         now_iso = datetime.now(timezone.utc).isoformat()
         seize_summary = None
-        if not target.get("is_npc"):
-            try:
-                from utils.death_revive_snapshot import capture_death_revive_snapshot
+        already_dead = bool(target.get("is_dead"))
+        if not target.get("is_npc") and (wipe or not already_dead):
+            if not wipe and not already_dead:
+                try:
+                    from utils.death_revive_snapshot import capture_death_revive_snapshot
 
-                death_snap = await capture_death_revive_snapshot(
-                    db,
-                    victim_id=target["id"],
-                    killer_id=current_user.get("id"),
-                    victim_username=target.get("username") or target_username,
-                    victim_user=target,
-                    staff_kill=True,
-                )
-                await db.users.update_one({"id": target["id"]}, {"$set": {"death_revive_snapshot": death_snap}})
-            except Exception:
-                logging.exception("death_revive_snapshot capture (admin kill) victim=%s", target.get("id"))
-            try:
-                from utils.admin_kill_asset_transfer import transfer_staff_kill_seizures
+                    death_snap = await capture_death_revive_snapshot(
+                        db,
+                        victim_id=target["id"],
+                        killer_id=current_user.get("id"),
+                        victim_username=target.get("username") or target_username,
+                        victim_user=target,
+                        staff_kill=True,
+                    )
+                    await db.users.update_one({"id": target["id"]}, {"$set": {"death_revive_snapshot": death_snap}})
+                except Exception:
+                    logging.exception("death_revive_snapshot capture (admin kill) victim=%s", target.get("id"))
+            if not wipe:
+                try:
+                    from utils.admin_kill_asset_transfer import transfer_staff_kill_seizures
 
-                seize_summary = await transfer_staff_kill_seizures(db, target["id"], current_user)
-            except HTTPException:
-                raise
-            except Exception:
-                logging.exception("admin_kill transfer_staff_kill_seizures victim=%s", target.get("id"))
+                    seize_summary = await transfer_staff_kill_seizures(db, target["id"], current_user)
+                except HTTPException:
+                    raise
+                except Exception:
+                    logging.exception("admin_kill transfer_staff_kill_seizures victim=%s", target.get("id"))
         # Store token counts at death for Dead > Alive restoration
         tokens_at_death = {}
         for token_type, cfg in TOKEN_CONFIG.items():
@@ -7980,58 +8000,77 @@ def register(router):
             tokens_at_death[count_field] = int(target.get(count_field, 0) or 0)
         from utils.player_death import player_death_pull_fields, player_death_set_fields
 
-        await db.users.update_one(
-            {"id": target["id"]},
-            {
-                "$set": {
-                "is_dead": True,
-                "dead_at": now_iso,
-                "death_by_staff": True,
-                "points_at_death": int(target.get("points", 0) or 0),
-                "money_at_death": int(target.get("money", 0) or 0),
-                "tokens_at_death": tokens_at_death,
-                "money": 0,
-                "points": 0,
-                "health": 0,
-                **player_death_set_fields(),
-            },
-                "$pull": player_death_pull_fields(),
-                "$inc": {"total_deaths": 1},
-            },
-        )
-        try:
-            from utils.loot_reclaimable_passives import reclaim_on_kill
+        if not already_dead:
+            await db.users.update_one(
+                {"id": target["id"]},
+                {
+                    "$set": {
+                    "is_dead": True,
+                    "dead_at": now_iso,
+                    "death_by_staff": True,
+                    "points_at_death": 0 if wipe else int(target.get("points", 0) or 0),
+                    "money_at_death": 0 if wipe else int(target.get("money", 0) or 0),
+                    "tokens_at_death": {} if wipe else tokens_at_death,
+                    "money": 0,
+                    "points": 0,
+                    "health": 0,
+                    **player_death_set_fields(),
+                },
+                    "$pull": player_death_pull_fields(),
+                    "$inc": {"total_deaths": 1},
+                },
+            )
+            try:
+                from utils.loot_reclaimable_passives import reclaim_on_kill
 
-            await reclaim_on_kill(
+                await reclaim_on_kill(
+                    db,
+                    victim_id=target["id"],
+                    victim_username=target.get("username") or target_username,
+                    killer_id=current_user.get("id"),
+                    send_notification=send_notification,
+                )
+            except Exception:
+                logging.exception(
+                    "reclaimable vault relic reclaim failed on admin kill victim=%s",
+                    target.get("id"),
+                )
+            try:
+                from utils.redeem_code_lifecycle import release_redeem_slots_for_deceased_user
+
+                await release_redeem_slots_for_deceased_user(db, target["id"])
+            except Exception:
+                logging.exception("release_redeem_slots_for_deceased_user (admin kill)")
+            try:
+                from routers.game.families import maybe_promote_after_boss_death, _invalidate_list_cache
+                await maybe_promote_after_boss_death(target["id"])
+                _invalidate_list_cache()
+            except Exception as e:
+                logging.exception("Promote after boss death: %s", e)
+            try:
+                from routers.money.quicktrade import cancel_offers_on_death
+                await cancel_offers_on_death(target["id"])
+            except Exception as e:
+                logging.exception("Quick trade offers on death: %s", e)
+        wipe_summary = None
+        if wipe:
+            wipe_summary = await apply_modkill_wipe_after_kill(
                 db,
-                victim_id=target["id"],
-                victim_username=target.get("username") or target_username,
-                killer_id=current_user.get("id"),
-                send_notification=send_notification,
+                user_id=target["id"],
+                username=target.get("username") or target_username,
+                reason=wipe_reason,
+                staff_username=current_user.get("username") or "Staff",
+                admin_user=current_user,
             )
-        except Exception:
-            logging.exception(
-                "reclaimable vault relic reclaim failed on admin kill victim=%s",
-                target.get("id"),
-            )
-        try:
-            from utils.redeem_code_lifecycle import release_redeem_slots_for_deceased_user
-
-            await release_redeem_slots_for_deceased_user(db, target["id"])
-        except Exception:
-            logging.exception("release_redeem_slots_for_deceased_user (admin kill)")
-        try:
-            from routers.game.families import maybe_promote_after_boss_death, _invalidate_list_cache
-            await maybe_promote_after_boss_death(target["id"])
-            _invalidate_list_cache()
-        except Exception as e:
-            logging.exception("Promote after boss death: %s", e)
-        try:
-            from routers.money.quicktrade import cancel_offers_on_death
-            await cancel_offers_on_death(target["id"])
-        except Exception as e:
-            logging.exception("Quick trade offers on death: %s", e)
-        parts = [f"Killed {target_username}. Account is dead (cannot login); use Dead to Alive to revive."]
+            seize_summary = wipe_summary.get("seize") or seize_summary
+            parts = [
+                f"Modkill (wipe) applied to {target_username}. "
+                "Honours, leaderboards, cash, points, Game Pass, and rank/prestige stripped (Rat). "
+                "Casinos, airport, and armoury taken. Unique loot returned to the game. "
+                "£10 Dead > Alive revive blocked. Posted to Topic of Shame."
+            ]
+        else:
+            parts = [f"Killed {target_username}. Account is dead (cannot login); use Dead to Alive to revive."]
         if seize_summary and not seize_summary.get("skipped"):
             if seize_summary.get("portfolio_rows_moved"):
                 parts.append(f"Portfolio properties moved to you: {seize_summary['portfolio_rows_moved']}.")
@@ -8043,7 +8082,7 @@ def register(router):
                 parts.append("Bullet factory ownership transferred to you.")
             if seize_summary.get("exclusive_transferred"):
                 parts.append("Exclusive property (Speakeasy) transferred to you.")
-        return {"message": " ".join(parts), "seize_summary": seize_summary}
+        return {"message": " ".join(parts), "seize_summary": seize_summary, "wipe_summary": wipe_summary}
 
     @router.post("/admin/give-auto-rank")
     async def admin_give_auto_rank(target_username: str, current_user: dict = Depends(require_admin)):

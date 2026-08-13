@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, LogOut } from 'lucide-react';
 import api from '../../utils/api';
+import { parseIpBanFromError } from '../../utils/ipBan';
 
 const MAX_COMMENT_LENGTH = 2000;
 
@@ -27,10 +28,9 @@ export default function LockedPage() {
         }
       } catch (e) {
         if (cancelled) return;
-        const detail = e.response?.data?.detail;
-        const detailStr = typeof detail === 'string' ? detail : '';
+        const parsedBan = parseIpBanFromError(e);
         // IP ban is enforced before account_locked; leave locked page so user is not stuck in a loop.
-        if (e.response?.status === 403 && /IP has been banned|banned from this server/i.test(detailStr)) {
+        if (parsedBan) {
           localStorage.removeItem('token');
           window.location.replace('/');
           return;

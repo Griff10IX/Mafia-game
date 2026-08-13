@@ -2897,8 +2897,8 @@ def user_has_admin_list_email(user: dict) -> bool:
 
 
 def _user_excluded_from_stat_leaderboards(user: dict) -> bool:
-    """True if this account is excluded from /leaderboards/top and stat honours (mods + ADMIN_EMAILS)."""
-    return _is_moderator(user) or user_has_admin_list_email(user)
+    """True if this account is excluded from /leaderboards/top and stat honours (mods + ADMIN_EMAILS + modkill wipe)."""
+    return _is_moderator(user) or user_has_admin_list_email(user) or bool(user.get("modkill_wipe"))
 
 
 def expand_user_ids_for_mongo_nin(raw_ids) -> list:
@@ -3010,6 +3010,7 @@ async def stat_leaderboard_users_match(*, dead: bool, database=None) -> dict:
         m: dict = {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
     else:
         m = {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
+    m["modkill_wipe"] = {"$ne": True}
     ex = await honours_stat_excluded_user_ids(d)
     # Skip email $nor regex when staff ids are available — same exclusion, much cheaper plans.
     m.update(_staff_exclude_user_filter(with_email_nor=not bool(ex)))

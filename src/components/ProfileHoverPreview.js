@@ -108,6 +108,12 @@ export default function ProfileHoverPreview({ preview, userStatus = 'online' }) 
                   Founder
                 </span>
               ) : null}
+              {preview.modkill_wipe || (preview.badges || []).includes('Modkilled') ? (
+                <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border border-red-500/50 bg-red-500/20 text-[8px] font-heading font-bold uppercase tracking-wide text-red-200 shrink-0">
+                  <Skull size={10} className="text-red-300" aria-hidden />
+                  Modkilled
+                </span>
+              ) : null}
             </div>
 
             <div className="flex items-center gap-1.5 text-[11px] font-heading font-semibold truncate">

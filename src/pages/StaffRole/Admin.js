@@ -1196,7 +1196,8 @@ export default function Admin() {
   const [ipBansLoading, setIpBansLoading] = useState(false);
   const [ipBanUsername, setIpBanUsername] = useState('');
   const [ipBanReason, setIpBanReason] = useState('');
-  const [ipBanHours, setIpBanHours] = useState('');
+  const [ipBanHours, setIpBanHours] = useState('1');
+  const [ipBanDurationUnit, setIpBanDurationUnit] = useState('permanent');
   const [ipUnbanUsername, setIpUnbanUsername] = useState('');
   const [accountBans, setAccountBans] = useState([]);
   const [cheatDetectionConfig, setCheatDetectionConfig] = useState(null);
@@ -1548,6 +1549,7 @@ export default function Admin() {
   const [reviveRefundAltSpent, setReviveRefundAltSpent] = useState(true);
   const [reviveLockAlts, setReviveLockAlts] = useState(false);
   const [reviveGrantDeadAlive, setReviveGrantDeadAlive] = useState(true);
+  const [modkillWipeReason, setModkillWipeReason] = useState('');
   const [reviveConfirmUsername, setReviveConfirmUsername] = useState('');
   const [cheaterImpactRefundLoading, setCheaterImpactRefundLoading] = useState(false);
 
@@ -4776,6 +4778,35 @@ export default function Admin() {
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
+  const handleKillPlayerWipe = async () => {
+    const u = (formData.targetUsername || '').trim();
+    const reason = (modkillWipeReason || '').trim();
+    if (!u) {
+      toast.error('Enter target username');
+      return;
+    }
+    if (!reason) {
+      toast.error('Enter a short reason for Topic of Shame');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Modkill (wipe) ${u}?\n\nThis resets them to Rat (prestige 0), strips honours/leaderboards, cash, points, and Game Pass, blocks £10 Dead > Alive revive, and posts them to Topic of Shame.`
+      )
+    ) {
+      return;
+    }
+    try {
+      const response = await api.post('/admin/kill-player', null, {
+        params: { target_username: u, wipe: true, reason },
+      });
+      toast.success(response.data.message);
+      setModkillWipeReason('');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
   const loadRevivePreview = async () => {
     const u = (formData.targetUsername || '').trim();
     if (!u) {
@@ -5524,17 +5555,20 @@ export default function Admin() {
       toast.error('Enter a username (ban all known IPs) or a single IP address');
       return;
     }
-    const hoursRaw = (ipBanHours || '').trim();
-    const hoursParsed = hoursRaw ? parseInt(hoursRaw.replace(/[^\d]/g, ''), 10) : null;
-    const durationHours = hoursRaw && !Number.isNaN(hoursParsed) && hoursParsed > 0 ? hoursParsed : null;
+    const unit = (ipBanDurationUnit || 'permanent').trim().toLowerCase();
+    const amountParsed = parseInt(String(ipBanHours || '').replace(/[^\d]/g, ''), 10);
+    if (unit !== 'permanent' && (!amountParsed || Number.isNaN(amountParsed) || amountParsed < 1)) {
+      toast.error('Enter how long the IP ban lasts');
+      return;
+    }
 
     const looksLikeIp =
       /^(?:\d{1,3}\.){3}\d{1,3}$/.test(raw) || (raw.includes(':') && raw.length >= 3);
 
     setIpBansLoading(true);
     try {
-      const body = { reason };
-      if (durationHours != null) body.duration_hours = durationHours;
+      const body = { reason, duration_unit: unit };
+      if (unit !== 'permanent') body.duration_amount = amountParsed;
       if (looksLikeIp) body.ip = raw;
       else body.username = raw;
 
@@ -5542,7 +5576,8 @@ export default function Admin() {
       toast.success(res.data?.message || (looksLikeIp ? `IP ${raw} banned` : 'Ban applied'));
       setIpBanUsername('');
       setIpBanReason('');
-      setIpBanHours('');
+      setIpBanHours('1');
+      setIpBanDurationUnit('permanent');
       fetchIpBans();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to ban IP');
@@ -12826,6 +12861,24 @@ export default function Admin() {
               <ActionRow icon={Skull} label="Modkill" description="Permanently kill the target account. They cannot log in until revived." color="text-red-400">
                 <BtnDanger onClick={handleKillPlayer}>Kill</BtnDanger>
               </ActionRow>
+              <ActionRow
+                icon={Trash2}
+                label="Modkill (wipe)"
+                description="Kill, reset to Rat / prestige 0, strip honours, cash, points, Game Pass. Blocks £10 Dead > Alive. Posts Topic of Shame."
+                color="text-red-400"
+              >
+                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                  <input
+                    type="text"
+                    value={modkillWipeReason}
+                    onChange={(e) => setModkillWipeReason(e.target.value)}
+                    placeholder="Shame reason (required)"
+                    maxLength={400}
+                    className="flex-1 min-w-[10rem] max-w-[280px] px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+                  />
+                  <BtnDanger onClick={handleKillPlayerWipe}>Wipe</BtnDanger>
+                </div>
+              </ActionRow>
               {isFullAdminUi && (
               <>
               <ActionRow icon={Zap} label="Revive (fair)" description="Restore victim; optional alt point recovery if they remade on same email">
@@ -17730,14 +17783,33 @@ export default function Admin() {
                   placeholder="Reason"
                   className="flex-1 min-w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
                 />
-                <input
-                  type="number"
-                  value={ipBanHours}
-                  onChange={(e) => setIpBanHours(e.target.value)}
-                  placeholder="Hours (empty=permanent)"
-                  min="1"
-                  className="w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
-                />
+                {ipBanDurationUnit !== 'permanent' && (
+                  <input
+                    type="number"
+                    value={ipBanHours}
+                    onChange={(e) => setIpBanHours(e.target.value)}
+                    placeholder="1"
+                    min="1"
+                    max="1000"
+                    className="w-16 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                  />
+                )}
+                <select
+                  value={ipBanDurationUnit}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setIpBanDurationUnit(next);
+                    if (next !== 'permanent' && !(ipBanHours || '').trim()) setIpBanHours('1');
+                  }}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="hours">Hours</option>
+                  <option value="days">Days</option>
+                  <option value="weeks">Weeks</option>
+                  <option value="months">Months</option>
+                  <option value="years">Years</option>
+                  <option value="permanent">Permanent</option>
+                </select>
                 <BtnPrimary onClick={handleBanIp} disabled={ipBansLoading}>Ban user IPs</BtnPrimary>
               </div>
 
@@ -17766,7 +17838,15 @@ export default function Admin() {
                           <span className="font-mono font-bold text-foreground">{b.ip}</span>
                           {b.source_username && <span className="ml-2 text-[9px] text-amber-400/90 font-heading">via {b.source_username}</span>}
                           {b.reason && <span className="ml-2 text-mutedForeground truncate">{b.reason}</span>}
-                          {b.expires_at && <span className="ml-2 text-amber-400/80">expires {b.expires_at.slice(0, 10)}</span>}
+                          <span className="ml-2 text-amber-400/80">
+                            {b.duration_label
+                              ? b.duration_label === 'permanent'
+                                ? 'perm'
+                                : b.duration_label
+                              : b.expires_at
+                                ? `expires ${String(b.expires_at).slice(0, 10)}`
+                                : 'perm'}
+                          </span>
                         </div>
                         <button type="button" onClick={() => handleUnbanIp(b.ip)} className="shrink-0 bg-zinc-700/50 hover:bg-zinc-600/50 text-foreground rounded px-2 py-1 text-[9px] font-bold border border-zinc-600/50">Unban IP</button>
                       </div>

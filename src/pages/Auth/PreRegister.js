@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Link2, KeyRound, DollarSign, UserPlus, Crosshair, Building2, Car, Wine, BarChart3, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../utils/api';
+import { useIpBanGate } from '../../hooks/useIpBanGate';
+import IpBannedPanel from '../../components/IpBannedPanel';
 import styles from '../../styles/noir.module.css';
 
 const FEATURES = [
@@ -16,12 +18,15 @@ const FEATURES = [
 
 export default function PreRegister() {
   const navigate = useNavigate();
+  const { ban: ipBan, banned: ipBanned, checking: ipBanChecking } = useIpBanGate();
   const [rewards, setRewards] = useState(null);
 
   // Track landing page views for admin analytics.
   useEffect(() => {
+    if (ipBanned || ipBanChecking) return undefined;
     api.post('/auth/track-login-page-view').catch(() => {});
-  }, []);
+    return undefined;
+  }, [ipBanned, ipBanChecking]);
 
   useEffect(() => {
     api.get('/auth/preregister/rewards')
@@ -108,6 +113,16 @@ export default function PreRegister() {
             </p>
           </div>
 
+          {ipBanned ? (
+            <div className="max-w-md mx-auto fade-up-2">
+              <IpBannedPanel ban={ipBan} />
+            </div>
+          ) : ipBanChecking ? (
+            <p className="text-center text-[10px] font-heading uppercase tracking-wider fade-up-2" style={{ color: 'var(--noir-muted)' }}>
+              Checking…
+            </p>
+          ) : (
+          <>
           {/* Main Card */}
           <div className={`${styles.panel} rounded-xl overflow-hidden fade-up-2`}>
             {/* Rewards Banner */}
@@ -350,6 +365,8 @@ export default function PreRegister() {
               </div>
             </div>
           </div>
+          </>
+          )}
 
           {/* Footer */}
           <div className="mt-8 text-center">
