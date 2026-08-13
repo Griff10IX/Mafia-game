@@ -204,18 +204,6 @@ def _shame_bbcode(
     )
 
 
-def _insert_shame_entry(body: str, entry: str) -> str:
-    text = (body or "").rstrip()
-    marker = "[hr]"
-    idx = text.lower().find(marker.lower())
-    if idx >= 0:
-        split_at = idx + len(marker)
-        head = text[:split_at].rstrip()
-        tail = text[split_at:].lstrip()
-        return f"{head}\n\n{entry.strip()}\n\n{tail}".rstrip() + "\n"
-    return f"{text}\n\n{entry.strip()}\n"
-
-
 async def append_topic_of_shame_entry(
     db,
     *,
@@ -225,34 +213,16 @@ async def append_topic_of_shame_entry(
     extra: Optional[dict] = None,
 ) -> bool:
     """Prepend a player-safe wipe entry on the locked Topic of Shame (forum + docs if writable)."""
-    from utils.ensure_topic_of_shame import _TITLE_RE, ensure_topic_of_shame_forum_topic
+    from utils.ensure_topic_of_shame import prepend_topic_of_shame_bbcode
 
-    await ensure_topic_of_shame_forum_topic(db)
     day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     entry = _shame_bbcode(username=username, reason=reason, day=day, holdings=holdings, extra=extra)
-
-    topic = await db.forum_topics.find_one({"title": _TITLE_RE}, {"_id": 0, "id": 1, "content": 1})
-    if not topic:
+    ok = await prepend_topic_of_shame_bbcode(db, entry)
+    if ok:
+        logger.info("modkill wipe: Topic of Shame updated for %s", username)
+    else:
         logger.warning("modkill wipe: Topic of Shame missing after ensure")
-        return False
-    now = datetime.now(timezone.utc).isoformat()
-    new_content = _insert_shame_entry(topic.get("content") or "", entry)
-    await db.forum_topics.update_one(
-        {"id": topic["id"]},
-        {"$set": {"content": new_content, "updated_at": now}},
-    )
-
-    try:
-        from utils.ensure_topic_of_shame import _shame_path
-
-        path = _shame_path()
-        if path.is_file():
-            path.write_text(_insert_shame_entry(path.read_text(encoding="utf-8"), entry), encoding="utf-8")
-    except OSError as e:
-        logger.warning("modkill wipe: could not update docs/TOPIC_OF_SHAME.md: %s", e)
-
-    logger.info("modkill wipe: Topic of Shame updated for %s", username)
-    return True
+    return ok
 
 
 async def apply_modkill_wipe_after_kill(
@@ -363,6 +333,16 @@ async def apply_modkill_wipe_after_kill(
         r = await coll.delete_many({"user_id": uid})
         extra_deleted[key] = int(r.deleted_count or 0)
 
+    from utils.founding_member import FOUNDING_MEMBER_BADGE
+    from utils.player_death import player_death_set_fields
+    from utils.profile_cosmetics import CUSTOM_PROFILE_BADGE
+
+    badge_doc = await db.users.find_one({"id": uid}, {"_id": 0, "badges": 1})
+    strip_badges = {FOUNDING_MEMBER_BADGE, CUSTOM_PROFILE_BADGE}
+    badges = [b for b in ((badge_doc or {}).get("badges") or []) if b not in strip_badges]
+    if MODKILLED_BADGE not in badges:
+        badges.append(MODKILLED_BADGE)
+
     await db.users.update_one(
         {"id": uid},
         {
@@ -391,8 +371,11 @@ async def apply_modkill_wipe_after_kill(
                 "game_pass_weed_strain_ids": [],
                 "loot_reclaimable_passive_ids": [],
                 "killed_by_username": "Staff (modkill wipe)",
+                "total_kills": 0,
+                "robot_bodyguard_kills": 0,
+                "badges": badges,
+                **player_death_set_fields(),
             },
-            "$addToSet": {"badges": MODKILLED_BADGE},
             "$unset": {
                 "death_revive_snapshot": "",
                 "rank_xp_pass_bonus_until": "",

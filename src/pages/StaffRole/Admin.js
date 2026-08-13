@@ -5550,7 +5550,7 @@ export default function Admin() {
 
   const handleBanIp = async () => {
     const raw = (ipBanUsername || '').trim();
-    const reason = (ipBanReason || '').trim() || 'Banned by admin';
+    const reason = (ipBanReason || '').trim();
     if (!raw) {
       toast.error('Enter a username (ban all known IPs) or a single IP address');
       return;

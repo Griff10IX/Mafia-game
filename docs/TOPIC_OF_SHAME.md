@@ -1,7 +1,7 @@
 [center][size=2][b][color=#FFD700]TOPIC OF SHAME[/color][/b][/size][/center]
 
 [quote]
-[color=#AAAAAA]Players staff-killed for cheating or bots, and why. Proof is summarized so it does not help anyone copy the method. Staff only — this topic is locked.[/color]
+[color=#AAAAAA]Posts here are automated. Staff kills, wipes, and IP bans — duration and reason when given. Anyone caught knowingly playing while they know they are IP banned will be modkilled (wipe). Proof is summarized so it does not help anyone copy the method. Staff only — this topic is locked.[/color]
 [/quote]
 
 [hr]

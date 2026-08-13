@@ -1,9 +1,12 @@
 # Security Admin endpoints: view logs, ban/unban users, security stats
 from datetime import datetime, timezone, timedelta
+import logging
 import re
 import uuid
 from pydantic import BaseModel
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import Depends, HTTPException, Request
 
@@ -137,7 +140,8 @@ def register(router):
         uname = (request.username or "").strip()
         raw_ip = (request.ip or "").strip()
         now = datetime.now(timezone.utc)
-        reason = (request.reason or "").strip() or "Banned by admin"
+        raw_reason = (request.reason or "").strip()
+        reason = raw_reason or "Banned by admin"
         duration_hours, duration_str = _resolve_ip_ban_duration(request)
         expires_at = (now + timedelta(hours=duration_hours)).isoformat() if duration_hours is not None else None
         banned_by = current_user.get("username", "Admin")
@@ -209,6 +213,17 @@ def register(router):
             await _ban_user_impl(db, uid, display_name, reason, duration_hours, banned_by)
             wipe_summary = await wipe_user_for_account_ban(db, uid)
             await apply_ban_and_invalidate_sessions(db, uid)
+            try:
+                from utils.ensure_topic_of_shame import append_ip_ban_shame_entry
+
+                await append_ip_ban_shame_entry(
+                    db,
+                    username=display_name,
+                    duration_label=duration_str,
+                    reason=raw_reason,
+                )
+            except Exception:
+                logger.exception("topic of shame: IP ban entry failed user=%s", display_name)
             msg = (
                 f"Banned {inserted} new IP ban(s) for {display_name} ({duration_str})"
                 + (f"; {skipped} IP(s) already banned" if skipped else "")
