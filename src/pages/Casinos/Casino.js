@@ -1,4 +1,4 @@
-import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Users, LayoutGrid, Sparkles, Ban } from 'lucide-react';
+import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Users, LayoutGrid, Sparkles, Ban, Trophy } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import styles from '../../styles/noir.module.css';
 import { SLOTS_FEATURE_ENABLED } from '../../config/gameFeatures';
@@ -30,6 +30,7 @@ const GAMES = [
   { to: '/casino/mp-blackjack', label: 'Multiplayer Blackjack', desc: 'Pot game · 2–8 players, best hand wins', Icon: Spade, testId: 'play-mp-blackjack' },
   { to: '/casino/mp-poker', label: 'Poker', desc: "Texas Hold'em · vs Dealer or multiplayer", Icon: Spade, testId: 'play-mp-poker' },
   { to: '/sports-betting', label: 'Sports Betting', desc: 'Live games & results', Icon: Target, testId: 'sports-betting' },
+  { to: '/last-man-standing', label: 'Last Man Standing', desc: 'Premier League survivor pot', Icon: Trophy, testId: 'last-man-standing' },
 ];
 
 export default function Casino() {

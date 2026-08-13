@@ -243,6 +243,12 @@ async def release_redeem_slots_for_deceased_user(db: Any, user_id: str) -> None:
     if not user_id:
         return
     try:
+        from utils.last_man_standing import on_lms_owner_death
+
+        await on_lms_owner_death(db, user_id)
+    except Exception:
+        logger.exception("on_lms_owner_death failed user_id=%s", user_id)
+    try:
         cursor = db.redeem_codes.find({"used_by": user_id}, {"_id": 0, "code": 1})
         code_list = [d["code"] async for d in cursor if d.get("code")]
         if not code_list:

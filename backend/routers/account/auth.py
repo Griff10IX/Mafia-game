@@ -961,6 +961,12 @@ def register(router):
 
             await db.users.insert_one(user_doc.copy())
             try:
+                from utils.last_man_standing import transfer_lms_entry_to_user
+
+                await transfer_lms_entry_to_user(db, user_doc)
+            except Exception:
+                logging.exception("LMS entry transfer on register failed user_id=%s", user_id)
+            try:
                 if user_doc.get("email_verified"):
                     from utils.auto_rank_email_entitlement import sync_auto_rank_email_entitlement_to_user
 

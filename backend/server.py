@@ -3702,6 +3702,8 @@ events.register(api_router)
 security_admin.register(api_router)
 investigate.register(api_router)
 sports_betting.register(api_router)
+from routers.casinos import last_man_standing as last_man_standing_router
+last_man_standing_router.register(api_router)
 from routers.game import world_cup_archive
 world_cup_archive.register(api_router)
 auth.register(api_router)
@@ -4061,6 +4063,19 @@ async def startup_db():
         asyncio.create_task(sports_betting_mod.run_sports_auto_board_ticker())
         logging.getLogger(__name__).info(
             "Sports auto-board: in-process ticker enabled (default ON; set SPORTS_AUTO_BOARD_TICKER=0 to disable). Default: DB templates every 2h, no Odds refresh on that path. Multi-worker: prefer cron-only."
+        )
+    # Last Man Standing: lock GWs / settle results (~15 min)
+    _lms_ticker_raw = (os.environ.get("LMS_TICKER") or "").strip().lower()
+    lms_ticker_on = _lms_ticker_raw not in ("0", "false", "no", "off")
+    lms_use_cron = (os.environ.get("LMS_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
+    if lms_use_cron:
+        logging.getLogger(__name__).info(
+            "LMS: ticker disabled (LMS_USE_CRON=1). Schedule POST /api/lms/cron/tick every 15-30 min. Header: X-Cron-Secret."
+        )
+    elif lms_ticker_on:
+        asyncio.create_task(last_man_standing_router.run_lms_ticker())
+        logging.getLogger(__name__).info(
+            "LMS: in-process ticker enabled (~15 min; LMS_TICKER=0 to disable). Multi-worker: prefer cron-only."
         )
     # Crew OC store-token auto-apply: bounded ticker vs cron-only (multi-worker safe)
     crew_oc_auto_apply_use_cron = (os.environ.get("CREW_OC_AUTO_APPLY_USE_CRON") or "").strip().lower() in ("1", "true", "yes")

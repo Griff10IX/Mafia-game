@@ -24,6 +24,7 @@ import {
   Wrench,
   Coins,
   Zap,
+  Trophy,
   Wine,
 } from 'lucide-react';
 
@@ -120,6 +121,7 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'staff', label: 'Staff', categoryId: 'admin-operations', kind: 'hub', hubSection: 'staff', anchorId: 'admin-staff', icon: UserCog, description: 'Moderator visibility and staffing tools.' },
   { id: 'crew-recovery', label: 'Crew recovery', categoryId: 'admin-operations', kind: 'standalone', icon: Building2, description: 'Revive families and restore illegal businesses from kill snapshots.' },
   { id: 'witness-statements', label: 'Witness', categoryId: 'admin-operations', kind: 'standalone', icon: FileText, description: 'Witness statements review.' },
+  { id: 'last-man-standing', label: 'Last Man Standing', categoryId: 'admin-world-systems', kind: 'standalone', icon: Trophy, description: 'Premier League LMS seasons — create, sync fixtures, settle.' },
   { id: 'commerce', label: 'Commerce', categoryId: 'admin-economy-progression', kind: 'hub', hubSection: 'commerce', anchorId: 'admin-donations', icon: Coins, description: 'Points, economy, and store controls.' },
   { id: 'racket-progress', label: 'Racket progress', categoryId: 'admin-economy-progression', kind: 'standalone', icon: Wine, description: 'Set player racket business progress (ladder, vault, guards, security).' },
   { id: 'distillery-progress', label: 'Distillery progress', categoryId: 'admin-economy-progression', kind: 'standalone', icon: Wine, description: 'Set distillery progress % or grant equipment levels and special track unlocks.' },
@@ -183,6 +185,7 @@ export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
   'weed-sell-audit': 'Weed',
   'property-transfer': 'Props',
   'witness-statements': 'Witness',
+  'last-man-standing': 'LMS',
   locked: 'Locked',
 };
 

@@ -42,6 +42,7 @@ const AdminDistilleryProgress = lazy(() => import('./AdminDistilleryProgress'));
 const AdminWeedSellAudit = lazy(() => import('./AdminWeedSellAudit'));
 const AdminPropertyTransfer = lazy(() => import('./AdminPropertyTransfer'));
 const AdminWitnessStatements = lazy(() => import('./AdminWitnessStatements'));
+const AdminLastManStanding = lazy(() => import('./AdminLastManStanding'));
 const AdminLocked = lazy(() => import('./AdminLocked'));
 
 function routeFor(groupId) {
@@ -74,6 +75,7 @@ const STANDALONE_PAGE = {
   'weed-sell-audit': AdminWeedSellAudit,
   'property-transfer': AdminPropertyTransfer,
   'witness-statements': AdminWitnessStatements,
+  'last-man-standing': AdminLastManStanding,
   locked: AdminLocked,
 };
 

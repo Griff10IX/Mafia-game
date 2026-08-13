@@ -142,6 +142,7 @@ export const SEARCHABLE_TOOLS = [
   { label: "Bodyguard Tools", categoryId: "admin-testing", collapseKey: "bodyguards", keywords: ["bodyguard","robot","generate","sync","location","hacked","replace","hire inflation","clear inflation","payout","test"] },
   { label: "Hitman Tools", categoryId: "admin-testing", collapseKey: "hitman", keywords: ["hitman","cooldown","protection","victim","reset","for hire","hire log","contracts","staff hire","hire","contract","log","bodyguard killed","who hired"] },
   { label: "GTA exclusive pool & dealer", categoryId: "admin-world-systems", collapseKey: "gtaPool", keywords: ["gta","exclusive","loot exclusive","car intel","timeline","war lock","marketplace","pool","dealer","cars","values"], adminOnly: true },
+  { label: "Last Man Standing", categoryId: "admin-world-systems", routePath: "/tjjeujr3wa/last-man-standing", keywords: ["lms","last man standing","premier","football","season","pot"], adminOnly: true },
   { label: "System health", categoryId: "admin-operations", collapseKey: "systemHealth", keywords: ["system","health","uptime","status","db"] },
   { label: "Moderation related accounts", categoryId: "admin-operations", collapseKey: "moderationRelated", keywords: ["moderation","related","linked","accounts"] },
   { label: "Page locks (admin)", categoryId: "admin-world-systems", collapseKey: "pageLocks", scrollToId: "admin-page-locks", keywords: ["page","lock","route","maintenance"] },

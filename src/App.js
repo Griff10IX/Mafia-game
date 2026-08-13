@@ -156,6 +156,7 @@ const MPBlackjackGame = lazy(() => import("./pages/Casinos/MPBlackjackGamePage")
 const MPPoker = lazy(() => import("./pages/Casinos/MPPokerPage"));
 const MPPokerGame = lazy(() => import("./pages/Casinos/MPPokerGamePage"));
 const SportsBetting = lazy(() => import("./pages/Casinos/SportsBetting"));
+const LastManStanding = lazy(() => import("./pages/Casinos/LastManStanding"));
 
 /** Lock casino/sports wager UIs while gambling self-exclusion is active. */
 const withGamblingBan = (node, mode = 'hard') => (
@@ -790,6 +791,12 @@ function App() {
               path="/sports-betting"
               element={
               withGamblingBan(<SportsBetting />)
+              }
+            />
+            <Route
+              path="/last-man-standing"
+              element={
+              withGamblingBan(<LastManStanding />)
               }
             />
             <Route

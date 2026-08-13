@@ -708,12 +708,26 @@ const CrimesGtaSettingsCard = ({
   meltDisabled,
   scrapDisabled,
 }) => (
-  <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`} style={{ animationDelay: '0.2s' }}>
+  <div
+    className={`relative rounded-lg ar-fade-in ${styles.panel} mobile-panel`}
+    style={{ animationDelay: '0.2s', overflow: 'visible' }}
+  >
     <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
       <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
         <Settings2 size={14} className="sm:w-4 sm:h-4" />
         Crimes, GTA & Melt options
       </h2>
+    </div>
+    {/* Sticky under page tabs so Save stays reachable on mobile without scrolling to the end */}
+    <div className="sticky top-12 z-10 px-2.5 sm:px-3 py-2 border-b border-zinc-700/40 bg-zinc-950/95 backdrop-blur-md">
+      <button
+        type="button"
+        onClick={onSaveSettings}
+        disabled={savingSettings}
+        className="w-full py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-[10px] sm:text-xs hover:bg-primary/30 disabled:opacity-50 transition-all active:scale-[0.99]"
+      >
+        {savingSettings ? 'Saving...' : 'Save options'}
+      </button>
     </div>
     <div className="p-2.5 sm:p-3 space-y-4">
       <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">
@@ -855,15 +869,6 @@ const CrimesGtaSettingsCard = ({
           ))}
         </div>
       </div>
-
-      <button
-        type="button"
-        onClick={onSaveSettings}
-        disabled={savingSettings}
-        className="w-full py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-[10px] sm:text-xs hover:bg-primary/30 disabled:opacity-50 transition-all active:scale-[0.99]"
-      >
-        {savingSettings ? 'Saving...' : 'Save options'}
-      </button>
     </div>
   </div>
 );

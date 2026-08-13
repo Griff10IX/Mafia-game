@@ -148,6 +148,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/casino/mp-blackjack', label: 'MP Blackjack' },
         { path: '/casino/mp-poker', label: 'Poker' },
         { path: '/sports-betting', label: 'Sports Betting' },
+        { path: '/last-man-standing', label: 'Last Man Standing' },
         { path: '/my-properties', label: 'My Properties' },
         { path: '/casino/gambling-ban', label: 'Gambling Ban' },
       ],
@@ -2115,7 +2116,7 @@ export default function Layout({ children }) {
     );
   })();
 
-  const isCasinoPath = (p) => p === '/casino' || (p && (p.startsWith('/casino/') || p === '/sports-betting' || p === '/my-properties'));
+  const isCasinoPath = (p) => p === '/casino' || (p && (p.startsWith('/casino/') || p === '/sports-betting' || p === '/last-man-standing' || p === '/my-properties'));
   const casinoNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-casino-group" onClick={() => setCasinoOpen((v) => { const next = !v; setNavSectionOpen('casino', next); return next; })}
@@ -2142,6 +2143,7 @@ export default function Layout({ children }) {
             { to: '/casino/mp-blackjack', label: 'MP Blackjack', testId: 'nav-mp-blackjack', matchPrefix: true, Icon: Users },
             { to: '/casino/mp-poker', label: 'Poker', testId: 'nav-mp-poker', matchPrefix: true, Icon: Crown },
             { to: '/sports-betting', label: 'Sports Betting', testId: 'nav-sports-betting', Icon: LineChart },
+            { to: '/last-man-standing', label: 'Last Man Standing', testId: 'nav-last-man-standing', Icon: Trophy },
             { to: '/my-properties', label: 'My Properties', testId: 'nav-my-properties', Icon: Building2 },
             { to: '/casino/gambling-ban', label: 'Gambling Ban', testId: 'nav-gambling-ban', Icon: Ban },
           ].map((item, idx) => {
@@ -3452,6 +3454,7 @@ export default function Layout({ children }) {
                 { path: '/casino/blackjack', label: 'Blackjack', Icon: Spade },
                 ...(SLOTS_FEATURE_ENABLED ? [{ path: '/casino/slots', label: 'Slots', Icon: SquareStack }] : []),
                 { path: '/sports-betting', label: 'Sports', Icon: LineChart },
+                { path: '/last-man-standing', label: 'LMS', Icon: Trophy },
                 { path: '/casino/gambling-ban', label: 'Gambling Ban', Icon: Ban },
                 { path: '/mini-games', label: 'Mini Games', Icon: Gamepad2 },
                 ...(user?.is_entertainer ? [{ path: '/game/entertainer', label: 'Entertainer', Icon: Mic2 }] : []),
