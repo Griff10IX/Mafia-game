@@ -93,10 +93,11 @@ removeEmergentBadge();
 setTimeout(removeEmergentBadge, 500);
 setTimeout(removeEmergentBadge, 2000);
 
-// Android (Honor, Samsung, etc.): disable backdrop-filter before first paint to avoid GPU tile static.
+// Mobile WebKit/Blink: disable backdrop-filter / transform fades before first paint (black flash + tile static).
 try {
   const ua = typeof navigator !== 'undefined' ? (navigator.userAgent || '') : '';
-  if (/Android/i.test(ua) && !/Firefox/i.test(ua)) {
+  const iPadOs = /Macintosh/i.test(ua) && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1;
+  if (!/Firefox/i.test(ua) && (/Android/i.test(ua) || /iPhone|iPad|iPod/i.test(ua) || iPadOs)) {
     document.documentElement.setAttribute('data-mobile-compositor-safe', 'on');
     if (document.body) document.body.setAttribute('data-mobile-compositor-safe', 'on');
   }

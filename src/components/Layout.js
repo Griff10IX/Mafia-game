@@ -2928,7 +2928,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
-      <main data-layout="main" className={`${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:ml-40' : 'md:ml-48') : ''} mt-main-below-topbar min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' || isPocketDeck ? 'pb-safe-bottom-nav md:pb-6' : ''} ${isPocketDeck ? 'pt-9 md:pt-0' : ''} ${(isMobileViewport || isLandscapeCompactLayout) && !isPocketDeck && mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && mobileNavStyle !== 'bottom' ? 'pb-16 md:pb-6' : ''} ${user && mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout && !isPocketDeck ? (themeVariant === 'modern' ? 'md:mr-60' : 'md:mr-52') : ''}`}>
+      <main data-layout="main" className={`${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:ml-40' : 'md:ml-48') : ''} mt-main-below-topbar min-h-[100dvh] p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' || isPocketDeck ? 'pb-safe-bottom-nav md:pb-6' : ''} ${isPocketDeck ? 'pt-9 md:pt-0' : ''} ${(isMobileViewport || isLandscapeCompactLayout) && !isPocketDeck && mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && mobileNavStyle !== 'bottom' ? 'pb-16 md:pb-6' : ''} ${user && mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout && !isPocketDeck ? (themeVariant === 'modern' ? 'md:mr-60' : 'md:mr-52') : ''}`}>
         {needsEmailVerification && (
           <div className="mb-3 px-3 py-2 rounded-sm flex items-center gap-2 flex-wrap" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', border: '1px solid rgba(var(--noir-primary-rgb), 0.4)' }}>
             <Mail size={16} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
@@ -3237,7 +3237,9 @@ export default function Layout({ children }) {
           {(pocketMenuOpen || pocketStatsOpen || pocketActionsOpen || pocketCombatOpen || pocketMoneyOpen) && (
             <div
               role="presentation"
-              className="md:hidden fixed inset-0 z-[54] bg-black/55 touch-manipulation"
+              data-layout="pocket-dim"
+              className="md:hidden fixed inset-0 z-[54] touch-manipulation"
+              style={{ backgroundColor: 'rgba(12, 12, 14, 0.72)' }}
               onClick={closeAllPocketSheets}
             />
           )}

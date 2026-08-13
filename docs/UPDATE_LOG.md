@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-14[/color][/b] — [b]Mobile: no black flash when opening pages[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Mobile:[/b] Tapping a page from the phone menu no longer flashes a black screen. iPhone/iPad get the same compositor-safe treatment as Android (no fade-from-invisible, no black overlay tear-off).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-13[/color][/b] — [b]Gambling Ban: points and Quick Trade still work[/b][/size]
 [quote]
 [list]

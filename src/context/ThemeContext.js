@@ -444,14 +444,18 @@ function applyModernPerfFlagToDocument(themeVariant, modernVisualQuality) {
   }
 }
 
-/** Android Blink/WebView (Honor, Samsung, stock Chrome, etc.): backdrop-filter on fixed/floating UI + scroll often shows GPU "static". */
+/** Mobile WebKit/Blink: backdrop-filter + transform fades on fixed overlays flash black / tile-corrupt. */
 function shouldApplyMobileCompositorBackdropWorkaround() {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent || '';
-  if (!/Android/i.test(ua)) return false;
   if (/Firefox/i.test(ua)) return false;
-  // Chrome, Samsung Internet, Edge/Opera Android, WebView — any non-Firefox Android Blink.
-  return true;
+  if (/Android/i.test(ua)) return true;
+  if (/iPhone|iPad|iPod/i.test(ua)) return true;
+  // iPadOS desktop UA
+  if (/Macintosh/i.test(ua) && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1) {
+    return true;
+  }
+  return false;
 }
 
 function applyMobileCompositorSafeToDocument() {

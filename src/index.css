@@ -27,6 +27,7 @@
 
 html {
   overflow-x: hidden;
+  background-color: #0c0c0e;
   /* Scrollbar: dark grey thumb (#303030) to match UI panels */
   scrollbar-color: #303030 #1a1a1a;
   scrollbar-width: thin;
@@ -1046,10 +1047,12 @@ body[data-texture="scatter"]::before {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='sc2'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23sc2)'/%3E%3C/svg%3E");
 }
 
-/* Ensure main content stays above texture overlay */
+/* Ensure main content stays above texture overlay. Opaque paint so iOS never flashes void-black on nav. */
 body > #root {
   position: relative;
   z-index: 1;
+  min-height: 100%;
+  background-color: var(--noir-bg, #0c0c0e);
 }
 
 /*
@@ -1073,6 +1076,12 @@ body[data-mobile-compositor-safe="on"] [data-layout="bottom-nav-submenu"],
 body[data-mobile-compositor-safe="on"] [data-layout="mobile-bottom-bar"],
 body[data-mobile-compositor-safe="on"] [data-layout="pocket-dock"],
 body[data-mobile-compositor-safe="on"] [data-layout="pocket-hud"],
+body[data-mobile-compositor-safe="on"] [data-layout="pocket-dim"],
+body[data-mobile-compositor-safe="on"] [data-layout="pocket-menu-sheet"],
+body[data-mobile-compositor-safe="on"] [data-layout="pocket-actions-sheet"],
+body[data-mobile-compositor-safe="on"] [data-layout="pocket-combat-sheet"],
+body[data-mobile-compositor-safe="on"] [data-layout="pocket-money-sheet"],
+body[data-mobile-compositor-safe="on"] [data-layout="pocket-stats-sheet"],
 body[data-mobile-compositor-safe="on"] [data-layout="touch-ball"] button,
 body[data-mobile-compositor-safe="on"] [data-layout="touch-ball-panel"] {
   background: var(--noir-content, #121214) !important;
@@ -1103,11 +1112,32 @@ html[data-mobile-compositor-safe="on"] .m-fade-in,
 html[data-mobile-compositor-safe="on"] .wof-fade,
 html[data-mobile-compositor-safe="on"] .ge-fade-in,
 html[data-mobile-compositor-safe="on"] .cg-fade-in,
+html[data-mobile-compositor-safe="on"] .obj-fade-in,
+html[data-mobile-compositor-safe="on"] .obj-scale-in,
+html[data-mobile-compositor-safe="on"] .store-fade-in,
+html[data-mobile-compositor-safe="on"] .atk-fade-in,
+html[data-mobile-compositor-safe="on"] .st-fade-in,
+html[data-mobile-compositor-safe="on"] .ref-fade-in,
+html[data-mobile-compositor-safe="on"] .cs-fade-in,
+html[data-mobile-compositor-safe="on"] .gr-fade-in,
+html[data-mobile-compositor-safe="on"] .coinflip-fade-in,
+html[data-mobile-compositor-safe="on"] .vc-enter,
 html[data-mobile-compositor-safe="on"] .token-badge-pulse,
 html[data-mobile-compositor-safe="on"] .game-chat-notification-dot-mention {
   animation: none !important;
   transform: none !important;
   opacity: 1 !important;
+}
+
+/* Phones: page entrance fades start at opacity 0 and flash black when a menu closes. */
+@media (max-width: 767px) {
+  [class*="-fade-in"],
+  [class*="-scale-in"],
+  .vc-enter {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
 }
 
 /* Prefer opaque paints for floating launchers over the scroll plane. */
