@@ -112,6 +112,7 @@ export const SEARCHABLE_TOOLS = [
   { label: "Minigame Payouts", categoryId: "admin-logs", collapseKey: "minigamePayouts", keywords: ["minigame","payout","reward","cash","mini","game"] },
   { label: "Weekly Leaderboard Payouts", categoryId: "admin-logs", collapseKey: "weeklyLeaderboardPayouts", keywords: ["leaderboard","weekly","payout","respect","points","top 10","fix","deduction","negative points"] },
   { label: "Attack Logs", categoryId: "admin-logs", keywords: ["attack","log","kill"], routePath: "/tjjeujr3wa/attack-logs" },
+  { label: "BG hire logs", categoryId: "admin-logs", keywords: ["bodyguard","hire","robot","rvk","bot","log"], routePath: "/tjjeujr3wa/bodyguard-hire-logs" },
   { label: "Bodyguard audit", categoryId: "admin-logs", collapseKey: "bodyguardAudit", keywords: ["bodyguard","guard","hire","drop","inflation","robot hire history","last 100 robot","searching time","find time","overpay","stale inflation"] },
   { label: "Mod Action Logs", categoryId: "admin-logs", collapseKey: "modLogs", keywords: ["mod","action","log"] },
   { label: "Crime logs", categoryId: "admin-logs", collapseKey: "crimeLogs", keywords: ["crime","log","heist"] },

@@ -68,13 +68,14 @@ const BODYGUARD_ARMOUR_UPGRADE_COSTS = { 0: 50, 1: 100, 2: 200, 3: 400, 4: 800 }
 const ROBOT_BG_AUTO_SEARCH_COST_DEFAULT = 10_000;
 
 function getBodyguardHireCodePayload(data) {
-  const name = data?.hire_code_name;
+  // v2 gate: rvk_name + rvk_* field (old hire_code_name / bgc_* intentionally ignored)
+  const name = data?.rvk_name;
   if (!name || typeof name !== 'string') return {};
   const value = data?.[name];
-  if (!value || typeof value !== 'string') return {};
+  if (!value || typeof value !== 'string' || value.trim().length < 16) return {};
   return {
-    hire_code_name: name,
-    [name]: value,
+    rvk_name: name,
+    [name]: value.trim(),
   };
 }
 
@@ -308,6 +309,34 @@ export default function Bodyguards() {
       setHasLoaded(true);
     }
   };
+
+  // Quiet rvk gate refresh while page is open (keeps hire token fresh; Hire stays one POST).
+  useEffect(() => {
+    const POLL_MS = 45_000;
+    const tick = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      try {
+        const res = await api.get('/bodyguards', noCacheGetConfig());
+        if (res?.status < 400 && res.data) {
+          hireCodePayloadRef.current = getBodyguardHireCodePayload(res.data);
+          if (typeof res.data.robot_bodyguard_hire_tokens === 'number') {
+            setRobotHireTokens(res.data.robot_bodyguard_hire_tokens);
+          }
+        }
+      } catch {
+        /* ignore quiet poll errors */
+      }
+    };
+    const timer = setInterval(tick, POLL_MS);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
 
   const handleManualRefresh = async () => {
     if (refreshing) return;

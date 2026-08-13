@@ -1046,6 +1046,9 @@ def _run_assistant_tick(farm: dict, now: datetime) -> Optional[Dict[str, Any]]:
 
 def _harvest_ready_plot(farm: dict, plot: dict, stats: dict, now: datetime) -> Tuple[dict, Dict[str, Any]]:
     """Harvest one ready plot into curing. Mutates farm fields; returns (new_empty_plot, info)."""
+    # Flush finished curing into stash first so overdue same-strain rows cannot merge
+    # and pull a fresh harvest straight to sell.
+    _tick_curing(farm, now)
     strain = STRAIN_BY_ID.get(plot.get("strain_id") or "")
     if not strain:
         raise ValueError("Invalid plant")
@@ -1743,7 +1746,11 @@ def _tick_plot(plot: dict, farm: dict, stats: dict, now: datetime) -> dict:
 
 
 def _merge_curing_batches(curing: list, cure_level: int = 0) -> list:
-    """One curing row per strain_id — combine grams (weighted quality), keep earliest start / latest ready."""
+    """One curing row per strain_id — combine grams (weighted quality).
+
+    New harvests must not inherit an older started_at (that let overdue merges
+    finish immediately and dump fresh wet weed into stash / sell).
+    """
     by_strain: Dict[str, dict] = {}
     order: List[str] = []
     for raw in curing or []:
@@ -1765,21 +1772,20 @@ def _merge_curing_batches(curing: list, cure_level: int = 0) -> list:
         dest["grams"] = round(new_g, 2)
         a = _parse_iso(dest.get("started_at"))
         b = _parse_iso((raw or {}).get("started_at"))
-        if a and b and b < a:
+        # Keep the newest start so fresh harvests reset the cure clock.
+        if a and b:
+            latest = max(a, b)
+            dest["started_at"] = _iso(latest)
+        elif b and not a:
             dest["started_at"] = (raw or {}).get("started_at")
-        elif not a and b:
-            dest["started_at"] = (raw or {}).get("started_at")
-        ra = _parse_iso(dest.get("ready_at"))
-        rb = _parse_iso((raw or {}).get("ready_at"))
-        if ra and rb and rb > ra:
-            dest["ready_at"] = (raw or {}).get("ready_at")
-        elif not ra and rb:
-            dest["ready_at"] = (raw or {}).get("ready_at")
     out = []
     for sid in order:
         batch = by_strain[sid]
         mins = curing_minutes(float(batch.get("grams") or 0), cure_level)
         batch["curing_minutes"] = round(mins, 2)
+        started = _parse_iso(batch.get("started_at"))
+        if started:
+            batch["ready_at"] = _iso(started + timedelta(minutes=mins))
         out.append(batch)
     return out
 
@@ -1794,6 +1800,7 @@ def _tick_curing(farm: dict, now: datetime) -> dict:
         ready_at = _parse_iso(batch.get("ready_at"))
         started_at = _parse_iso(batch.get("started_at"))
         minutes = curing_minutes(float(batch.get("grams") or 0), cure_level)
+        # Equipment upgrades may shorten remaining cure time from started_at.
         expected_ready_at = started_at + timedelta(minutes=minutes) if started_at else None
         if expected_ready_at and (not ready_at or ready_at > expected_ready_at):
             ready_at = expected_ready_at
@@ -2571,6 +2578,7 @@ async def weed_harvest(body: PlotActionBody, http_request: Request, current_user
         {
             "plots": plots,
             "curing": farm.get("curing"),
+            "stash": farm.get("stash"),
             "missions": farm.get("missions"),
             "heat": farm["heat"],
             "heat_high_since": farm.get("heat_high_since"),

@@ -6,6 +6,25 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-13[/color][/b] — [b]Bodyguard hire anti-bot + hire logs[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Bodyguards:[/b] Robot hire now uses a new short-lived [b]rvk[/b] gate (rotating field name + reminted token). Normal hire click stays the same; old bot scripts that still send the previous code shape will fail.[/color]
+[*][color=#888888][b]Staff:[/b] New [b]BG hire logs[/b] console (under staff tools) shows successful hires, gate fails, and [b]legacy_code_attempt[/b] fingerprints (bots still using the old hire code fields).[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-13[/color][/b] — [b]Weed Empire: curing skip fix[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] Harvesting a new batch while the same strain was already curing (or overdue to finish) no longer dumps the fresh harvest straight into [b]Sell[/b]. Finished curing is flushed first, and merged batches restart the cure timer from the newest harvest.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-12[/color][/b] — [b]Loot / QT Mission Skip, MDG prize holds, Gambling Ban, Families Apply OC, Samsung GPU[/b][/size]
 [quote]
 [list]

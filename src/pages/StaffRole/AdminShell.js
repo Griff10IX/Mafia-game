@@ -28,6 +28,7 @@ const Admin = lazy(() => import('./Admin'));
 const AdminOverview = lazy(() => import('./AdminOverview'));
 const AdminUsersOnline = lazy(() => import('./AdminUsersOnline'));
 const AdminAttackLogs = lazy(() => import('./AdminAttackLogs'));
+const AdminBodyguardHireLogs = lazy(() => import('./AdminBodyguardHireLogs'));
 const AdminIpHistory = lazy(() => import('./AdminIpHistory'));
 const AdminDeadAliveLog = lazy(() => import('./AdminDeadAliveLog'));
 const AdminAccountCompare = lazy(() => import('./AdminAccountCompare'));
@@ -59,6 +60,7 @@ function AdminLazyFallback() {
 const STANDALONE_PAGE = {
   'users-online': AdminUsersOnline,
   'attack-logs': AdminAttackLogs,
+  'bodyguard-hire-logs': AdminBodyguardHireLogs,
   'ip-history': AdminIpHistory,
   'dead-alive-log': AdminDeadAliveLog,
   'account-compare': AdminAccountCompare,

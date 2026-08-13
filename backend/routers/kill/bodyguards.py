@@ -72,52 +72,178 @@ BODYGUARD_ARMOUR_UPGRADE_COSTS = {0: 50, 1: 100, 2: 200, 3: 400, 4: 800}
 BODYGUARD_HUMAN_HIRE_DISCOUNT = 0.75  # 75% of robot price
 # After someone else kills your robot NPC bodyguard, you cannot hire another for this many seconds (self-kill does not apply; see attack.py).
 BODYGUARD_ROBOT_KILLED_HIRE_COOLDOWN_SECONDS = 60
-_BODYGUARD_HIRE_CODE_PREFIX = "bgc_"
+
+# --- Robot hire gate (v2): short-lived reminted random tokens + rotating JSON field names ---
+# Old bots that POST hire_code_name / bgc_* fail and are logged as legacy_code_attempt.
+_BODYGUARD_RVK_PREFIX = "rvk_"
+_BODYGUARD_RVK_NAME_KEY = "rvk_name"
+_BODYGUARD_RVK_BUCKET_KEY = "rvk_b"
+_BODYGUARD_LEGACY_HIRE_NAME_KEY = "hire_code_name"
+_BODYGUARD_LEGACY_PREFIX = "bgc_"
+_BODYGUARD_HIRE_ATTEMPTS_COLLECTION = "bodyguard_hire_attempts"
 
 
-def _bodyguard_hire_code_bucket_seconds() -> int:
+def _bodyguard_rvk_field_bucket_seconds() -> int:
+    """How often the JSON field *name* rotates (value remints more often)."""
     try:
-        return max(900, int(os.getenv("BODYGUARD_HIRE_CODE_BUCKET_SECONDS", "7200") or "7200"))
+        return max(300, int(os.getenv("BODYGUARD_RVK_FIELD_BUCKET_SECONDS", "900") or "900"))
     except Exception:
-        return 7200
+        return 900
 
 
-def _bodyguard_hire_code_bucket(now: Optional[float] = None) -> int:
-    return int((time.time() if now is None else now) // _bodyguard_hire_code_bucket_seconds())
+def _bodyguard_rvk_remint_seconds() -> int:
+    try:
+        return max(30, int(os.getenv("BODYGUARD_HIRE_TOKEN_REMINT_SECONDS", "60") or "60"))
+    except Exception:
+        return 60
 
 
-def _bodyguard_hire_code_field_name(bucket: Optional[int] = None) -> str:
-    b = _bodyguard_hire_code_bucket() if bucket is None else int(bucket)
-    secret = str(SECRET_KEY or "bodyguard-hire-code").encode("utf-8", "ignore")
-    digest = hmac.new(secret, f"bodyguard-hire-field:{b}".encode("utf-8"), hashlib.sha256).hexdigest()
-    return f"{_BODYGUARD_HIRE_CODE_PREFIX}{digest[:16]}"
+def _bodyguard_rvk_field_bucket(now: Optional[float] = None) -> int:
+    return int((time.time() if now is None else now) // _bodyguard_rvk_field_bucket_seconds())
 
 
-def _bodyguard_hire_code_value(user_id: str, bucket: Optional[int] = None) -> str:
-    b = _bodyguard_hire_code_bucket() if bucket is None else int(bucket)
-    secret = str(SECRET_KEY or "bodyguard-hire-code").encode("utf-8", "ignore")
-    digest = hmac.new(secret, f"bodyguard-hire-value:{user_id}:{b}".encode("utf-8"), hashlib.sha256).hexdigest()
-    return digest[:48]
+def _bodyguard_rvk_field_name(bucket: Optional[int] = None) -> str:
+    b = _bodyguard_rvk_field_bucket() if bucket is None else int(bucket)
+    secret = str(SECRET_KEY or "bodyguard-rvk").encode("utf-8", "ignore")
+    digest = hmac.new(secret, f"bodyguard-rvk-field-v2:{b}".encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{_BODYGUARD_RVK_PREFIX}{digest[:16]}"
 
 
-def _bodyguard_hire_code_payload(user_id: str) -> Dict[str, Any]:
-    name = _bodyguard_hire_code_field_name()
+def _accepted_bodyguard_rvk_fields() -> Dict[str, int]:
+    b = _bodyguard_rvk_field_bucket()
     return {
-        "hire_code_name": name,
-        "hire_code_bucket": _bodyguard_hire_code_bucket(),
-        name: _bodyguard_hire_code_value(user_id),
+        _bodyguard_rvk_field_name(b): b,
+        _bodyguard_rvk_field_name(b - 1): b - 1,
     }
 
 
-def _accepted_bodyguard_hire_code_fields() -> Dict[str, int]:
-    b = _bodyguard_hire_code_bucket()
+def _bodyguard_client_meta(request: Optional[Request]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    if not request:
+        return out
+    ua = (request.headers.get("user-agent") or "").strip()
+    if ua:
+        out["user_agent"] = ua[:500]
+    cf_ip = (request.headers.get("cf-connecting-ip") or "").strip()
+    if cf_ip:
+        out["client_ip"] = cf_ip[:45]
+    else:
+        forwarded = (request.headers.get("x-forwarded-for") or "").strip()
+        if forwarded:
+            out["client_ip"] = forwarded.split(",")[0].strip()[:45]
+        elif getattr(request, "client", None) and getattr(request.client, "host", None):
+            out["client_ip"] = str(request.client.host)[:45]
+    return out
+
+
+async def _log_bodyguard_hire_attempt(
+    *,
+    user_id: str,
+    username: str,
+    outcome: str,
+    req: Optional[Request] = None,
+    slot: Optional[int] = None,
+    is_robot: Optional[bool] = None,
+    extra: Optional[Dict[str, Any]] = None,
+) -> None:
+    try:
+        doc: Dict[str, Any] = {
+            "id": str(uuid.uuid4()),
+            "at": datetime.now(timezone.utc),
+            "owner_id": user_id or "",
+            "owner_username": username or "?",
+            "outcome": outcome,
+            "gate": "rvk",
+            **_bodyguard_client_meta(req),
+        }
+        if slot is not None:
+            doc["slot"] = int(slot)
+        if is_robot is not None:
+            doc["is_robot"] = bool(is_robot)
+        if extra:
+            for k, v in extra.items():
+                if v is not None and k not in doc:
+                    doc[k] = v
+        await db[_BODYGUARD_HIRE_ATTEMPTS_COLLECTION].insert_one(doc)
+    except Exception:
+        logger.exception("bodyguard_hire_attempts insert failed outcome=%s uid=%s", outcome, user_id)
+
+
+async def _ensure_bodyguard_rvk_token(user_id: str) -> str:
+    """Mint/remint a per-user random hire token. Returns current token value."""
+    uid = (user_id or "").strip()
+    if not uid:
+        return ""
+    now = datetime.now(timezone.utc)
+    remint = _bodyguard_rvk_remint_seconds()
+    user = await db.users.find_one(
+        {"id": uid},
+        {"_id": 0, "bodyguard_rvk": 1, "bodyguard_rvk_prev": 1, "bodyguard_rvk_at": 1},
+    )
+    cur = str((user or {}).get("bodyguard_rvk") or "").strip()
+    at = _parse_iso_datetime((user or {}).get("bodyguard_rvk_at"))
+    age_ok = bool(at and (now - at).total_seconds() < remint and len(cur) >= 16)
+    if age_ok:
+        return cur
+    new_tok = secrets.token_urlsafe(24)
+    update: Dict[str, Any] = {
+        "bodyguard_rvk": new_tok,
+        "bodyguard_rvk_at": now.isoformat(),
+    }
+    if cur and len(cur) >= 16:
+        update["bodyguard_rvk_prev"] = cur
+    await db.users.update_one({"id": uid}, {"$set": update})
+    return new_tok
+
+
+async def _consume_bodyguard_rvk_token(user_id: str) -> None:
+    uid = (user_id or "").strip()
+    if not uid:
+        return
+    await db.users.update_one(
+        {"id": uid},
+        {"$unset": {"bodyguard_rvk": "", "bodyguard_rvk_prev": "", "bodyguard_rvk_at": ""}},
+    )
+
+
+async def _bodyguard_rvk_payload(user_id: str) -> Dict[str, Any]:
+    token = await _ensure_bodyguard_rvk_token(user_id)
+    name = _bodyguard_rvk_field_name()
     return {
-        _bodyguard_hire_code_field_name(b): b,
-        _bodyguard_hire_code_field_name(b - 1): b - 1,
+        _BODYGUARD_RVK_NAME_KEY: name,
+        _BODYGUARD_RVK_BUCKET_KEY: _bodyguard_rvk_field_bucket(),
+        name: token,
     }
 
 
-async def _submitted_bodyguard_hire_code(payload: "BodyguardHireRequest", req: Request) -> Optional[str]:
+def _bodyguard_request_body_dict(payload: "BodyguardHireRequest", body: Dict[str, Any]) -> Dict[str, Any]:
+    merged = dict(body or {})
+    extra = getattr(payload, "__pydantic_extra__", None)
+    if isinstance(extra, dict):
+        for k, v in extra.items():
+            if k not in merged:
+                merged[k] = v
+    return merged
+
+
+def _bodyguard_has_legacy_hire_code(body: Dict[str, Any]) -> bool:
+    if not isinstance(body, dict):
+        return False
+    if isinstance(body.get(_BODYGUARD_LEGACY_HIRE_NAME_KEY), str):
+        return True
+    for k, v in body.items():
+        if isinstance(k, str) and k.startswith(_BODYGUARD_LEGACY_PREFIX) and isinstance(v, str) and len(v.strip()) >= 16:
+            return True
+    return False
+
+
+async def _submitted_bodyguard_rvk(
+    payload: "BodyguardHireRequest", req: Request
+) -> tuple[Optional[str], bool]:
+    """
+    Returns (submitted_token, used_legacy_shape).
+    used_legacy_shape True means old hire_code_name / bgc_* was present (bot fingerprint).
+    """
     body: Dict[str, Any] = {}
     try:
         raw = await req.json()
@@ -125,39 +251,35 @@ async def _submitted_bodyguard_hire_code(payload: "BodyguardHireRequest", req: R
             body = raw
     except Exception:
         body = {}
+    merged = _bodyguard_request_body_dict(payload, body)
+    legacy = _bodyguard_has_legacy_hire_code(merged)
 
-    fields = _accepted_bodyguard_hire_code_fields()
-    hinted = body.get("hire_code_name")
+    fields = _accepted_bodyguard_rvk_fields()
+    hinted = merged.get(_BODYGUARD_RVK_NAME_KEY)
     if isinstance(hinted, str) and hinted in fields:
-        val = body.get(hinted)
+        val = merged.get(hinted)
         if isinstance(val, str) and len(val.strip()) >= 16:
-            return val.strip()
+            return val.strip(), legacy
 
     for name in fields:
-        val = body.get(name)
+        val = merged.get(name)
         if isinstance(val, str) and len(val.strip()) >= 16:
-            return val.strip()
-
-    extra = getattr(payload, "__pydantic_extra__", None)
-    if isinstance(extra, dict):
-        hinted = extra.get("hire_code_name")
-        if isinstance(hinted, str) and hinted in fields:
-            val = extra.get(hinted)
-            if isinstance(val, str) and len(val.strip()) >= 16:
-                return val.strip()
-        for name in fields:
-            val = extra.get(name)
-            if isinstance(val, str) and len(val.strip()) >= 16:
-                return val.strip()
-    return None
+            return val.strip(), legacy
+    return None, legacy
 
 
-def _valid_bodyguard_hire_code(user_id: str, submitted: Optional[str]) -> bool:
+async def _valid_bodyguard_rvk(user_id: str, submitted: Optional[str]) -> bool:
     sub = (submitted or "").strip()
     if len(sub) < 16:
         return False
-    for bucket in set(_accepted_bodyguard_hire_code_fields().values()):
-        expected = _bodyguard_hire_code_value(user_id, bucket)
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "bodyguard_rvk": 1, "bodyguard_rvk_prev": 1},
+    )
+    for key in ("bodyguard_rvk", "bodyguard_rvk_prev"):
+        expected = str((user or {}).get(key) or "").strip()
+        if len(expected) < 16:
+            continue
         try:
             if secrets.compare_digest(expected.encode("utf-8"), sub.encode("utf-8")):
                 return True
@@ -463,7 +585,15 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
             payload, expires = _bodyguards_cache[uid]
             if now <= expires:
                 logger.debug("get_bodyguards cache hit uid=%s", uid)
-                return payload
+                # Always remint/attach fresh rvk gate — never serve a stale hire token from cache.
+                try:
+                    rvk = await _bodyguard_rvk_payload(uid)
+                    out = dict(payload)
+                    out.update(rvk)
+                    return out
+                except Exception:
+                    logger.exception("get_bodyguards rvk overlay failed uid=%s", uid)
+                    return payload
         bodyguards = await db.bodyguards.find({"user_id": uid}, {"_id": 0}).to_list(10)
         logger.debug("get_bodyguards found %d raw slots for uid=%s", len(bodyguards), uid)
         guard_ids = list(
@@ -531,7 +661,7 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
         if len(_bodyguards_cache) >= _BODYGUARDS_CACHE_MAX_ENTRIES:
             oldest = next(iter(_bodyguards_cache))
             _bodyguards_cache.pop(oldest, None)
-        payload = {"bodyguards": result, **_bodyguard_hire_code_payload(uid)}
+        payload = {"bodyguards": result}
         as_guard = await db.bodyguards.find_one(
             {"bodyguard_user_id": uid, "is_robot": False},
             {"_id": 0, "user_id": 1},
@@ -565,7 +695,12 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
         payload["robot_bg_auto_search_active"] = robot_bg_auto_search_active(sub_doc or {})
         payload["robot_bg_auto_search_cost"] = ROBOT_BG_AUTO_SEARCH_COST
         payload["robot_bodyguard_hire_tokens"] = int((sub_doc or {}).get("robot_bodyguard_hire_tokens") or 0)
-        _bodyguards_cache[uid] = (payload, now + _BODYGUARDS_CACHE_TTL_SEC)
+        # Cache slot payload without rvk; overlay fresh token on every response (incl. cache hits).
+        _bodyguards_cache[uid] = (dict(payload), now + _BODYGUARDS_CACHE_TTL_SEC)
+        try:
+            payload.update(await _bodyguard_rvk_payload(uid))
+        except Exception:
+            logger.exception("get_bodyguards rvk attach failed uid=%s", uid)
         logger.info("get_bodyguards success uid=%s slots=%d", uid, len(result))
         return payload
     except HTTPException:
@@ -712,16 +847,34 @@ async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
 
 
 async def hire_bodyguard(payload: BodyguardHireRequest, req: Request, current_user: dict = Depends(get_current_user)):
-    submitted_code = await _submitted_bodyguard_hire_code(payload, req)
-    if not _valid_bodyguard_hire_code(current_user.get("id") or "", submitted_code):
+    uid = current_user.get("id") or ""
+    uname = current_user.get("username") or ""
+    submitted_code, used_legacy = await _submitted_bodyguard_rvk(payload, req)
+    if not await _valid_bodyguard_rvk(uid, submitted_code):
+        outcome = "legacy_code_attempt" if used_legacy else "code_invalid"
+        try:
+            await _log_bodyguard_hire_attempt(
+                user_id=uid,
+                username=uname,
+                outcome=outcome,
+                req=req,
+                slot=payload.slot,
+                is_robot=payload.is_robot,
+                extra={
+                    "code_present": bool(submitted_code),
+                    "legacy_shape": used_legacy,
+                },
+            )
+        except Exception:
+            logger.exception("bodyguard hire attempt log failed")
         try:
             from utils.staff_bot_client_alert import maybe_notify_staff_bodyguard_hire_code_fail
 
             await maybe_notify_staff_bodyguard_hire_code_fail(
                 db=db,
                 request=req,
-                user_id=current_user.get("id") or "",
-                username=current_user.get("username") or "",
+                user_id=uid,
+                username=uname,
                 slot=payload.slot,
                 is_robot=payload.is_robot,
             )
@@ -731,10 +884,32 @@ async def hire_bodyguard(payload: BodyguardHireRequest, req: Request, current_us
             status_code=400,
             detail={
                 "code": "bodyguard_hire_code_invalid",
+                "gate": "rvk",
                 "detail": "Bodyguard hire code refreshed. Reload Bodyguards and try again.",
             },
         )
-    return await _do_hire_bodyguard(payload.slot, payload.is_robot, current_user)
+    result = await _do_hire_bodyguard(payload.slot, payload.is_robot, current_user)
+    try:
+        await _consume_bodyguard_rvk_token(uid)
+    except Exception:
+        logger.exception("bodyguard rvk consume failed uid=%s", uid)
+    try:
+        await _log_bodyguard_hire_attempt(
+            user_id=uid,
+            username=uname,
+            outcome="hired",
+            req=req,
+            slot=payload.slot,
+            is_robot=payload.is_robot,
+            extra={
+                "hire_cost": (result or {}).get("cost"),
+                "used_hire_token": (result or {}).get("used_hire_token"),
+                "bodyguard_username": (result or {}).get("bodyguard_name"),
+            },
+        )
+    except Exception:
+        logger.exception("bodyguard hire success log failed")
+    return result
 
 
 async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
@@ -3011,6 +3186,59 @@ async def admin_test_bodyguard_payout(current_user: dict = Depends(get_current_u
     return {"message": f"Test payout run: {paid} bodyguard(s) paid", "paid_count": paid}
 
 
+async def admin_bodyguard_hire_logs(
+    username: Optional[str] = Query(None),
+    outcome: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    since: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Admin/mod: bodyguard hire attempt console (success + rvk gate fails).
+    Outcomes: hired | code_invalid | legacy_code_attempt
+    """
+    if not _admin_or_mod(current_user):
+        raise HTTPException(status_code=403, detail="Admin or moderator access required")
+    filt: Dict[str, Any] = {}
+    uname = (username or "").strip()
+    if uname:
+        filt["owner_username"] = _username_pattern(uname)
+    oc = (outcome or "").strip().lower()
+    if oc:
+        filt["outcome"] = oc
+    if since:
+        try:
+            since_dt = _parse_iso_datetime(since) or datetime.fromisoformat(since.replace("Z", "+00:00"))
+            if since_dt.tzinfo is None:
+                since_dt = since_dt.replace(tzinfo=timezone.utc)
+            filt["at"] = {"$gt": since_dt}
+        except Exception:
+            pass
+    rows = (
+        await db[_BODYGUARD_HIRE_ATTEMPTS_COLLECTION]
+        .find(filt, {"_id": 0})
+        .sort("at", -1)
+        .to_list(limit)
+    )
+    # Summary over same filter without since (last 24h)
+    day_ago = datetime.now(timezone.utc) - timedelta(hours=24)
+    summary_match: Dict[str, Any] = {"at": {"$gte": day_ago}}
+    if filt.get("owner_username"):
+        summary_match["owner_username"] = filt["owner_username"]
+    pipe = [
+        {"$match": summary_match},
+        {"$group": {"_id": "$outcome", "n": {"$sum": 1}}},
+    ]
+    summary_rows = await db[_BODYGUARD_HIRE_ATTEMPTS_COLLECTION].aggregate(pipe).to_list(20)
+    summary = {str(r.get("_id") or "?"): int(r.get("n") or 0) for r in summary_rows}
+    return {
+        "logs": rows,
+        "summary_24h": summary,
+        "gate": "rvk",
+        "note": "legacy_code_attempt = bot still sending old hire_code_name / bgc_* fields",
+    }
+
+
 def register(router):
     router.add_api_route("/bodyguards/inflation", get_bodyguards_hire_inflation, methods=["GET"], dependencies=_bodyguards_rl_u)
     router.add_api_route("/bodyguards/stats", get_bodyguards_stats, methods=["GET"], dependencies=_bodyguards_rl_u)
@@ -3037,3 +3265,4 @@ def register(router):
     router.add_api_route("/admin/bodyguards/inflation-overpay-audit", admin_bodyguard_inflation_overpay_audit, methods=["GET"])
     router.add_api_route("/admin/bodyguards/inflation-overpay-refund", admin_bodyguard_inflation_overpay_refund, methods=["POST"])
     router.add_api_route("/admin/bodyguards/hire-intervals", admin_get_bodyguard_hire_intervals, methods=["GET"])
+    router.add_api_route("/admin/bodyguards/hire-logs", admin_bodyguard_hire_logs, methods=["GET"])
