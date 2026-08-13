@@ -11,6 +11,8 @@ from utils.last_man_standing import (
     _gw_all_resolved,
     _deadline_from_fixtures,
     entry_prize_ineligible,
+    lives_after_wrong_pick,
+    entry_lives,
 )
 
 
@@ -83,6 +85,26 @@ class LmsHelpersTests(unittest.TestCase):
         self.assertTrue(entry_prize_ineligible({"prize_eligible": False}))
         self.assertFalse(entry_prize_ineligible({"staff_entry": False, "prize_eligible": True}))
         self.assertFalse(entry_prize_ineligible({"username": "player"}))
+
+    def test_two_lives_then_out(self):
+        left, alive = lives_after_wrong_pick(2)
+        self.assertEqual(left, 1)
+        self.assertTrue(alive)
+        left, alive = lives_after_wrong_pick(1)
+        self.assertEqual(left, 0)
+        self.assertFalse(alive)
+        self.assertEqual(entry_lives({"lives": 3}), 3)
+        self.assertEqual(entry_lives({}), 2)
+
+    def test_official_gw1_is_full_slate(self):
+        from utils.last_man_standing import official_gw1_2026_fixtures
+        fx = official_gw1_2026_fixtures()
+        ok, n_fx, n_teams = gw1_completeness(fx)
+        self.assertTrue(ok)
+        self.assertEqual(n_fx, 10)
+        self.assertEqual(n_teams, 20)
+        self.assertEqual(fx[0]["home"], "Arsenal")
+        self.assertEqual(fx[-1]["away"], "Chelsea")
 
 
 if __name__ == "__main__":

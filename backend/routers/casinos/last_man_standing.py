@@ -117,6 +117,13 @@ async def _season_view(season: dict, user: dict) -> dict:
     if entry and entry.get("status") == "alive" and not staff_no_prizes:
         streak = int(entry.get("correct_streak") or 0) + 1
         next_weekly = int(season.get("weekly_correct_bonus") or 0) + int(season.get("weekly_streak_bonus") or 0) * streak
+    can_buy_life = bool(
+        entry
+        and entry.get("status") == "alive"
+        and not entry.get("extra_life_bought")
+        and not user.get("is_dead")
+        and season.get("status") in ("open", "active")
+    )
     return {
         "season": {
             **lms.season_public_payload(season, alive=counts["alive"], out_n=counts["out"]),
@@ -129,6 +136,7 @@ async def _season_view(season: dict, user: dict) -> dict:
         "fallen": fallen,
         "next_weekly_preview": next_weekly,
         "staff_no_prizes": staff_no_prizes,
+        "can_buy_life": can_buy_life,
         "picks_locked": lms._picks_locked(gw) if gw else True,
         "can_join": (
             not entry
@@ -164,10 +172,10 @@ async def lms_join(season_id: str, current_user: dict = Depends(get_current_user
     return await lms.join_season(db, current_user, season_id)
 
 
-async def lms_pick(season_id: str, body: LmsPickBody, current_user: dict = Depends(get_current_user_verified)):
+async def lms_extra_life(season_id: str, current_user: dict = Depends(get_current_user_verified)):
     raise_if_gambling_self_banned(current_user)
-    _action_rl(current_user.get("id") or "", "pick")
-    return await lms.submit_pick(db, current_user, season_id, body.gw, body.team_id)
+    _action_rl(current_user.get("id") or "", "life")
+    return await lms.buy_extra_life(db, current_user, season_id)
 
 
 async def lms_gameweek(season_id: str, gw: int, current_user: dict = Depends(get_current_user_verified)):
@@ -243,7 +251,7 @@ async def lms_picks_feed(
             if result == "win":
                 result = "survived"
             elif result == "lose":
-                result = "out"
+                result = "used a life" if p.get("survived_with_life") else "out"
             elif result == "postponed":
                 result = "free pass"
             elif elim == gwn:
@@ -335,6 +343,7 @@ def register(router):
     router.add_api_route("/lms/seasons/{season_id}", lms_season, methods=["GET"], dependencies=_lms_rl_u)
     router.add_api_route("/lms/seasons/{season_id}/join", lms_join, methods=["POST"], dependencies=_lms_rl_u)
     router.add_api_route("/lms/seasons/{season_id}/picks", lms_pick, methods=["POST"], dependencies=_lms_rl_u)
+    router.add_api_route("/lms/seasons/{season_id}/extra-life", lms_extra_life, methods=["POST"], dependencies=_lms_rl_u)
     router.add_api_route("/lms/seasons/{season_id}/gameweeks/{gw}", lms_gameweek, methods=["GET"], dependencies=_lms_rl_u)
     router.add_api_route("/lms/seasons/{season_id}/picks-feed", lms_picks_feed, methods=["GET"], dependencies=_lms_rl_u)
     router.add_api_route("/lms/seasons/{season_id}/my-entry", lms_my_entry, methods=["GET"], dependencies=_lms_rl_u)

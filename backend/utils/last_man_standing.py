@@ -22,6 +22,8 @@ LMS_SEED_POT = 150_000
 LMS_ENTRY_FEE = 5_000
 LMS_WEEKLY_CORRECT = 1_000
 LMS_WEEKLY_STREAK = 250
+LMS_START_LIVES = 2
+LMS_EXTRA_LIFE_COST = 2_500
 LMS_GW1_FIXTURE_COUNT = 10
 LMS_GW1_TEAM_COUNT = 20
 LMS_MAX_GW = 38
@@ -95,6 +97,18 @@ def gw1_completeness(fixtures: List[dict]) -> Tuple[bool, int, int]:
     n_teams = len(teams)
     ok = n_fx == LMS_GW1_FIXTURE_COUNT and n_teams == LMS_GW1_TEAM_COUNT
     return ok, n_fx, n_teams
+
+
+def lives_after_wrong_pick(lives: int) -> Tuple[int, bool]:
+    """Return (lives_left, still_alive) after a wrong/missed pick."""
+    left = max(0, int(lives) - 1)
+    return left, left > 0
+
+
+def entry_lives(entry: Optional[dict], season: Optional[dict] = None) -> int:
+    if entry is not None and entry.get("lives") is not None:
+        return max(0, int(entry.get("lives") or 0))
+    return int((season or {}).get("starting_lives") or LMS_START_LIVES)
 
 
 def split_pot(pot: int, winner_count: int) -> List[int]:
@@ -438,6 +452,38 @@ def _deadline_from_fixtures(fixtures: List[dict]) -> Optional[str]:
     return min(times).isoformat()
 
 
+def _sort_fixtures(fixtures: List[dict]) -> List[dict]:
+    return sorted(list(fixtures or []), key=lambda f: (f.get("kickoff") or "", f.get("home") or ""))
+
+
+def official_gw1_2026_fixtures() -> List[dict]:
+    """2026/27 opening weekend (kickoffs in UTC; UK was BST)."""
+    rows = [
+        ("2026-08-21T19:00:00+00:00", "Arsenal", "Coventry City"),
+        ("2026-08-22T11:30:00+00:00", "Hull City", "Manchester United"),
+        ("2026-08-22T14:00:00+00:00", "Everton", "Crystal Palace"),
+        ("2026-08-22T14:00:00+00:00", "Ipswich Town", "Sunderland"),
+        ("2026-08-22T14:00:00+00:00", "Nottingham Forest", "Leeds United"),
+        ("2026-08-22T16:30:00+00:00", "Brentford", "Tottenham Hotspur"),
+        ("2026-08-23T13:00:00+00:00", "Brighton and Hove Albion", "Aston Villa"),
+        ("2026-08-23T13:00:00+00:00", "Manchester City", "AFC Bournemouth"),
+        ("2026-08-23T15:30:00+00:00", "Newcastle United", "Liverpool"),
+        ("2026-08-24T19:00:00+00:00", "Fulham", "Chelsea"),
+    ]
+    out = []
+    for kick, home, away in rows:
+        out.append({
+            "external_event_id": f"pl-2026-gw1-{slug_team(home)}-{slug_team(away)}",
+            "home_team_id": slug_team(home),
+            "away_team_id": slug_team(away),
+            "home": home,
+            "away": away,
+            "kickoff": kick,
+            "result": None,
+        })
+    return _sort_fixtures(out)
+
+
 def _gw_status_for_fixtures(fixtures: List[dict], *, gw1_must_complete: bool) -> str:
     if gw1_must_complete:
         ok, _, _ = gw1_completeness(fixtures)
@@ -471,7 +517,15 @@ async def sync_season_fixtures(db, season_id: str) -> dict:
                 matchdays.add(md)
         for gw in sorted(matchdays):
             grouped[gw] = _fixtures_from_fd_matches(fd_matches, gw)
-    if not grouped.get(1):
+    gw1_ok, n_fx, n_teams = gw1_completeness(grouped.get(1) or [])
+    if not gw1_ok:
+        official = official_gw1_2026_fixtures()
+        ok_off, n_fx, n_teams = gw1_completeness(official)
+        if ok_off:
+            grouped[1] = official
+            gw1_ok = True
+            source = "official-gw1" if source == "none" else f"{source}+official-gw1"
+    if not gw1_ok:
         odds_events = await _fetch_odds_epl_events()
         clustered = _cluster_odds_into_gameweeks(odds_events)
         if clustered:
@@ -479,16 +533,15 @@ async def sync_season_fixtures(db, season_id: str) -> dict:
             for gw, fx in clustered.items():
                 if gw not in grouped or not grouped[gw]:
                     grouped[gw] = fx
+        gw1_ok, n_fx, n_teams = gw1_completeness(grouped.get(1) or [])
     if not grouped:
         raise HTTPException(status_code=400, detail="Could not load Premier League fixtures")
-
-    gw1 = grouped.get(1) or []
-    gw1_ok, n_fx, n_teams = gw1_completeness(gw1)
     upserted = 0
     for gw, fixtures in grouped.items():
         existing = await get_gameweek(db, season_id, gw)
         prev_status = (existing or {}).get("status") or "upcoming"
         must_complete = gw == 1
+        fixtures = _sort_fixtures(fixtures)
         status = _gw_status_for_fixtures(fixtures, gw1_must_complete=must_complete)
         if prev_status in ("settling", "settled"):
             status = prev_status
@@ -596,6 +649,8 @@ async def create_season(
         "entry_count": 0,
         "weekly_correct_bonus": int(weekly_correct_bonus),
         "weekly_streak_bonus": int(weekly_streak_bonus),
+        "starting_lives": LMS_START_LIVES,
+        "extra_life_cost": LMS_EXTRA_LIFE_COST,
         "current_gameweek": 1,
         "pick_deadline_mode": "first_kickoff",
         "gw1_complete": False,
@@ -696,6 +751,8 @@ async def join_season(db, user: dict, season_id: str) -> dict:
         "teams_used": [],
         "eliminated_gw": None,
         "correct_streak": 0,
+        "lives": LMS_START_LIVES,
+        "extra_life_bought": False,
         "joined_at": now_iso(),
         "entry_fee_paid": fee,
         "staff_entry": staff,
@@ -724,6 +781,69 @@ async def join_season(db, user: dict, season_id: str) -> dict:
     )
     entry.pop("_id", None)
     return {"already_joined": False, "entry": entry}
+
+
+async def buy_extra_life(db, user: dict, season_id: str) -> dict:
+    key = account_key_from_user(user)
+    uid = user.get("id") or ""
+    if user.get("is_dead"):
+        raise HTTPException(status_code=400, detail="Dead characters cannot buy a life.")
+    if not key or not uid:
+        raise HTTPException(status_code=400, detail="A verified email is required.")
+    await transfer_lms_entry_to_user(db, user, season_id=season_id)
+    season = await get_season(db, season_id)
+    if not season:
+        raise HTTPException(status_code=404, detail="Season not found")
+    if season.get("status") not in ("open", "active"):
+        raise HTTPException(status_code=400, detail="This season is not open.")
+    cost = int(season.get("extra_life_cost") or LMS_EXTRA_LIFE_COST)
+    claimed = await db[COL_ENTRIES].find_one_and_update(
+        {
+            "season_id": season_id,
+            "account_key": key,
+            "status": "alive",
+            "extra_life_bought": {"$ne": True},
+        },
+        {"$set": {"extra_life_bought": True, "extra_life_pending": True}},
+    )
+    if not claimed:
+        existing = await db[COL_ENTRIES].find_one({"season_id": season_id, "account_key": key}, {"_id": 0, "status": 1, "extra_life_bought": 1, "lives": 1})
+        if not existing:
+            raise HTTPException(status_code=400, detail="Join the season first.")
+        if existing.get("status") != "alive":
+            raise HTTPException(status_code=400, detail="Only alive players can buy an extra life.")
+        raise HTTPException(status_code=400, detail="You already bought your extra life this season.")
+    debit = await db.users.find_one_and_update(
+        {"id": uid, "points": {"$gte": cost}, "is_dead": {"$ne": True}},
+        {"$inc": {"points": -cost}},
+        projection={"_id": 0, "id": 1, "points": 1},
+    )
+    if not debit:
+        await db[COL_ENTRIES].update_one(
+            {"season_id": season_id, "account_key": key, "extra_life_pending": True},
+            {"$set": {"extra_life_bought": False, "extra_life_pending": False}},
+        )
+        raise HTTPException(status_code=400, detail=f"You need {cost:,} points for an extra life.")
+    new_lives = entry_lives(claimed, season) + 1
+    await db[COL_ENTRIES].update_one(
+        {"season_id": season_id, "account_key": key},
+        {"$set": {
+            "lives": new_lives,
+            "extra_life_pending": False,
+            "user_id": uid,
+            "username": user.get("username") or claimed.get("username") or "",
+        }},
+    )
+    await log_points_event(
+        db,
+        user_id=uid,
+        points=-cost,
+        event_type="lms_extra_life",
+        event_ref=f"lms:{season_id}:life:{key}",
+        meta={"season_id": season_id, "cost": cost},
+    )
+    entry = await db[COL_ENTRIES].find_one({"season_id": season_id, "account_key": key}, {"_id": 0})
+    return {"ok": True, "lives": int((entry or {}).get("lives") or 0), "extra_life_bought": True, "entry": entry}
 
 
 def _picks_locked(gw: dict) -> bool:
@@ -1029,6 +1149,12 @@ async def settle_gameweek(db, season_id: str, gw: int, *, force: bool = False) -
                 {"season_id": season_id, "gw": int(gw), "account_key": key},
                 {"$set": {"outcome": outcome, "correct": outcome == "win"}},
             )
+        if pick and pick.get("life_consumed"):
+            if entry.get("status") == "out" and int(entry.get("eliminated_gw") or 0) == int(gw):
+                eliminated.append(entry)
+            else:
+                survivors.append(entry)
+            continue
         if outcome == "postponed":
             survivors.append(entry)
             continue
@@ -1044,22 +1170,50 @@ async def settle_gameweek(db, season_id: str, gw: int, *, force: bool = False) -
                 weekly_paid += points
             survivors.append(entry)
         else:
-            await db[COL_ENTRIES].update_one(
-                {"season_id": season_id, "account_key": key},
-                {"$set": {"status": "out", "eliminated_gw": int(gw), "correct_streak": 0}},
-            )
-            eliminated.append(entry)
-            try:
-                from server import send_notification
-
-                await send_notification(
-                    entry.get("user_id"),
-                    "Eliminated from LMS",
-                    f"You went out in GW{gw}.",
-                    "system",
+            current_lives = entry_lives(entry, season)
+            left, still_alive = lives_after_wrong_pick(current_lives)
+            pick_set = {"outcome": outcome, "correct": False, "life_consumed": True, "survived_with_life": still_alive}
+            if pick:
+                await db[COL_PICKS].update_one(
+                    {"season_id": season_id, "gw": int(gw), "account_key": key},
+                    {"$set": pick_set},
                 )
-            except Exception:
-                pass
+            if still_alive:
+                await db[COL_ENTRIES].update_one(
+                    {"season_id": season_id, "account_key": key},
+                    {"$set": {"status": "alive", "eliminated_gw": None, "correct_streak": 0, "lives": left}},
+                )
+                entry["lives"] = left
+                entry["correct_streak"] = 0
+                survivors.append(entry)
+                try:
+                    from server import send_notification
+
+                    await send_notification(
+                        entry.get("user_id"),
+                        "LMS life used",
+                        f"Wrong pick in GW{gw}. You have {left} life left." if left == 1 else f"Wrong pick in GW{gw}. You have {left} lives left.",
+                        "system",
+                    )
+                except Exception:
+                    pass
+            else:
+                await db[COL_ENTRIES].update_one(
+                    {"season_id": season_id, "account_key": key},
+                    {"$set": {"status": "out", "eliminated_gw": int(gw), "correct_streak": 0, "lives": 0}},
+                )
+                eliminated.append(entry)
+                try:
+                    from server import send_notification
+
+                    await send_notification(
+                        entry.get("user_id"),
+                        "Eliminated from LMS",
+                        f"You went out in GW{gw}.",
+                        "system",
+                    )
+                except Exception:
+                    pass
 
     pot_result = None
     eligible_survivors = await filter_prize_eligible(db, survivors)
@@ -1239,4 +1393,6 @@ def season_public_payload(season: dict, *, alive: int = 0, out_n: int = 0) -> di
     d["alive_count"] = alive
     d["out_count"] = out_n
     d["entered"] = int(season.get("entry_count") or 0)
+    d["starting_lives"] = int(season.get("starting_lives") or LMS_START_LIVES)
+    d["extra_life_cost"] = int(season.get("extra_life_cost") or LMS_EXTRA_LIFE_COST)
     return d

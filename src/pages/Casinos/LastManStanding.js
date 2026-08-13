@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Skull, Flame, Users, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { Skull, Flame, Users, Clock, ChevronDown, ChevronUp, Heart } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
@@ -141,6 +141,8 @@ export default function LastManStanding() {
 
   const nextWeekly = data?.next_weekly_preview || 0;
   const streak = intSafe(entry?.correct_streak);
+  const lives = entry ? intSafe(entry.lives ?? season?.starting_lives ?? 2) : 0;
+  const lifeCost = intSafe(season?.extra_life_cost ?? 2500);
 
   async function onJoin() {
     if (busy || !season?.id) return;
@@ -152,6 +154,21 @@ export default function LastManStanding() {
       await load();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Join failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onBuyLife() {
+    if (busy || !season?.id) return;
+    setBusy(true);
+    try {
+      await api.post(`/lms/seasons/${season.id}/extra-life`);
+      toast.success('Extra life bought.');
+      refreshUser().catch(() => {});
+      await load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not buy a life');
     } finally {
       setBusy(false);
     }
@@ -221,7 +238,7 @@ export default function LastManStanding() {
           <h1 className={`text-lg sm:text-xl font-heading font-bold leading-tight ${styles.gmTitle}`}>Last Man Standing</h1>
           <span className="shrink-0 text-[9px] font-heading uppercase tracking-wider px-2 py-1 rounded border border-primary/35 text-primary">{seasonStatus}</span>
         </div>
-        <p className="text-[11px] text-zinc-400 font-heading mt-1">Survive every week. No team twice. Last player(s) take the pot.</p>
+        <p className="text-[11px] text-zinc-400 font-heading mt-1">Survive every week. Two lives. No team twice. Last player(s) take the pot.</p>
         <div className="mt-3">
           <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-heading">Season pot</div>
           <div className="text-3xl sm:text-4xl font-heading font-bold tabular-nums text-primary leading-none">{fmt(potShown)} <span className="text-sm text-zinc-400">pts</span></div>
@@ -235,7 +252,18 @@ export default function LastManStanding() {
             <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-heading">Still standing</div>
             <div className="text-lg font-heading font-bold tabular-nums">{alive} <span className="text-zinc-500 text-xs">/ {entered} entered</span></div>
           </div>
-          {badge && <span className={`text-[10px] font-heading font-bold uppercase tracking-wider px-2 py-1 rounded border ${badge.cls}`}>{badge.label}</span>}
+          {badge && (
+            <div className="flex flex-col items-end gap-1">
+              <span className={`text-[10px] font-heading font-bold uppercase tracking-wider px-2 py-1 rounded border ${badge.cls}`}>{badge.label}</span>
+              {status === 'alive' && (
+                <span className="flex items-center gap-0.5 text-rose-300" title={`${lives} ${lives === 1 ? 'life' : 'lives'}`}>
+                  {Array.from({ length: Math.max(0, lives) }).map((_, i) => (
+                    <Heart key={i} size={12} fill="currentColor" />
+                  ))}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="mt-2 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
           <div className="h-full bg-primary/80" style={{ width: `${entered ? Math.max(4, Math.round((alive / entered) * 100)) : 0}%` }} />
@@ -286,7 +314,7 @@ export default function LastManStanding() {
             <p className="text-[10px] text-zinc-500 font-heading text-center">
               {data?.staff_no_prizes
                 ? 'Staff entry — you pay the fee but take none of the weekly bonuses or the pot'
-                : 'One entry per email · transfers if you die'}
+                : 'One entry per email · 2 lives · transfers if you die'}
             </p>
             </>
           )}
@@ -295,6 +323,16 @@ export default function LastManStanding() {
           )}
           {status === 'out' && (
             <p className="text-[12px] text-rose-300/90 font-heading">You went out{entry?.eliminated_gw ? ` in GW${entry.eliminated_gw}` : ''}. Seat stays on this email if you die.</p>
+          )}
+          {status === 'alive' && data?.can_buy_life && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onBuyLife}
+              className="w-full min-h-[44px] rounded-lg border border-rose-500/40 bg-rose-950/30 text-rose-200 font-heading font-bold text-[12px] disabled:opacity-50"
+            >
+              {busy ? 'Buying…' : `Buy extra life — ${fmt(lifeCost)} pts`}
+            </button>
           )}
 
           {gw && (
@@ -430,7 +468,8 @@ export default function LastManStanding() {
       {tab === 'rules' && (
         <div className="lms-fade rounded-lg border border-zinc-800 px-3 bg-zinc-950/40">
           <RuleBlock title="How to play" open={ruleOpen === 'play'} onToggle={() => setRuleOpen(ruleOpen === 'play' ? '' : 'play')}>
-            <p>Pick one Premier League team to win each gameweek. Draws and losses put you out. Miss the deadline and you are out.</p>
+            <p>Pick one Premier League team to win each gameweek. You start with <b>2 lives</b>. A draw, loss, or missed deadline costs one life. At 0 lives you are out.</p>
+            <p>You can buy <b>one</b> extra life for {fmt(season.extra_life_cost || 2500)} pts while you are still alive (not added to the pot).</p>
             <p>You cannot reuse a team you already picked this season. Anyone can pick the same team as you.</p>
             <p>GW1 lists the full Premier League slate — all 10 matches / 20 clubs.</p>
             <p>You can change your pick until the first kickoff of that week.</p>
