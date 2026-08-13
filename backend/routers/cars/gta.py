@@ -235,6 +235,7 @@ GARAGE_DEALERSHIP_TRANSFER_TARGET_CONFLICT_DETAIL = (
 )
 from utils.minigame_captcha_gate import require_turnstile_for_game_action
 from utils.civilian_protection import (
+    is_civilian_protected,
     maybe_revoke_civilian_protection,
     raise_if_civilian_protected_asset_recipient,
     require_protection_revoke_confirm,
@@ -1150,8 +1151,16 @@ async def attempt_gta(
     req: Request,
     current_user: dict = Depends(get_current_user_verified),
 ):
-    # Exclusive car drops end new-account protection — confirm before any steal attempt.
-    require_protection_revoke_confirm(current_user, reason="exclusive_car", request=req)
+    # Exclusive drops strip new-account protection — only confirm when Al Capone is actually in the GTA pool.
+    if is_civilian_protected(current_user):
+        exclusive_stealable = False
+        try:
+            if await _gta_exclusive_pool_released_from_config() and await _count_car20_owned() == 0:
+                exclusive_stealable = True
+        except Exception:
+            logger.exception("gta exclusive-pool check for protection confirm failed")
+        if exclusive_stealable:
+            require_protection_revoke_confirm(current_user, reason="exclusive_car", request=req)
     if current_user.get("in_jail"):
         jail_until_raw = current_user.get("jail_until")
         jail_time = _parse_iso_datetime(jail_until_raw) if jail_until_raw else None

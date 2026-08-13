@@ -115,6 +115,13 @@ async def apply_redeem_code(db: Any, user: dict, code: str) -> dict:
     if not user_id:
         raise RedeemCodeError("Not authenticated")
     if code_normalized in (user.get("redeemed_codes") or []):
+        # Tutorial auto-applies WELCOMECODE on complete; manual redeem should explain that.
+        from utils.tutorial import TUTORIAL_WELCOME_REDEEM_CODE
+
+        if code_normalized == TUTORIAL_WELCOME_REDEEM_CODE:
+            raise RedeemCodeError(
+                "WELCOMECODE was already claimed automatically when you finished the tutorial — you already have those rewards."
+            )
         raise RedeemCodeError("This character has already redeemed this code.")
 
     await reconcile_stale_dead_redeemers_on_code(db, code_normalized)
@@ -123,6 +130,12 @@ async def apply_redeem_code(db: Any, user: dict, code: str) -> dict:
         raise RedeemCodeError("Invalid or inactive code")
     used_by = doc.get("used_by") or []
     if user_id in used_by:
+        from utils.tutorial import TUTORIAL_WELCOME_REDEEM_CODE
+
+        if code_normalized == TUTORIAL_WELCOME_REDEEM_CODE:
+            raise RedeemCodeError(
+                "WELCOMECODE was already claimed automatically when you finished the tutorial — you already have those rewards."
+            )
         raise RedeemCodeError("This character is already recorded for this redeem code.")
     max_uses = doc.get("max_uses")
     used_count = int(doc.get("used_count", 0))
