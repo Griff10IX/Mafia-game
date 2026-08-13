@@ -72,6 +72,7 @@ def raise_if_gambling_self_banned(user: Optional[Mapping[str, Any]], now: Option
         detail=(
             f"You have an active gambling self-exclusion ({left} remaining). "
             "Casino and sports betting are blocked until it expires. "
+            "You can still buy and sell points and use Quick Trade. "
             "Staff will not remove this ban."
         ),
     )

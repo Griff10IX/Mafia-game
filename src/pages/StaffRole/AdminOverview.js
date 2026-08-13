@@ -59,11 +59,11 @@ export default function AdminOverview({ isFullAdmin = true }) {
     }
     const cat = normalizeCategoryId(tool.categoryId);
     const hub =
-      cat === 'admin-operations' ? 'players'
-        : cat === 'admin-economy-progression' ? 'commerce'
+      tool.hubRoute
+        || (cat === 'admin-economy-progression' ? 'commerce'
           : cat === 'admin-world-systems' ? 'liveops'
             : cat === 'admin-analytics-monitoring' ? 'logs'
-              : 'players';
+              : 'players');
     navigate(`/tjjeujr3wa/${hub}`);
   };
 

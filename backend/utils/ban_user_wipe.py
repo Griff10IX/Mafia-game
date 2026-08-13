@@ -35,6 +35,7 @@ async def wipe_user_for_account_ban(db, user_id: str, *, preserve_dead: bool = F
     """
     Remove leaderboard rows, minigame history, inventories, and reset core user stats.
     Keeps the users document (id, username, email, password) for audit; does not touch ip_bans.
+    Never resurrects a dead or modkill-wiped account (Ban user IPs used to set is_dead False).
     """
     uid = (user_id or "").strip()
     if not uid:
@@ -166,6 +167,12 @@ async def wipe_user_for_account_ban(db, user_id: str, *, preserve_dead: bool = F
         r = await db.weed_farms.delete_many({"user_id": uid})
         deleted["weed_farms"] = int(r.deleted_count or 0)
 
+    prior = await db.users.find_one(
+        {"id": uid},
+        {"_id": 0, "is_dead": 1, "modkill_wipe": 1, "dead_at": 1, "killed_by_username": 1},
+    )
+    keep_dead = bool((prior or {}).get("is_dead") or (prior or {}).get("modkill_wipe"))
+
     # --- Reset user document: keep identity fields; strip progression ---
     reset: Dict[str, Any] = {
         "money": 0,
@@ -238,7 +245,23 @@ async def wipe_user_for_account_ban(db, user_id: str, *, preserve_dead: bool = F
         "loot_reclaimable_passive_ids": [],
         "armour_owned_level_max": 0,
     }
-    if preserve_dead:
+    if keep_dead:
+        reset["is_dead"] = True
+        reset["health"] = 0
+        if (prior or {}).get("dead_at"):
+            reset.pop("dead_at", None)
+        else:
+            reset["dead_at"] = datetime.now(timezone.utc).isoformat()
+        if (prior or {}).get("killed_by_username"):
+            reset.pop("killed_by_username", None)
+            reset.pop("killed_by_family_name", None)
+        elif (prior or {}).get("modkill_wipe"):
+            reset["killed_by_username"] = "Staff (modkill wipe)"
+            reset.pop("killed_by_family_name", None)
+        else:
+            reset.pop("killed_by_username", None)
+            reset.pop("killed_by_family_name", None)
+    elif preserve_dead:
         reset.pop("is_dead", None)
         reset.pop("dead_at", None)
     unset_fields = [

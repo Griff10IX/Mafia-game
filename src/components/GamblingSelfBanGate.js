@@ -3,15 +3,18 @@ import { Link } from 'react-router-dom';
 import { Ban } from 'lucide-react';
 import { useAuthUser } from '../context/AuthContext';
 import {
+  GAMBLING_BAN_COMMERCE_NOTE,
   formatGamblingSelfBanRemaining,
   isGamblingSelfBanned,
 } from '../utils/gamblingSelfBan';
 
 /**
- * Blocks casino / sports wager UIs while gambling self-exclusion is active.
- * @param {'hard'|'notice'} mode hard = no interaction; notice = banner only (e.g. MDG staff joins).
+ * Gambling self-exclusion banner. Ownership / claim / Quick Trade stay clickable.
+ * @param {'notice'|'lock-page'|'hard'} mode
+ *   notice / hard (default) = banner only so claim / sell / buy-back work
+ *   lock-page = full overlay (bet-only pages: keno, LMS, multiplayer)
  */
-export default function GamblingSelfBanGate({ children, mode = 'hard' }) {
+export default function GamblingSelfBanGate({ children, mode = 'notice' }) {
   const user = useAuthUser();
   const [, setTick] = useState(0);
   const active = isGamblingSelfBanned(user);
@@ -38,7 +41,7 @@ export default function GamblingSelfBanGate({ children, mode = 'hard' }) {
           </p>
           <p>
             Casino and sports betting are locked for <span className="font-bold tabular-nums">{left}</span>.
-            Staff will not remove this ban.
+            Staff will not remove this ban. {GAMBLING_BAN_COMMERCE_NOTE}
           </p>
           <Link
             to="/casino/gambling-ban"
@@ -51,7 +54,9 @@ export default function GamblingSelfBanGate({ children, mode = 'hard' }) {
     </div>
   );
 
-  if (mode === 'notice') {
+  const lockWholePage = mode === 'lock-page';
+
+  if (!lockWholePage) {
     return (
       <div className="space-y-3">
         {banner}
@@ -81,6 +86,7 @@ export default function GamblingSelfBanGate({ children, mode = 'hard' }) {
             </p>
             <p className="text-[11px] text-zinc-400 font-heading mt-1.5 leading-snug">
               You cannot place casino or sports bets until your self-exclusion ends ({left} left).
+              You can still claim casinos, buy and sell points, and use Quick Trade.
             </p>
           </div>
         </div>

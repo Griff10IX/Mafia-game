@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-13[/color][/b] — [b]Gambling Ban: points and Quick Trade still work[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Gambling Ban:[/b] Self-exclusion still blocks casino and sports [b]bets[/b]. You can still [b]claim[/b] (and relinquish / list / buy-back) casinos, [b]buy and sell points[/b], and use [b]Quick Trade[/b].[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-13[/color][/b] — [b]Referral: living players on your link[/b][/size]
 [quote]
 [list]

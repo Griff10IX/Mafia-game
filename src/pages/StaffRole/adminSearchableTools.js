@@ -78,7 +78,7 @@ export const SEARCHABLE_TOOLS = [
   { label: "Staff tool denials (401/403)", categoryId: "admin-security", collapseKey: "staffAccessDenials", keywords: ["403","401","denied","forbidden","staff","access","audit","login"], adminOnly: false },
   { label: "Staff tool access (history + live)", categoryId: "admin-security", collapseKey: "toolAccessAudit", keywords: ["staff","admin","tool","access","audit","history","presence","who","used","shell"], adminOnly: false },
   { label: "Sustained pacing 429 log", categoryId: "admin-security", collapseKey: "sustainedRl429Log", keywords: ["429","rate","limit","pacing","sustained","inbox","spam","throttle"], adminOnly: true },
-  { label: "IP Bans", categoryId: "admin-security", collapseKey: "security", keywords: ["ip","ban","block","unban","restore"] },
+  { label: "IP Bans", categoryId: "admin-security", collapseKey: "ipBans", scrollToId: "admin-ip-bans", hubRoute: "safety", keywords: ["ip","ban","block","unban","restore","ip ban","ban ip","ban user","duration","weeks","shame"] },
   { label: "Rate Limits", categoryId: "admin-security", collapseKey: "security", keywords: ["rate","limit","throttle","violations","cooldown"] },
   { label: "Cloudflare Bot Block", categoryId: "admin-security", collapseKey: "cfBotBlock", keywords: ["cloudflare","bot","block","cf"] },
   { label: "Cloudflare auto block", categoryId: "admin-security", collapseKey: "cfAutoBlock", keywords: ["cloudflare","auto","block","cf"] },

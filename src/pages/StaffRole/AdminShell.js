@@ -447,28 +447,21 @@ export default function AdminShell() {
 
   const groupedRoutes = useMemo(() => routesByCategory(visibleRouteGroups), [visibleRouteGroups]);
 
-  const [openNavCategories, setOpenNavCategories] = useState(() => new Set(ADMIN_CATEGORIES.map((c) => c.id)));
+  const [openNavCategories, setOpenNavCategories] = useState(() => {
+    const id = ADMIN_ROUTE_GROUP_MAP[(section || 'overview').toLowerCase()]?.categoryId;
+    return new Set([id || 'admin-operations']);
+  });
   const [mobileNavCategory, setMobileNavCategory] = useState('admin-operations');
 
   useEffect(() => {
     if (routeGroup?.categoryId) {
       setMobileNavCategory(routeGroup.categoryId);
-      setOpenNavCategories((prev) => {
-        if (prev.has(routeGroup.categoryId)) return prev;
-        const next = new Set(prev);
-        next.add(routeGroup.categoryId);
-        return next;
-      });
+      setOpenNavCategories(new Set([routeGroup.categoryId]));
     }
   }, [routeGroup?.categoryId]);
 
   const toggleNavCategory = (id) => {
-    setOpenNavCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setOpenNavCategories((prev) => (prev.has(id) ? new Set() : new Set([id])));
   };
 
   const navigateVerified = async (path) => {
@@ -659,7 +652,65 @@ export default function AdminShell() {
 
   return (
     <StaffAccessVerifyContext.Provider value={verifyStaffAccess}>
-      <div className="space-y-3 md:space-y-4">
+      <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:items-start">
+      <div className="hidden md:block w-[240px] shrink-0 sticky top-14 self-start z-10">
+        <aside
+          className="flex max-h-[calc(100dvh-4.5rem)] flex-col gap-1.5 overflow-y-auto overscroll-contain rounded-xl border border-primary/20 bg-zinc-950/85 p-2"
+          aria-label="Admin tool groups"
+        >
+          {ADMIN_CATEGORIES.map((cat) => {
+            const tools = groupedRoutes[cat.id] || [];
+            if (!tools.length) return null;
+            const open = openNavCategories.has(cat.id);
+            const CatIcon = cat.icon;
+            const catActive = tools.some((g) => g.id === routeGroup?.id);
+            return (
+              <div key={cat.id} className="rounded-lg border border-zinc-800/80 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleNavCategory(cat.id)}
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 text-left text-[10px] font-heading font-bold uppercase tracking-wide ${
+                    catActive ? 'bg-primary/15 text-primary' : 'bg-zinc-900/50 text-mutedForeground hover:text-foreground'
+                  }`}
+                >
+                  {CatIcon ? <CatIcon size={13} className="shrink-0" /> : null}
+                  <span className="flex-1 truncate">{cat.label}</span>
+                  <ChevronRight size={12} className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
+                </button>
+                {open && (
+                  <div className="flex flex-col gap-0.5 p-1 border-t border-zinc-800/80">
+                    {tools.map((group) => {
+                      const active = group.id === routeGroup?.id;
+                      const Icon = group.icon;
+                      return (
+                        <Link
+                          key={group.id}
+                          to={routeFor(group.id)}
+                          onClick={(e) => {
+                            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                            e.preventDefault();
+                            void navigateVerified(routeFor(group.id));
+                          }}
+                          title={group.description}
+                          className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-heading ${
+                            active
+                              ? 'bg-primary/20 text-primary border border-primary/40'
+                              : 'text-mutedForeground hover:text-foreground hover:bg-zinc-800/60 border border-transparent'
+                          }`}
+                        >
+                          {Icon ? <Icon size={12} className="shrink-0 opacity-90" /> : null}
+                          <span className="truncate">{group.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </aside>
+      </div>
+      <div className="flex-1 min-w-0 w-full space-y-3 md:space-y-4">
       <section className="rounded-xl border border-primary/25 bg-gradient-to-br from-zinc-900/85 via-zinc-900/65 to-zinc-800/55 p-3 md:p-4">
         <div className="flex flex-col gap-2 md:gap-3">
           <div className="flex items-start justify-between gap-2">
@@ -1057,70 +1108,14 @@ export default function AdminShell() {
         </div>
       </section>
 
-      <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-start">
-        <aside className="hidden md:flex w-[240px] shrink-0 flex-col gap-1.5 sticky top-2 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-xl border border-primary/20 bg-zinc-950/85 p-2" aria-label="Admin tool groups">
-          {ADMIN_CATEGORIES.map((cat) => {
-            const tools = groupedRoutes[cat.id] || [];
-            if (!tools.length) return null;
-            const open = openNavCategories.has(cat.id);
-            const CatIcon = cat.icon;
-            const catActive = tools.some((g) => g.id === routeGroup?.id);
-            return (
-              <div key={cat.id} className="rounded-lg border border-zinc-800/80 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => toggleNavCategory(cat.id)}
-                  className={`w-full flex items-center gap-2 px-2.5 py-2 text-left text-[10px] font-heading font-bold uppercase tracking-wide ${
-                    catActive ? 'bg-primary/15 text-primary' : 'bg-zinc-900/50 text-mutedForeground hover:text-foreground'
-                  }`}
-                >
-                  {CatIcon ? <CatIcon size={13} className="shrink-0" /> : null}
-                  <span className="flex-1 truncate">{cat.label}</span>
-                  <ChevronRight size={12} className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
-                </button>
-                {open && (
-                  <div className="flex flex-col gap-0.5 p-1 border-t border-zinc-800/80">
-                    {tools.map((group) => {
-                      const active = group.id === routeGroup?.id;
-                      const Icon = group.icon;
-                      return (
-                        <Link
-                          key={group.id}
-                          to={routeFor(group.id)}
-                          onClick={(e) => {
-                            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                            e.preventDefault();
-                            void navigateVerified(routeFor(group.id));
-                          }}
-                          title={group.description}
-                          className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-heading ${
-                            active
-                              ? 'bg-primary/20 text-primary border border-primary/40'
-                              : 'text-mutedForeground hover:text-foreground hover:bg-zinc-800/60 border border-transparent'
-                          }`}
-                        >
-                          {Icon ? <Icon size={12} className="shrink-0 opacity-90" /> : null}
-                          <span className="truncate">{group.label}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </aside>
-
-        <div className="flex-1 min-w-0 w-full">
-          <Suspense fallback={<AdminLazyFallback />}>
-            {hubSection === 'overview' && <AdminOverview isFullAdmin={!!isFullAdminShell} />}
-            {STANDALONE_ADMIN_SECTIONS.has(hubSection) && (() => {
-              const Page = STANDALONE_PAGE[hubSection];
-              return Page ? <Page /> : null;
-            })()}
-            {HUB_ADMIN_SECTIONS.has(hubSection) && <Admin />}
-          </Suspense>
-        </div>
+      <Suspense fallback={<AdminLazyFallback />}>
+        {hubSection === 'overview' && <AdminOverview isFullAdmin={!!isFullAdminShell} />}
+        {STANDALONE_ADMIN_SECTIONS.has(hubSection) && (() => {
+          const Page = STANDALONE_PAGE[hubSection];
+          return Page ? <Page /> : null;
+        })()}
+        {HUB_ADMIN_SECTIONS.has(hubSection) && <Admin />}
+      </Suspense>
       </div>
       </div>
     </StaffAccessVerifyContext.Provider>

@@ -33,7 +33,7 @@ _IPV6_IN_TEXT_RE = re.compile(
 )
 SHAME_INTRO = (
     "Posts here are automated. Staff kills, wipes, and IP bans — duration and reason when given. "
-    "Anyone caught knowingly playing while they know they are IP banned will be modkilled (wipe). "
+    "Anyone caught playing with a banned user will be modkilled (wipe). "
     "Proof is summarized so it does not help anyone copy the method. Staff only — this topic is locked."
 )
 
@@ -185,8 +185,8 @@ def ip_ban_shame_bbcode(*, username: str, duration_label: str, reason: str = "")
     if why:
         lines.append(f"[*][color=#888888][b]Reason:[/b] {why}[/color]")
     lines.append(
-        "[*][color=#888888][b]Warning:[/b] Anyone caught knowingly playing during this "
-        f"[b]{dur}[/b] IP ban will be [b]modkilled[/b] (wipe).[/color]"
+        "[*][color=#888888][b]Warning:[/b] Anyone caught playing with a banned user "
+        "will be [b]modkilled[/b] (wipe).[/color]"
     )
     inner = "\n".join(lines)
     return (

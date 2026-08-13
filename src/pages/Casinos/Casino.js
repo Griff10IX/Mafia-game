@@ -4,6 +4,7 @@ import styles from '../../styles/noir.module.css';
 import { SLOTS_FEATURE_ENABLED } from '../../config/gameFeatures';
 import { useAuthUser } from '../../context/AuthContext';
 import {
+  GAMBLING_BAN_COMMERCE_NOTE,
   formatGamblingSelfBanRemaining,
   isGamblingSelfBanned,
 } from '../../utils/gamblingSelfBan';
@@ -50,7 +51,7 @@ export default function Casino() {
           <p className="font-bold text-red-200 uppercase tracking-wider text-[10px] mb-1">Gambling self-exclusion active</p>
           <p>
             Casino and sports betting are locked{banLeft ? <> for <span className="font-bold tabular-nums">{banLeft}</span></> : null}.
-            Opening a game will not let you place bets.{' '}
+            Opening a game will not let you place bets. {GAMBLING_BAN_COMMERCE_NOTE}{' '}
             <Link to="/casino/gambling-ban" className="underline underline-offset-2 text-red-200/90 hover:text-red-100">
               View status
             </Link>

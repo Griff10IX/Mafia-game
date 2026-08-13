@@ -211,7 +211,7 @@ def register(router):
             uid = user["id"]
             await _deactivate_prior_bans(db, uid)
             await _ban_user_impl(db, uid, display_name, reason, duration_hours, banned_by)
-            wipe_summary = await wipe_user_for_account_ban(db, uid)
+            wipe_summary = await wipe_user_for_account_ban(db, uid, preserve_dead=True)
             await apply_ban_and_invalidate_sessions(db, uid)
             try:
                 from utils.ensure_topic_of_shame import append_ip_ban_shame_entry

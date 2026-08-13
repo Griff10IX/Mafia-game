@@ -31,3 +31,7 @@ export function formatGamblingSelfBanRemaining(user, now = new Date()) {
   if (hours > 0) return `${hours}h ${mins}m`;
   return `${Math.max(1, mins)}m`;
 }
+
+/** Commerce that stays available during gambling self-exclusion (not wagering). */
+export const GAMBLING_BAN_COMMERCE_NOTE =
+  'You can still buy and sell points, use Quick Trade, and manage casino ownership (claim, relinquish, list, buy-back).';

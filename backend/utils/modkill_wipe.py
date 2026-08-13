@@ -175,7 +175,7 @@ def _shame_taken_lines(holdings: Optional[dict], extra: Optional[dict] = None) -
         else:
             role = h.get("family_role")
             bit = f" ({role})" if role else ""
-            lines.append(f"Removed from family {fam}{bit}.")
+            lines.append(f"Removed from family: {fam}{bit}.")
     return lines
 
 

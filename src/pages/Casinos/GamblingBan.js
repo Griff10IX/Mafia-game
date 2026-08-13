@@ -136,13 +136,15 @@ export default function GamblingBan() {
               <p className="text-[10px] text-zinc-400 font-heading leading-relaxed">{NOTICE}</p>
               <p className="text-[9px] text-zinc-500 font-heading">
                 Player MDGs are blocked. You can still join MDGs created by admins or mods.
+                Buy/sell points, Quick Trade, and casino ownership (claim, relinquish, list, buy-back) still work.
               </p>
             </>
           ) : !confirmStep ? (
             <>
               <p className="text-[10px] text-zinc-400 font-heading leading-relaxed">
-                Blocks casino games and sports bets for the time you choose. Ownership tools (claim / relinquish)
-                still work. Max length is 3 days.
+                Blocks casino games and sports bets for the time you choose. You can still buy and sell
+                points, use Quick Trade, and manage casino ownership (claim / relinquish / list / buy-back).
+                Max length is 3 days.
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {DURATIONS.map((d) => (

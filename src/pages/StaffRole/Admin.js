@@ -17728,12 +17728,28 @@ export default function Admin() {
               )}
             </div>
 
-            {/* Account & IP bans */}
-            <div className="mt-3 pt-3 border-t border-zinc-700/50">
-              <div className="text-[10px] font-heading text-primary uppercase tracking-wider mb-2">Bans &amp; login restore</div>
-              <p className="text-[10px] text-mutedForeground mb-2">
-                Account bans block login after password succeeds. IP bans block the whole API for that address. Use <span className="text-foreground font-heading">Restore login (full)</span> to clear account ban, linked IP bans, and login lockout in one step.
-              </p>
+          </div>
+        )}
+        </div>
+
+        <div id="admin-ip-bans" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={ShieldAlert}
+          title="IP Bans"
+          badge={<span className="text-[10px] font-heading text-mutedForeground">Duration · reason · Shame</span>}
+          toolAnchor="ipBans"
+          isCollapsed={collapsed.ipBans}
+          onToggle={() => toggleSection('ipBans')}
+        />
+        {!collapsed.ipBans && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground mb-2">
+              Ban a player by username (all known IPs) or a single address. Duration and reason are posted to Topic of Shame (no IP listed). Anyone caught playing with a banned user is modkilled.
+            </p>
+            <p className="text-[10px] text-mutedForeground mb-2">
+              Account bans block login after password succeeds. IP bans block the whole API for that address. Use <span className="text-foreground font-heading">Restore login (full)</span> to clear account ban, linked IP bans, and login lockout in one step.
+            </p>
 
               <div className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Load lists</div>
               <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -17854,7 +17870,6 @@ export default function Admin() {
                   </div>
                 </div>
               )}
-            </div>
           </div>
         )}
         </div>
