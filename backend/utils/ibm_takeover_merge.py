@@ -25,9 +25,5 @@ def merge_ibm_completion_rows(killer_rows, victim_rows) -> List[dict]:
 
 
 def merge_ibm_baseline_maps(killer_map, victim_map) -> dict:
-    """Keep killer baselines; fill missing mission keys from victim."""
-    out = dict(killer_map or {})
-    for mid, block in (victim_map or {}).items():
-        if mid not in out and isinstance(block, dict):
-            out[mid] = dict(block)
-    return out
+    """Keep killer baselines only. Victim baselines sit on the victim's counters."""
+    return dict(killer_map or {})

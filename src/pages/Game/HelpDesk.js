@@ -532,9 +532,21 @@ export default function HelpDesk() {
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2 flex-wrap">
             <span className="text-[9px] font-heading font-bold text-primary uppercase">Ticket</span>
-            <button type="button" onClick={() => setSelectedId(null)} className="p-1 rounded hover:bg-primary/20 text-primary">
-              <X size={14} />
-            </button>
+            <div className="flex items-center gap-1.5">
+              {canManage && ticketDetail && ticketDetail.status !== 'closed' && (
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  disabled={closing}
+                  className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50 touch-manipulation"
+                >
+                  {closing ? 'Closing…' : 'Close ticket'}
+                </button>
+              )}
+              <button type="button" onClick={() => setSelectedId(null)} className="p-1 rounded hover:bg-primary/20 text-primary">
+                <X size={14} />
+              </button>
+            </div>
           </div>
           {detailLoading ? (
             <div className="p-4 text-center text-mutedForeground text-[11px]">Loading…</div>
@@ -544,11 +556,6 @@ export default function HelpDesk() {
                 <h2 className="text-[11px] font-heading font-bold text-foreground">{ticketDetail.subject}</h2>
                 <div className="text-[9px] text-mutedForeground mt-0.5">
                   {ticketDetail.username} · {formatDateTime(ticketDetail.created_at)} · {ticketDetail.status}
-                  {canManage && (
-                    <span className="ml-1">
-                      · <button type="button" onClick={handleClose} disabled={ticketDetail.status === 'closed' || closing} className="underline hover:text-foreground disabled:opacity-50">Close ticket</button>
-                    </span>
-                  )}
                 </div>
                 {canManage && (
                   <div className="mt-1.5 space-y-1 text-[9px] font-heading">

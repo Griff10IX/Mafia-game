@@ -15,9 +15,9 @@ def test_merge_completions_union_by_id():
     assert by_id["ibm_2"].get("via_takeover") is True
 
 
-def test_merge_baselines_fills_missing():
+def test_merge_baselines_keeps_killer_only():
     killer = {"ibm_3": {"guards_hired": 1}}
-    victim = {"ibm_3": {"guards_hired": 9}, "ibm_4": {"guards_hired": 2}}
+    victim = {"ibm_3": {"guards_hired": 9}, "ibm_4": {"crimes_in_state": 2000}}
     merged = merge_ibm_baseline_maps(killer, victim)
-    assert merged["ibm_3"]["guards_hired"] == 1
-    assert merged["ibm_4"]["guards_hired"] == 2
+    assert merged == {"ibm_3": {"guards_hired": 1}}
+    assert "ibm_4" not in merged

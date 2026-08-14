@@ -1657,16 +1657,28 @@ async def _ibm_ensure_mission_baselines(user_id: str, u: dict) -> None:
         seg_keys = [k for k in req if k in IBM_SEGMENT_KEYS]
         if not seg_keys:
             continue
-        block = baselines.get(mid) or {}
-        if block and all(k in block for k in seg_keys):
-            continue
+        block = dict(baselines.get(mid) or {})
         if not block:
             new_snap = {k: _ibm_user_counter_raw(u, k) for k in seg_keys}
-        else:
+        elif not all(k in block for k in seg_keys):
             new_snap = {**block}
             for k in seg_keys:
                 if k not in new_snap:
                     new_snap[k] = _ibm_user_counter_raw(u, k)
+        else:
+            new_snap = {**block}
+        clamped = False
+        for k in seg_keys:
+            raw = _ibm_user_counter_raw(u, k)
+            try:
+                base = int(new_snap.get(k) or 0)
+            except (TypeError, ValueError):
+                base = 0
+            if base > raw:
+                new_snap[k] = raw
+                clamped = True
+        if block and all(k in block for k in seg_keys) and not clamped:
+            continue
         baselines[mid] = new_snap
         u.setdefault("illegal_business_mission_baselines", {})[mid] = new_snap
         set_ops[f"illegal_business_mission_baselines.{mid}"] = new_snap
