@@ -96,9 +96,9 @@ async def create_revive_payment_intent(
         raise HTTPException(status_code=400, detail="That account is not dead.")
     if dead_user.get("account_locked"):
         raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
-    from utils.modkill_wipe import account_blocks_dead_alive_revive
+    from utils.modkill_wipe import lineage_blocks_dead_alive_revive
 
-    if account_blocks_dead_alive_revive(dead_user):
+    if await lineage_blocks_dead_alive_revive(db, dead_user):
         raise HTTPException(
             status_code=400,
             detail="That account cannot be revived with Dead > Alive (£10).",
@@ -168,9 +168,9 @@ async def execute_paid_revive(
         raise HTTPException(status_code=400, detail="Target account is no longer dead.")
     if dead_user.get("account_locked"):
         raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
-    from utils.modkill_wipe import account_blocks_dead_alive_revive
+    from utils.modkill_wipe import lineage_blocks_dead_alive_revive
 
-    if account_blocks_dead_alive_revive(dead_user):
+    if await lineage_blocks_dead_alive_revive(db, dead_user):
         raise HTTPException(
             status_code=400,
             detail="That account cannot be revived with Dead > Alive (£10).",
@@ -590,6 +590,13 @@ def register(router):
             raise HTTPException(status_code=400, detail="That account is not dead. Only dead accounts can be used.")
         if dead_user.get("account_locked"):
             raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
+        from utils.modkill_wipe import lineage_blocks_dead_alive_revive
+
+        if await lineage_blocks_dead_alive_revive(db, dead_user):
+            raise HTTPException(
+                status_code=400,
+                detail="That account cannot be used with Dead > Alive (£10) after a modkill wipe.",
+            )
         if not verify_password(request.dead_password, dead_user["password_hash"]):
             raise HTTPException(status_code=401, detail="Invalid password for that account")
         if dead_user.get("revive_sacrifice"):
@@ -1071,18 +1078,29 @@ def register(router):
             }
         dead_same_email = await db.users.find(
             {"email": email, "is_dead": True},
-            {"_id": 0, "username": 1, "account_locked": 1, "modkill_wipe": 1},
+            {"_id": 0, "id": 1, "username": 1, "email": 1, "email_before_freed": 1, "account_locked": 1, "modkill_wipe": 1, "registration_freed_email_from_user_id": 1},
         ).to_list(50)
-        from utils.modkill_wipe import account_blocks_dead_alive_revive
+        from utils.modkill_wipe import account_blocks_dead_alive_revive, lineage_blocks_dead_alive_revive
 
-        eligible_dead = [
-            u for u in dead_same_email
-            if u.get("username") and not u.get("account_locked") and not account_blocks_dead_alive_revive(u)
-        ]
-        wipe_blocked = [
-            u for u in dead_same_email
-            if u.get("username") and account_blocks_dead_alive_revive(u)
-        ]
+        if await lineage_blocks_dead_alive_revive(db, current_user):
+            return {
+                **base,
+                "can_revive": False,
+                "reason": "That account cannot be revived with Dead > Alive (£10).",
+                "revive_used": False,
+                "dead_accounts_same_email": [],
+            }
+
+        eligible_dead = []
+        wipe_blocked = []
+        for u in dead_same_email:
+            if not u.get("username"):
+                continue
+            blocked = account_blocks_dead_alive_revive(u) or await lineage_blocks_dead_alive_revive(db, u)
+            if blocked:
+                wipe_blocked.append(u)
+            elif not u.get("account_locked"):
+                eligible_dead.append(u)
         dead_accounts_same_email = [{"username": u.get("username")} for u in eligible_dead]
         if not dead_accounts_same_email and any(bool(u.get("account_locked")) for u in dead_same_email):
             return {

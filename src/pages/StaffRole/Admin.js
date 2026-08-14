@@ -4791,7 +4791,7 @@ export default function Admin() {
     }
     if (
       !window.confirm(
-        `Modkill (wipe) ${u}?\n\nThis resets them to Rat (prestige 0), strips honours/leaderboards, cash, points, and Game Pass, blocks £10 Dead > Alive revive, and posts them to Topic of Shame.`
+        `Modkill (wipe) ${u}?\n\nThis resets them to Rat (prestige 0), strips honours/leaderboards, cash, points, and Game Pass, blocks £10 Dead > Alive revive, also wipes linked dead accounts on the same email so they cannot be revived, and posts them to Topic of Shame.`
       )
     ) {
       return;
@@ -12864,7 +12864,7 @@ export default function Admin() {
               <ActionRow
                 icon={Trash2}
                 label="Modkill (wipe)"
-                description="Kill, reset to Rat / prestige 0, strip honours, cash, points, Game Pass. Blocks £10 Dead > Alive. Posts Topic of Shame."
+                description="Kill, reset to Rat / prestige 0, strip honours, cash, points, Game Pass. Blocks £10 Dead > Alive. Also wipes linked dead accounts on the same email. Posts Topic of Shame."
                 color="text-red-400"
               >
                 <div className="flex flex-wrap items-center gap-1.5 min-w-0">

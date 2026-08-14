@@ -8069,6 +8069,13 @@ def register(router):
                 "Casinos, airport, and armoury taken. Unique loot returned to the game. "
                 "£10 Dead > Alive revive blocked. Posted to Topic of Shame."
             ]
+            linked_names = wipe_summary.get("lineage_wiped_usernames") or []
+            if linked_names:
+                parts.append(
+                    "Also wiped linked dead accounts on the same email ("
+                    + ", ".join(str(n) for n in linked_names)
+                    + ") — they cannot be revived."
+                )
         else:
             parts = [f"Killed {target_username}. Account is dead (cannot login); use Dead to Alive to revive."]
         if seize_summary and not seize_summary.get("skipped"):

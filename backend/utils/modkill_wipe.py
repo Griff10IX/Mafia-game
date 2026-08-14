@@ -38,6 +38,44 @@ def account_blocks_dead_alive_revive(user: Optional[dict]) -> bool:
     return bool(user and user.get("modkill_wipe"))
 
 
+def email_lineage_dead_wipe_targets(
+    related_accounts: Optional[list],
+    primary_id: str,
+) -> list:
+    """Dead email-chain accounts that still need a wipe (not the primary, not staff)."""
+    pid = (primary_id or "").strip()
+    out = []
+    for acc in related_accounts or []:
+        rid = (acc or {}).get("id")
+        if not rid or rid == pid:
+            continue
+        if not acc.get("is_dead"):
+            continue
+        if acc.get("modkill_wipe"):
+            continue
+        uname = str(acc.get("username") or "").strip().lower()
+        if uname in ("ghostface", "scoop"):
+            continue
+        out.append(acc)
+    return out
+
+
+async def lineage_blocks_dead_alive_revive(db, user: Optional[dict]) -> bool:
+    """True if this account or any email-lineage account has modkill_wipe."""
+    if account_blocks_dead_alive_revive(user):
+        return True
+    if not user or not user.get("id"):
+        return False
+    from utils.account_compare_lineage import collect_email_lineage_accounts
+
+    cluster = await collect_email_lineage_accounts(db, user)
+    ids = [r.get("id") for r in (cluster.get("related_accounts") or []) if r.get("id")]
+    if not ids:
+        return False
+    hit = await db.users.find_one({"id": {"$in": ids}, "modkill_wipe": True}, {"_id": 0, "id": 1})
+    return bool(hit)
+
+
 _CASINO_SHAME_LABELS = {
     "dice": "Dice",
     "roulette": "Roulette",
@@ -176,6 +214,11 @@ def _shame_taken_lines(holdings: Optional[dict], extra: Optional[dict] = None) -
             role = h.get("family_role")
             bit = f" ({role})" if role else ""
             lines.append(f"Removed from family: {fam}{bit}.")
+    linked = extra.get("lineage_wiped_usernames") or []
+    if linked:
+        shown = [_bbcode_safe(n) for n in linked if n][:10]
+        if shown:
+            lines.append("Linked dead accounts also blocked from revive: " + ", ".join(shown) + ".")
     return lines
 
 
@@ -233,6 +276,8 @@ async def apply_modkill_wipe_after_kill(
     reason: str,
     staff_username: str,
     admin_user: Optional[dict] = None,
+    cascade_email_lineage: bool = True,
+    post_shame: bool = True,
 ) -> Dict[str, Any]:
     """
     Strip honours/progress/Game Pass, reset to Rat / prestige 0, add Modkilled badge,
@@ -250,6 +295,20 @@ async def apply_modkill_wipe_after_kill(
     extra: Dict[str, Any] = {}
     holdings = await snapshot_wipe_holdings(db, uid)
     fam_id_snap = holdings.get("family_id")
+    seed_user = await db.users.find_one(
+        {"id": uid},
+        {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "email": 1,
+            "email_before_freed": 1,
+            "registration_freed_email_from_user_id": 1,
+            "is_dead": 1,
+            "modkill_wipe": 1,
+            "is_npc": 1,
+        },
+    ) or {"id": uid, "username": uname}
 
     await db.users.update_one({"id": uid}, {"$set": {"is_dead": True}})
 
@@ -388,16 +447,52 @@ async def apply_modkill_wipe_after_kill(
     )
 
     shame_ok = False
-    try:
-        shame_ok = await append_topic_of_shame_entry(
-            db,
-            username=uname,
-            reason=reason_clean,
-            holdings=holdings,
-            extra=extra,
-        )
-    except Exception:
-        logger.exception("modkill wipe: Topic of Shame append failed user=%s", uname)
+    lineage_wiped: list = []
+    if cascade_email_lineage:
+        try:
+            from utils.account_compare_lineage import collect_email_lineage_accounts
+            from utils.staff_mod_protection import user_is_admin_account
+
+            cluster = await collect_email_lineage_accounts(db, seed_user, limit=25)
+            targets = email_lineage_dead_wipe_targets(
+                cluster.get("related_accounts"),
+                uid,
+            )
+            for acc in targets:
+                rid = acc.get("id")
+                rname = (acc.get("username") or "").strip() or "?"
+                full = await db.users.find_one({"id": rid}, {"_id": 0, "id": 1, "username": 1, "email": 1, "is_npc": 1, "is_dead": 1})
+                if not full or full.get("is_npc") or user_is_admin_account(full):
+                    continue
+                try:
+                    await apply_modkill_wipe_after_kill(
+                        db,
+                        user_id=rid,
+                        username=rname,
+                        reason=reason_clean,
+                        staff_username=staff_username,
+                        admin_user=admin_user,
+                        cascade_email_lineage=False,
+                        post_shame=False,
+                    )
+                    lineage_wiped.append(rname)
+                except Exception:
+                    logger.exception("modkill wipe: lineage cascade failed user=%s", rname)
+        except Exception:
+            logger.exception("modkill wipe: email lineage cascade failed user=%s", uid)
+    extra["lineage_wiped_usernames"] = lineage_wiped
+
+    if post_shame:
+        try:
+            shame_ok = await append_topic_of_shame_entry(
+                db,
+                username=uname,
+                reason=reason_clean,
+                holdings=holdings,
+                extra=extra,
+            )
+        except Exception:
+            logger.exception("modkill wipe: Topic of Shame append failed user=%s", uname)
 
     try:
         from routers.game.leaderboard import invalidate_leaderboard_cache
