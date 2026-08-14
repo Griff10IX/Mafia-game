@@ -40,9 +40,6 @@ const CRIMES_STYLES = `
       min-width: 4.25rem;
       justify-content: center;
     }
-    .cr-col-head { display: none !important; }
-    .cr-progress { flex: 1 1 auto; min-width: 64px; }
-    .cr-progress-track { width: auto !important; flex: 1; min-width: 64px; height: 8px !important; }
   }
 `;
 
@@ -190,27 +187,29 @@ const StatusIcons = ({ inJail, autoRankActive }) => {
   );
 };
 
-// Crime progress bar: 25–92% (fail/jail drops max 15%). Fill matches the displayed %.
+// Crime progress bar: 25–92%, similar to rank bar (fail/jail drops max 15%)
 const CrimeProgressBar = ({ progress }) => {
   const pct = Math.min(92, Math.max(25, Number(progress) || 25));
+  const barPct = ((pct - 25) / 67) * 100; // 25% = 0% fill, 92% = 100% fill
   return (
     <div
-      className="cr-progress flex items-center gap-1.5 min-w-0 shrink-0"
+      className="flex items-center gap-1 shrink-0"
       title={`Crime success rate: ${pct}%. Success +3–5%; fail -1–3%; once you've hit 92%, it never goes below 77%.`}
     >
       <div
-        className="cr-progress-track rounded-full overflow-hidden"
         style={{
-          width: 72,
-          height: 8,
+          width: 36,
+          height: 4,
           backgroundColor: '#333333',
+          borderRadius: 9999,
+          overflow: 'hidden',
         }}
       >
         <div
           style={{
             height: '100%',
-            width: `${pct}%`,
-            minWidth: pct > 0 ? 4 : 0,
+            width: `${barPct}%`,
+            minWidth: barPct > 0 ? 3 : 0,
             background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))',
             borderRadius: 9999,
             transition: 'width 0.3s ease',
@@ -221,17 +220,10 @@ const CrimeProgressBar = ({ progress }) => {
           aria-valuemax={92}
         />
       </div>
-      <span className="text-[9px] sm:text-[10px] text-primary font-heading w-7 tabular-nums shrink-0">{pct}%</span>
+      <span className="text-[9px] text-primary font-heading w-6">{pct}%</span>
     </div>
   );
 };
-
-const CRIME_ACTION_IDLE =
-  'cr-action-btn bg-zinc-700/50 text-mutedForeground rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed font-heading';
-const CRIME_ACTION_COMMIT =
-  'cr-action-btn tap-feedback bg-primary/20 text-primary rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 active:scale-[0.97] transition-all touch-manipulation font-heading';
-const CRIME_ACTION_SKIP =
-  'cr-action-btn tap-feedback bg-amber-500/15 text-amber-300 rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-amber-500/45 hover:bg-amber-500/25 active:scale-[0.97] transition-all touch-manipulation font-heading disabled:opacity-50';
 
 // Compact crime row
 const CrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip, skipBusy }) => {
@@ -243,7 +235,7 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip, skipBu
 
   return (
     <div
-      className={`cr-row flex items-center justify-between gap-3 px-2 py-1.5 rounded-md transition-all ${
+      className={`cr-row flex items-center justify-between gap-2 px-2 py-1 rounded-md transition-all ${
         crime.can_commit 
           ? 'bg-zinc-800/30 border border-transparent hover:border-primary/20' 
           : 'bg-zinc-800/20 border border-transparent opacity-60'
@@ -255,7 +247,7 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip, skipBu
         <span className="text-primary/50 text-[10px] shrink-0">▸</span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1 flex-wrap gap-y-0.5">
-            <span className="cr-name-text text-xs font-heading font-bold text-foreground truncate" title={crime.name}>
+            <span className="cr-name-text text-[11px] font-heading font-bold text-foreground truncate" title={crime.name}>
               {crime.name}
             </span>
             {crime.unlocked === false && crime.min_rank_name && (
@@ -304,7 +296,7 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip, skipBu
           <button
             type="button"
             disabled
-            className={CRIME_ACTION_IDLE}
+            className="cr-action-btn bg-zinc-700/50 text-mutedForeground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
           >
             Locked
           </button>
@@ -312,7 +304,7 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip, skipBu
           <button
             type="button"
             onClick={() => onCommit(crime.id)}
-            className={CRIME_ACTION_COMMIT}
+            className="cr-action-btn tap-feedback bg-primary/20 text-primary rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 active:scale-[0.97] transition-all touch-manipulation font-heading"
             data-testid={`commit-crime-${crime.id}`}
           >
             Commit
@@ -323,7 +315,7 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip, skipBu
             disabled={skipBusy}
             onClick={() => onSkip(crime.id)}
             title="Use a cooldown skip token to commit now (−50% cash; max 5,000 crime skips/day)"
-            className={CRIME_ACTION_SKIP}
+            className="cr-action-btn tap-feedback bg-amber-500/15 text-amber-300 rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-amber-500/45 hover:bg-amber-500/25 active:scale-[0.97] transition-all touch-manipulation font-heading disabled:opacity-50"
             data-testid={`skip-crime-${crime.id}`}
           >
             {skipBusy ? '...' : 'Skip'}
@@ -332,7 +324,7 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip, skipBu
           <button
             type="button"
             disabled
-            className={CRIME_ACTION_IDLE}
+            className="cr-action-btn bg-zinc-700/50 text-mutedForeground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
           >
             Wait
           </button>
@@ -363,7 +355,7 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip
 
   return (
     <div
-      className="flex flex-col gap-1.5 px-2.5 py-2 rounded-md transition-all cr-prestige"
+      className="flex flex-col gap-1 px-2 py-1 rounded-md transition-all cr-row"
       style={{
         background: isLocked ? 'rgba(39,39,42,0.3)' : `${color}08`,
         border: `1px solid ${isLocked ? 'rgba(63,63,70,0.4)' : color + '25'}`,
@@ -374,7 +366,7 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip
       <div className="flex items-center gap-1.5 min-w-0">
         {/* Prestige badge */}
         <span
-          className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase tracking-wider border"
+          className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-heading font-bold uppercase tracking-wider border"
           style={isLocked
             ? { color: '#52525b', borderColor: 'rgba(63,63,70,0.5)' }
             : { color, borderColor: color + '50', backgroundColor: color + '12' }
@@ -385,7 +377,7 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip
         </span>
 
         {/* Name */}
-        <span className="text-xs font-heading font-bold truncate" style={{ color: isLocked ? '#52525b' : '#e4e4e7' }} title={crime.description}>
+        <span className="text-[10px] font-heading font-bold truncate" style={{ color: isLocked ? '#52525b' : '#e4e4e7' }} title={crime.description}>
           {crime.name}
         </span>
 
@@ -407,7 +399,7 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip
       <div className="flex items-center gap-2 flex-wrap">
         {!isLocked && (
           <span
-            className="shrink-0 inline-flex items-center gap-0.5 text-[9px] font-heading font-bold uppercase px-1.5 py-0.5 rounded border"
+            className="shrink-0 inline-flex items-center gap-0.5 text-[8px] font-heading font-bold uppercase px-1.5 py-0.5 rounded border"
             style={isGuaranteed
               ? { color: '#34d399', borderColor: 'rgba(52,211,153,0.3)', background: 'rgba(52,211,153,0.08)' }
               : { color: '#fbbf24', borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.08)' }
@@ -434,7 +426,7 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip
         {/* Action button */}
         <div className="shrink-0">
           {manualPlayDisabled === true && crime.can_commit ? (
-            <button type="button" disabled className={CRIME_ACTION_IDLE}>Locked</button>
+            <button type="button" disabled className="bg-zinc-700/50 text-zinc-500 rounded px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase border border-zinc-600/50 cursor-not-allowed">Locked</button>
           ) : crime.can_commit ? (
             <button
               type="button"
@@ -450,12 +442,12 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip
               disabled={skipBusy}
               onClick={() => onSkip(crime.id)}
               title="Use a cooldown skip token to commit now (−50% cash; max 5,000 crime skips/day)"
-              className={CRIME_ACTION_SKIP}
+              className="tap-feedback bg-amber-500/15 text-amber-300 rounded px-2.5 py-1.5 min-h-9 text-[9px] font-heading font-bold uppercase border border-amber-500/45 hover:bg-amber-500/25 active:scale-[0.97] transition-all touch-manipulation disabled:opacity-50"
             >
               {skipBusy ? '...' : '⚡ Skip'}
             </button>
           ) : onCooldown ? (
-            <button type="button" disabled className={CRIME_ACTION_IDLE}>Wait</button>
+            <button type="button" disabled className="bg-zinc-700/50 text-zinc-500 rounded px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase border border-zinc-600/50 cursor-not-allowed">Wait</button>
           ) : isLocked ? (
             <span className="text-[9px] text-zinc-600">—</span>
           ) : (
@@ -466,19 +458,19 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip
 
       {/* Possible rewards — from server prestige_bonus + base payout */}
       {!isLocked && (
-        <div className="pl-0.5 space-y-1 border-t border-zinc-700/30 pt-1.5 mt-0.5">
-          <p className="text-[10px] font-heading text-zinc-400 leading-snug">
-            ${Number(crime.reward_min || 0).toLocaleString()}–${Number(crime.reward_max || 0).toLocaleString()} cash · 10 rank pts
+        <div className="pl-0.5 space-y-0.5 border-t border-zinc-700/30 pt-1 mt-0.5">
+          <p className="text-[8px] font-heading text-zinc-500 leading-tight">
+            Base (success): ${Number(crime.reward_min || 0).toLocaleString()}–${Number(crime.reward_max || 0).toLocaleString()} cash · 10 rank points (more with perks / events / badges / prestige mult)
           </p>
           {bonusLines.length > 0 && (
-            <ul className="text-[10px] font-heading text-zinc-400 list-disc list-inside space-y-1 leading-snug">
+            <ul className="text-[8px] font-heading text-zinc-400 list-disc list-inside space-y-0.5 leading-snug">
               {bonusLines.map((line, i) => (
                 <li key={i}>{line}</li>
               ))}
             </ul>
           )}
-          <p className="text-[10px] font-heading text-zinc-500 italic leading-snug">
-            Same extras as other crimes: ~0.15% loot piece, ~0.1% molotov, ~1/100k token.
+          <p className="text-[7px] font-heading text-zinc-600 italic leading-tight">
+            Same global extras as other crimes: ~0.15% loot piece (vs ~0.05%), ~0.1% molotov, ~1/100k random token.
           </p>
         </div>
       )}
@@ -818,17 +810,7 @@ export default function Crimes() {
           )}
         </div>
 
-        <div className="cr-col-head hidden md:flex items-center gap-3 px-2 pt-1.5 pb-0.5">
-          <span className="flex-1 min-w-0 text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Crime</span>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="w-[104px] text-center text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Rate</span>
-            <span className="w-8 text-center text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Risk</span>
-            <span className="w-10 text-center text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Wait</span>
-          </div>
-          <span className="w-[60px] shrink-0" aria-hidden />
-        </div>
-
-        <div className="p-1.5 space-y-0.5 sm:space-y-1">
+        <div className="p-1.5 space-y-0.5">
           {regularCrimeRows.map((crime) => (
             <CrimeRow
               key={crime.id}
@@ -855,7 +837,7 @@ export default function Crimes() {
             </span>
             <span className="text-[8px] font-heading text-zinc-600 ml-1">— exclusive to each prestige level</span>
           </div>
-          <div className="p-2 space-y-2">
+          <div className="p-1.5 space-y-1.5">
             {prestigeCrimeRows.map((crime) => (
               <PrestigeCrimeRow
                 key={crime.id}

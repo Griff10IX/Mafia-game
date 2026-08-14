@@ -90,8 +90,19 @@ function travelErrorMessage(error) {
   return detail || 'Travel failed';
 }
 
-const TravelingScreen = ({ destination, timeLeft, pending, method }) => {
+const TravelingScreen = ({ destination, timeLeft, duration, pending, method, startedAt }) => {
   const isAirport = method === 'airport';
+  const totalMs = Math.max(1, (Number(duration) > 0 ? Number(duration) : Number(timeLeft) || 1) * 1000);
+  const origin = Number(startedAt) || 0;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (pending) return undefined;
+    const id = setInterval(() => setNow(Date.now()), 50);
+    return () => clearInterval(id);
+  }, [pending]);
+  const pct = pending || !origin
+    ? 0
+    : Math.min(100, Math.max(0, ((now - origin) / totalMs) * 100));
   return (
   <div className="flex flex-col items-center justify-center min-h-[40vh] space-y-3" data-testid="traveling-screen">
     <div className="text-4xl md:text-5xl animate-bounce">{isAirport ? '✈️' : '🚗'}</div>
@@ -104,7 +115,17 @@ const TravelingScreen = ({ destination, timeLeft, pending, method }) => {
       {pending ? '…' : `${Math.max(0, Math.floor(Number(timeLeft) || 0))}s`}
     </div>
     <div className="w-48 md:w-64 h-2 bg-secondary rounded-full overflow-hidden border border-primary/20">
-      <div className="h-full bg-gradient-to-r from-primary via-yellow-600 to-primary animate-pulse"></div>
+      <div
+        className="h-full rounded-full"
+        style={{
+          width: `${pct}%`,
+          background: 'linear-gradient(to right, var(--noir-primary), var(--noir-accent-line, var(--noir-primary)))',
+        }}
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(pct)}
+      />
     </div>
   </div>
   );
@@ -467,6 +488,8 @@ export default function Travel() {
   const [traveling, setTraveling] = useState(false);
   const [travelPostPending, setTravelPostPending] = useState(false);
   const [travelTime, setTravelTime] = useState(0);
+  const [travelDuration, setTravelDuration] = useState(0);
+  const [travelStartedAt, setTravelStartedAt] = useState(0);
   const [selectedDest, setSelectedDest] = useState('');
   const [travelMethod, setTravelMethod] = useState('');
   const [autoRankBoozeOn, setAutoRankBoozeOn] = useState(() => !!bootCached?.autoRankBoozeOn);
@@ -603,6 +626,8 @@ export default function Travel() {
     setTravelPostPending(true);
     setTraveling(false);
     setTravelTime(0);
+    setTravelDuration(0);
+    setTravelStartedAt(0);
     try {
       const [bjRes, mpBjRes] = await Promise.all([
         api.get('/casino/blackjack/current-game').catch(() => ({ data: {} })),
@@ -628,10 +653,14 @@ export default function Travel() {
       if (sec <= 0) {
         setTraveling(false);
         setTravelTime(0);
+        setTravelDuration(0);
+        setTravelStartedAt(0);
         fetchTravelInfo({ silent: true, force: true });
         refreshUser({ current_state: destination });
         toast.success(`Arrived at ${destination}!`);
       } else {
+        setTravelDuration(sec);
+        setTravelStartedAt(Date.now());
         setTravelTime(sec);
         setTraveling(true);
         const arrivesRaw = response.data?.travel_arrives_at;
@@ -651,6 +680,8 @@ export default function Travel() {
       toast.error(travelErrorMessage(error));
       setTraveling(false);
       setTravelTime(0);
+      setTravelDuration(0);
+      setTravelStartedAt(0);
     }
   };
 
@@ -671,6 +702,8 @@ export default function Travel() {
       <TravelingScreen
         destination={selectedDest || '…'}
         timeLeft={travelTime}
+        duration={travelDuration || travelTime}
+        startedAt={travelStartedAt}
         pending={false}
         method={travelMethod}
       />

@@ -171,7 +171,7 @@ export default function FamilyCommandCenter({ onCloseSidebar, hasFamily }) {
 
   return (
     <div
-      className="family-command-center flex flex-col min-h-0 border-t mt-3 pt-1 w-full"
+      className="family-command-center flex flex-col min-h-0 border-t mt-2 w-full"
       data-panel="family-command-center"
       style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.12)' }}
     >

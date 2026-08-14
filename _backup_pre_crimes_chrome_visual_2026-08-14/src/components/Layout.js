@@ -342,59 +342,10 @@ function loadTopBarChipHeightScale() {
 function SidebarCatHeader({ label, classic }) {
   const labelColor = classic ? 'var(--noir-primary)' : 'var(--noir-muted)';
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 8px 5px 10px', marginTop: 6 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px 3px 10px', marginTop: 3 }}>
       <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
       <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: labelColor, whiteSpace: 'nowrap' }}>{label}</span>
       <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
-    </div>
-  );
-}
-
-function RightStatGroup({ label, children }) {
-  return (
-    <div className="space-y-0.5">
-      <p className="text-[8px] font-heading uppercase tracking-[0.14em] px-1 pb-0.5" style={{ color: 'var(--noir-muted)' }}>{label}</p>
-      {children}
-    </div>
-  );
-}
-
-function RightStatRow({ row, closeOnMobile }) {
-  const hoverOn = (e) => { e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.05)'; };
-  const hoverOff = (e) => { e.currentTarget.style.background = ''; };
-  if (row.isLink) {
-    return (
-      <SameRouteAwareLink
-        to={row.to}
-        onClick={closeOnMobile}
-        className={`flex justify-between gap-1 text-[9px] font-heading px-1 py-1 rounded-sm transition-colors min-w-0 ${row.wrapValue ? 'items-start' : 'items-center'}`}
-        style={{ color: 'var(--noir-foreground)' }}
-        onMouseEnter={hoverOn}
-        onMouseLeave={hoverOff}
-      >
-        <span className="shrink-0 pt-px" style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
-        <span
-          className={
-            row.wrapValue
-              ? `flex-1 min-w-0 text-right break-words leading-snug ${row.className || ''}`
-              : `shrink min-w-0 text-right ${row.truncate ? 'truncate max-w-[72px]' : 'truncate'} ${row.className || ''}`
-          }
-          style={row.className ? undefined : { color: 'var(--noir-primary)' }}
-          title={row.wrapValue || typeof row.value !== 'string' ? undefined : row.value}
-        >
-          {row.value}
-        </span>
-      </SameRouteAwareLink>
-    );
-  }
-  return (
-    <div
-      className="flex justify-between items-center gap-1 text-[9px] font-heading px-1 py-1 rounded-sm transition-colors min-w-0"
-      onMouseEnter={hoverOn}
-      onMouseLeave={hoverOff}
-    >
-      <span className="shrink-0" style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
-      <span className={`shrink min-w-0 text-right ${row.truncate ? 'truncate max-w-[72px]' : ''} ${row.className || ''}`} style={!row.className ? { color: 'var(--noir-foreground)' } : undefined} title={typeof row.value === 'string' ? row.value : undefined}>{row.value}</span>
     </div>
   );
 }
@@ -2038,7 +1989,7 @@ export default function Layout({ children }) {
       {rankingOpen && (
         <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
           <SameRouteAwareLink to="/crime/crimes" onClick={() => setSidebarOpen(false)} onMouseEnter={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }} onFocus={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }}
-            className={`flex items-center gap-1 px-2 py-0.5 min-h-[24px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/crimes' ? styles.navItemActivePage : styles.sidebarNavLink}`}
+            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/crimes' ? styles.navItemActivePage : styles.sidebarNavLink}`}
             style={location.pathname === '/crime/crimes' ? sidebarActiveStyle : undefined} data-testid="nav-crimes">
             <ListChecks size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
             <span className="uppercase tracking-widest font-heading flex-1">Crimes</span>
@@ -2048,7 +1999,7 @@ export default function Layout({ children }) {
           <SameRouteAwareLink
             to="/crime/gta"
             onClick={() => setSidebarOpen(false)}
-            className={`flex items-center gap-1 px-2 py-0.5 min-h-[24px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/gta' ? styles.navItemActivePage : styles.sidebarNavLink} ${gtaExclusiveInPool ? 'gta-exclusive-flash' : ''}`}
+            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/gta' ? styles.navItemActivePage : styles.sidebarNavLink} ${gtaExclusiveInPool ? 'gta-exclusive-flash' : ''}`}
             style={gtaExclusiveInPool
               ? { background: 'var(--noir-raised)', backgroundImage: 'none', borderLeft: '3px solid #a78bfa', color: '#a78bfa' }
               : (location.pathname === '/crime/gta' ? sidebarActiveStyle : undefined)}
@@ -2061,24 +2012,24 @@ export default function Layout({ children }) {
             {rankingCounts.gta > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30">{rankingCounts.gta}</span>}
           </SameRouteAwareLink>
           {showSidebarDividers && navDividerEl('rd2')}
-          <SameRouteAwareLink to="/crime/jail" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[24px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/jail' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/crime/jail' ? sidebarActiveStyle : undefined} data-testid="nav-jail">
+          <SameRouteAwareLink to="/crime/jail" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/jail' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/crime/jail' ? sidebarActiveStyle : undefined} data-testid="nav-jail">
             <Lock size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
             <span className="uppercase tracking-widest font-heading flex-1">Jail</span>
             {rankingCounts.jail > 0 && <span className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30">{rankingCounts.jail}</span>}
           </SameRouteAwareLink>
           {showSidebarDividers && navDividerEl('rd3')}
-          <SameRouteAwareLink to="/organised-crime" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[24px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/organised-crime' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/organised-crime' ? sidebarActiveStyle : undefined} data-testid="nav-organised-crime">
+          <SameRouteAwareLink to="/organised-crime" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/organised-crime' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/organised-crime' ? sidebarActiveStyle : undefined} data-testid="nav-organised-crime">
             <Users size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
             <span className="uppercase tracking-widest font-heading flex-1">Organised Crime</span>
           </SameRouteAwareLink>
           {showSidebarDividers && navDividerEl('rd4')}
-          <SameRouteAwareLink to="/game/ranking/badges" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[24px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/game/ranking/badges' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/game/ranking/badges' ? sidebarActiveStyle : undefined} data-testid="nav-badges">
+          <SameRouteAwareLink to="/game/ranking/badges" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/game/ranking/badges' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/game/ranking/badges' ? sidebarActiveStyle : undefined} data-testid="nav-badges">
             <Award size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
             <span className="uppercase tracking-widest font-heading flex-1">Badges</span>
           </SameRouteAwareLink>
           {showSidebarDividers && navDividerEl('rd5')}
           <SameRouteAwareLink to="/account/prestige" onClick={() => setSidebarOpen(false)} data-testid="nav-prestige"
-            className={`flex items-center gap-1 px-2 py-0.5 min-h-[24px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/account/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
+            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/account/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
             style={location.pathname === '/account/prestige' ? sidebarActiveStyle : undefined}>
             <Trophy size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
             <span className="uppercase tracking-widest font-heading flex-1">Prestige</span>
@@ -2129,7 +2080,7 @@ export default function Layout({ children }) {
             return (
               <Fragment key={item.to}>
                 {showSidebarDividers && idx > 0 && navDividerEl(`cb${idx}`)}
-                <SameRouteAwareLink to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[24px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
+                <SameRouteAwareLink to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
                   <Icon size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
                   <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
                   {item.staffPreview && (
@@ -2218,7 +2169,7 @@ export default function Layout({ children }) {
                   <SameRouteAwareLink
                     to={row.to}
                     onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center gap-1 px-2 py-0.5 min-h-[24px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`}
+                    className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`}
                     style={isActive ? sidebarActiveStyle : undefined}
                     data-testid={row.testId}
                   >
@@ -2282,7 +2233,7 @@ export default function Layout({ children }) {
             return (
               <Fragment key={item.to}>
                 {showSidebarDividers && idx > 0 && navDividerEl(`cd${idx}`)}
-                <SameRouteAwareLink to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[24px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
+                <SameRouteAwareLink to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
                   {IconComp && <IconComp size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />}
                   <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
                   {item.to === '/sports-betting' && sportsBettingEventCount > 0 && (
@@ -2334,7 +2285,7 @@ export default function Layout({ children }) {
             return (
               <Fragment key={item.to}>
                 {showSidebarDividers && idx > 0 && navDividerEl(`mg${idx}`)}
-                <SameRouteAwareLink to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[24px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
+                <SameRouteAwareLink to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
                   {IconComp && <IconComp size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />}
                   <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
                 </SameRouteAwareLink>
@@ -2354,7 +2305,7 @@ export default function Layout({ children }) {
     if (item.path === '__messaging__') return <Fragment key="nav-messaging-group">{navDivider}{messagingNavBlock}</Fragment>;
     if (item.path === '__tutorial__') {
       const TutIcon = item.icon;
-      const tutSizeClass = compact ? 'py-0.5 min-h-[24px]' : 'py-2 md:py-1 min-h-[44px] md:min-h-[26px]';
+      const tutSizeClass = compact ? 'py-0.5 min-h-[22px]' : 'py-2 md:py-1 min-h-[44px] md:min-h-[26px]';
       return (
         <Fragment key="nav-tutorial">
           {navDivider}
@@ -2376,7 +2327,7 @@ export default function Layout({ children }) {
     const Icon = item.icon;
     const isActive = location.pathname === item.path;
     const isFamiliesAtWar = item.path === '/game/family/list' && atWar;
-    const sizeClass = compact ? 'py-0.5 min-h-[24px]' : 'py-2 md:py-1 min-h-[44px] md:min-h-[26px]';
+    const sizeClass = compact ? 'py-0.5 min-h-[22px]' : 'py-2 md:py-1 min-h-[44px] md:min-h-[26px]';
     return (
       <Fragment key={itemKey}>
         {navDivider}
@@ -3156,66 +3107,81 @@ export default function Layout({ children }) {
               {rankProgress && (
                 <div className="pt-1 pb-2 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.12)' }}>
                   <p className="text-[9px] font-heading uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-muted)' }}>Rank Progress</p>
-                  <div className="h-2 w-full rounded-full overflow-hidden mb-1" style={{ backgroundColor: 'var(--noir-raised)' }}>
+                  <div className="h-1.5 w-full rounded-full overflow-hidden mb-1" style={{ backgroundColor: 'var(--noir-raised)' }}>
                     <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
                   </div>
                   <p className="text-[9px] font-heading" style={{ color: 'var(--noir-primary)' }}>{(user?.premium_rank_bar ? (Number(rankProgress.rank_points_progress) || 0).toFixed(2) : (Number(rankProgress.rank_points_progress) || 0).toFixed(0))}% · {rankProgress.current_rank_name}</p>
                 </div>
               )}
 
-              {/* Stat rows — grouped so the list is scannable */}
-              <div className="space-y-2.5">
-                <RightStatGroup label="Money">
-                  {[
-                    { label: 'Cash', value: formatMoney(user.money), className: 'text-primary', isLink: true, to: '/bank' },
-                    { label: 'Points', value: formatInt(user.points), isLink: true, to: '/game/store?tab=points' },
-                    { label: 'Respect', value: formatInt(user.respect_points ?? 0), isLink: true, to: '/game/store?tab=upgrades' },
-                    { label: 'Bullets', value: formatInt(user.bullets), isLink: true, to: '/game/store?tab=bullets' },
-                    ...(hasCasinoOrProperty ? [
-                      { label: 'Casino', value: formatMoney(user.casino_profit ?? 0), className: (user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400', isLink: true, to: '/my-properties' },
-                      { label: 'Property', value: `${formatInt(user.property_profit ?? 0)} pts`, isLink: true, to: '/my-properties' },
-                    ] : []),
-                  ].map((row) => (
-                    <RightStatRow key={row.label} row={row} closeOnMobile={() => isMobileViewport && setRightSidebarOpen(false)} />
-                  ))}
-                </RightStatGroup>
-                <RightStatGroup label="Combat">
-                  {[
-                    { label: 'Health', value: Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%', className: Number(user.health) > 50 ? 'text-emerald-400' : Number(user.health) > 25 ? 'text-amber-400' : 'text-red-400', isLink: true, to: '/game/store?tab=upgrades' },
-                    { label: 'Kills', value: formatInt(user.total_kills), className: 'text-red-400', isLink: true, to: '/kill/attack' },
-                    { label: 'Weapon', value: user.gun_name || 'None', isLink: true, to: '/kill/armour-weapons' },
-                    { label: 'Armour', value: user.armour_name || 'None', isLink: true, to: '/kill/armour-weapons' },
-                    { label: 'Guards', value: typeof user.bodyguard_count === 'number' ? `${user.bodyguard_count}/${user.bodyguard_slots ?? 1}` : '—', isLink: true, to: '/kill/bodyguards' },
-                  ].map((row) => (
-                    <RightStatRow key={row.label} row={row} closeOnMobile={() => isMobileViewport && setRightSidebarOpen(false)} />
-                  ))}
-                </RightStatGroup>
-                <RightStatGroup label="Location">
-                  {[
-                    { label: 'Location', value: user.current_state || user.location || '—', truncate: true, isLink: true, to: '/travel' },
-                    {
-                      label: 'Family',
-                      value: (
-                        <span className="inline-flex items-center justify-end gap-1.5 w-full">
-                          {(user.family_emblem_preset_id || user.family_emblem_avatar_url) ? (
-                            <FamilyEmblem
-                              emblemPresetId={user.family_emblem_preset_id}
-                              avatarUrl={user.family_emblem_avatar_url}
-                              size={14}
-                              className="shrink-0"
-                            />
-                          ) : null}
-                          <span className="min-w-0 break-words leading-snug">{user.gang_name || 'None'}</span>
+              {/* Stat rows — IMPROVEMENT 4: hover highlight, colour-coded values */}
+              <div className="space-y-0">
+                {[
+                  { label: 'Cash', value: formatMoney(user.money), className: 'text-primary', isLink: true, to: '/bank' },
+                  { label: 'Points', value: formatInt(user.points), isLink: true, to: '/game/store?tab=points' },
+                  { label: 'Respect', value: formatInt(user.respect_points ?? 0), isLink: true, to: '/game/store?tab=upgrades' },
+                  { label: 'Bullets', value: formatInt(user.bullets), isLink: true, to: '/game/store?tab=bullets' },
+                  { label: 'Health', value: Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%', className: Number(user.health) > 50 ? 'text-emerald-400' : Number(user.health) > 25 ? 'text-amber-400' : 'text-red-400', isLink: true, to: '/game/store?tab=upgrades' },
+                  { label: 'Kills', value: formatInt(user.total_kills), className: 'text-red-400', isLink: true, to: '/kill/attack' },
+                  { label: 'Weapon', value: user.gun_name || 'None', isLink: true, to: '/kill/armour-weapons' },
+                  { label: 'Armour', value: user.armour_name || 'None', isLink: true, to: '/kill/armour-weapons' },
+                  { label: 'Location', value: user.current_state || user.location || '—', truncate: true, isLink: true, to: '/travel' },
+                  {
+                    label: 'Family',
+                    value: (
+                      <span className="inline-flex items-center justify-end gap-1.5 w-full">
+                        {(user.family_emblem_preset_id || user.family_emblem_avatar_url) ? (
+                          <FamilyEmblem
+                            emblemPresetId={user.family_emblem_preset_id}
+                            avatarUrl={user.family_emblem_avatar_url}
+                            size={14}
+                            className="shrink-0"
+                          />
+                        ) : null}
+                        <span className="min-w-0 break-words leading-snug">{user.gang_name || 'None'}</span>
+                      </span>
+                    ),
+                    wrapValue: true,
+                    isLink: true,
+                    to: '/game/family/list',
+                  },
+                  { label: 'Guards', value: typeof user.bodyguard_count === 'number' ? `${user.bodyguard_count}/${user.bodyguard_slots ?? 1}` : '—', isLink: true, to: '/kill/bodyguards' },
+                  ...(hasCasinoOrProperty ? [
+                    { label: 'Casino', value: formatMoney(user.casino_profit ?? 0), className: (user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400', isLink: true, to: '/my-properties' },
+                    { label: 'Property', value: `${formatInt(user.property_profit ?? 0)} pts`, isLink: true, to: '/my-properties' },
+                  ] : []),
+                ].map((row, i) => {
+                  if (row.isLink) {
+                    return (
+                      <SameRouteAwareLink key={i} to={row.to} onClick={() => isMobileViewport && setRightSidebarOpen(false)}
+                        className={`flex justify-between gap-1 text-[9px] font-heading px-1 py-1 rounded-sm transition-colors min-w-0 ${row.wrapValue ? 'items-start' : 'items-center'}`}
+                        style={{ color: 'var(--noir-foreground)' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.05)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
+                        <span className="shrink-0 pt-px" style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
+                        <span
+                          className={
+                            row.wrapValue
+                              ? `flex-1 min-w-0 text-right break-words leading-snug ${row.className || ''}`
+                              : `shrink min-w-0 text-right ${row.truncate ? 'truncate max-w-[72px]' : 'truncate'} ${row.className || ''}`
+                          }
+                          style={row.className ? undefined : { color: 'var(--noir-primary)' }}
+                          title={row.wrapValue || typeof row.value !== 'string' ? undefined : row.value}
+                        >
+                          {row.value}
                         </span>
-                      ),
-                      wrapValue: true,
-                      isLink: true,
-                      to: '/game/family/list',
-                    },
-                  ].map((row) => (
-                    <RightStatRow key={row.label} row={row} closeOnMobile={() => isMobileViewport && setRightSidebarOpen(false)} />
-                  ))}
-                </RightStatGroup>
+                      </SameRouteAwareLink>
+                    );
+                  }
+                  return (
+                    <div key={i} className="flex justify-between items-center gap-1 text-[9px] font-heading px-1 py-1 rounded-sm transition-colors min-w-0"
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.04)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
+                      <span className="shrink-0" style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
+                      <span className={`shrink min-w-0 text-right ${row.truncate ? 'truncate max-w-[72px]' : ''} ${row.className || ''}`} style={!row.className ? { color: 'var(--noir-foreground)' } : undefined} title={typeof row.value === 'string' ? row.value : undefined}>{row.value}</span>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Find user — under stats / property */}
@@ -3237,14 +3203,14 @@ export default function Layout({ children }) {
                     value={findUserQuery}
                     onChange={(e) => setFindUserQuery(e.target.value)}
                     placeholder="Username"
-                    className="flex-1 min-w-0 px-1.5 py-1 min-h-9 md:min-h-[22px] rounded text-[9px] font-heading bg-secondary border border-border placeholder:text-mutedForeground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="flex-1 min-w-0 px-1.5 py-1 rounded text-[9px] font-heading bg-secondary border border-border placeholder:text-mutedForeground focus:outline-none focus:ring-1 focus:ring-primary/50"
                     style={{ color: 'var(--noir-foreground)' }}
                     aria-label="Search for user by username"
                   />
                   <button
                     type="submit"
                     disabled={!findUserQuery.trim()}
-                    className="shrink-0 p-1 min-h-9 min-w-9 md:min-h-0 md:min-w-0 rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
+                    className="shrink-0 p-1 rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
                     aria-label="Go to profile"
                     title="Go to profile"
                   >
