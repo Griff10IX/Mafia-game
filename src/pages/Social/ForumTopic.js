@@ -1077,7 +1077,7 @@ export default function ForumTopic() {
 
   const commentCount = comments.length;
   const topicTitlePlain = (topic.title || '').replace(/<[^>]+>/g, '').trim();
-  const isPinnedGuideTopic = /^(how\s*to|faqs?|update\s*log)$/i.test(topicTitlePlain);
+  const isPinnedGuideTopic = /^(how\s*to|faqs?|update\s*log|forum\s*rules|topic\s*of\s*shame)$/i.test(topicTitlePlain);
   const isLegacyFaqHtml =
     topic.content &&
     (topic.content.includes('<details') ||

@@ -190,12 +190,13 @@ def ip_ban_shame_bbcode(*, username: str, duration_label: str, reason: str = "")
     )
     inner = "\n".join(lines)
     return (
-        f"[size=1.5][b][color=#E74C3C]{day}[/color][/b] — [b]{_bbcode_safe(username)}[/b][/size]\n"
+        f"[size=1.5][b][color=#2ECC71]{day}[/color][/b] — [b]{_bbcode_safe(username)}[/b][/size]\n"
         "[quote]\n"
         "[list]\n"
         f"{inner}\n"
         "[/list]\n"
         "[/quote]\n"
+        "\n[hr]\n"
     )
 
 

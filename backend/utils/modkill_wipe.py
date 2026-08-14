@@ -234,7 +234,7 @@ def _shame_bbcode(
     taken = _shame_taken_lines(holdings, extra)
     taken_bb = "".join(f"[*][color=#888888]{line}[/color]\n" for line in taken)
     return (
-        f"[size=1.5][b][color=#E74C3C]{day}[/color][/b] — [b]{_bbcode_safe(username)}[/b][/size]\n"
+        f"[size=1.5][b][color=#2ECC71]{day}[/color][/b] — [b]{_bbcode_safe(username)}[/b][/size]\n"
         "[quote]\n"
         "[list]\n"
         "[*][color=#888888][b]Action:[/b] Modkill (wipe) for rule breaking.[/color]\n"
@@ -244,6 +244,7 @@ def _shame_bbcode(
         "and Game Pass stripped. Modkilled badge added. £10 Dead > Alive revive blocked.[/color]\n"
         "[/list]\n"
         "[/quote]\n"
+        "\n[hr]\n"
     )
 
 
