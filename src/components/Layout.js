@@ -53,6 +53,10 @@ function readLayoutBootFromDashboardCache() {
   return { user: row.user, rankProgress: null };
 }
 
+function isChromeTabHidden() {
+  return typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden');
+}
+
 /** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
 function buildModStaffNavItems() {
   return buildLayoutStaffNavItems({ isAdmin: false, isModerator: true });
@@ -415,6 +419,8 @@ export default function Layout({ children }) {
     layoutBootRef.current = readLayoutBootFromDashboardCache();
   }
   const [user, setUser] = useState(() => layoutBootRef.current.user);
+  const userInJailRef = useRef(!!layoutBootRef.current.user?.in_jail);
+  const wasInJailRef = useRef(!!layoutBootRef.current.user?.in_jail);
   const [rankProgress, setRankProgress] = useState(() => layoutBootRef.current.rankProgress);
   const [unreadCount, setUnreadCount] = useState(0);
   const [updateLogUnread, setUpdateLogUnread] = useState(0);
@@ -1229,8 +1235,7 @@ export default function Layout({ children }) {
       path.startsWith('/crime/') ||
       path.startsWith('/game/ranking') ||
       path === '/ranking' ||
-      path === '/sports-betting' ||
-      (userId && mobileStatsDisplay === 'right_sidebar');
+      path === '/sports-betting';
     if (rankingDebounceRef.current) clearTimeout(rankingDebounceRef.current);
     rankingDebounceRef.current = setTimeout(() => {
       if (needRanking) fetchRankingCounts();
@@ -1249,7 +1254,10 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     let intervalId;
-    const deferred = setTimeout(() => { fetchWarStatus(); intervalId = setInterval(fetchWarStatus, 45000); }, 1200);
+    const deferred = setTimeout(() => {
+      fetchWarStatus();
+      intervalId = setInterval(() => { if (!isChromeTabHidden()) fetchWarStatus(); }, 45000);
+    }, 1200);
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
 
@@ -1264,7 +1272,7 @@ export default function Layout({ children }) {
     let intervalId;
     const deferred = setTimeout(() => {
       pollNotifications();
-      intervalId = setInterval(pollNotifications, 30000);
+      intervalId = setInterval(() => { if (!isChromeTabHidden()) pollNotifications(); }, 30000);
     }, 2000);
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
@@ -1274,7 +1282,7 @@ export default function Layout({ children }) {
     const jitterMs = Math.floor(Math.random() * 45000);
     const deferred = setTimeout(() => {
       fetchHelpDeskOpenCount();
-      intervalId = setInterval(fetchHelpDeskOpenCount, 60000);
+      intervalId = setInterval(() => { if (!isChromeTabHidden()) fetchHelpDeskOpenCount(); }, 120000);
     }, 300 + jitterMs);
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
@@ -1284,7 +1292,7 @@ export default function Layout({ children }) {
     const jitterMs = Math.floor(Math.random() * 30000);
     const deferred = setTimeout(() => {
       fetchUpdateLogUnread();
-      intervalId = setInterval(fetchUpdateLogUnread, 60000);
+      intervalId = setInterval(() => { if (!isChromeTabHidden()) fetchUpdateLogUnread(); }, 120000);
     }, 800 + jitterMs);
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
@@ -1300,7 +1308,10 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     let intervalId;
-    const deferred = setTimeout(() => { fetchUsersOnlineCount(); intervalId = setInterval(fetchUsersOnlineCount, 30000); }, 500);
+    const deferred = setTimeout(() => {
+      fetchUsersOnlineCount();
+      intervalId = setInterval(() => { if (!isChromeTabHidden()) fetchUsersOnlineCount(); }, 90000);
+    }, 500);
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
 
@@ -1324,7 +1335,7 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     const t = setTimeout(() => fetchFlashNews(), 4000);
-    const id = setInterval(fetchFlashNews, 60000);
+    const id = setInterval(() => { if (!isChromeTabHidden()) fetchFlashNews(); }, 120000);
     return () => { clearTimeout(t); clearInterval(id); };
   }, []); // eslint-disable-line
 
@@ -1461,6 +1472,26 @@ export default function Layout({ children }) {
             await fetchDataRef.current?.();
           } catch (_) { /* fetchData handles auth */ }
         })();
+        const jobs = [
+          () => fetchUsersOnlineCount(),
+          () => fetchHelpDeskOpenCount(),
+          () => fetchUpdateLogUnread(),
+          () => fetchWarStatus(),
+          () => fetchFlashNews(),
+          () => fetchRankingCounts({ force: true }),
+          () => {
+            api.get('/sports-betting/events').then((res) => {
+              const ev = res.data?.events;
+              if (Array.isArray(ev)) setSportsBettingEventCount(ev.length);
+            }).catch(() => {});
+          },
+          () => {
+            api.get('/weed-empire/ready-count').then((res) => {
+              setWeedEmpireReadyCount(Math.max(0, Number(res.data?.ready_count) || 0));
+            }).catch(() => {});
+          },
+        ];
+        jobs.forEach((fn, i) => setTimeout(fn, 120 * (i + 1)));
       }, 800);
     };
     document.addEventListener('visibilitychange', onVisibility);
@@ -1574,21 +1605,23 @@ export default function Layout({ children }) {
     try { await api.post('/admin/act-as-normal', null, { params: { acting: false } }); await checkAdmin(); window.dispatchEvent(new CustomEvent('app:refresh-user')); } catch (_) {}
   };
 
-  const fetchRankingCounts = async () => {
+  const fetchRankingCounts = async (opts = {}) => {
     const now = Date.now();
-    if (rankingLastFetchAtRef.current && now - rankingLastFetchAtRef.current < 5000) return;
+    if (!opts.force && rankingLastFetchAtRef.current && now - rankingLastFetchAtRef.current < 5000) return;
     rankingLastFetchAtRef.current = now;
     try {
+      const jailed = !!userInJailRef.current;
       const crimesPrefetchData = getCrimesPrefetch();
-      const crimesPromise = crimesPrefetchData != null
-        ? Promise.resolve({ data: crimesPrefetchData })
-        : api.get('/crimes');
+      const crimesPromise = jailed
+        ? Promise.resolve({ data: null })
+        : (crimesPrefetchData != null
+          ? Promise.resolve({ data: crimesPrefetchData })
+          : api.get('/crimes'));
       const onJailPage = location.pathname === '/crime/jail';
       const settled = await Promise.allSettled([
         crimesPromise,
-        api.get('/gta/playable-count'),
+        jailed ? Promise.resolve({ data: null }) : api.get('/gta/playable-count'),
         onJailPage ? Promise.resolve({ data: null }) : api.get('/jail/players'),
-        api.get('/sports-betting/events'),
       ]);
       const crimesRes = settled[0].status === 'fulfilled' ? settled[0].value : null;
       const gtaPcRes = settled[1].status === 'fulfilled' ? settled[1].value : null;
@@ -1603,16 +1636,10 @@ export default function Layout({ children }) {
         ? undefined
         : (jailPlayersRes && Array.isArray(jailPlayersRes.data?.players) ? jailPlayersRes.data.players.length : 0);
       setRankingCounts((prev) => ({
-        crimes: crimesAvailable,
-        gta: gtaAvailable,
+        crimes: jailed ? prev.crimes : crimesAvailable,
+        gta: jailed ? prev.gta : gtaAvailable,
         jail: jailCount === undefined ? prev.jail : jailCount,
       }));
-      if (settled[3].status === 'fulfilled') {
-        const ev = settled[3].value?.data?.events;
-        setSportsBettingEventCount(Array.isArray(ev) ? ev.length : 0);
-      } else {
-        setSportsBettingEventCount(0);
-      }
     } catch (error) { }
   };
 
@@ -1631,16 +1658,38 @@ export default function Layout({ children }) {
   }, [userId]); // eslint-disable-line
 
   useEffect(() => {
-    if (!userId) return;
-    const id = setInterval(async () => {
+    if (!userId) return undefined;
+    const load = async () => {
+      if (isChromeTabHidden()) return;
       try {
         const res = await api.get('/sports-betting/events');
         const ev = res.data?.events;
         if (Array.isArray(ev)) setSportsBettingEventCount(ev.length);
       } catch { /* keep last count */ }
-    }, 120000);
-    return () => clearInterval(id);
+    };
+    const t = setTimeout(load, 2500);
+    const id = setInterval(load, 120000);
+    return () => {
+      clearTimeout(t);
+      clearInterval(id);
+    };
   }, [userId]);
+
+  useEffect(() => {
+    if (!userId || mobileStatsDisplay !== 'right_sidebar') return undefined;
+    const id = setInterval(() => {
+      if (!isChromeTabHidden()) fetchRankingCounts();
+    }, 60000);
+    return () => clearInterval(id);
+  }, [userId, mobileStatsDisplay]); // eslint-disable-line
+
+  useEffect(() => {
+    userInJailRef.current = !!user?.in_jail;
+    if (wasInJailRef.current && !user?.in_jail && userId) {
+      fetchRankingCounts({ force: true });
+    }
+    wasInJailRef.current = !!user?.in_jail;
+  }, [user?.in_jail, userId]); // eslint-disable-line
 
   useEffect(() => {
     if (!userId || !weedEmpireNavVisible) {
@@ -1649,6 +1698,7 @@ export default function Layout({ children }) {
     }
     let cancelled = false;
     const load = async () => {
+      if (isChromeTabHidden()) return;
       try {
         const res = await api.get('/weed-empire/ready-count');
         if (!cancelled) setWeedEmpireReadyCount(Math.max(0, Number(res.data?.ready_count) || 0));
@@ -1662,7 +1712,7 @@ export default function Layout({ children }) {
       cancelled = true;
       clearInterval(id);
     };
-  }, [userId, weedEmpireNavVisible, location.pathname]);
+  }, [userId, weedEmpireNavVisible]);
 
   const fetchTravelStatus = useCallback(async () => {
     try {

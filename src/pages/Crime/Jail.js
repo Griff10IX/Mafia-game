@@ -427,6 +427,7 @@ export default function Jail() {
     mod_default_online_color: cachedPlayers.mod_default_online_color || DEFAULT_MOD_COLOR,
   });
   const jailStatusRef = useRef(jailStatus);
+  const bustInFlightRef = useRef(false);
 
   useEffect(() => {
     jailStatusRef.current = jailStatus;
@@ -623,6 +624,8 @@ export default function Jail() {
   };
 
   const bustOut = async (username) => {
+    if (loading || bustInFlightRef.current || bustCooldownRemaining > 0 || jailStatus.in_jail) return;
+    bustInFlightRef.current = true;
     setLoading(true);
     try {
       const response = await api.post('/jail/bust', { target_username: username });
@@ -684,6 +687,7 @@ export default function Jail() {
             : 'Failed to bust out';
       toast.error(msg);
     } finally {
+      bustInFlightRef.current = false;
       setLoading(false);
     }
   };

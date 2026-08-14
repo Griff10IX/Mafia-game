@@ -27,6 +27,7 @@ const RARITY_GLOW_HEX = {
   vip_exclusive: '#06b6d4',
 };
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
+import { useAuthUser } from '../../context/AuthContext';
 import {
   apiPostWithCivilianProtectionConfirm,
   isCivilianProtectionConfirmCancelled,
@@ -582,6 +583,7 @@ export default function GTA() {
 
   const [autoRankGtaDisabled, setAutoRankGtaDisabled] = useState(() => !!gtaBoot?.autoRankGtaDisabled);
   const [user, setUser] = useState(() => gtaBoot?.user ?? null);
+  const authUser = useAuthUser();
 
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -589,6 +591,7 @@ export default function GTA() {
   // silent=true (cooldown sync): can skip toast noise; includeStats overrides so footer numbers stay real
   // (session boot used to skip /gta/stats → stuck at 0/1 while Auto Rank kept stealing).
   const fetchData = useCallback(async ({ silent = false, includeStats } = {}) => {
+    if (authUser?.in_jail) return;
     const wantStats = includeStats ?? !silent;
     let nextOptions = optionsRef.current;
     let nextRecentStolen = [];
@@ -656,7 +659,7 @@ export default function GTA() {
         console.error('Error fetching GTA data:', error);
       }
     }
-  }, []);
+  }, [authUser?.in_jail]);
 
   useEffect(() => {
     const boot = readSessionJson(GTA_SESSION_CACHE_KEY);

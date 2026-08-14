@@ -493,6 +493,7 @@ export default function Crimes() {
   // silent=true (cooldown sync / focus): skip /crimes/stats — that aggregate scans 7d of crime_events.
   // includeStats overrides: needed when silently refreshing after prefetch still wants the footer numbers.
   const fetchCrimes = useCallback(async (silent = false, { includeStats } = {}) => {
+    if (authUser?.in_jail) return;
     const wantStats = includeStats ?? !silent;
     try {
       const prefetched = getCrimesPrefetch();
@@ -519,7 +520,7 @@ export default function Crimes() {
         setAutoRankCrimesDisabled(false); // Allow manual play if we can't determine status
       }
     }
-  }, []);
+  }, [authUser?.in_jail]);
 
   useEffect(() => {
     fetchCrimes(!!bootPrefetchedCrimes, { includeStats: true });

@@ -868,10 +868,9 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
   );
 };
 
-// Topic row for desktop with hover preview. Lock/unlock is handled inside the topic page.
-const TopicRowDesktop = ({ topic, canStickyImportant, onUpdate, updating, designerCompId, myEntryTopicIds, meUsername, onSubmitToComp, submittingTopicId, censorProfanity }) => {
+// Topic row for desktop with hover preview. Sticky/important/lock are handled inside the topic page.
+const TopicRowDesktop = ({ topic, designerCompId, myEntryTopicIds, meUsername, onSubmitToComp, submittingTopicId, censorProfanity }) => {
   const [showPreview, setShowPreview] = useState(false);
-  const showFlagControls = canStickyImportant;
   const isMyTopic = meUsername && topic.author_username === meUsername;
   const showDesignerSubmit = designerCompId && isMyTopic;
   const alreadySubmitted = showDesignerSubmit && (myEntryTopicIds || []).includes(topic.id);
@@ -889,7 +888,7 @@ const TopicRowDesktop = ({ topic, canStickyImportant, onUpdate, updating, design
       onMouseLeave={() => setShowPreview(false)}
     >
       <div className="grid grid-cols-12 gap-2 px-3 py-2 f-row transition-colors items-center text-xs">
-        <div className={`flex items-center gap-1.5 min-w-0 ${showFlagControls ? 'col-span-6' : 'col-span-7'}`}>
+        <div className="flex items-center gap-1.5 min-w-0 col-span-7">
           <Link
             to={`/social/forum/${topic.id}`}
             className="flex items-center gap-1.5 min-w-0 flex-1 truncate"
@@ -973,20 +972,6 @@ const TopicRowDesktop = ({ topic, canStickyImportant, onUpdate, updating, design
         </div>
         <div className="col-span-1 text-right text-foreground tabular-nums">{topic.posts}</div>
         <div className="col-span-2 text-right text-mutedForeground tabular-nums">{topic.views}</div>
-        {showFlagControls && (
-          <div className="col-span-1 flex items-center justify-end gap-0.5">
-            {canStickyImportant && (
-              <>
-                <button type="button" title={topic.is_sticky ? 'Unsticky' : 'Sticky'} onClick={(e) => { e.preventDefault(); onUpdate(topic.id, { is_sticky: !topic.is_sticky }); }} disabled={updating} className={`p-0.5 rounded ${topic.is_sticky ? 'text-amber-400' : 'text-mutedForeground hover:text-amber-400'}`}>
-                  <Pin size={12} />
-                </button>
-                <button type="button" title={topic.is_important ? 'Not important' : 'Important'} onClick={(e) => { e.preventDefault(); onUpdate(topic.id, { is_important: !topic.is_important }); }} disabled={updating} className={`p-0.5 rounded ${topic.is_important ? 'text-amber-400' : 'text-mutedForeground hover:text-amber-400'}`}>
-                  <AlertCircle size={12} />
-                </button>
-              </>
-            )}
-          </div>
-        )}
       </div>
       
       {/* Hover Preview */}
@@ -1004,10 +989,9 @@ const TopicRowDesktop = ({ topic, canStickyImportant, onUpdate, updating, design
   );
 };
 
-// Topic card for mobile. Lock/unlock is handled inside the topic page.
-const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designerCompId, myEntryTopicIds, meUsername, onSubmitToComp, submittingTopicId, censorProfanity }) => {
+// Topic card for mobile. Sticky/important/lock are handled inside the topic page.
+const TopicRowMobile = ({ topic, designerCompId, myEntryTopicIds, meUsername, onSubmitToComp, submittingTopicId, censorProfanity }) => {
   const navigate = useNavigate();
-  const showFlagControls = canStickyImportant;
   const isMyTopic = meUsername && topic.author_username === meUsername;
   const showDesignerSubmit = designerCompId && isMyTopic;
   const alreadySubmitted = showDesignerSubmit && (myEntryTopicIds || []).includes(topic.id);
@@ -1111,20 +1095,6 @@ const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designe
       <ChevronRight size={16} className="text-mutedForeground shrink-0 mt-1" />
     </div>
 
-    {showFlagControls && (
-      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-700/30" onClick={(e) => e.stopPropagation()}>
-        {canStickyImportant && (
-          <>
-            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_sticky: !topic.is_sticky }); }} disabled={updating} className={`flex items-center gap-1 px-3 min-h-10 rounded text-[10px] touch-manipulation ${topic.is_sticky ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
-              <Pin size={10} /> {topic.is_sticky ? 'Unsticky' : 'Sticky'}
-            </button>
-            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_important: !topic.is_important }); }} disabled={updating} className={`flex items-center gap-1 px-3 min-h-10 rounded text-[10px] touch-manipulation ${topic.is_important ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
-              <AlertCircle size={10} /> {topic.is_important ? 'Unmark' : 'Important'}
-            </button>
-          </>
-        )}
-      </div>
-    )}
     {showDesignerSubmit && (
       <div className="pt-2 border-t border-zinc-700/30 mt-2" onClick={(e) => e.stopPropagation()}>
         {alreadySubmitted ? (
@@ -1231,7 +1201,6 @@ export default function Forum() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [isHdo, setIsHdo] = useState(false);
-  const [updatingId, setUpdatingId] = useState(null);
   const [joiningId, setJoiningId] = useState(null);
   const joiningInFlightRef = useRef(new Set());
   const entJoinTokenRef = useRef(null);
@@ -1707,19 +1676,6 @@ export default function Forum() {
       toast.error(err.response?.data?.detail || 'Failed');
     } finally {
       setRollingId(null);
-    }
-  };
-
-  const updateTopicFlags = async (topicId, payload) => {
-    setUpdatingId(topicId);
-    try {
-      await api.patch(`/forum/topics/${topicId}`, payload);
-      toast.success('Updated');
-      fetchTopics();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed');
-    } finally {
-      setUpdatingId(null);
     }
   };
 
@@ -2719,12 +2675,11 @@ export default function Forum() {
       <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         {/* Desktop Header */}
-        <div className={`hidden sm:grid grid-cols-12 gap-2 px-3 py-2.5 bg-primary/8 border-b border-primary/20 text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]`}>
-          <div className={isAdmin ? 'col-span-6' : 'col-span-7'}>Topic</div>
+        <div className="hidden sm:grid grid-cols-12 gap-2 px-3 py-2.5 bg-primary/8 border-b border-primary/20 text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+          <div className="col-span-7">Topic</div>
           <div className="col-span-2 text-right">Author</div>
           <div className="col-span-1 text-right">Posts</div>
           <div className="col-span-2 text-right">Views</div>
-          {isAdmin && <div className="col-span-1 text-right">Admin</div>}
         </div>
 
         {/* Mobile Header */}
@@ -2754,9 +2709,6 @@ export default function Forum() {
                   >
                     <TopicRowDesktop
                       topic={t}
-                      canStickyImportant={isAdmin || isModerator}
-                      onUpdate={updateTopicFlags}
-                      updating={updatingId === t.id}
                       designerCompId={null}
                       myEntryTopicIds={[]}
                       meUsername={user?.username}
@@ -2766,9 +2718,6 @@ export default function Forum() {
                     />
                     <TopicRowMobile
                       topic={t}
-                      canStickyImportant={isAdmin || isModerator}
-                      onUpdate={updateTopicFlags}
-                      updating={updatingId === t.id}
                       designerCompId={null}
                       myEntryTopicIds={[]}
                       meUsername={user?.username}
@@ -2792,9 +2741,6 @@ export default function Forum() {
               >
                 <TopicRowDesktop
                   topic={t}
-                  canStickyImportant={isAdmin || isModerator}
-                  onUpdate={updateTopicFlags}
-                  updating={updatingId === t.id}
                   designerCompId={null}
                   myEntryTopicIds={[]}
                   meUsername={user?.username}
@@ -2804,9 +2750,6 @@ export default function Forum() {
                 />
                 <TopicRowMobile
                   topic={t}
-                  canStickyImportant={isAdmin || isModerator}
-                  onUpdate={updateTopicFlags}
-                  updating={updatingId === t.id}
                   designerCompId={null}
                   myEntryTopicIds={[]}
                   meUsername={user?.username}

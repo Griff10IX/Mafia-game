@@ -35,9 +35,20 @@ export default function FindWordHuntLayer() {
   }, []);
 
   useEffect(() => {
-    fetchActive();
-    const t = setInterval(fetchActive, 45000);
-    return () => clearInterval(t);
+    const load = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      fetchActive();
+    };
+    load();
+    const t = setInterval(load, 45000);
+    const onVis = () => {
+      if (typeof document !== 'undefined' && !document.hidden) fetchActive();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [fetchActive]);
 
   const pos = useMemo(

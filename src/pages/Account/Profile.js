@@ -612,74 +612,38 @@ const ProfileInfoCard = ({
             )}
           </div>
           <div className="min-w-0 flex-1 flex flex-col gap-1">
-            <div className="flex items-start justify-between gap-2">
-              <span className="text-[8px] md:text-[9px] font-heading font-bold text-primary uppercase tracking-[0.16em] pt-0.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[8px] md:text-[9px] font-heading font-bold text-primary uppercase tracking-[0.16em]">
                 Dossier
               </span>
-              <div className="flex items-center gap-1 md:gap-1.5 shrink-0 flex-wrap justify-end">
-                {profile.profile_country_code ? (
-                  <span
-                    className="inline-flex shrink-0 items-center leading-none"
-                    title={`Region ${profile.profile_country_code}`}
-                    aria-label={`Country ${profile.profile_country_code}`}
-                  >
-                    <CountryFlagThumb code={profile.profile_country_code} />
-                  </span>
-                ) : null}
-                {profile.prestige_level > 0 && (
-                  <PrestigeBadge level={profile.prestige_level} size="icon" showLabel />
-                )}
-                {isMe && onOpenSettings && (
-                  <button
-                    type="button"
-                    onClick={onOpenSettings}
-                    className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95 touch-manipulation"
-                    title="Profile settings"
-                    aria-label="Profile settings"
-                  >
-                    <Settings size={12} className="md:w-3.5 md:h-3.5" />
-                  </button>
-                )}
-                {!isMe && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={onAddToSearch}
-                      className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95 touch-manipulation"
-                      title="Add to Attack searches"
-                      aria-label="Add to Attack searches"
-                      data-testid="profile-add-to-search"
-                    >
-                      <Search size={12} className="md:w-3.5 md:h-3.5" />
-                    </button>
-                    {profile.id && (
-                      <button
-                        type="button"
-                        onClick={() => onSendMessage?.()}
-                        className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95 touch-manipulation"
-                        title="Send message"
-                        aria-label="Send message"
-                      >
-                        <MessageCircle size={12} className="md:w-3.5 md:h-3.5" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => onSendMoney?.()}
-                      className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95 touch-manipulation"
-                      title="Send money"
-                      aria-label="Send money"
-                    >
-                      <DollarSign size={12} className="md:w-3.5 md:h-3.5" />
-                    </button>
-                  </>
-                )}
-              </div>
+              {isMe && onOpenSettings && (
+                <button
+                  type="button"
+                  onClick={onOpenSettings}
+                  className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95 touch-manipulation"
+                  title="Profile settings"
+                  aria-label="Profile settings"
+                >
+                  <Settings size={12} className="md:w-3.5 md:h-3.5" />
+                </button>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
               <span className="text-[13px] sm:text-sm md:text-base font-heading font-bold text-foreground leading-tight break-words min-w-0" style={nameGlowStyle}>
                 {profile.username}
               </span>
+              {profile.profile_country_code ? (
+                <span
+                  className="inline-flex shrink-0 items-center leading-none"
+                  title={`Region ${profile.profile_country_code}`}
+                  aria-label={`Country ${profile.profile_country_code}`}
+                >
+                  <CountryFlagThumb code={profile.profile_country_code} />
+                </span>
+              ) : null}
+              {profile.prestige_level > 0 && (
+                <PrestigeBadge level={profile.prestige_level} size="sm" showLabel />
+              )}
               {isCustomBadge && (
                 profile.custom_profile_badge_url ? (
                   <img
@@ -718,6 +682,37 @@ const ProfileInfoCard = ({
                 </span>
               )}
             </div>
+            {!isMe && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5">
+                <button
+                  type="button"
+                  onClick={onAddToSearch}
+                  className="inline-flex items-center gap-1 text-[10px] font-heading font-bold uppercase tracking-wider text-primary/80 hover:text-primary touch-manipulation"
+                  title="Add to Attack searches"
+                  data-testid="profile-add-to-search"
+                >
+                  <Search size={11} /> Search
+                </button>
+                {profile.id && (
+                  <button
+                    type="button"
+                    onClick={() => onSendMessage?.()}
+                    className="inline-flex items-center gap-1 text-[10px] font-heading font-bold uppercase tracking-wider text-primary/80 hover:text-primary touch-manipulation"
+                    title="Send message"
+                  >
+                    <MessageCircle size={11} /> Message
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onSendMoney?.()}
+                  className="inline-flex items-center gap-1 text-[10px] font-heading font-bold uppercase tracking-wider text-primary/80 hover:text-primary touch-manipulation"
+                  title="Send money"
+                >
+                  <DollarSign size={11} /> Money
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

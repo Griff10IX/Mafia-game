@@ -30,6 +30,8 @@ GAME_CONFIG_ID = "auto_rank"
 MIN_BUST_INTERVAL_SECONDS = 1
 DEFAULT_BUST_INTERVAL_SECONDS = 5  # jail bust loop: run every 5 seconds
 BUST_EVERY_5SEC_INTERVAL = 5  # fallback when config not used (do not change without updating UI labels)
+_bust_400_streak: Dict[str, int] = {}
+_bust_backoff_until: Dict[str, float] = {}
 LOOP_WAKE_SECONDS = 2  # frequent wake so booze arrivals (and sells) processed within ~2s; only remaining delay = travel time
 AUTO_RANK_CRIME_COMMIT_INTERVAL_SEC = 5  # pause between consecutive auto-rank crime commits (same user, one cycle)
 MIN_OC_INTERVAL_SECONDS = 10
@@ -1176,6 +1178,8 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
         return
     if user.get("in_jail"):
         return
+    if time.monotonic() < _bust_backoff_until.get(user_id, 0):
+        return
     token = bot_token or (user.get("telegram_bot_token") or "").strip()
     if bust_target_username is None:
         npc = await db.jail_npcs.find_one(
@@ -1212,11 +1216,17 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
             if not bust_result.get("bust_cooldown"):
                 now = datetime.now(timezone.utc)
                 await _inc_failed_today(db, user_id, "auto_rank_failed_busts_today", "auto_rank_failed_busts_date", now)
+                streak = _bust_400_streak.get(user_id, 0) + 1
+                _bust_400_streak[user_id] = streak
+                if streak >= 3:
+                    _bust_backoff_until[user_id] = time.monotonic() + min(30.0, 5.0 * streak)
             return
         if not bust_result.get("success"):
             now = datetime.now(timezone.utc)
             await _inc_failed_today(db, user_id, "auto_rank_failed_busts_today", "auto_rank_failed_busts_date", now)
             return
+        _bust_400_streak.pop(user_id, None)
+        _bust_backoff_until.pop(user_id, None)
         now = datetime.now(timezone.utc)
         rp = bust_result.get("rank_points_earned") or 0
         cash = bust_result.get("cash_reward") or 0
