@@ -1,0 +1,1522 @@
+{
+  "domain": "cross_feature",
+  "intents": [
+    {
+      "id": "cross_feature.faq.faq.overview",
+      "domain": "cross_feature",
+      "entities": [
+        "FAQ",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "FAQ",
+          "title": "FAQ"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is FAQ?",
+        "What are FAQ?",
+        "Tell me about FAQ",
+        "Explain FAQ",
+        "How does FAQ work?",
+        "I need information about FAQ",
+        "Give me the guide for FAQ"
+      ],
+      "related_intents": [
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.how-do-i-make-money-fast.rules"
+      ],
+      "follow_ups": [
+        "How do I use FAQ?",
+        "What are the rules for FAQ?",
+        "Where do I find FAQ?"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.faq.rules",
+      "domain": "cross_feature",
+      "entities": [
+        "FAQ",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "FAQ",
+          "title": "FAQ"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for FAQ?",
+        "What happens with FAQ?",
+        "Does the FAQ explain FAQ?",
+        "Can you clarify FAQ?",
+        "Which FAQ covers FAQ?",
+        "I have a question about FAQ",
+        "How is FAQ supposed to work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.how-do-i-make-money-fast.rules"
+      ],
+      "follow_ups": [
+        "Tell me about FAQ",
+        "What happens with FAQ?",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.how-do-i-make-money-fast.overview",
+      "domain": "cross_feature",
+      "entities": [
+        "How do I make money fast?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How do I make money fast?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do I make money fast?",
+        "What is How do I make money fast??",
+        "What are How do I make money fast??",
+        "Tell me about How do I make money fast?",
+        "Explain How do I make money fast?",
+        "How does How do I make money fast? work?",
+        "I need information about How do I make money fast?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.how-do-i-make-money-fast.rules",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules"
+      ],
+      "follow_ups": [
+        "How do I use How do I make money fast??",
+        "What are the rules for How do I make money fast??",
+        "Where do I find How do I make money fast??"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.how-do-i-make-money-fast.rules",
+      "domain": "cross_feature",
+      "entities": [
+        "How do I make money fast?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How do I make money fast?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for How do I make money fast??",
+        "What happens with How do I make money fast??",
+        "Does the FAQ explain How do I make money fast??",
+        "Can you clarify How do I make money fast??",
+        "Which FAQ covers How do I make money fast??",
+        "I have a question about How do I make money fast?",
+        "How is How do I make money fast? supposed to work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules"
+      ],
+      "follow_ups": [
+        "Tell me about How do I make money fast?",
+        "What happens with How do I make money fast??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview",
+      "domain": "cross_feature",
+      "entities": [
+        "Why can't I collect property income? / What is Heat?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: Why can't I collect property income? / What is Heat?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "Why can't I collect property income? / What is Heat?",
+        "What is Why can't I collect property income? / What is Heat??",
+        "What are Why can't I collect property income? / What is Heat??",
+        "Tell me about Why can't I collect property income? / What is Heat?",
+        "Explain Why can't I collect property income? / What is Heat?",
+        "How does Why can't I collect property income? / What is Heat? work?",
+        "I need information about Why can't I collect property income? / What is Heat?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.rules",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "How do I use Why can't I collect property income? / What is Heat??",
+        "What are the rules for Why can't I collect property income? / What is Heat??",
+        "Where do I find Why can't I collect property income? / What is Heat??"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.rules",
+      "domain": "cross_feature",
+      "entities": [
+        "Why can't I collect property income? / What is Heat?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: Why can't I collect property income? / What is Heat?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Why can't I collect property income? / What is Heat??",
+        "What happens with Why can't I collect property income? / What is Heat??",
+        "Does the FAQ explain Why can't I collect property income? / What is Heat??",
+        "Can you clarify Why can't I collect property income? / What is Heat??",
+        "Which FAQ covers Why can't I collect property income? / What is Heat??",
+        "I have a question about Why can't I collect property income? / What is Heat?",
+        "How is Why can't I collect property income? / What is Heat? supposed to work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Why can't I collect property income? / What is Heat?",
+        "What happens with Why can't I collect property income? / What is Heat??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.why-are-property-collections-still-blocked-when-heat-is-low.overview",
+      "domain": "cross_feature",
+      "entities": [
+        "Why are property collections still blocked when Heat is low?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: Why are property collections still blocked when Heat is low?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "Why are property collections still blocked when Heat is low?",
+        "What is Why are property collections still blocked when Heat is low??",
+        "What are Why are property collections still blocked when Heat is low??",
+        "Tell me about Why are property collections still blocked when Heat is low?",
+        "Explain Why are property collections still blocked when Heat is low?",
+        "How does Why are property collections still blocked when Heat is low? work?",
+        "I need information about Why are property collections still blocked when Heat is low?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.why-are-property-collections-still-blocked-when-heat-is-low.rules",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "How do I use Why are property collections still blocked when Heat is low??",
+        "What are the rules for Why are property collections still blocked when Heat is low??",
+        "Where do I find Why are property collections still blocked when Heat is low??"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.why-are-property-collections-still-blocked-when-heat-is-low.rules",
+      "domain": "cross_feature",
+      "entities": [
+        "Why are property collections still blocked when Heat is low?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: Why are property collections still blocked when Heat is low?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Why are property collections still blocked when Heat is low??",
+        "What happens with Why are property collections still blocked when Heat is low??",
+        "Does the FAQ explain Why are property collections still blocked when Heat is low??",
+        "Can you clarify Why are property collections still blocked when Heat is low??",
+        "Which FAQ covers Why are property collections still blocked when Heat is low??",
+        "I have a question about Why are property collections still blocked when Heat is low?",
+        "How is Why are property collections still blocked when Heat is low? supposed to work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.why-are-property-collections-still-blocked-when-heat-is-low.overview",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Why are property collections still blocked when Heat is low?",
+        "What happens with Why are property collections still blocked when Heat is low??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.how-do-i-get-bullets.overview",
+      "domain": "cross_feature",
+      "entities": [
+        "How do I get bullets?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How do I get bullets?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do I get bullets?",
+        "What is How do I get bullets??",
+        "What are How do I get bullets??",
+        "Tell me about How do I get bullets?",
+        "Explain How do I get bullets?",
+        "How does How do I get bullets? work?",
+        "I need information about How do I get bullets?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.how-do-i-get-bullets.rules",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "How do I use How do I get bullets??",
+        "What are the rules for How do I get bullets??",
+        "Where do I find How do I get bullets??"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.how-do-i-get-bullets.rules",
+      "domain": "cross_feature",
+      "entities": [
+        "How do I get bullets?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How do I get bullets?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for How do I get bullets??",
+        "What happens with How do I get bullets??",
+        "Does the FAQ explain How do I get bullets??",
+        "Can you clarify How do I get bullets??",
+        "Which FAQ covers How do I get bullets??",
+        "I have a question about How do I get bullets?",
+        "How is How do I get bullets? supposed to work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.how-do-i-get-bullets.overview",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "Tell me about How do I get bullets?",
+        "What happens with How do I get bullets??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.what-happens-when-i-die.overview",
+      "domain": "cross_feature",
+      "entities": [
+        "What happens when I die?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What happens when I die?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What happens when I die?",
+        "What is What happens when I die??",
+        "What are What happens when I die??",
+        "Tell me about What happens when I die?",
+        "Explain What happens when I die?",
+        "How does What happens when I die? work?",
+        "I need information about What happens when I die?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.what-happens-when-i-die.rules",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "How do I use What happens when I die??",
+        "What are the rules for What happens when I die??",
+        "Where do I find What happens when I die??"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.what-happens-when-i-die.rules",
+      "domain": "cross_feature",
+      "entities": [
+        "What happens when I die?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What happens when I die?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for What happens when I die??",
+        "What happens with What happens when I die??",
+        "Does the FAQ explain What happens when I die??",
+        "Can you clarify What happens when I die??",
+        "Which FAQ covers What happens when I die??",
+        "I have a question about What happens when I die?",
+        "How is What happens when I die? supposed to work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.what-happens-when-i-die.overview",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "Tell me about What happens when I die?",
+        "What happens with What happens when I die??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.how-do-i-join-a-family.overview",
+      "domain": "cross_feature",
+      "entities": [
+        "How do I join a family?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How do I join a family?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do I join a family?",
+        "What is How do I join a family??",
+        "What are How do I join a family??",
+        "Tell me about How do I join a family?",
+        "Explain How do I join a family?",
+        "How does How do I join a family? work?",
+        "I need information about How do I join a family?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.how-do-i-join-a-family.rules",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "How do I use How do I join a family??",
+        "What are the rules for How do I join a family??",
+        "Where do I find How do I join a family??"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.how-do-i-join-a-family.rules",
+      "domain": "cross_feature",
+      "entities": [
+        "How do I join a family?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How do I join a family?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for How do I join a family??",
+        "What happens with How do I join a family??",
+        "Does the FAQ explain How do I join a family??",
+        "Can you clarify How do I join a family??",
+        "Which FAQ covers How do I join a family??",
+        "I have a question about How do I join a family?",
+        "How is How do I join a family? supposed to work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.how-do-i-join-a-family.overview",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "Tell me about How do I join a family?",
+        "What happens with How do I join a family??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.can-i-get-my-points-back-if-i-die.overview",
+      "domain": "cross_feature",
+      "entities": [
+        "Can I get my points back if I die?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: Can I get my points back if I die?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "Can I get my points back if I die?",
+        "What is Can I get my points back if I die??",
+        "What are Can I get my points back if I die??",
+        "Tell me about Can I get my points back if I die?",
+        "Explain Can I get my points back if I die?",
+        "How does Can I get my points back if I die? work?",
+        "I need information about Can I get my points back if I die?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.can-i-get-my-points-back-if-i-die.rules",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "How do I use Can I get my points back if I die??",
+        "What are the rules for Can I get my points back if I die??",
+        "Where do I find Can I get my points back if I die??"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.can-i-get-my-points-back-if-i-die.rules",
+      "domain": "cross_feature",
+      "entities": [
+        "Can I get my points back if I die?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: Can I get my points back if I die?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Can I get my points back if I die??",
+        "What happens with Can I get my points back if I die??",
+        "Does the FAQ explain Can I get my points back if I die??",
+        "Can you clarify Can I get my points back if I die??",
+        "Which FAQ covers Can I get my points back if I die??",
+        "I have a question about Can I get my points back if I die?",
+        "How is Can I get my points back if I die? supposed to work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.can-i-get-my-points-back-if-i-die.overview",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Can I get my points back if I die?",
+        "What happens with Can I get my points back if I die??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.what-s-the-interest-bank-vs-swiss-bank.overview",
+      "domain": "cross_feature",
+      "entities": [
+        "What's the Interest Bank vs Swiss Bank?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What's the Interest Bank vs Swiss Bank?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What's the Interest Bank vs Swiss Bank?",
+        "What is What's the Interest Bank vs Swiss Bank??",
+        "What are What's the Interest Bank vs Swiss Bank??",
+        "Tell me about What's the Interest Bank vs Swiss Bank?",
+        "Explain What's the Interest Bank vs Swiss Bank?",
+        "How does What's the Interest Bank vs Swiss Bank? work?",
+        "I need information about What's the Interest Bank vs Swiss Bank?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.what-s-the-interest-bank-vs-swiss-bank.rules",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "How do I use What's the Interest Bank vs Swiss Bank??",
+        "What are the rules for What's the Interest Bank vs Swiss Bank??",
+        "Where do I find What's the Interest Bank vs Swiss Bank??"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.what-s-the-interest-bank-vs-swiss-bank.rules",
+      "domain": "cross_feature",
+      "entities": [
+        "What's the Interest Bank vs Swiss Bank?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What's the Interest Bank vs Swiss Bank?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for What's the Interest Bank vs Swiss Bank??",
+        "What happens with What's the Interest Bank vs Swiss Bank??",
+        "Does the FAQ explain What's the Interest Bank vs Swiss Bank??",
+        "Can you clarify What's the Interest Bank vs Swiss Bank??",
+        "Which FAQ covers What's the Interest Bank vs Swiss Bank??",
+        "I have a question about What's the Interest Bank vs Swiss Bank?",
+        "How is What's the Interest Bank vs Swiss Bank? supposed to work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.what-s-the-interest-bank-vs-swiss-bank.overview",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "Tell me about What's the Interest Bank vs Swiss Bank?",
+        "What happens with What's the Interest Bank vs Swiss Bank??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.how-do-i-report-a-bug.overview",
+      "domain": "cross_feature",
+      "entities": [
+        "How do I report a bug?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How do I report a bug?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do I report a bug?",
+        "What is How do I report a bug??",
+        "What are How do I report a bug??",
+        "Tell me about How do I report a bug?",
+        "Explain How do I report a bug?",
+        "How does How do I report a bug? work?",
+        "I need information about How do I report a bug?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.how-do-i-report-a-bug.rules",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "How do I use How do I report a bug??",
+        "What are the rules for How do I report a bug??",
+        "Where do I find How do I report a bug??"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.how-do-i-report-a-bug.rules",
+      "domain": "cross_feature",
+      "entities": [
+        "How do I report a bug?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How do I report a bug?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for How do I report a bug??",
+        "What happens with How do I report a bug??",
+        "Does the FAQ explain How do I report a bug??",
+        "Can you clarify How do I report a bug??",
+        "Which FAQ covers How do I report a bug??",
+        "I have a question about How do I report a bug?",
+        "How is How do I report a bug? supposed to work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.how-do-i-report-a-bug.overview",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "Tell me about How do I report a bug?",
+        "What happens with How do I report a bug??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.how-do-tokens-work.overview",
+      "domain": "cross_feature",
+      "entities": [
+        "How do tokens work?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How do tokens work?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do tokens work?",
+        "What is How do tokens work??",
+        "What are How do tokens work??",
+        "Tell me about How do tokens work?",
+        "Explain How do tokens work?",
+        "How does How do tokens work? work?",
+        "I need information about How do tokens work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.how-do-tokens-work.rules",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "How do I use How do tokens work??",
+        "What are the rules for How do tokens work??",
+        "Where do I find How do tokens work??"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.how-do-tokens-work.rules",
+      "domain": "cross_feature",
+      "entities": [
+        "How do tokens work?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How do tokens work?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for How do tokens work??",
+        "What happens with How do tokens work??",
+        "Does the FAQ explain How do tokens work??",
+        "Can you clarify How do tokens work??",
+        "Which FAQ covers How do tokens work??",
+        "I have a question about How do tokens work?",
+        "How is How do tokens work? supposed to work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.how-do-tokens-work.overview",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "Tell me about How do tokens work?",
+        "What happens with How do tokens work??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.how-do-family-wars-work.overview",
+      "domain": "cross_feature",
+      "entities": [
+        "How do family wars work?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How do family wars work?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do family wars work?",
+        "What is How do family wars work??",
+        "What are How do family wars work??",
+        "Tell me about How do family wars work?",
+        "Explain How do family wars work?",
+        "How does How do family wars work? work?",
+        "I need information about How do family wars work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.how-do-family-wars-work.rules",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "How do I use How do family wars work??",
+        "What are the rules for How do family wars work??",
+        "Where do I find How do family wars work??"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.how-do-family-wars-work.rules",
+      "domain": "cross_feature",
+      "entities": [
+        "How do family wars work?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How do family wars work?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for How do family wars work??",
+        "What happens with How do family wars work??",
+        "Does the FAQ explain How do family wars work??",
+        "Can you clarify How do family wars work??",
+        "Which FAQ covers How do family wars work??",
+        "I have a question about How do family wars work?",
+        "How is How do family wars work? supposed to work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.how-do-family-wars-work.overview",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "Tell me about How do family wars work?",
+        "What happens with How do family wars work??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.what-are-daily-rewards.overview",
+      "domain": "cross_feature",
+      "entities": [
+        "What are Daily Rewards?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What are Daily Rewards?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What are Daily Rewards?",
+        "What is What are Daily Rewards??",
+        "What are What are Daily Rewards??",
+        "Tell me about What are Daily Rewards?",
+        "Explain What are Daily Rewards?",
+        "How does What are Daily Rewards? work?",
+        "I need information about What are Daily Rewards?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.what-are-daily-rewards.rules",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "How do I use What are Daily Rewards??",
+        "What are the rules for What are Daily Rewards??",
+        "Where do I find What are Daily Rewards??"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.what-are-daily-rewards.rules",
+      "domain": "cross_feature",
+      "entities": [
+        "What are Daily Rewards?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What are Daily Rewards?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for What are Daily Rewards??",
+        "What happens with What are Daily Rewards??",
+        "Does the FAQ explain What are Daily Rewards??",
+        "Can you clarify What are Daily Rewards??",
+        "Which FAQ covers What are Daily Rewards??",
+        "I have a question about What are Daily Rewards?",
+        "How is What are Daily Rewards? supposed to work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.what-are-daily-rewards.overview",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "Tell me about What are Daily Rewards?",
+        "What happens with What are Daily Rewards??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.how-do-i-own-a-casino-table-or-airport-slot.overview",
+      "domain": "cross_feature",
+      "entities": [
+        "How do I own a casino table or airport slot?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How do I own a casino table or airport slot?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do I own a casino table or airport slot?",
+        "What is How do I own a casino table or airport slot??",
+        "What are How do I own a casino table or airport slot??",
+        "Tell me about How do I own a casino table or airport slot?",
+        "Explain How do I own a casino table or airport slot?",
+        "How does How do I own a casino table or airport slot? work?",
+        "I need information about How do I own a casino table or airport slot?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.how-do-i-own-a-casino-table-or-airport-slot.rules",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "How do I use How do I own a casino table or airport slot??",
+        "What are the rules for How do I own a casino table or airport slot??",
+        "Where do I find How do I own a casino table or airport slot??"
+      ]
+    },
+    {
+      "id": "cross_feature.faq.how-do-i-own-a-casino-table-or-airport-slot.rules",
+      "domain": "cross_feature",
+      "entities": [
+        "How do I own a casino table or airport slot?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How do I own a casino table or airport slot?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for How do I own a casino table or airport slot??",
+        "What happens with How do I own a casino table or airport slot??",
+        "Does the FAQ explain How do I own a casino table or airport slot??",
+        "Can you clarify How do I own a casino table or airport slot??",
+        "Which FAQ covers How do I own a casino table or airport slot??",
+        "I have a question about How do I own a casino table or airport slot?",
+        "How is How do I own a casino table or airport slot? supposed to work?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.how-do-i-own-a-casino-table-or-airport-slot.overview",
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "Tell me about How do I own a casino table or airport slot?",
+        "What happens with How do I own a casino table or airport slot??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "cross_feature.pro-tips.pro-tips.overview",
+      "domain": "cross_feature",
+      "entities": [
+        "PRO TIPS",
+        "PRO TIPS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "PRO TIPS",
+          "title": "PRO TIPS"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is PRO TIPS?",
+        "What are PRO TIPS?",
+        "Tell me about PRO TIPS",
+        "Explain PRO TIPS",
+        "How does PRO TIPS work?",
+        "I need information about PRO TIPS",
+        "Give me the guide for PRO TIPS"
+      ],
+      "related_intents": [
+        "cross_feature.pro-tips.pro-tips.rules"
+      ],
+      "follow_ups": [
+        "How do I use PRO TIPS?",
+        "What are the rules for PRO TIPS?",
+        "Where do I find PRO TIPS?"
+      ]
+    },
+    {
+      "id": "cross_feature.pro-tips.pro-tips.rules",
+      "domain": "cross_feature",
+      "entities": [
+        "PRO TIPS",
+        "PRO TIPS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "PRO TIPS",
+          "title": "PRO TIPS"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for PRO TIPS?",
+        "What happens with PRO TIPS?",
+        "Does the FAQ explain PRO TIPS?",
+        "Can you clarify PRO TIPS?",
+        "Which FAQ covers PRO TIPS?",
+        "I have a question about PRO TIPS",
+        "How is PRO TIPS supposed to work?"
+      ],
+      "related_intents": [
+        "cross_feature.pro-tips.pro-tips.overview"
+      ],
+      "follow_ups": [
+        "Tell me about PRO TIPS",
+        "What happens with PRO TIPS?",
+        "Show me the PRO TIPS guide"
+      ]
+    },
+    {
+      "id": "cross_feature.compare.interest-bank-vs-swiss-bank",
+      "domain": "cross_feature",
+      "entities": [
+        "Interest Bank",
+        "Swiss Bank",
+        "bank"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Banks"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What's the Interest Bank vs Swiss Bank?"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Bank"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "comparison",
+      "variants": [
+        "What is the difference between the Interest Bank and Swiss Bank?",
+        "Interest Bank vs Swiss Bank",
+        "Compare Swiss and Interest banks",
+        "Which bank should I use?",
+        "How are the two banks different?",
+        "What about the other bank?",
+        "Swiss or Interest Bank?"
+      ],
+      "related_intents": [
+        "cross_feature.compare.personal-vs-family-racket",
+        "cross_feature.yes-no.bank-money-counts-for-wealth"
+      ],
+      "follow_ups": [
+        "Does bank money count for wealth rank?",
+        "How do I use the bank?"
+      ]
+    },
+    {
+      "id": "cross_feature.compare.rp-rank-vs-wealth-rank",
+      "domain": "cross_feature",
+      "entities": [
+        "RP rank",
+        "wealth rank",
+        "rank"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Ranks (13 total)"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Wealth ranks (cash on hand)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "comparison",
+      "variants": [
+        "What is the difference between RP rank and wealth rank?",
+        "RP rank vs wealth rank",
+        "Compare rank points and wealth",
+        "Are wealth ranks and normal ranks the same?",
+        "Which rank uses cash?",
+        "Which rank uses RP?",
+        "Explain the two types of rank"
+      ],
+      "related_intents": [],
+      "follow_ups": [
+        "What are wealth ranks?",
+        "How does normal ranking work?"
+      ]
+    },
+    {
+      "id": "cross_feature.compare.personal-vs-family-racket",
+      "domain": "cross_feature",
+      "entities": [
+        "personal racket",
+        "family racket",
+        "illegal business"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Illegal Business (Personal Racket)"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Rackets"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "comparison",
+      "variants": [
+        "What is the difference between a personal racket and family racket?",
+        "Personal racket vs family racket",
+        "Compare illegal businesses and family rackets",
+        "Are personal and family rackets the same?",
+        "Which racket belongs to my family?",
+        "Which racket can I own personally?",
+        "Explain both kinds of racket"
+      ],
+      "related_intents": [
+        "cross_feature.compare.interest-bank-vs-swiss-bank",
+        "cross_feature.yes-no.bank-money-counts-for-wealth"
+      ],
+      "follow_ups": [
+        "How do personal rackets work?",
+        "How do family rackets work?"
+      ]
+    },
+    {
+      "id": "cross_feature.compare.property-heat-vs-distillery-heat",
+      "domain": "cross_feature",
+      "entities": [
+        "property heat",
+        "distillery heat",
+        "heat"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: Why can't I collect property income? / What is Heat?"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: Why are property collections still blocked when Heat is low?"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How does the Distillery work?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "comparison",
+      "variants": [
+        "What is the difference between property heat and distillery heat?",
+        "Property heat vs distillery heat",
+        "Compare property and distillery heat",
+        "Is all heat the same?",
+        "Which heat blocks property collections?",
+        "Which heat affects the distillery?",
+        "Explain both kinds of heat"
+      ],
+      "related_intents": [
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "Why can't I collect property income?",
+        "How does the Distillery work?"
+      ]
+    },
+    {
+      "id": "cross_feature.yes-no.bank-money-counts-for-wealth",
+      "domain": "cross_feature",
+      "entities": [
+        "bank money",
+        "wealth rank",
+        "cash on hand"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Wealth ranks (cash on hand)"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Cash vs bank"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "yes_no",
+      "variants": [
+        "Does bank money count for wealth rank?",
+        "Does Swiss Bank cash count toward wealth?",
+        "Does Interest Bank money count toward my wealth tier?",
+        "Is protected cash included in wealth rank?",
+        "Do banks increase my wealth rank?",
+        "What money counts for wealth rank?",
+        "Is wealth based on cash on hand?"
+      ],
+      "related_intents": [
+        "cross_feature.compare.interest-bank-vs-swiss-bank",
+        "cross_feature.compare.personal-vs-family-racket"
+      ],
+      "follow_ups": [
+        "What are wealth ranks?",
+        "Interest Bank vs Swiss Bank"
+      ]
+    },
+    {
+      "id": "cross_feature.troubleshoot.new-player-attack",
+      "domain": "cross_feature",
+      "entities": [
+        "new player",
+        "new account protection",
+        "attack",
+        "hitman"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "COMBAT",
+          "title": "New-account protection"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: Why can’t I attack / hire a Hitman on a new player?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "troubleshooting",
+      "variants": [
+        "Why can't I attack a new player?",
+        "Why is attacking this new account blocked?",
+        "I cannot hire a hitman on a new player",
+        "New player attack is not working",
+        "Why does new account protection stop attacks?",
+        "Can I attack someone who just joined?",
+        "Hitman is blocked on a new account"
+      ],
+      "related_intents": [],
+      "follow_ups": [
+        "How does attacking work?",
+        "What is Hitman for Hire?"
+      ]
+    },
+    {
+      "id": "cross_feature.troubleshoot.property-collection",
+      "domain": "cross_feature",
+      "entities": [
+        "property collection",
+        "property heat",
+        "My Properties"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: Why can't I collect property income? / What is Heat?"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: Why are property collections still blocked when Heat is low?"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "My Properties"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "troubleshooting",
+      "variants": [
+        "Why can't I collect property income?",
+        "My property collection is blocked",
+        "Property income is not working",
+        "Why can I not collect when heat is low?",
+        "What stops property collections?",
+        "I cannot collect from My Properties",
+        "Help with a blocked property collection"
+      ],
+      "related_intents": [
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.faq.rules",
+        "cross_feature.faq.how-do-i-make-money-fast.overview"
+      ],
+      "follow_ups": [
+        "What is property heat?",
+        "Where is My Properties?"
+      ]
+    },
+    {
+      "id": "cross_feature.yes-no.jail-blocks-actions",
+      "domain": "cross_feature",
+      "entities": [
+        "jail",
+        "blocked actions",
+        "attack",
+        "travel"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "JAIL SYSTEM",
+          "title": "What the server blocks while you’re in jail"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "Jail"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "yes_no",
+      "variants": [
+        "Can I play normally while I am in jail?",
+        "What is blocked while jailed?",
+        "Can I attack from jail?",
+        "Can I travel while in jail?",
+        "Does jail stop game actions?",
+        "What can I do while jailed?",
+        "Which actions are unavailable in jail?"
+      ],
+      "related_intents": [],
+      "follow_ups": [
+        "How do I get out of jail?",
+        "How do I bust someone?"
+      ]
+    }
+  ]
+}

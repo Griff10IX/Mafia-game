@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "shards": [
+    {
+      "file": "onboarding_navigation.json",
+      "intents": 14,
+      "variants": 98
+    },
+    {
+      "file": "combat_death.json",
+      "intents": 54,
+      "variants": 378
+    },
+    {
+      "file": "money_banks_properties.json",
+      "intents": 32,
+      "variants": 224
+    },
+    {
+      "file": "distillery_rackets.json",
+      "intents": 16,
+      "variants": 112
+    },
+    {
+      "file": "weed_empire.json",
+      "intents": 26,
+      "variants": 182
+    },
+    {
+      "file": "cars_crimes.json",
+      "intents": 38,
+      "variants": 266
+    },
+    {
+      "file": "jail.json",
+      "intents": 12,
+      "variants": 84
+    },
+    {
+      "file": "travel_states.json",
+      "intents": 20,
+      "variants": 140
+    },
+    {
+      "file": "families.json",
+      "intents": 14,
+      "variants": 98
+    },
+    {
+      "file": "casinos_minigames.json",
+      "intents": 46,
+      "variants": 322
+    },
+    {
+      "file": "progression_wealth.json",
+      "intents": 46,
+      "variants": 322
+    },
+    {
+      "file": "loot_store_pass.json",
+      "intents": 24,
+      "variants": 168
+    },
+    {
+      "file": "auto_rank.json",
+      "intents": 2,
+      "variants": 14
+    },
+    {
+      "file": "social_help_formatting.json",
+      "intents": 44,
+      "variants": 308
+    },
+    {
+      "file": "rules_punishments.json",
+      "intents": 40,
+      "variants": 280
+    },
+    {
+      "file": "cross_feature.json",
+      "intents": 38,
+      "variants": 266
+    }
+  ],
+  "intent_count": 466,
+  "variant_count": 3262
+}

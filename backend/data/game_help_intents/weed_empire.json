@@ -1,0 +1,1067 @@
+{
+  "domain": "weed_empire",
+  "intents": [
+    {
+      "id": "weed_empire.weed-empire.weed-empire.overview",
+      "domain": "weed_empire",
+      "entities": [
+        "WEED EMPIRE",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "WEED EMPIRE",
+          "title": "WEED EMPIRE"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is WEED EMPIRE?",
+        "What are WEED EMPIRE?",
+        "Tell me about WEED EMPIRE",
+        "Explain WEED EMPIRE",
+        "How does WEED EMPIRE work?",
+        "I need information about WEED EMPIRE"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.overview.rules"
+      ],
+      "follow_ups": [
+        "How do I use WEED EMPIRE?",
+        "What are the rules for WEED EMPIRE?",
+        "Where do I find WEED EMPIRE?"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.weed-empire.rules",
+      "domain": "weed_empire",
+      "entities": [
+        "WEED EMPIRE",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "WEED EMPIRE",
+          "title": "WEED EMPIRE"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for WEED EMPIRE?",
+        "What happens with WEED EMPIRE?",
+        "Does the FAQ explain WEED EMPIRE?",
+        "Can you clarify WEED EMPIRE?",
+        "Which FAQ covers WEED EMPIRE?",
+        "I have a question about WEED EMPIRE",
+        "How is WEED EMPIRE supposed to work?"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.overview.rules"
+      ],
+      "follow_ups": [
+        "Tell me about WEED EMPIRE",
+        "What happens with WEED EMPIRE?",
+        "Show me the WEED EMPIRE guide"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.overview.overview",
+      "domain": "weed_empire",
+      "entities": [
+        "Overview",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Overview"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Overview in WEED EMPIRE?",
+        "What is Overview?",
+        "What are Overview?",
+        "Tell me about Overview",
+        "Explain Overview",
+        "How does Overview work?",
+        "I need information about Overview"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.overview.rules",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules"
+      ],
+      "follow_ups": [
+        "How do I use Overview?",
+        "What are the rules for Overview?",
+        "Where do I find Overview?"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.overview.rules",
+      "domain": "weed_empire",
+      "entities": [
+        "Overview",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Overview"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Overview?",
+        "What happens with Overview?",
+        "Does the FAQ explain Overview?",
+        "Can you clarify Overview?",
+        "Which FAQ covers Overview?",
+        "I have a question about Overview",
+        "How is Overview supposed to work?"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Overview",
+        "What happens with Overview?",
+        "Show me the WEED EMPIRE guide"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.grow-loop.overview",
+      "domain": "weed_empire",
+      "entities": [
+        "Grow loop",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Grow loop"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Grow loop?",
+        "What are Grow loop?",
+        "Tell me about Grow loop",
+        "Explain Grow loop",
+        "How does Grow loop work?",
+        "I need information about Grow loop",
+        "Give me the guide for Grow loop"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.grow-loop.rules",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "How do I use Grow loop?",
+        "What are the rules for Grow loop?",
+        "Where do I find Grow loop?"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.grow-loop.rules",
+      "domain": "weed_empire",
+      "entities": [
+        "Grow loop",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Grow loop"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Grow loop?",
+        "What happens with Grow loop?",
+        "Does the FAQ explain Grow loop?",
+        "Can you clarify Grow loop?",
+        "Which FAQ covers Grow loop?",
+        "I have a question about Grow loop",
+        "How is Grow loop supposed to work?"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.grow-loop.overview",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Grow loop",
+        "What happens with Grow loop?",
+        "Show me the WEED EMPIRE guide"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.business-cash.overview",
+      "domain": "weed_empire",
+      "entities": [
+        "Business cash",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Business cash"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Business cash?",
+        "What are Business cash?",
+        "Tell me about Business cash",
+        "Explain Business cash",
+        "How does Business cash work?",
+        "I need information about Business cash",
+        "Give me the guide for Business cash"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.business-cash.rules",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "How do I use Business cash?",
+        "What are the rules for Business cash?",
+        "Where do I find Business cash?"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.business-cash.rules",
+      "domain": "weed_empire",
+      "entities": [
+        "Business cash",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Business cash"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Business cash?",
+        "What happens with Business cash?",
+        "Does the FAQ explain Business cash?",
+        "Can you clarify Business cash?",
+        "Which FAQ covers Business cash?",
+        "I have a question about Business cash",
+        "How is Business cash supposed to work?"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.business-cash.overview",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Business cash",
+        "What happens with Business cash?",
+        "Show me the WEED EMPIRE guide"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.heat-and-busts.overview",
+      "domain": "weed_empire",
+      "entities": [
+        "Heat & busts",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Heat & busts"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Heat & busts?",
+        "What are Heat & busts?",
+        "Tell me about Heat & busts",
+        "Explain Heat & busts",
+        "How does Heat & busts work?",
+        "I need information about Heat & busts",
+        "Give me the guide for Heat & busts"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.heat-and-busts.rules",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "How do I use Heat & busts?",
+        "What are the rules for Heat & busts?",
+        "Where do I find Heat & busts?"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.heat-and-busts.rules",
+      "domain": "weed_empire",
+      "entities": [
+        "Heat & busts",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Heat & busts"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Heat & busts?",
+        "What happens with Heat & busts?",
+        "Does the FAQ explain Heat & busts?",
+        "Can you clarify Heat & busts?",
+        "Which FAQ covers Heat & busts?",
+        "I have a question about Heat & busts",
+        "How is Heat & busts supposed to work?"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.heat-and-busts.overview",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Heat & busts",
+        "What happens with Heat & busts?",
+        "Show me the WEED EMPIRE guide"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.raids.overview",
+      "domain": "weed_empire",
+      "entities": [
+        "Raids",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Raids"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Raids?",
+        "What are Raids?",
+        "Tell me about Raids",
+        "Explain Raids",
+        "How does Raids work?",
+        "I need information about Raids",
+        "Give me the guide for Raids"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.raids.rules",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "How do I use Raids?",
+        "What are the rules for Raids?",
+        "Where do I find Raids?"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.raids.rules",
+      "domain": "weed_empire",
+      "entities": [
+        "Raids",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Raids"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Raids?",
+        "What happens with Raids?",
+        "Does the FAQ explain Raids?",
+        "Can you clarify Raids?",
+        "Which FAQ covers Raids?",
+        "I have a question about Raids",
+        "How is Raids supposed to work?"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.raids.overview",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Raids",
+        "What happens with Raids?",
+        "Show me the WEED EMPIRE guide"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.crew.overview",
+      "domain": "weed_empire",
+      "entities": [
+        "Crew",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Crew"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Crew?",
+        "What are Crew?",
+        "Tell me about Crew",
+        "Explain Crew",
+        "How does Crew work?",
+        "I need information about Crew",
+        "Give me the guide for Crew"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.crew.rules",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "How do I use Crew?",
+        "What are the rules for Crew?",
+        "Where do I find Crew?"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.crew.rules",
+      "domain": "weed_empire",
+      "entities": [
+        "Crew",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Crew"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Crew?",
+        "What happens with Crew?",
+        "Does the FAQ explain Crew?",
+        "Can you clarify Crew?",
+        "Which FAQ covers Crew?",
+        "I have a question about Crew",
+        "How is Crew supposed to work?"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.crew.overview",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Crew",
+        "What happens with Crew?",
+        "Show me the WEED EMPIRE guide"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.special-strains.overview",
+      "domain": "weed_empire",
+      "entities": [
+        "Special strains",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Special strains"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Special strains?",
+        "What are Special strains?",
+        "Tell me about Special strains",
+        "Explain Special strains",
+        "How does Special strains work?",
+        "I need information about Special strains",
+        "Give me the guide for Special strains"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.special-strains.rules",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "How do I use Special strains?",
+        "What are the rules for Special strains?",
+        "Where do I find Special strains?"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.special-strains.rules",
+      "domain": "weed_empire",
+      "entities": [
+        "Special strains",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Special strains"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Special strains?",
+        "What happens with Special strains?",
+        "Does the FAQ explain Special strains?",
+        "Can you clarify Special strains?",
+        "Which FAQ covers Special strains?",
+        "I have a question about Special strains",
+        "How is Special strains supposed to work?"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.special-strains.overview",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Special strains",
+        "What happens with Special strains?",
+        "Show me the WEED EMPIRE guide"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.weed-empire-how_to.overview",
+      "domain": "weed_empire",
+      "entities": [
+        "WEED EMPIRE",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "WEED EMPIRE",
+          "title": "WEED EMPIRE"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is WEED EMPIRE?",
+        "What are WEED EMPIRE?",
+        "Tell me about WEED EMPIRE",
+        "Explain WEED EMPIRE",
+        "How does WEED EMPIRE work?",
+        "I need information about WEED EMPIRE"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.weed-empire-how_to.procedure",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "How do I use WEED EMPIRE?",
+        "What are the rules for WEED EMPIRE?",
+        "Where do I find WEED EMPIRE?"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.weed-empire-how_to.procedure",
+      "domain": "weed_empire",
+      "entities": [
+        "WEED EMPIRE",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "WEED EMPIRE",
+          "title": "WEED EMPIRE"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use WEED EMPIRE?",
+        "How do I start WEED EMPIRE?",
+        "Where do I find WEED EMPIRE?",
+        "What do I do for WEED EMPIRE?",
+        "Show me how to do WEED EMPIRE",
+        "Help me with WEED EMPIRE",
+        "Which menu has WEED EMPIRE?"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.weed-empire-how_to.overview",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "Tell me about WEED EMPIRE",
+        "What happens with WEED EMPIRE?",
+        "Show me the WEED EMPIRE guide"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.open-the-farm.overview",
+      "domain": "weed_empire",
+      "entities": [
+        "Open the farm",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Open the farm"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Open the farm?",
+        "What are Open the farm?",
+        "Tell me about Open the farm",
+        "Explain Open the farm",
+        "How does Open the farm work?",
+        "I need information about Open the farm",
+        "Give me the guide for Open the farm"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.open-the-farm.procedure",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "How do I use Open the farm?",
+        "What are the rules for Open the farm?",
+        "Where do I find Open the farm?"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.open-the-farm.procedure",
+      "domain": "weed_empire",
+      "entities": [
+        "Open the farm",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Open the farm"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Open the farm?",
+        "How do I start Open the farm?",
+        "Where do I find Open the farm?",
+        "What do I do for Open the farm?",
+        "Show me how to do Open the farm",
+        "Help me with Open the farm",
+        "Which menu has Open the farm?"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.open-the-farm.overview",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Open the farm",
+        "What happens with Open the farm?",
+        "Show me the WEED EMPIRE guide"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.grow.overview",
+      "domain": "weed_empire",
+      "entities": [
+        "Grow",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Grow"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Grow?",
+        "What are Grow?",
+        "Tell me about Grow",
+        "Explain Grow",
+        "How does Grow work?",
+        "I need information about Grow",
+        "Give me the guide for Grow"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.grow.procedure",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "How do I use Grow?",
+        "What are the rules for Grow?",
+        "Where do I find Grow?"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.grow.procedure",
+      "domain": "weed_empire",
+      "entities": [
+        "Grow",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Grow"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Grow?",
+        "How do I start Grow?",
+        "Where do I find Grow?",
+        "What do I do for Grow?",
+        "Show me how to do Grow",
+        "Help me with Grow",
+        "Which menu has Grow?"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.grow.overview",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Grow",
+        "What happens with Grow?",
+        "Show me the WEED EMPIRE guide"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.cash-and-vault.overview",
+      "domain": "weed_empire",
+      "entities": [
+        "Cash & vault",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Cash & vault"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Cash & vault?",
+        "What are Cash & vault?",
+        "Tell me about Cash & vault",
+        "Explain Cash & vault",
+        "How does Cash & vault work?",
+        "I need information about Cash & vault",
+        "Give me the guide for Cash & vault"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.cash-and-vault.procedure",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "How do I use Cash & vault?",
+        "What are the rules for Cash & vault?",
+        "Where do I find Cash & vault?"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.cash-and-vault.procedure",
+      "domain": "weed_empire",
+      "entities": [
+        "Cash & vault",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Cash & vault"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Cash & vault?",
+        "How do I start Cash & vault?",
+        "Where do I find Cash & vault?",
+        "What do I do for Cash & vault?",
+        "Show me how to do Cash & vault",
+        "Help me with Cash & vault",
+        "Which menu has Cash & vault?"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.cash-and-vault.overview",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Cash & vault",
+        "What happens with Cash & vault?",
+        "Show me the WEED EMPIRE guide"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.crew-raids-heat.overview",
+      "domain": "weed_empire",
+      "entities": [
+        "Crew, raids, heat",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Crew, raids, heat"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Crew, raids, heat?",
+        "What are Crew, raids, heat?",
+        "Tell me about Crew, raids, heat",
+        "Explain Crew, raids, heat",
+        "How does Crew, raids, heat work?",
+        "I need information about Crew, raids, heat",
+        "Give me the guide for Crew, raids, heat"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.crew-raids-heat.procedure",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "How do I use Crew, raids, heat?",
+        "What are the rules for Crew, raids, heat?",
+        "Where do I find Crew, raids, heat?"
+      ]
+    },
+    {
+      "id": "weed_empire.weed-empire.crew-raids-heat.procedure",
+      "domain": "weed_empire",
+      "entities": [
+        "Crew, raids, heat",
+        "WEED EMPIRE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Crew, raids, heat"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/money/weed-empire"
+      ],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Crew, raids, heat?",
+        "How do I start Crew, raids, heat?",
+        "Where do I find Crew, raids, heat?",
+        "What do I do for Crew, raids, heat?",
+        "Show me how to do Crew, raids, heat",
+        "Help me with Crew, raids, heat",
+        "Which menu has Crew, raids, heat?"
+      ],
+      "related_intents": [
+        "weed_empire.weed-empire.crew-raids-heat.overview",
+        "weed_empire.weed-empire.weed-empire.overview",
+        "weed_empire.weed-empire.weed-empire.rules",
+        "weed_empire.weed-empire.overview.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Crew, raids, heat",
+        "What happens with Crew, raids, heat?",
+        "Show me the WEED EMPIRE guide"
+      ]
+    }
+  ]
+}

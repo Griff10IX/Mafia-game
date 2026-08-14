@@ -1,0 +1,547 @@
+{
+  "domain": "onboarding_navigation",
+  "intents": [
+    {
+      "id": "onboarding_navigation.finding-your-way.finding-your-way.overview",
+      "domain": "onboarding_navigation",
+      "entities": [
+        "FINDING YOUR WAY",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "FINDING YOUR WAY",
+          "title": "FINDING YOUR WAY"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is FINDING YOUR WAY?",
+        "What are FINDING YOUR WAY?",
+        "Tell me about FINDING YOUR WAY",
+        "Explain FINDING YOUR WAY",
+        "How does FINDING YOUR WAY work?",
+        "I need information about FINDING YOUR WAY",
+        "Give me the guide for FINDING YOUR WAY"
+      ],
+      "related_intents": [
+        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
+        "onboarding_navigation.finding-your-way.menus.overview",
+        "onboarding_navigation.finding-your-way.menus.procedure"
+      ],
+      "follow_ups": [
+        "How do I use FINDING YOUR WAY?",
+        "What are the rules for FINDING YOUR WAY?",
+        "Where do I find FINDING YOUR WAY?"
+      ]
+    },
+    {
+      "id": "onboarding_navigation.finding-your-way.finding-your-way.procedure",
+      "domain": "onboarding_navigation",
+      "entities": [
+        "FINDING YOUR WAY",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "FINDING YOUR WAY",
+          "title": "FINDING YOUR WAY"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use FINDING YOUR WAY?",
+        "How do I start FINDING YOUR WAY?",
+        "Where do I find FINDING YOUR WAY?",
+        "What do I do for FINDING YOUR WAY?",
+        "Show me how to do FINDING YOUR WAY",
+        "Help me with FINDING YOUR WAY",
+        "Which menu has FINDING YOUR WAY?"
+      ],
+      "related_intents": [
+        "onboarding_navigation.finding-your-way.finding-your-way.overview",
+        "onboarding_navigation.finding-your-way.menus.overview",
+        "onboarding_navigation.finding-your-way.menus.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about FINDING YOUR WAY",
+        "What happens with FINDING YOUR WAY?",
+        "Show me the FINDING YOUR WAY guide"
+      ]
+    },
+    {
+      "id": "onboarding_navigation.finding-your-way.menus.overview",
+      "domain": "onboarding_navigation",
+      "entities": [
+        "Menus",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Menus"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Menus?",
+        "What are Menus?",
+        "Tell me about Menus",
+        "Explain Menus",
+        "How does Menus work?",
+        "I need information about Menus",
+        "Give me the guide for Menus"
+      ],
+      "related_intents": [
+        "onboarding_navigation.finding-your-way.menus.procedure",
+        "onboarding_navigation.finding-your-way.finding-your-way.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.procedure"
+      ],
+      "follow_ups": [
+        "How do I use Menus?",
+        "What are the rules for Menus?",
+        "Where do I find Menus?"
+      ]
+    },
+    {
+      "id": "onboarding_navigation.finding-your-way.menus.procedure",
+      "domain": "onboarding_navigation",
+      "entities": [
+        "Menus",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Menus"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Menus?",
+        "How do I start Menus?",
+        "Where do I find Menus?",
+        "What do I do for Menus?",
+        "Show me how to do Menus",
+        "Help me with Menus",
+        "Which menu has Menus?"
+      ],
+      "related_intents": [
+        "onboarding_navigation.finding-your-way.menus.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about Menus",
+        "What happens with Menus?",
+        "Show me the FINDING YOUR WAY guide"
+      ]
+    },
+    {
+      "id": "onboarding_navigation.finding-your-way.cash-vs-bank.overview",
+      "domain": "onboarding_navigation",
+      "entities": [
+        "Cash vs bank",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Cash vs bank"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Cash vs bank?",
+        "What are Cash vs bank?",
+        "Tell me about Cash vs bank",
+        "Explain Cash vs bank",
+        "How does Cash vs bank work?",
+        "I need information about Cash vs bank",
+        "Give me the guide for Cash vs bank"
+      ],
+      "related_intents": [
+        "onboarding_navigation.finding-your-way.cash-vs-bank.procedure",
+        "onboarding_navigation.finding-your-way.finding-your-way.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
+        "onboarding_navigation.finding-your-way.menus.overview"
+      ],
+      "follow_ups": [
+        "How do I use Cash vs bank?",
+        "What are the rules for Cash vs bank?",
+        "Where do I find Cash vs bank?"
+      ]
+    },
+    {
+      "id": "onboarding_navigation.finding-your-way.cash-vs-bank.procedure",
+      "domain": "onboarding_navigation",
+      "entities": [
+        "Cash vs bank",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Cash vs bank"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Cash vs bank?",
+        "How do I start Cash vs bank?",
+        "Where do I find Cash vs bank?",
+        "What do I do for Cash vs bank?",
+        "Show me how to do Cash vs bank",
+        "Help me with Cash vs bank",
+        "Which menu has Cash vs bank?"
+      ],
+      "related_intents": [
+        "onboarding_navigation.finding-your-way.cash-vs-bank.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
+        "onboarding_navigation.finding-your-way.menus.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Cash vs bank",
+        "What happens with Cash vs bank?",
+        "Show me the FINDING YOUR WAY guide"
+      ]
+    },
+    {
+      "id": "onboarding_navigation.finding-your-way.health.overview",
+      "domain": "onboarding_navigation",
+      "entities": [
+        "Health",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Health"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Health?",
+        "What are Health?",
+        "Tell me about Health",
+        "Explain Health",
+        "How does Health work?",
+        "I need information about Health",
+        "Give me the guide for Health"
+      ],
+      "related_intents": [
+        "onboarding_navigation.finding-your-way.health.procedure",
+        "onboarding_navigation.finding-your-way.finding-your-way.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
+        "onboarding_navigation.finding-your-way.menus.overview"
+      ],
+      "follow_ups": [
+        "How do I use Health?",
+        "What are the rules for Health?",
+        "Where do I find Health?"
+      ]
+    },
+    {
+      "id": "onboarding_navigation.finding-your-way.health.procedure",
+      "domain": "onboarding_navigation",
+      "entities": [
+        "Health",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Health"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Health?",
+        "How do I start Health?",
+        "Where do I find Health?",
+        "What do I do for Health?",
+        "Show me how to do Health",
+        "Help me with Health",
+        "Which menu has Health?"
+      ],
+      "related_intents": [
+        "onboarding_navigation.finding-your-way.health.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
+        "onboarding_navigation.finding-your-way.menus.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Health",
+        "What happens with Health?",
+        "Show me the FINDING YOUR WAY guide"
+      ]
+    },
+    {
+      "id": "onboarding_navigation.finding-your-way.bullets.overview",
+      "domain": "onboarding_navigation",
+      "entities": [
+        "Bullets",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Bullets"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Bullets in FINDING YOUR WAY?",
+        "What is Bullets?",
+        "What are Bullets?",
+        "Tell me about Bullets",
+        "Explain Bullets",
+        "How does Bullets work?",
+        "I need information about Bullets"
+      ],
+      "related_intents": [
+        "onboarding_navigation.finding-your-way.bullets.procedure",
+        "onboarding_navigation.finding-your-way.finding-your-way.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
+        "onboarding_navigation.finding-your-way.menus.overview"
+      ],
+      "follow_ups": [
+        "How do I use Bullets?",
+        "What are the rules for Bullets?",
+        "Where do I find Bullets?"
+      ]
+    },
+    {
+      "id": "onboarding_navigation.finding-your-way.bullets.procedure",
+      "domain": "onboarding_navigation",
+      "entities": [
+        "Bullets",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Bullets"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Bullets?",
+        "How do I start Bullets?",
+        "Where do I find Bullets?",
+        "What do I do for Bullets?",
+        "Show me how to do Bullets",
+        "Help me with Bullets",
+        "Which menu has Bullets?"
+      ],
+      "related_intents": [
+        "onboarding_navigation.finding-your-way.bullets.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
+        "onboarding_navigation.finding-your-way.menus.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Bullets",
+        "What happens with Bullets?",
+        "Show me the FINDING YOUR WAY guide"
+      ]
+    },
+    {
+      "id": "onboarding_navigation.finding-your-way.new-accounts.overview",
+      "domain": "onboarding_navigation",
+      "entities": [
+        "New accounts",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "New accounts"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is New accounts?",
+        "What are New accounts?",
+        "Tell me about New accounts",
+        "Explain New accounts",
+        "How does New accounts work?",
+        "I need information about New accounts",
+        "Give me the guide for New accounts"
+      ],
+      "related_intents": [
+        "onboarding_navigation.finding-your-way.new-accounts.procedure",
+        "onboarding_navigation.finding-your-way.finding-your-way.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
+        "onboarding_navigation.finding-your-way.menus.overview"
+      ],
+      "follow_ups": [
+        "How do I use New accounts?",
+        "What are the rules for New accounts?",
+        "Where do I find New accounts?"
+      ]
+    },
+    {
+      "id": "onboarding_navigation.finding-your-way.new-accounts.procedure",
+      "domain": "onboarding_navigation",
+      "entities": [
+        "New accounts",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "New accounts"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use New accounts?",
+        "How do I start New accounts?",
+        "Where do I find New accounts?",
+        "What do I do for New accounts?",
+        "Show me how to do New accounts",
+        "Help me with New accounts",
+        "Which menu has New accounts?"
+      ],
+      "related_intents": [
+        "onboarding_navigation.finding-your-way.new-accounts.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
+        "onboarding_navigation.finding-your-way.menus.overview"
+      ],
+      "follow_ups": [
+        "Tell me about New accounts",
+        "What happens with New accounts?",
+        "Show me the FINDING YOUR WAY guide"
+      ]
+    },
+    {
+      "id": "onboarding_navigation.finding-your-way.short-links.overview",
+      "domain": "onboarding_navigation",
+      "entities": [
+        "Short links",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Short links"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Short links?",
+        "What are Short links?",
+        "Tell me about Short links",
+        "Explain Short links",
+        "How does Short links work?",
+        "I need information about Short links",
+        "Give me the guide for Short links"
+      ],
+      "related_intents": [
+        "onboarding_navigation.finding-your-way.short-links.procedure",
+        "onboarding_navigation.finding-your-way.finding-your-way.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
+        "onboarding_navigation.finding-your-way.menus.overview"
+      ],
+      "follow_ups": [
+        "How do I use Short links?",
+        "What are the rules for Short links?",
+        "Where do I find Short links?"
+      ]
+    },
+    {
+      "id": "onboarding_navigation.finding-your-way.short-links.procedure",
+      "domain": "onboarding_navigation",
+      "entities": [
+        "Short links",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Short links"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Short links?",
+        "How do I start Short links?",
+        "Where do I find Short links?",
+        "What do I do for Short links?",
+        "Show me how to do Short links",
+        "Help me with Short links",
+        "Which menu has Short links?"
+      ],
+      "related_intents": [
+        "onboarding_navigation.finding-your-way.short-links.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.overview",
+        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
+        "onboarding_navigation.finding-your-way.menus.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Short links",
+        "What happens with Short links?",
+        "Show me the FINDING YOUR WAY guide"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,819 @@
+{
+  "domain": "travel_states",
+  "intents": [
+    {
+      "id": "travel_states.travel.travel.overview",
+      "domain": "travel_states",
+      "entities": [
+        "TRAVEL",
+        "TRAVEL"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "TRAVEL",
+          "title": "TRAVEL"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/travel",
+        "/game/states"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is TRAVEL in TRAVEL?",
+        "What is TRAVEL?",
+        "What are TRAVEL?",
+        "Tell me about TRAVEL",
+        "Explain TRAVEL",
+        "How does TRAVEL work?",
+        "I need information about TRAVEL"
+      ],
+      "related_intents": [
+        "travel_states.travel.travel.rules",
+        "travel_states.travel.cities.overview",
+        "travel_states.travel.cities.rules"
+      ],
+      "follow_ups": [
+        "How do I use TRAVEL?",
+        "What are the rules for TRAVEL?",
+        "Where do I find TRAVEL?"
+      ]
+    },
+    {
+      "id": "travel_states.travel.travel.rules",
+      "domain": "travel_states",
+      "entities": [
+        "TRAVEL",
+        "TRAVEL"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "TRAVEL",
+          "title": "TRAVEL"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/travel",
+        "/game/states"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for TRAVEL?",
+        "What happens with TRAVEL?",
+        "Does the FAQ explain TRAVEL?",
+        "Can you clarify TRAVEL?",
+        "Which FAQ covers TRAVEL?",
+        "I have a question about TRAVEL",
+        "How is TRAVEL supposed to work?"
+      ],
+      "related_intents": [
+        "travel_states.travel.travel.overview",
+        "travel_states.travel.cities.overview",
+        "travel_states.travel.cities.rules"
+      ],
+      "follow_ups": [
+        "Tell me about TRAVEL",
+        "What happens with TRAVEL?",
+        "Show me the TRAVEL guide"
+      ]
+    },
+    {
+      "id": "travel_states.travel.cities.overview",
+      "domain": "travel_states",
+      "entities": [
+        "Cities",
+        "TRAVEL"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "TRAVEL",
+          "title": "Cities"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/travel",
+        "/game/states"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Cities?",
+        "What are Cities?",
+        "Tell me about Cities",
+        "Explain Cities",
+        "How does Cities work?",
+        "I need information about Cities",
+        "Give me the guide for Cities"
+      ],
+      "related_intents": [
+        "travel_states.travel.cities.rules",
+        "travel_states.travel.travel.overview",
+        "travel_states.travel.travel.rules"
+      ],
+      "follow_ups": [
+        "How do I use Cities?",
+        "What are the rules for Cities?",
+        "Where do I find Cities?"
+      ]
+    },
+    {
+      "id": "travel_states.travel.cities.rules",
+      "domain": "travel_states",
+      "entities": [
+        "Cities",
+        "TRAVEL"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "TRAVEL",
+          "title": "Cities"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/travel",
+        "/game/states"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Cities?",
+        "What happens with Cities?",
+        "Does the FAQ explain Cities?",
+        "Can you clarify Cities?",
+        "Which FAQ covers Cities?",
+        "I have a question about Cities",
+        "How is Cities supposed to work?"
+      ],
+      "related_intents": [
+        "travel_states.travel.cities.overview",
+        "travel_states.travel.travel.overview",
+        "travel_states.travel.travel.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Cities",
+        "What happens with Cities?",
+        "Show me the TRAVEL guide"
+      ]
+    },
+    {
+      "id": "travel_states.travel.travel-time.overview",
+      "domain": "travel_states",
+      "entities": [
+        "Travel Time",
+        "TRAVEL"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "TRAVEL",
+          "title": "Travel Time"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/travel",
+        "/game/states"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Travel Time?",
+        "What are Travel Time?",
+        "Tell me about Travel Time",
+        "Explain Travel Time",
+        "How does Travel Time work?",
+        "I need information about Travel Time",
+        "Give me the guide for Travel Time"
+      ],
+      "related_intents": [
+        "travel_states.travel.travel-time.rules",
+        "travel_states.travel.travel.overview",
+        "travel_states.travel.travel.rules",
+        "travel_states.travel.cities.overview"
+      ],
+      "follow_ups": [
+        "How do I use Travel Time?",
+        "What are the rules for Travel Time?",
+        "Where do I find Travel Time?"
+      ]
+    },
+    {
+      "id": "travel_states.travel.travel-time.rules",
+      "domain": "travel_states",
+      "entities": [
+        "Travel Time",
+        "TRAVEL"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "TRAVEL",
+          "title": "Travel Time"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/travel",
+        "/game/states"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Travel Time?",
+        "What happens with Travel Time?",
+        "Does the FAQ explain Travel Time?",
+        "Can you clarify Travel Time?",
+        "Which FAQ covers Travel Time?",
+        "I have a question about Travel Time",
+        "How is Travel Time supposed to work?"
+      ],
+      "related_intents": [
+        "travel_states.travel.travel-time.overview",
+        "travel_states.travel.travel.overview",
+        "travel_states.travel.travel.rules",
+        "travel_states.travel.cities.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Travel Time",
+        "What happens with Travel Time?",
+        "Show me the TRAVEL guide"
+      ]
+    },
+    {
+      "id": "travel_states.travel.travel-limits.overview",
+      "domain": "travel_states",
+      "entities": [
+        "Travel limits",
+        "TRAVEL"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "TRAVEL",
+          "title": "Travel limits"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/travel",
+        "/game/states"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Travel limits?",
+        "What are Travel limits?",
+        "Tell me about Travel limits",
+        "Explain Travel limits",
+        "How does Travel limits work?",
+        "I need information about Travel limits",
+        "Give me the guide for Travel limits"
+      ],
+      "related_intents": [
+        "travel_states.travel.travel-limits.rules",
+        "travel_states.travel.travel.overview",
+        "travel_states.travel.travel.rules",
+        "travel_states.travel.cities.overview"
+      ],
+      "follow_ups": [
+        "How do I use Travel limits?",
+        "What are the rules for Travel limits?",
+        "Where do I find Travel limits?"
+      ]
+    },
+    {
+      "id": "travel_states.travel.travel-limits.rules",
+      "domain": "travel_states",
+      "entities": [
+        "Travel limits",
+        "TRAVEL"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "TRAVEL",
+          "title": "Travel limits"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/travel",
+        "/game/states"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Travel limits?",
+        "What happens with Travel limits?",
+        "Does the FAQ explain Travel limits?",
+        "Can you clarify Travel limits?",
+        "Which FAQ covers Travel limits?",
+        "I have a question about Travel limits",
+        "How is Travel limits supposed to work?"
+      ],
+      "related_intents": [
+        "travel_states.travel.travel-limits.overview",
+        "travel_states.travel.travel.overview",
+        "travel_states.travel.travel.rules",
+        "travel_states.travel.cities.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Travel limits",
+        "What happens with Travel limits?",
+        "Show me the TRAVEL guide"
+      ]
+    },
+    {
+      "id": "travel_states.travel.why-travel.overview",
+      "domain": "travel_states",
+      "entities": [
+        "Why Travel?",
+        "TRAVEL"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "TRAVEL",
+          "title": "Why Travel?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/travel",
+        "/game/states"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Why Travel??",
+        "What are Why Travel??",
+        "Tell me about Why Travel?",
+        "Explain Why Travel?",
+        "How does Why Travel? work?",
+        "I need information about Why Travel?",
+        "Give me the guide for Why Travel?"
+      ],
+      "related_intents": [
+        "travel_states.travel.why-travel.rules",
+        "travel_states.travel.travel.overview",
+        "travel_states.travel.travel.rules",
+        "travel_states.travel.cities.overview"
+      ],
+      "follow_ups": [
+        "How do I use Why Travel??",
+        "What are the rules for Why Travel??",
+        "Where do I find Why Travel??"
+      ]
+    },
+    {
+      "id": "travel_states.travel.why-travel.rules",
+      "domain": "travel_states",
+      "entities": [
+        "Why Travel?",
+        "TRAVEL"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "TRAVEL",
+          "title": "Why Travel?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/travel",
+        "/game/states"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Why Travel??",
+        "What happens with Why Travel??",
+        "Does the FAQ explain Why Travel??",
+        "Can you clarify Why Travel??",
+        "Which FAQ covers Why Travel??",
+        "I have a question about Why Travel?",
+        "How is Why Travel? supposed to work?"
+      ],
+      "related_intents": [
+        "travel_states.travel.why-travel.overview",
+        "travel_states.travel.travel.overview",
+        "travel_states.travel.travel.rules",
+        "travel_states.travel.cities.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Why Travel?",
+        "What happens with Why Travel??",
+        "Show me the TRAVEL guide"
+      ]
+    },
+    {
+      "id": "travel_states.travel.airport-ownership.overview",
+      "domain": "travel_states",
+      "entities": [
+        "Airport Ownership",
+        "TRAVEL"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "TRAVEL",
+          "title": "Airport Ownership"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/travel",
+        "/game/states"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Airport Ownership?",
+        "What are Airport Ownership?",
+        "Tell me about Airport Ownership",
+        "Explain Airport Ownership",
+        "How does Airport Ownership work?",
+        "I need information about Airport Ownership",
+        "Give me the guide for Airport Ownership"
+      ],
+      "related_intents": [
+        "travel_states.travel.airport-ownership.rules",
+        "travel_states.travel.travel.overview",
+        "travel_states.travel.travel.rules",
+        "travel_states.travel.cities.overview"
+      ],
+      "follow_ups": [
+        "How do I use Airport Ownership?",
+        "What are the rules for Airport Ownership?",
+        "Where do I find Airport Ownership?"
+      ]
+    },
+    {
+      "id": "travel_states.travel.airport-ownership.rules",
+      "domain": "travel_states",
+      "entities": [
+        "Airport Ownership",
+        "TRAVEL"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "TRAVEL",
+          "title": "Airport Ownership"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/travel",
+        "/game/states"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Airport Ownership?",
+        "What happens with Airport Ownership?",
+        "Does the FAQ explain Airport Ownership?",
+        "Can you clarify Airport Ownership?",
+        "Which FAQ covers Airport Ownership?",
+        "I have a question about Airport Ownership",
+        "How is Airport Ownership supposed to work?"
+      ],
+      "related_intents": [
+        "travel_states.travel.airport-ownership.overview",
+        "travel_states.travel.travel.overview",
+        "travel_states.travel.travel.rules",
+        "travel_states.travel.cities.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Airport Ownership",
+        "What happens with Airport Ownership?",
+        "Show me the TRAVEL guide"
+      ]
+    },
+    {
+      "id": "travel_states.travel.states-city-overview.overview",
+      "domain": "travel_states",
+      "entities": [
+        "States (city overview)",
+        "TRAVEL"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "TRAVEL",
+          "title": "States (city overview)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/travel",
+        "/game/states"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is States (city overview)?",
+        "What are States (city overview)?",
+        "Tell me about States (city overview)",
+        "Explain States (city overview)",
+        "How does States (city overview) work?",
+        "I need information about States (city overview)",
+        "Give me the guide for States (city overview)"
+      ],
+      "related_intents": [
+        "travel_states.travel.states-city-overview.rules",
+        "travel_states.travel.travel.overview",
+        "travel_states.travel.travel.rules",
+        "travel_states.travel.cities.overview"
+      ],
+      "follow_ups": [
+        "How do I use States (city overview)?",
+        "What are the rules for States (city overview)?",
+        "Where do I find States (city overview)?"
+      ]
+    },
+    {
+      "id": "travel_states.travel.states-city-overview.rules",
+      "domain": "travel_states",
+      "entities": [
+        "States (city overview)",
+        "TRAVEL"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "TRAVEL",
+          "title": "States (city overview)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/travel",
+        "/game/states"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for States (city overview)?",
+        "What happens with States (city overview)?",
+        "Does the FAQ explain States (city overview)?",
+        "Can you clarify States (city overview)?",
+        "Which FAQ covers States (city overview)?",
+        "I have a question about States (city overview)",
+        "How is States (city overview) supposed to work?"
+      ],
+      "related_intents": [
+        "travel_states.travel.states-city-overview.overview",
+        "travel_states.travel.travel.overview",
+        "travel_states.travel.travel.rules",
+        "travel_states.travel.cities.overview"
+      ],
+      "follow_ups": [
+        "Tell me about States (city overview)",
+        "What happens with States (city overview)?",
+        "Show me the TRAVEL guide"
+      ]
+    },
+    {
+      "id": "travel_states.travel-and-states.travel-and-states.overview",
+      "domain": "travel_states",
+      "entities": [
+        "TRAVEL & STATES",
+        "TRAVEL & STATES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "TRAVEL & STATES",
+          "title": "TRAVEL & STATES"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is TRAVEL & STATES?",
+        "What are TRAVEL & STATES?",
+        "Tell me about TRAVEL & STATES",
+        "Explain TRAVEL & STATES",
+        "How does TRAVEL & STATES work?",
+        "I need information about TRAVEL & STATES",
+        "Give me the guide for TRAVEL & STATES"
+      ],
+      "related_intents": [
+        "travel_states.travel-and-states.travel-and-states.procedure",
+        "travel_states.travel-and-states.travel.overview",
+        "travel_states.travel-and-states.travel.procedure"
+      ],
+      "follow_ups": [
+        "How do I use TRAVEL & STATES?",
+        "What are the rules for TRAVEL & STATES?",
+        "Where do I find TRAVEL & STATES?"
+      ]
+    },
+    {
+      "id": "travel_states.travel-and-states.travel-and-states.procedure",
+      "domain": "travel_states",
+      "entities": [
+        "TRAVEL & STATES",
+        "TRAVEL & STATES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "TRAVEL & STATES",
+          "title": "TRAVEL & STATES"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use TRAVEL & STATES?",
+        "How do I start TRAVEL & STATES?",
+        "Where do I find TRAVEL & STATES?",
+        "What do I do for TRAVEL & STATES?",
+        "Show me how to do TRAVEL & STATES",
+        "Help me with TRAVEL & STATES",
+        "Which menu has TRAVEL & STATES?"
+      ],
+      "related_intents": [
+        "travel_states.travel-and-states.travel-and-states.overview",
+        "travel_states.travel-and-states.travel.overview",
+        "travel_states.travel-and-states.travel.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about TRAVEL & STATES",
+        "What happens with TRAVEL & STATES?",
+        "Show me the TRAVEL & STATES guide"
+      ]
+    },
+    {
+      "id": "travel_states.travel-and-states.travel.overview",
+      "domain": "travel_states",
+      "entities": [
+        "Travel",
+        "TRAVEL & STATES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "TRAVEL & STATES",
+          "title": "Travel"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Travel in TRAVEL & STATES?",
+        "What is Travel?",
+        "What are Travel?",
+        "Tell me about Travel",
+        "Explain Travel",
+        "How does Travel work?",
+        "I need information about Travel"
+      ],
+      "related_intents": [
+        "travel_states.travel-and-states.travel.procedure",
+        "travel_states.travel-and-states.travel-and-states.overview",
+        "travel_states.travel-and-states.travel-and-states.procedure"
+      ],
+      "follow_ups": [
+        "How do I use Travel?",
+        "What are the rules for Travel?",
+        "Where do I find Travel?"
+      ]
+    },
+    {
+      "id": "travel_states.travel-and-states.travel.procedure",
+      "domain": "travel_states",
+      "entities": [
+        "Travel",
+        "TRAVEL & STATES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "TRAVEL & STATES",
+          "title": "Travel"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Travel?",
+        "How do I start Travel?",
+        "Where do I find Travel?",
+        "What do I do for Travel?",
+        "Show me how to do Travel",
+        "Help me with Travel",
+        "Which menu has Travel?"
+      ],
+      "related_intents": [
+        "travel_states.travel-and-states.travel.overview",
+        "travel_states.travel-and-states.travel-and-states.overview",
+        "travel_states.travel-and-states.travel-and-states.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about Travel",
+        "What happens with Travel?",
+        "Show me the TRAVEL & STATES guide"
+      ]
+    },
+    {
+      "id": "travel_states.travel-and-states.states.overview",
+      "domain": "travel_states",
+      "entities": [
+        "States",
+        "TRAVEL & STATES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "TRAVEL & STATES",
+          "title": "States"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is States?",
+        "What are States?",
+        "Tell me about States",
+        "Explain States",
+        "How does States work?",
+        "I need information about States",
+        "Give me the guide for States"
+      ],
+      "related_intents": [
+        "travel_states.travel-and-states.states.procedure",
+        "travel_states.travel-and-states.travel-and-states.overview",
+        "travel_states.travel-and-states.travel-and-states.procedure",
+        "travel_states.travel-and-states.travel.overview"
+      ],
+      "follow_ups": [
+        "How do I use States?",
+        "What are the rules for States?",
+        "Where do I find States?"
+      ]
+    },
+    {
+      "id": "travel_states.travel-and-states.states.procedure",
+      "domain": "travel_states",
+      "entities": [
+        "States",
+        "TRAVEL & STATES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "TRAVEL & STATES",
+          "title": "States"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use States?",
+        "How do I start States?",
+        "Where do I find States?",
+        "What do I do for States?",
+        "Show me how to do States",
+        "Help me with States",
+        "Which menu has States?"
+      ],
+      "related_intents": [
+        "travel_states.travel-and-states.states.overview",
+        "travel_states.travel-and-states.travel-and-states.overview",
+        "travel_states.travel-and-states.travel-and-states.procedure",
+        "travel_states.travel-and-states.travel.overview"
+      ],
+      "follow_ups": [
+        "Tell me about States",
+        "What happens with States?",
+        "Show me the TRAVEL & STATES guide"
+      ]
+    }
+  ]
+}

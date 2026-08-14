@@ -1591,6 +1591,7 @@ export default function Admin() {
   const [captchaFailUserDraft, setCaptchaFailUserDraft] = useState('');
   const [captchaFailUserQuery, setCaptchaFailUserQuery] = useState('');
   const [spotifyFeatureEnabled, setSpotifyFeatureEnabled] = useState(false);
+  const [gameHelpChatEnabled, setGameHelpChatEnabled] = useState(false);
   const [landingBannerEnabled, setLandingBannerEnabled] = useState(false);
   const [landingBannerMessage, setLandingBannerMessage] = useState('');
   const [stockMarketMaxPoints, setStockMarketMaxPoints] = useState(3000);
@@ -2525,6 +2526,7 @@ export default function Admin() {
       setUserRequestPaceEnabled(!!res.data?.user_request_pace_enabled);
       setUserRequestPaceLimit(String(Math.max(5, Math.min(100, parseInt(res.data?.user_request_pace_limit, 10) || 15))));
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
+      setGameHelpChatEnabled(!!res.data?.game_help_chat_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setLandingBannerMessage(res.data?.landing_banner_message ?? '');
       setStockMarketMaxPoints(Math.max(1, parseInt(res.data?.stock_market_max_points, 10) || 3000));
@@ -2610,6 +2612,7 @@ export default function Admin() {
       setUserRequestPaceEnabled(false);
       setUserRequestPaceLimit('15');
       setSpotifyFeatureEnabled(false);
+      setGameHelpChatEnabled(false);
       setLandingBannerMessage('');
       setStockMarketMaxPoints(3000);
       setSportsOpenStakeCapText(String(SPORTS_OPEN_STAKE_CAP_DEFAULT));
@@ -2767,6 +2770,7 @@ export default function Admin() {
         user_request_pace_enabled: userRequestPaceEnabled,
         user_request_pace_limit: Math.max(5, Math.min(100, parseInt(userRequestPaceLimit, 10) || 15)),
         spotify_feature_enabled: spotifyFeatureEnabled,
+        game_help_chat_enabled: gameHelpChatEnabled,
         landing_banner_enabled: landingBannerEnabled,
         landing_banner_message: landingBannerMessage,
         stock_market_max_points: Math.max(1, parseInt(stockMarketMaxPoints, 10) || 3000),
@@ -2834,6 +2838,7 @@ export default function Admin() {
         setUserRequestPaceLimit(String(Math.max(5, Math.min(100, parseInt(res.data.user_request_pace_limit, 10) || 15))));
       }
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
+      setGameHelpChatEnabled(!!res.data?.game_help_chat_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       if (res.data?.landing_banner_message !== undefined) setLandingBannerMessage(res.data.landing_banner_message ?? '');
       setStockMarketMaxPoints(Math.max(1, res.data?.stock_market_max_points ?? 3000));
@@ -16207,6 +16212,17 @@ export default function Admin() {
                   className="rounded border-input"
                 />
                 <span>Enable Spotify feature for players (admins can always test)</span>
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
+                <input
+                  type="checkbox"
+                  checked={gameHelpChatEnabled}
+                  onChange={(e) => setGameHelpChatEnabled(e.target.checked)}
+                  className="rounded border-input"
+                />
+                <span>Enable Game Guide chatbot for all players (admins can always test)</span>
               </label>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">

@@ -74,6 +74,7 @@ const DeadAlive = lazy(() => import("./pages/Game/DeadAlive"));
 const FamilyPage = lazy(() => import("./pages/Game/FamilyPage"));
 const FamilyProfilePage = lazy(() => import("./pages/Game/FamilyProfilePage"));
 const HelpDesk = lazy(() => import("./pages/Game/HelpDesk"));
+const GameGuideChat = lazy(() => import("./pages/Game/GameGuideChat"));
 const Leaderboard = lazy(() => import("./pages/Game/Leaderboard"));
 const Ranking = lazy(() => import("./pages/Game/Ranking"));
 const RankingBadges = lazy(() => import("./pages/Game/RankingBadges"));
@@ -548,6 +549,7 @@ function App() {
 
 
           <Route path="/help-desk" element={<Navigate to="/game/help-desk" replace />} />
+          <Route path="/guide" element={<Navigate to="/game/guide" replace />} />
           {/* Social redirects */}
           <Route path="/inbox" element={<Navigate to="/social/inbox" replace />} />
           <Route path="/inbox/chat/:userId" element={<InboxChatRedirect />} />
@@ -1138,6 +1140,12 @@ function App() {
               path="/game/help-desk"
               element={
               <HelpDesk />
+              }
+            />
+            <Route
+              path="/game/guide"
+              element={
+              <GameGuideChat />
               }
             />
             <Route

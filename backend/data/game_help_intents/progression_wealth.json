@@ -1,0 +1,1923 @@
+{
+  "domain": "progression_wealth",
+  "intents": [
+    {
+      "id": "progression_wealth.money-making.wealth-ranks-cash-on-hand.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Wealth ranks (cash on hand)",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Wealth ranks (cash on hand)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Wealth ranks (cash on hand)?",
+        "What are Wealth ranks (cash on hand)?",
+        "Tell me about Wealth ranks (cash on hand)",
+        "Explain Wealth ranks (cash on hand)",
+        "How does Wealth ranks (cash on hand) work?",
+        "I need information about Wealth ranks (cash on hand)",
+        "Give me the guide for Wealth ranks (cash on hand)"
+      ],
+      "related_intents": [
+        "progression_wealth.money-making.wealth-ranks-cash-on-hand.rules"
+      ],
+      "follow_ups": [
+        "How do I use Wealth ranks (cash on hand)?",
+        "What are the rules for Wealth ranks (cash on hand)?",
+        "Where do I find Wealth ranks (cash on hand)?"
+      ]
+    },
+    {
+      "id": "progression_wealth.money-making.wealth-ranks-cash-on-hand.rules",
+      "domain": "progression_wealth",
+      "entities": [
+        "Wealth ranks (cash on hand)",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Wealth ranks (cash on hand)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Wealth ranks (cash on hand)?",
+        "What happens with Wealth ranks (cash on hand)?",
+        "Does the FAQ explain Wealth ranks (cash on hand)?",
+        "Can you clarify Wealth ranks (cash on hand)?",
+        "Which FAQ covers Wealth ranks (cash on hand)?",
+        "I have a question about Wealth ranks (cash on hand)",
+        "How is Wealth ranks (cash on hand) supposed to work?"
+      ],
+      "related_intents": [
+        "progression_wealth.money-making.wealth-ranks-cash-on-hand.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Wealth ranks (cash on hand)",
+        "What happens with Wealth ranks (cash on hand)?",
+        "Show me the MONEY MAKING guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.progression.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "PROGRESSION",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "PROGRESSION",
+          "title": "PROGRESSION"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is PROGRESSION in PROGRESSION?",
+        "What is PROGRESSION?",
+        "What are PROGRESSION?",
+        "Tell me about PROGRESSION",
+        "Explain PROGRESSION",
+        "How does PROGRESSION work?",
+        "I need information about PROGRESSION"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.ranks-13-total.rules"
+      ],
+      "follow_ups": [
+        "How do I use PROGRESSION?",
+        "What are the rules for PROGRESSION?",
+        "Where do I find PROGRESSION?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.progression.rules",
+      "domain": "progression_wealth",
+      "entities": [
+        "PROGRESSION",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "PROGRESSION",
+          "title": "PROGRESSION"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for PROGRESSION?",
+        "What happens with PROGRESSION?",
+        "Does the FAQ explain PROGRESSION?",
+        "Can you clarify PROGRESSION?",
+        "Which FAQ covers PROGRESSION?",
+        "I have a question about PROGRESSION",
+        "How is PROGRESSION supposed to work?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.ranks-13-total.rules"
+      ],
+      "follow_ups": [
+        "Tell me about PROGRESSION",
+        "What happens with PROGRESSION?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.ranks-13-total.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Ranks (13 total)",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Ranks (13 total)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Ranks (13 total)?",
+        "What are Ranks (13 total)?",
+        "Tell me about Ranks (13 total)",
+        "Explain Ranks (13 total)",
+        "How does Ranks (13 total) work?",
+        "I need information about Ranks (13 total)",
+        "Give me the guide for Ranks (13 total)"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.ranks-13-total.rules",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules"
+      ],
+      "follow_ups": [
+        "How do I use Ranks (13 total)?",
+        "What are the rules for Ranks (13 total)?",
+        "Where do I find Ranks (13 total)?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.ranks-13-total.rules",
+      "domain": "progression_wealth",
+      "entities": [
+        "Ranks (13 total)",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Ranks (13 total)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Ranks (13 total)?",
+        "What happens with Ranks (13 total)?",
+        "Does the FAQ explain Ranks (13 total)?",
+        "Can you clarify Ranks (13 total)?",
+        "Which FAQ covers Ranks (13 total)?",
+        "I have a question about Ranks (13 total)",
+        "How is Ranks (13 total) supposed to work?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Ranks (13 total)",
+        "What happens with Ranks (13 total)?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.prestige-system.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Prestige System",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Prestige System"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Prestige System?",
+        "What are Prestige System?",
+        "Tell me about Prestige System",
+        "Explain Prestige System",
+        "How does Prestige System work?",
+        "I need information about Prestige System",
+        "Give me the guide for Prestige System"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.prestige-system.rules",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "How do I use Prestige System?",
+        "What are the rules for Prestige System?",
+        "Where do I find Prestige System?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.prestige-system.rules",
+      "domain": "progression_wealth",
+      "entities": [
+        "Prestige System",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Prestige System"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Prestige System?",
+        "What happens with Prestige System?",
+        "Does the FAQ explain Prestige System?",
+        "Can you clarify Prestige System?",
+        "Which FAQ covers Prestige System?",
+        "I have a question about Prestige System",
+        "How is Prestige System supposed to work?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.prestige-system.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Prestige System",
+        "What happens with Prestige System?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.missions.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Missions",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Missions"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Missions?",
+        "What are Missions?",
+        "Tell me about Missions",
+        "Explain Missions",
+        "How does Missions work?",
+        "I need information about Missions",
+        "Give me the guide for Missions"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.missions.rules",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "How do I use Missions?",
+        "What are the rules for Missions?",
+        "Where do I find Missions?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.missions.rules",
+      "domain": "progression_wealth",
+      "entities": [
+        "Missions",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Missions"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Missions?",
+        "What happens with Missions?",
+        "Does the FAQ explain Missions?",
+        "Can you clarify Missions?",
+        "Which FAQ covers Missions?",
+        "I have a question about Missions",
+        "How is Missions supposed to work?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.missions.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Missions",
+        "What happens with Missions?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.objectives.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Objectives",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Objectives"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Objectives?",
+        "What are Objectives?",
+        "Tell me about Objectives",
+        "Explain Objectives",
+        "How does Objectives work?",
+        "I need information about Objectives",
+        "Give me the guide for Objectives"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.objectives.rules",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "How do I use Objectives?",
+        "What are the rules for Objectives?",
+        "Where do I find Objectives?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.objectives.rules",
+      "domain": "progression_wealth",
+      "entities": [
+        "Objectives",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Objectives"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Objectives?",
+        "What happens with Objectives?",
+        "Does the FAQ explain Objectives?",
+        "Can you clarify Objectives?",
+        "Which FAQ covers Objectives?",
+        "I have a question about Objectives",
+        "How is Objectives supposed to work?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.objectives.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Objectives",
+        "What happens with Objectives?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.game-leaderboard.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Game Leaderboard",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Game Leaderboard"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Game Leaderboard?",
+        "What are Game Leaderboard?",
+        "Tell me about Game Leaderboard",
+        "Explain Game Leaderboard",
+        "How does Game Leaderboard work?",
+        "I need information about Game Leaderboard",
+        "Give me the guide for Game Leaderboard"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.game-leaderboard.rules",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "How do I use Game Leaderboard?",
+        "What are the rules for Game Leaderboard?",
+        "Where do I find Game Leaderboard?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.game-leaderboard.rules",
+      "domain": "progression_wealth",
+      "entities": [
+        "Game Leaderboard",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Game Leaderboard"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Game Leaderboard?",
+        "What happens with Game Leaderboard?",
+        "Does the FAQ explain Game Leaderboard?",
+        "Can you clarify Game Leaderboard?",
+        "Which FAQ covers Game Leaderboard?",
+        "I have a question about Game Leaderboard",
+        "How is Game Leaderboard supposed to work?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.game-leaderboard.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Game Leaderboard",
+        "What happens with Game Leaderboard?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.inventory.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Inventory",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Inventory"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Inventory?",
+        "What are Inventory?",
+        "Tell me about Inventory",
+        "Explain Inventory",
+        "How does Inventory work?",
+        "I need information about Inventory",
+        "Give me the guide for Inventory"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.inventory.rules",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "How do I use Inventory?",
+        "What are the rules for Inventory?",
+        "Where do I find Inventory?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.inventory.rules",
+      "domain": "progression_wealth",
+      "entities": [
+        "Inventory",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Inventory"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Inventory?",
+        "What happens with Inventory?",
+        "Does the FAQ explain Inventory?",
+        "Can you clarify Inventory?",
+        "Which FAQ covers Inventory?",
+        "I have a question about Inventory",
+        "How is Inventory supposed to work?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.inventory.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Inventory",
+        "What happens with Inventory?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.badges-and-achievements.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Badges & achievements",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Badges & achievements"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Badges & achievements?",
+        "What are Badges & achievements?",
+        "Tell me about Badges & achievements",
+        "Explain Badges & achievements",
+        "How does Badges & achievements work?",
+        "I need information about Badges & achievements",
+        "Give me the guide for Badges & achievements"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.badges-and-achievements.rules",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "How do I use Badges & achievements?",
+        "What are the rules for Badges & achievements?",
+        "Where do I find Badges & achievements?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.badges-and-achievements.rules",
+      "domain": "progression_wealth",
+      "entities": [
+        "Badges & achievements",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Badges & achievements"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Badges & achievements?",
+        "What happens with Badges & achievements?",
+        "Does the FAQ explain Badges & achievements?",
+        "Can you clarify Badges & achievements?",
+        "Which FAQ covers Badges & achievements?",
+        "I have a question about Badges & achievements",
+        "How is Badges & achievements supposed to work?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.badges-and-achievements.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Badges & achievements",
+        "What happens with Badges & achievements?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.respect-secondary-currency.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Respect (secondary currency)",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Respect (secondary currency)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Respect (secondary currency)?",
+        "What are Respect (secondary currency)?",
+        "Tell me about Respect (secondary currency)",
+        "Explain Respect (secondary currency)",
+        "How does Respect (secondary currency) work?",
+        "I need information about Respect (secondary currency)",
+        "Give me the guide for Respect (secondary currency)"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.respect-secondary-currency.rules",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "How do I use Respect (secondary currency)?",
+        "What are the rules for Respect (secondary currency)?",
+        "Where do I find Respect (secondary currency)?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.respect-secondary-currency.rules",
+      "domain": "progression_wealth",
+      "entities": [
+        "Respect (secondary currency)",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Respect (secondary currency)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Respect (secondary currency)?",
+        "What happens with Respect (secondary currency)?",
+        "Does the FAQ explain Respect (secondary currency)?",
+        "Can you clarify Respect (secondary currency)?",
+        "Which FAQ covers Respect (secondary currency)?",
+        "I have a question about Respect (secondary currency)",
+        "How is Respect (secondary currency) supposed to work?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.respect-secondary-currency.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Respect (secondary currency)",
+        "What happens with Respect (secondary currency)?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.auto-rank.auto-rank.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "AUTO RANK",
+        "AUTO RANK"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "AUTO RANK",
+          "title": "AUTO RANK"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/account/autorank"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is AUTO RANK in AUTO RANK?",
+        "What is AUTO RANK?",
+        "What are AUTO RANK?",
+        "Tell me about AUTO RANK",
+        "Explain AUTO RANK",
+        "How does AUTO RANK work?",
+        "I need information about AUTO RANK"
+      ],
+      "related_intents": [
+        "progression_wealth.auto-rank.auto-rank.rules"
+      ],
+      "follow_ups": [
+        "How do I use AUTO RANK?",
+        "What are the rules for AUTO RANK?",
+        "Where do I find AUTO RANK?"
+      ]
+    },
+    {
+      "id": "progression_wealth.auto-rank.auto-rank.rules",
+      "domain": "progression_wealth",
+      "entities": [
+        "AUTO RANK",
+        "AUTO RANK"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "AUTO RANK",
+          "title": "AUTO RANK"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/account/autorank"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for AUTO RANK?",
+        "What happens with AUTO RANK?",
+        "Does the FAQ explain AUTO RANK?",
+        "Can you clarify AUTO RANK?",
+        "Which FAQ covers AUTO RANK?",
+        "I have a question about AUTO RANK",
+        "How is AUTO RANK supposed to work?"
+      ],
+      "related_intents": [
+        "progression_wealth.auto-rank.auto-rank.overview"
+      ],
+      "follow_ups": [
+        "Tell me about AUTO RANK",
+        "What happens with AUTO RANK?",
+        "Show me the AUTO RANK guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.faq.how-does-auto-rank-work.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "How does Auto Rank work?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How does Auto Rank work?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does Auto Rank work?",
+        "What is How does Auto Rank work??",
+        "What are How does Auto Rank work??",
+        "Tell me about How does Auto Rank work?",
+        "Explain How does Auto Rank work?",
+        "How does How does Auto Rank work? work?",
+        "I need information about How does Auto Rank work?"
+      ],
+      "related_intents": [
+        "progression_wealth.faq.how-does-auto-rank-work.rules",
+        "progression_wealth.faq.what-are-wealth-ranks.overview",
+        "progression_wealth.faq.what-are-wealth-ranks.rules"
+      ],
+      "follow_ups": [
+        "How do I use How does Auto Rank work??",
+        "What are the rules for How does Auto Rank work??",
+        "Where do I find How does Auto Rank work??"
+      ]
+    },
+    {
+      "id": "progression_wealth.faq.how-does-auto-rank-work.rules",
+      "domain": "progression_wealth",
+      "entities": [
+        "How does Auto Rank work?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How does Auto Rank work?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for How does Auto Rank work??",
+        "What happens with How does Auto Rank work??",
+        "Does the FAQ explain How does Auto Rank work??",
+        "Can you clarify How does Auto Rank work??",
+        "Which FAQ covers How does Auto Rank work??",
+        "I have a question about How does Auto Rank work?",
+        "How is How does Auto Rank work? supposed to work?"
+      ],
+      "related_intents": [
+        "progression_wealth.faq.how-does-auto-rank-work.overview",
+        "progression_wealth.faq.what-are-wealth-ranks.overview",
+        "progression_wealth.faq.what-are-wealth-ranks.rules"
+      ],
+      "follow_ups": [
+        "Tell me about How does Auto Rank work?",
+        "What happens with How does Auto Rank work??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.faq.what-are-wealth-ranks.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "What are wealth ranks?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What are wealth ranks?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What are wealth ranks?",
+        "What is What are wealth ranks??",
+        "What are What are wealth ranks??",
+        "Tell me about What are wealth ranks?",
+        "Explain What are wealth ranks?",
+        "How does What are wealth ranks? work?",
+        "I need information about What are wealth ranks?"
+      ],
+      "related_intents": [
+        "progression_wealth.faq.what-are-wealth-ranks.rules",
+        "progression_wealth.faq.how-does-auto-rank-work.overview",
+        "progression_wealth.faq.how-does-auto-rank-work.rules"
+      ],
+      "follow_ups": [
+        "How do I use What are wealth ranks??",
+        "What are the rules for What are wealth ranks??",
+        "Where do I find What are wealth ranks??"
+      ]
+    },
+    {
+      "id": "progression_wealth.faq.what-are-wealth-ranks.rules",
+      "domain": "progression_wealth",
+      "entities": [
+        "What are wealth ranks?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What are wealth ranks?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for What are wealth ranks??",
+        "What happens with What are wealth ranks??",
+        "Does the FAQ explain What are wealth ranks??",
+        "Can you clarify What are wealth ranks??",
+        "Which FAQ covers What are wealth ranks??",
+        "I have a question about What are wealth ranks?",
+        "How is What are wealth ranks? supposed to work?"
+      ],
+      "related_intents": [
+        "progression_wealth.faq.what-are-wealth-ranks.overview",
+        "progression_wealth.faq.how-does-auto-rank-work.overview",
+        "progression_wealth.faq.how-does-auto-rank-work.rules"
+      ],
+      "follow_ups": [
+        "Tell me about What are wealth ranks?",
+        "What happens with What are wealth ranks??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.faq.what-is-prestige.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "What is Prestige?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What is Prestige?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Prestige?",
+        "What is What is Prestige??",
+        "What are What is Prestige??",
+        "Tell me about What is Prestige?",
+        "Explain What is Prestige?",
+        "How does What is Prestige? work?",
+        "I need information about What is Prestige?"
+      ],
+      "related_intents": [
+        "progression_wealth.faq.what-is-prestige.rules",
+        "progression_wealth.faq.how-does-auto-rank-work.overview",
+        "progression_wealth.faq.how-does-auto-rank-work.rules",
+        "progression_wealth.faq.what-are-wealth-ranks.overview"
+      ],
+      "follow_ups": [
+        "How do I use What is Prestige??",
+        "What are the rules for What is Prestige??",
+        "Where do I find What is Prestige??"
+      ]
+    },
+    {
+      "id": "progression_wealth.faq.what-is-prestige.rules",
+      "domain": "progression_wealth",
+      "entities": [
+        "What is Prestige?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What is Prestige?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for What is Prestige??",
+        "What happens with What is Prestige??",
+        "Does the FAQ explain What is Prestige??",
+        "Can you clarify What is Prestige??",
+        "Which FAQ covers What is Prestige??",
+        "I have a question about What is Prestige?",
+        "How is What is Prestige? supposed to work?"
+      ],
+      "related_intents": [
+        "progression_wealth.faq.what-is-prestige.overview",
+        "progression_wealth.faq.how-does-auto-rank-work.overview",
+        "progression_wealth.faq.how-does-auto-rank-work.rules",
+        "progression_wealth.faq.what-are-wealth-ranks.overview"
+      ],
+      "follow_ups": [
+        "Tell me about What is Prestige?",
+        "What happens with What is Prestige??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.finding-your-way.wealth-rank.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Wealth rank",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Wealth rank"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Wealth rank?",
+        "What are Wealth rank?",
+        "Tell me about Wealth rank",
+        "Explain Wealth rank",
+        "How does Wealth rank work?",
+        "I need information about Wealth rank",
+        "Give me the guide for Wealth rank"
+      ],
+      "related_intents": [
+        "progression_wealth.finding-your-way.wealth-rank.procedure"
+      ],
+      "follow_ups": [
+        "How do I use Wealth rank?",
+        "What are the rules for Wealth rank?",
+        "Where do I find Wealth rank?"
+      ]
+    },
+    {
+      "id": "progression_wealth.finding-your-way.wealth-rank.procedure",
+      "domain": "progression_wealth",
+      "entities": [
+        "Wealth rank",
+        "FINDING YOUR WAY"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Wealth rank"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Wealth rank?",
+        "How do I start Wealth rank?",
+        "Where do I find Wealth rank?",
+        "What do I do for Wealth rank?",
+        "Show me how to do Wealth rank",
+        "Help me with Wealth rank",
+        "Which menu has Wealth rank?"
+      ],
+      "related_intents": [
+        "progression_wealth.finding-your-way.wealth-rank.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Wealth rank",
+        "What happens with Wealth rank?",
+        "Show me the FINDING YOUR WAY guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.progression-how_to.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "PROGRESSION",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "PROGRESSION",
+          "title": "PROGRESSION"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is PROGRESSION in PROGRESSION?",
+        "What is PROGRESSION?",
+        "What are PROGRESSION?",
+        "Tell me about PROGRESSION",
+        "Explain PROGRESSION",
+        "How does PROGRESSION work?",
+        "I need information about PROGRESSION"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.progression-how_to.procedure",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "How do I use PROGRESSION?",
+        "What are the rules for PROGRESSION?",
+        "Where do I find PROGRESSION?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.progression-how_to.procedure",
+      "domain": "progression_wealth",
+      "entities": [
+        "PROGRESSION",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "PROGRESSION",
+          "title": "PROGRESSION"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use PROGRESSION?",
+        "How do I start PROGRESSION?",
+        "Where do I find PROGRESSION?",
+        "What do I do for PROGRESSION?",
+        "Show me how to do PROGRESSION",
+        "Help me with PROGRESSION",
+        "Which menu has PROGRESSION?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.progression-how_to.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "Tell me about PROGRESSION",
+        "What happens with PROGRESSION?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.dashboard.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Dashboard",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Dashboard"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Dashboard?",
+        "What are Dashboard?",
+        "Tell me about Dashboard",
+        "Explain Dashboard",
+        "How does Dashboard work?",
+        "I need information about Dashboard",
+        "Give me the guide for Dashboard"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.dashboard.procedure",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "How do I use Dashboard?",
+        "What are the rules for Dashboard?",
+        "Where do I find Dashboard?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.dashboard.procedure",
+      "domain": "progression_wealth",
+      "entities": [
+        "Dashboard",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Dashboard"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Dashboard?",
+        "How do I start Dashboard?",
+        "Where do I find Dashboard?",
+        "What do I do for Dashboard?",
+        "Show me how to do Dashboard",
+        "Help me with Dashboard",
+        "Which menu has Dashboard?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.dashboard.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Dashboard",
+        "What happens with Dashboard?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.rank-badges-and-leaderboards.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Rank, badges & leaderboards",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Rank, badges & leaderboards"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Rank, badges & leaderboards?",
+        "What are Rank, badges & leaderboards?",
+        "Tell me about Rank, badges & leaderboards",
+        "Explain Rank, badges & leaderboards",
+        "How does Rank, badges & leaderboards work?",
+        "I need information about Rank, badges & leaderboards",
+        "Give me the guide for Rank, badges & leaderboards"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.rank-badges-and-leaderboards.procedure",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "How do I use Rank, badges & leaderboards?",
+        "What are the rules for Rank, badges & leaderboards?",
+        "Where do I find Rank, badges & leaderboards?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.rank-badges-and-leaderboards.procedure",
+      "domain": "progression_wealth",
+      "entities": [
+        "Rank, badges & leaderboards",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Rank, badges & leaderboards"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Rank, badges & leaderboards?",
+        "How do I start Rank, badges & leaderboards?",
+        "Where do I find Rank, badges & leaderboards?",
+        "What do I do for Rank, badges & leaderboards?",
+        "Show me how to do Rank, badges & leaderboards",
+        "Help me with Rank, badges & leaderboards",
+        "Which menu has Rank, badges & leaderboards?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.rank-badges-and-leaderboards.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Rank, badges & leaderboards",
+        "What happens with Rank, badges & leaderboards?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.missions-and-objectives.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Missions & objectives",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Missions & objectives"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Missions & objectives?",
+        "What are Missions & objectives?",
+        "Tell me about Missions & objectives",
+        "Explain Missions & objectives",
+        "How does Missions & objectives work?",
+        "I need information about Missions & objectives",
+        "Give me the guide for Missions & objectives"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.missions-and-objectives.procedure",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "How do I use Missions & objectives?",
+        "What are the rules for Missions & objectives?",
+        "Where do I find Missions & objectives?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.missions-and-objectives.procedure",
+      "domain": "progression_wealth",
+      "entities": [
+        "Missions & objectives",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Missions & objectives"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Missions & objectives?",
+        "How do I start Missions & objectives?",
+        "Where do I find Missions & objectives?",
+        "What do I do for Missions & objectives?",
+        "Show me how to do Missions & objectives",
+        "Help me with Missions & objectives",
+        "Which menu has Missions & objectives?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.missions-and-objectives.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Missions & objectives",
+        "What happens with Missions & objectives?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.stats.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Stats",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Stats"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Stats?",
+        "What are Stats?",
+        "Tell me about Stats",
+        "Explain Stats",
+        "How does Stats work?",
+        "I need information about Stats",
+        "Give me the guide for Stats"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.stats.procedure",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "How do I use Stats?",
+        "What are the rules for Stats?",
+        "Where do I find Stats?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.stats.procedure",
+      "domain": "progression_wealth",
+      "entities": [
+        "Stats",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Stats"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Stats?",
+        "How do I start Stats?",
+        "Where do I find Stats?",
+        "What do I do for Stats?",
+        "Show me how to do Stats",
+        "Help me with Stats",
+        "Which menu has Stats?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.stats.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Stats",
+        "What happens with Stats?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.prestige-and-inventory.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Prestige & inventory",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Prestige & inventory"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Prestige & inventory?",
+        "What are Prestige & inventory?",
+        "Tell me about Prestige & inventory",
+        "Explain Prestige & inventory",
+        "How does Prestige & inventory work?",
+        "I need information about Prestige & inventory",
+        "Give me the guide for Prestige & inventory"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.prestige-and-inventory.procedure",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "How do I use Prestige & inventory?",
+        "What are the rules for Prestige & inventory?",
+        "Where do I find Prestige & inventory?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.prestige-and-inventory.procedure",
+      "domain": "progression_wealth",
+      "entities": [
+        "Prestige & inventory",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Prestige & inventory"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Prestige & inventory?",
+        "How do I start Prestige & inventory?",
+        "Where do I find Prestige & inventory?",
+        "What do I do for Prestige & inventory?",
+        "Show me how to do Prestige & inventory",
+        "Help me with Prestige & inventory",
+        "Which menu has Prestige & inventory?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.prestige-and-inventory.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Prestige & inventory",
+        "What happens with Prestige & inventory?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.auto-rank.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Auto Rank",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Auto Rank"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Auto Rank in PROGRESSION?",
+        "What is Auto Rank?",
+        "What are Auto Rank?",
+        "Tell me about Auto Rank",
+        "Explain Auto Rank",
+        "How does Auto Rank work?",
+        "I need information about Auto Rank"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.auto-rank.procedure",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "How do I use Auto Rank?",
+        "What are the rules for Auto Rank?",
+        "Where do I find Auto Rank?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.auto-rank.procedure",
+      "domain": "progression_wealth",
+      "entities": [
+        "Auto Rank",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Auto Rank"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Auto Rank?",
+        "How do I start Auto Rank?",
+        "Where do I find Auto Rank?",
+        "What do I do for Auto Rank?",
+        "Show me how to do Auto Rank",
+        "Help me with Auto Rank",
+        "Which menu has Auto Rank?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.auto-rank.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Auto Rank",
+        "What happens with Auto Rank?",
+        "Show me the PROGRESSION guide"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.daily-rewards.overview",
+      "domain": "progression_wealth",
+      "entities": [
+        "Daily rewards",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Daily rewards"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Daily rewards?",
+        "What are Daily rewards?",
+        "Tell me about Daily rewards",
+        "Explain Daily rewards",
+        "How does Daily rewards work?",
+        "I need information about Daily rewards",
+        "Give me the guide for Daily rewards"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.daily-rewards.procedure",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "How do I use Daily rewards?",
+        "What are the rules for Daily rewards?",
+        "Where do I find Daily rewards?"
+      ]
+    },
+    {
+      "id": "progression_wealth.progression.daily-rewards.procedure",
+      "domain": "progression_wealth",
+      "entities": [
+        "Daily rewards",
+        "PROGRESSION"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Daily rewards"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/ranking",
+        "/account/missions",
+        "/account/prestige"
+      ],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Daily rewards?",
+        "How do I start Daily rewards?",
+        "Where do I find Daily rewards?",
+        "What do I do for Daily rewards?",
+        "Show me how to do Daily rewards",
+        "Help me with Daily rewards",
+        "Which menu has Daily rewards?"
+      ],
+      "related_intents": [
+        "progression_wealth.progression.daily-rewards.overview",
+        "progression_wealth.progression.progression.overview",
+        "progression_wealth.progression.progression.rules",
+        "progression_wealth.progression.ranks-13-total.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Daily rewards",
+        "What happens with Daily rewards?",
+        "Show me the PROGRESSION guide"
+      ]
+    }
+  ]
+}

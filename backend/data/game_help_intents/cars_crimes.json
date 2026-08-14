@@ -1,0 +1,1543 @@
+{
+  "domain": "cars_crimes",
+  "intents": [
+    {
+      "id": "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "GARAGE & VEHICLES",
+        "GARAGE & VEHICLES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "GARAGE & VEHICLES",
+          "title": "GARAGE & VEHICLES"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/cars/garage",
+        "/cars/buy",
+        "/cars/sell"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is GARAGE & VEHICLES?",
+        "What are GARAGE & VEHICLES?",
+        "Tell me about GARAGE & VEHICLES",
+        "Explain GARAGE & VEHICLES",
+        "How does GARAGE & VEHICLES work?",
+        "I need information about GARAGE & VEHICLES",
+        "Give me the guide for GARAGE & VEHICLES"
+      ],
+      "related_intents": [
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
+        "cars_crimes.garage-and-vehicles.car-rarities.overview",
+        "cars_crimes.garage-and-vehicles.car-rarities.rules"
+      ],
+      "follow_ups": [
+        "How do I use GARAGE & VEHICLES?",
+        "What are the rules for GARAGE & VEHICLES?",
+        "Where do I find GARAGE & VEHICLES?"
+      ]
+    },
+    {
+      "id": "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
+      "domain": "cars_crimes",
+      "entities": [
+        "GARAGE & VEHICLES",
+        "GARAGE & VEHICLES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "GARAGE & VEHICLES",
+          "title": "GARAGE & VEHICLES"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/cars/garage",
+        "/cars/buy",
+        "/cars/sell"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for GARAGE & VEHICLES?",
+        "What happens with GARAGE & VEHICLES?",
+        "Does the FAQ explain GARAGE & VEHICLES?",
+        "Can you clarify GARAGE & VEHICLES?",
+        "Which FAQ covers GARAGE & VEHICLES?",
+        "I have a question about GARAGE & VEHICLES",
+        "How is GARAGE & VEHICLES supposed to work?"
+      ],
+      "related_intents": [
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
+        "cars_crimes.garage-and-vehicles.car-rarities.overview",
+        "cars_crimes.garage-and-vehicles.car-rarities.rules"
+      ],
+      "follow_ups": [
+        "Tell me about GARAGE & VEHICLES",
+        "What happens with GARAGE & VEHICLES?",
+        "Show me the GARAGE & VEHICLES guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.garage-and-vehicles.car-rarities.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "Car Rarities",
+        "GARAGE & VEHICLES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "GARAGE & VEHICLES",
+          "title": "Car Rarities"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/cars/garage",
+        "/cars/buy",
+        "/cars/sell"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Car Rarities?",
+        "What are Car Rarities?",
+        "Tell me about Car Rarities",
+        "Explain Car Rarities",
+        "How does Car Rarities work?",
+        "I need information about Car Rarities",
+        "Give me the guide for Car Rarities"
+      ],
+      "related_intents": [
+        "cars_crimes.garage-and-vehicles.car-rarities.rules",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules"
+      ],
+      "follow_ups": [
+        "How do I use Car Rarities?",
+        "What are the rules for Car Rarities?",
+        "Where do I find Car Rarities?"
+      ]
+    },
+    {
+      "id": "cars_crimes.garage-and-vehicles.car-rarities.rules",
+      "domain": "cars_crimes",
+      "entities": [
+        "Car Rarities",
+        "GARAGE & VEHICLES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "GARAGE & VEHICLES",
+          "title": "Car Rarities"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/cars/garage",
+        "/cars/buy",
+        "/cars/sell"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Car Rarities?",
+        "What happens with Car Rarities?",
+        "Does the FAQ explain Car Rarities?",
+        "Can you clarify Car Rarities?",
+        "Which FAQ covers Car Rarities?",
+        "I have a question about Car Rarities",
+        "How is Car Rarities supposed to work?"
+      ],
+      "related_intents": [
+        "cars_crimes.garage-and-vehicles.car-rarities.overview",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Car Rarities",
+        "What happens with Car Rarities?",
+        "Show me the GARAGE & VEHICLES guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.garage-and-vehicles.travel-speed-by-rarity.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "Travel Speed by Rarity",
+        "GARAGE & VEHICLES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "GARAGE & VEHICLES",
+          "title": "Travel Speed by Rarity"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/cars/garage",
+        "/cars/buy",
+        "/cars/sell"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Travel Speed by Rarity?",
+        "What are Travel Speed by Rarity?",
+        "Tell me about Travel Speed by Rarity",
+        "Explain Travel Speed by Rarity",
+        "How does Travel Speed by Rarity work?",
+        "I need information about Travel Speed by Rarity",
+        "Give me the guide for Travel Speed by Rarity"
+      ],
+      "related_intents": [
+        "cars_crimes.garage-and-vehicles.travel-speed-by-rarity.rules",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
+        "cars_crimes.garage-and-vehicles.car-rarities.overview"
+      ],
+      "follow_ups": [
+        "How do I use Travel Speed by Rarity?",
+        "What are the rules for Travel Speed by Rarity?",
+        "Where do I find Travel Speed by Rarity?"
+      ]
+    },
+    {
+      "id": "cars_crimes.garage-and-vehicles.travel-speed-by-rarity.rules",
+      "domain": "cars_crimes",
+      "entities": [
+        "Travel Speed by Rarity",
+        "GARAGE & VEHICLES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "GARAGE & VEHICLES",
+          "title": "Travel Speed by Rarity"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/cars/garage",
+        "/cars/buy",
+        "/cars/sell"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Travel Speed by Rarity?",
+        "What happens with Travel Speed by Rarity?",
+        "Does the FAQ explain Travel Speed by Rarity?",
+        "Can you clarify Travel Speed by Rarity?",
+        "Which FAQ covers Travel Speed by Rarity?",
+        "I have a question about Travel Speed by Rarity",
+        "How is Travel Speed by Rarity supposed to work?"
+      ],
+      "related_intents": [
+        "cars_crimes.garage-and-vehicles.travel-speed-by-rarity.overview",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
+        "cars_crimes.garage-and-vehicles.car-rarities.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Travel Speed by Rarity",
+        "What happens with Travel Speed by Rarity?",
+        "Show me the GARAGE & VEHICLES guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.garage-and-vehicles.melting-cars-for-bullets.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "Melting Cars for Bullets",
+        "GARAGE & VEHICLES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "GARAGE & VEHICLES",
+          "title": "Melting Cars for Bullets"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/cars/garage",
+        "/cars/buy",
+        "/cars/sell"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Melting Cars for Bullets?",
+        "What are Melting Cars for Bullets?",
+        "Tell me about Melting Cars for Bullets",
+        "Explain Melting Cars for Bullets",
+        "How does Melting Cars for Bullets work?",
+        "I need information about Melting Cars for Bullets",
+        "Give me the guide for Melting Cars for Bullets"
+      ],
+      "related_intents": [
+        "cars_crimes.garage-and-vehicles.melting-cars-for-bullets.rules",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
+        "cars_crimes.garage-and-vehicles.car-rarities.overview"
+      ],
+      "follow_ups": [
+        "How do I use Melting Cars for Bullets?",
+        "What are the rules for Melting Cars for Bullets?",
+        "Where do I find Melting Cars for Bullets?"
+      ]
+    },
+    {
+      "id": "cars_crimes.garage-and-vehicles.melting-cars-for-bullets.rules",
+      "domain": "cars_crimes",
+      "entities": [
+        "Melting Cars for Bullets",
+        "GARAGE & VEHICLES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "GARAGE & VEHICLES",
+          "title": "Melting Cars for Bullets"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/cars/garage",
+        "/cars/buy",
+        "/cars/sell"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Melting Cars for Bullets?",
+        "What happens with Melting Cars for Bullets?",
+        "Does the FAQ explain Melting Cars for Bullets?",
+        "Can you clarify Melting Cars for Bullets?",
+        "Which FAQ covers Melting Cars for Bullets?",
+        "I have a question about Melting Cars for Bullets",
+        "How is Melting Cars for Bullets supposed to work?"
+      ],
+      "related_intents": [
+        "cars_crimes.garage-and-vehicles.melting-cars-for-bullets.overview",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
+        "cars_crimes.garage-and-vehicles.car-rarities.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Melting Cars for Bullets",
+        "What happens with Melting Cars for Bullets?",
+        "Show me the GARAGE & VEHICLES guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.garage-and-vehicles.other-car-options.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "Other Car Options",
+        "GARAGE & VEHICLES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "GARAGE & VEHICLES",
+          "title": "Other Car Options"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/cars/garage",
+        "/cars/buy",
+        "/cars/sell"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Other Car Options?",
+        "What are Other Car Options?",
+        "Tell me about Other Car Options",
+        "Explain Other Car Options",
+        "How does Other Car Options work?",
+        "I need information about Other Car Options",
+        "Give me the guide for Other Car Options"
+      ],
+      "related_intents": [
+        "cars_crimes.garage-and-vehicles.other-car-options.rules",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
+        "cars_crimes.garage-and-vehicles.car-rarities.overview"
+      ],
+      "follow_ups": [
+        "How do I use Other Car Options?",
+        "What are the rules for Other Car Options?",
+        "Where do I find Other Car Options?"
+      ]
+    },
+    {
+      "id": "cars_crimes.garage-and-vehicles.other-car-options.rules",
+      "domain": "cars_crimes",
+      "entities": [
+        "Other Car Options",
+        "GARAGE & VEHICLES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "GARAGE & VEHICLES",
+          "title": "Other Car Options"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/cars/garage",
+        "/cars/buy",
+        "/cars/sell"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Other Car Options?",
+        "What happens with Other Car Options?",
+        "Does the FAQ explain Other Car Options?",
+        "Can you clarify Other Car Options?",
+        "Which FAQ covers Other Car Options?",
+        "I have a question about Other Car Options",
+        "How is Other Car Options supposed to work?"
+      ],
+      "related_intents": [
+        "cars_crimes.garage-and-vehicles.other-car-options.overview",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
+        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
+        "cars_crimes.garage-and-vehicles.car-rarities.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Other Car Options",
+        "What happens with Other Car Options?",
+        "Show me the GARAGE & VEHICLES guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes.crimes.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "CRIMES",
+        "CRIMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "CRIMES",
+          "title": "CRIMES"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/crime/crimes",
+        "/crime/gta",
+        "/organised-crime"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is CRIMES?",
+        "What are CRIMES?",
+        "Tell me about CRIMES",
+        "Explain CRIMES",
+        "How does CRIMES work?",
+        "I need information about CRIMES",
+        "Give me the guide for CRIMES"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes.crimes.rules",
+        "cars_crimes.crimes.regular-crimes.overview",
+        "cars_crimes.crimes.regular-crimes.rules"
+      ],
+      "follow_ups": [
+        "How do I use CRIMES?",
+        "What are the rules for CRIMES?",
+        "Where do I find CRIMES?"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes.crimes.rules",
+      "domain": "cars_crimes",
+      "entities": [
+        "CRIMES",
+        "CRIMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "CRIMES",
+          "title": "CRIMES"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/crime/crimes",
+        "/crime/gta",
+        "/organised-crime"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for CRIMES?",
+        "What happens with CRIMES?",
+        "Does the FAQ explain CRIMES?",
+        "Can you clarify CRIMES?",
+        "Which FAQ covers CRIMES?",
+        "I have a question about CRIMES",
+        "How is CRIMES supposed to work?"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes.crimes.overview",
+        "cars_crimes.crimes.regular-crimes.overview",
+        "cars_crimes.crimes.regular-crimes.rules"
+      ],
+      "follow_ups": [
+        "Tell me about CRIMES",
+        "What happens with CRIMES?",
+        "Show me the CRIMES guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes.regular-crimes.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "Regular Crimes",
+        "CRIMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CRIMES",
+          "title": "Regular Crimes"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/crime/crimes",
+        "/crime/gta",
+        "/organised-crime"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Regular Crimes?",
+        "What are Regular Crimes?",
+        "Tell me about Regular Crimes",
+        "Explain Regular Crimes",
+        "How does Regular Crimes work?",
+        "I need information about Regular Crimes",
+        "Give me the guide for Regular Crimes"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes.regular-crimes.rules",
+        "cars_crimes.crimes.crimes.overview",
+        "cars_crimes.crimes.crimes.rules"
+      ],
+      "follow_ups": [
+        "How do I use Regular Crimes?",
+        "What are the rules for Regular Crimes?",
+        "Where do I find Regular Crimes?"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes.regular-crimes.rules",
+      "domain": "cars_crimes",
+      "entities": [
+        "Regular Crimes",
+        "CRIMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CRIMES",
+          "title": "Regular Crimes"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/crime/crimes",
+        "/crime/gta",
+        "/organised-crime"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Regular Crimes?",
+        "What happens with Regular Crimes?",
+        "Does the FAQ explain Regular Crimes?",
+        "Can you clarify Regular Crimes?",
+        "Which FAQ covers Regular Crimes?",
+        "I have a question about Regular Crimes",
+        "How is Regular Crimes supposed to work?"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes.regular-crimes.overview",
+        "cars_crimes.crimes.crimes.overview",
+        "cars_crimes.crimes.crimes.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Regular Crimes",
+        "What happens with Regular Crimes?",
+        "Show me the CRIMES guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes.organised-crime-oc-heists.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "Organised Crime (OC/Heists)",
+        "CRIMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CRIMES",
+          "title": "Organised Crime (OC/Heists)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/crime/crimes",
+        "/crime/gta",
+        "/organised-crime"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Organised Crime (OC/Heists)?",
+        "What are Organised Crime (OC/Heists)?",
+        "Tell me about Organised Crime (OC/Heists)",
+        "Explain Organised Crime (OC/Heists)",
+        "How does Organised Crime (OC/Heists) work?",
+        "I need information about Organised Crime (OC/Heists)",
+        "Give me the guide for Organised Crime (OC/Heists)"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes.organised-crime-oc-heists.rules",
+        "cars_crimes.crimes.crimes.overview",
+        "cars_crimes.crimes.crimes.rules",
+        "cars_crimes.crimes.regular-crimes.overview"
+      ],
+      "follow_ups": [
+        "How do I use Organised Crime (OC/Heists)?",
+        "What are the rules for Organised Crime (OC/Heists)?",
+        "Where do I find Organised Crime (OC/Heists)?"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes.organised-crime-oc-heists.rules",
+      "domain": "cars_crimes",
+      "entities": [
+        "Organised Crime (OC/Heists)",
+        "CRIMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CRIMES",
+          "title": "Organised Crime (OC/Heists)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/crime/crimes",
+        "/crime/gta",
+        "/organised-crime"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Organised Crime (OC/Heists)?",
+        "What happens with Organised Crime (OC/Heists)?",
+        "Does the FAQ explain Organised Crime (OC/Heists)?",
+        "Can you clarify Organised Crime (OC/Heists)?",
+        "Which FAQ covers Organised Crime (OC/Heists)?",
+        "I have a question about Organised Crime (OC/Heists)",
+        "How is Organised Crime (OC/Heists) supposed to work?"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes.organised-crime-oc-heists.overview",
+        "cars_crimes.crimes.crimes.overview",
+        "cars_crimes.crimes.crimes.rules",
+        "cars_crimes.crimes.regular-crimes.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Organised Crime (OC/Heists)",
+        "What happens with Organised Crime (OC/Heists)?",
+        "Show me the CRIMES guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes.gta-car-theft.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "GTA (Car Theft)",
+        "CRIMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CRIMES",
+          "title": "GTA (Car Theft)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/crime/crimes",
+        "/crime/gta",
+        "/organised-crime"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is GTA (Car Theft) in CRIMES?",
+        "What is GTA (Car Theft)?",
+        "What are GTA (Car Theft)?",
+        "Tell me about GTA (Car Theft)",
+        "Explain GTA (Car Theft)",
+        "How does GTA (Car Theft) work?",
+        "I need information about GTA (Car Theft)"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes.gta-car-theft.rules",
+        "cars_crimes.crimes.crimes.overview",
+        "cars_crimes.crimes.crimes.rules",
+        "cars_crimes.crimes.regular-crimes.overview"
+      ],
+      "follow_ups": [
+        "How do I use GTA (Car Theft)?",
+        "What are the rules for GTA (Car Theft)?",
+        "Where do I find GTA (Car Theft)?"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes.gta-car-theft.rules",
+      "domain": "cars_crimes",
+      "entities": [
+        "GTA (Car Theft)",
+        "CRIMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CRIMES",
+          "title": "GTA (Car Theft)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/crime/crimes",
+        "/crime/gta",
+        "/organised-crime"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for GTA (Car Theft)?",
+        "What happens with GTA (Car Theft)?",
+        "Does the FAQ explain GTA (Car Theft)?",
+        "Can you clarify GTA (Car Theft)?",
+        "Which FAQ covers GTA (Car Theft)?",
+        "I have a question about GTA (Car Theft)",
+        "How is GTA (Car Theft) supposed to work?"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes.gta-car-theft.overview",
+        "cars_crimes.crimes.crimes.overview",
+        "cars_crimes.crimes.crimes.rules",
+        "cars_crimes.crimes.regular-crimes.overview"
+      ],
+      "follow_ups": [
+        "Tell me about GTA (Car Theft)",
+        "What happens with GTA (Car Theft)?",
+        "Show me the CRIMES guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.cars-and-garage.cars-and-garage.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "CARS & GARAGE",
+        "CARS & GARAGE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "CARS & GARAGE",
+          "title": "CARS & GARAGE"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is CARS & GARAGE?",
+        "What are CARS & GARAGE?",
+        "Tell me about CARS & GARAGE",
+        "Explain CARS & GARAGE",
+        "How does CARS & GARAGE work?",
+        "I need information about CARS & GARAGE",
+        "Give me the guide for CARS & GARAGE"
+      ],
+      "related_intents": [
+        "cars_crimes.cars-and-garage.cars-and-garage.procedure",
+        "cars_crimes.cars-and-garage.garage.overview",
+        "cars_crimes.cars-and-garage.garage.procedure"
+      ],
+      "follow_ups": [
+        "How do I use CARS & GARAGE?",
+        "What are the rules for CARS & GARAGE?",
+        "Where do I find CARS & GARAGE?"
+      ]
+    },
+    {
+      "id": "cars_crimes.cars-and-garage.cars-and-garage.procedure",
+      "domain": "cars_crimes",
+      "entities": [
+        "CARS & GARAGE",
+        "CARS & GARAGE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "CARS & GARAGE",
+          "title": "CARS & GARAGE"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use CARS & GARAGE?",
+        "How do I start CARS & GARAGE?",
+        "Where do I find CARS & GARAGE?",
+        "What do I do for CARS & GARAGE?",
+        "Show me how to do CARS & GARAGE",
+        "Help me with CARS & GARAGE",
+        "Which menu has CARS & GARAGE?"
+      ],
+      "related_intents": [
+        "cars_crimes.cars-and-garage.cars-and-garage.overview",
+        "cars_crimes.cars-and-garage.garage.overview",
+        "cars_crimes.cars-and-garage.garage.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about CARS & GARAGE",
+        "What happens with CARS & GARAGE?",
+        "Show me the CARS & GARAGE guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.cars-and-garage.garage.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "Garage",
+        "CARS & GARAGE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CARS & GARAGE",
+          "title": "Garage"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Garage?",
+        "What are Garage?",
+        "Tell me about Garage",
+        "Explain Garage",
+        "How does Garage work?",
+        "I need information about Garage",
+        "Give me the guide for Garage"
+      ],
+      "related_intents": [
+        "cars_crimes.cars-and-garage.garage.procedure",
+        "cars_crimes.cars-and-garage.cars-and-garage.overview",
+        "cars_crimes.cars-and-garage.cars-and-garage.procedure"
+      ],
+      "follow_ups": [
+        "How do I use Garage?",
+        "What are the rules for Garage?",
+        "Where do I find Garage?"
+      ]
+    },
+    {
+      "id": "cars_crimes.cars-and-garage.garage.procedure",
+      "domain": "cars_crimes",
+      "entities": [
+        "Garage",
+        "CARS & GARAGE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CARS & GARAGE",
+          "title": "Garage"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Garage?",
+        "How do I start Garage?",
+        "Where do I find Garage?",
+        "What do I do for Garage?",
+        "Show me how to do Garage",
+        "Help me with Garage",
+        "Which menu has Garage?"
+      ],
+      "related_intents": [
+        "cars_crimes.cars-and-garage.garage.overview",
+        "cars_crimes.cars-and-garage.cars-and-garage.overview",
+        "cars_crimes.cars-and-garage.cars-and-garage.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about Garage",
+        "What happens with Garage?",
+        "Show me the CARS & GARAGE guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.cars-and-garage.car-details.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "Car details",
+        "CARS & GARAGE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CARS & GARAGE",
+          "title": "Car details"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Car details?",
+        "What are Car details?",
+        "Tell me about Car details",
+        "Explain Car details",
+        "How does Car details work?",
+        "I need information about Car details",
+        "Give me the guide for Car details"
+      ],
+      "related_intents": [
+        "cars_crimes.cars-and-garage.car-details.procedure",
+        "cars_crimes.cars-and-garage.cars-and-garage.overview",
+        "cars_crimes.cars-and-garage.cars-and-garage.procedure",
+        "cars_crimes.cars-and-garage.garage.overview"
+      ],
+      "follow_ups": [
+        "How do I use Car details?",
+        "What are the rules for Car details?",
+        "Where do I find Car details?"
+      ]
+    },
+    {
+      "id": "cars_crimes.cars-and-garage.car-details.procedure",
+      "domain": "cars_crimes",
+      "entities": [
+        "Car details",
+        "CARS & GARAGE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CARS & GARAGE",
+          "title": "Car details"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Car details?",
+        "How do I start Car details?",
+        "Where do I find Car details?",
+        "What do I do for Car details?",
+        "Show me how to do Car details",
+        "Help me with Car details",
+        "Which menu has Car details?"
+      ],
+      "related_intents": [
+        "cars_crimes.cars-and-garage.car-details.overview",
+        "cars_crimes.cars-and-garage.cars-and-garage.overview",
+        "cars_crimes.cars-and-garage.cars-and-garage.procedure",
+        "cars_crimes.cars-and-garage.garage.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Car details",
+        "What happens with Car details?",
+        "Show me the CARS & GARAGE guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.cars-and-garage.buy-and-sell.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "Buy & sell",
+        "CARS & GARAGE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CARS & GARAGE",
+          "title": "Buy & sell"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Buy & sell?",
+        "What are Buy & sell?",
+        "Tell me about Buy & sell",
+        "Explain Buy & sell",
+        "How does Buy & sell work?",
+        "I need information about Buy & sell",
+        "Give me the guide for Buy & sell"
+      ],
+      "related_intents": [
+        "cars_crimes.cars-and-garage.buy-and-sell.procedure",
+        "cars_crimes.cars-and-garage.cars-and-garage.overview",
+        "cars_crimes.cars-and-garage.cars-and-garage.procedure",
+        "cars_crimes.cars-and-garage.garage.overview"
+      ],
+      "follow_ups": [
+        "How do I use Buy & sell?",
+        "What are the rules for Buy & sell?",
+        "Where do I find Buy & sell?"
+      ]
+    },
+    {
+      "id": "cars_crimes.cars-and-garage.buy-and-sell.procedure",
+      "domain": "cars_crimes",
+      "entities": [
+        "Buy & sell",
+        "CARS & GARAGE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CARS & GARAGE",
+          "title": "Buy & sell"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Buy & sell?",
+        "How do I start Buy & sell?",
+        "Where do I find Buy & sell?",
+        "What do I do for Buy & sell?",
+        "Show me how to do Buy & sell",
+        "Help me with Buy & sell",
+        "Which menu has Buy & sell?"
+      ],
+      "related_intents": [
+        "cars_crimes.cars-and-garage.buy-and-sell.overview",
+        "cars_crimes.cars-and-garage.cars-and-garage.overview",
+        "cars_crimes.cars-and-garage.cars-and-garage.procedure",
+        "cars_crimes.cars-and-garage.garage.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Buy & sell",
+        "What happens with Buy & sell?",
+        "Show me the CARS & GARAGE guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.cars-and-garage.travel.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "Travel",
+        "CARS & GARAGE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CARS & GARAGE",
+          "title": "Travel"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Travel in CARS & GARAGE?",
+        "What is Travel?",
+        "What are Travel?",
+        "Tell me about Travel",
+        "Explain Travel",
+        "How does Travel work?",
+        "I need information about Travel"
+      ],
+      "related_intents": [
+        "cars_crimes.cars-and-garage.travel.procedure",
+        "cars_crimes.cars-and-garage.cars-and-garage.overview",
+        "cars_crimes.cars-and-garage.cars-and-garage.procedure",
+        "cars_crimes.cars-and-garage.garage.overview"
+      ],
+      "follow_ups": [
+        "How do I use Travel?",
+        "What are the rules for Travel?",
+        "Where do I find Travel?"
+      ]
+    },
+    {
+      "id": "cars_crimes.cars-and-garage.travel.procedure",
+      "domain": "cars_crimes",
+      "entities": [
+        "Travel",
+        "CARS & GARAGE"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CARS & GARAGE",
+          "title": "Travel"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Travel?",
+        "How do I start Travel?",
+        "Where do I find Travel?",
+        "What do I do for Travel?",
+        "Show me how to do Travel",
+        "Help me with Travel",
+        "Which menu has Travel?"
+      ],
+      "related_intents": [
+        "cars_crimes.cars-and-garage.travel.overview",
+        "cars_crimes.cars-and-garage.cars-and-garage.overview",
+        "cars_crimes.cars-and-garage.cars-and-garage.procedure",
+        "cars_crimes.cars-and-garage.garage.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Travel",
+        "What happens with Travel?",
+        "Show me the CARS & GARAGE guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "CRIMES & ORGANISED CRIME",
+        "CRIMES & ORGANISED CRIME"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "CRIMES & ORGANISED CRIME"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is CRIMES & ORGANISED CRIME?",
+        "What are CRIMES & ORGANISED CRIME?",
+        "Tell me about CRIMES & ORGANISED CRIME",
+        "Explain CRIMES & ORGANISED CRIME",
+        "How does CRIMES & ORGANISED CRIME work?",
+        "I need information about CRIMES & ORGANISED CRIME",
+        "Give me the guide for CRIMES & ORGANISED CRIME"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview",
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.procedure"
+      ],
+      "follow_ups": [
+        "How do I use CRIMES & ORGANISED CRIME?",
+        "What are the rules for CRIMES & ORGANISED CRIME?",
+        "Where do I find CRIMES & ORGANISED CRIME?"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
+      "domain": "cars_crimes",
+      "entities": [
+        "CRIMES & ORGANISED CRIME",
+        "CRIMES & ORGANISED CRIME"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "CRIMES & ORGANISED CRIME"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use CRIMES & ORGANISED CRIME?",
+        "How do I start CRIMES & ORGANISED CRIME?",
+        "Where do I find CRIMES & ORGANISED CRIME?",
+        "What do I do for CRIMES & ORGANISED CRIME?",
+        "Show me how to do CRIMES & ORGANISED CRIME",
+        "Help me with CRIMES & ORGANISED CRIME",
+        "Which menu has CRIMES & ORGANISED CRIME?"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview",
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about CRIMES & ORGANISED CRIME",
+        "What happens with CRIMES & ORGANISED CRIME?",
+        "Show me the CRIMES & ORGANISED CRIME guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes-and-organised-crime.solo-crimes.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "Solo crimes",
+        "CRIMES & ORGANISED CRIME"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "Solo crimes"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Solo crimes?",
+        "What are Solo crimes?",
+        "Tell me about Solo crimes",
+        "Explain Solo crimes",
+        "How does Solo crimes work?",
+        "I need information about Solo crimes",
+        "Give me the guide for Solo crimes"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.procedure",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure"
+      ],
+      "follow_ups": [
+        "How do I use Solo crimes?",
+        "What are the rules for Solo crimes?",
+        "Where do I find Solo crimes?"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes-and-organised-crime.solo-crimes.procedure",
+      "domain": "cars_crimes",
+      "entities": [
+        "Solo crimes",
+        "CRIMES & ORGANISED CRIME"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "Solo crimes"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Solo crimes?",
+        "How do I start Solo crimes?",
+        "Where do I find Solo crimes?",
+        "What do I do for Solo crimes?",
+        "Show me how to do Solo crimes",
+        "Help me with Solo crimes",
+        "Which menu has Solo crimes?"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about Solo crimes",
+        "What happens with Solo crimes?",
+        "Show me the CRIMES & ORGANISED CRIME guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes-and-organised-crime.gta-car-theft.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "GTA (car theft)",
+        "CRIMES & ORGANISED CRIME"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "GTA (car theft)"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is GTA (car theft) in CRIMES & ORGANISED CRIME?",
+        "What is GTA (car theft)?",
+        "What are GTA (car theft)?",
+        "Tell me about GTA (car theft)",
+        "Explain GTA (car theft)",
+        "How does GTA (car theft) work?",
+        "I need information about GTA (car theft)"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes-and-organised-crime.gta-car-theft.procedure",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview"
+      ],
+      "follow_ups": [
+        "How do I use GTA (car theft)?",
+        "What are the rules for GTA (car theft)?",
+        "Where do I find GTA (car theft)?"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes-and-organised-crime.gta-car-theft.procedure",
+      "domain": "cars_crimes",
+      "entities": [
+        "GTA (car theft)",
+        "CRIMES & ORGANISED CRIME"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "GTA (car theft)"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use GTA (car theft)?",
+        "How do I start GTA (car theft)?",
+        "Where do I find GTA (car theft)?",
+        "What do I do for GTA (car theft)?",
+        "Show me how to do GTA (car theft)",
+        "Help me with GTA (car theft)",
+        "Which menu has GTA (car theft)?"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes-and-organised-crime.gta-car-theft.overview",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview"
+      ],
+      "follow_ups": [
+        "Tell me about GTA (car theft)",
+        "What happens with GTA (car theft)?",
+        "Show me the CRIMES & ORGANISED CRIME guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes-and-organised-crime.jail.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "Jail",
+        "CRIMES & ORGANISED CRIME"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "Jail"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Jail?",
+        "What are Jail?",
+        "Tell me about Jail",
+        "Explain Jail",
+        "How does Jail work?",
+        "I need information about Jail",
+        "Give me the guide for Jail"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes-and-organised-crime.jail.procedure",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview"
+      ],
+      "follow_ups": [
+        "How do I use Jail?",
+        "What are the rules for Jail?",
+        "Where do I find Jail?"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes-and-organised-crime.jail.procedure",
+      "domain": "cars_crimes",
+      "entities": [
+        "Jail",
+        "CRIMES & ORGANISED CRIME"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "Jail"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Jail?",
+        "How do I start Jail?",
+        "Where do I find Jail?",
+        "What do I do for Jail?",
+        "Show me how to do Jail",
+        "Help me with Jail",
+        "Which menu has Jail?"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes-and-organised-crime.jail.overview",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Jail",
+        "What happens with Jail?",
+        "Show me the CRIMES & ORGANISED CRIME guide"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes-and-organised-crime.organised-crime.overview",
+      "domain": "cars_crimes",
+      "entities": [
+        "Organised Crime",
+        "CRIMES & ORGANISED CRIME"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "Organised Crime"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Organised Crime?",
+        "What are Organised Crime?",
+        "Tell me about Organised Crime",
+        "Explain Organised Crime",
+        "How does Organised Crime work?",
+        "I need information about Organised Crime",
+        "Give me the guide for Organised Crime"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes-and-organised-crime.organised-crime.procedure",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview"
+      ],
+      "follow_ups": [
+        "How do I use Organised Crime?",
+        "What are the rules for Organised Crime?",
+        "Where do I find Organised Crime?"
+      ]
+    },
+    {
+      "id": "cars_crimes.crimes-and-organised-crime.organised-crime.procedure",
+      "domain": "cars_crimes",
+      "entities": [
+        "Organised Crime",
+        "CRIMES & ORGANISED CRIME"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "Organised Crime"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Organised Crime?",
+        "How do I start Organised Crime?",
+        "Where do I find Organised Crime?",
+        "What do I do for Organised Crime?",
+        "Show me how to do Organised Crime",
+        "Help me with Organised Crime",
+        "Which menu has Organised Crime?"
+      ],
+      "related_intents": [
+        "cars_crimes.crimes-and-organised-crime.organised-crime.overview",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
+        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Organised Crime",
+        "What happens with Organised Crime?",
+        "Show me the CRIMES & ORGANISED CRIME guide"
+      ]
+    }
+  ]
+}

@@ -3712,6 +3712,8 @@ profile.register(api_router)
 admin.register(api_router)
 from routers.game import help_desk
 help_desk.register(api_router)
+from routers.game import game_help_chat
+game_help_chat.register(api_router)
 payments.register(api_router)
 stats.register(api_router)
 achievements.register(api_router)

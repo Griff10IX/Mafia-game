@@ -1,0 +1,953 @@
+{
+  "domain": "loot_store_pass",
+  "intents": [
+    {
+      "id": "loot_store_pass.loot-boxes.loot-boxes.overview",
+      "domain": "loot_store_pass",
+      "entities": [
+        "LOOT BOXES",
+        "LOOT BOXES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "LOOT BOXES",
+          "title": "LOOT BOXES"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is LOOT BOXES?",
+        "What are LOOT BOXES?",
+        "Tell me about LOOT BOXES",
+        "Explain LOOT BOXES",
+        "How does LOOT BOXES work?",
+        "I need information about LOOT BOXES",
+        "Give me the guide for LOOT BOXES"
+      ],
+      "related_intents": [
+        "loot_store_pass.loot-boxes.loot-boxes.rules",
+        "loot_store_pass.loot-boxes.possible-rewards.overview",
+        "loot_store_pass.loot-boxes.possible-rewards.rules"
+      ],
+      "follow_ups": [
+        "How do I use LOOT BOXES?",
+        "What are the rules for LOOT BOXES?",
+        "Where do I find LOOT BOXES?"
+      ]
+    },
+    {
+      "id": "loot_store_pass.loot-boxes.loot-boxes.rules",
+      "domain": "loot_store_pass",
+      "entities": [
+        "LOOT BOXES",
+        "LOOT BOXES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "LOOT BOXES",
+          "title": "LOOT BOXES"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for LOOT BOXES?",
+        "What happens with LOOT BOXES?",
+        "Does the FAQ explain LOOT BOXES?",
+        "Can you clarify LOOT BOXES?",
+        "Which FAQ covers LOOT BOXES?",
+        "I have a question about LOOT BOXES",
+        "How is LOOT BOXES supposed to work?"
+      ],
+      "related_intents": [
+        "loot_store_pass.loot-boxes.loot-boxes.overview",
+        "loot_store_pass.loot-boxes.possible-rewards.overview",
+        "loot_store_pass.loot-boxes.possible-rewards.rules"
+      ],
+      "follow_ups": [
+        "Tell me about LOOT BOXES",
+        "What happens with LOOT BOXES?",
+        "Show me the LOOT BOXES guide"
+      ]
+    },
+    {
+      "id": "loot_store_pass.loot-boxes.possible-rewards.overview",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Possible Rewards",
+        "LOOT BOXES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "LOOT BOXES",
+          "title": "Possible Rewards:"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Possible Rewards?",
+        "What are Possible Rewards?",
+        "Tell me about Possible Rewards",
+        "Explain Possible Rewards",
+        "How does Possible Rewards work?",
+        "I need information about Possible Rewards",
+        "Give me the guide for Possible Rewards"
+      ],
+      "related_intents": [
+        "loot_store_pass.loot-boxes.possible-rewards.rules",
+        "loot_store_pass.loot-boxes.loot-boxes.overview",
+        "loot_store_pass.loot-boxes.loot-boxes.rules"
+      ],
+      "follow_ups": [
+        "How do I use Possible Rewards?",
+        "What are the rules for Possible Rewards?",
+        "Where do I find Possible Rewards?"
+      ]
+    },
+    {
+      "id": "loot_store_pass.loot-boxes.possible-rewards.rules",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Possible Rewards",
+        "LOOT BOXES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "LOOT BOXES",
+          "title": "Possible Rewards:"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Possible Rewards?",
+        "What happens with Possible Rewards?",
+        "Does the FAQ explain Possible Rewards?",
+        "Can you clarify Possible Rewards?",
+        "Which FAQ covers Possible Rewards?",
+        "I have a question about Possible Rewards",
+        "How is Possible Rewards supposed to work?"
+      ],
+      "related_intents": [
+        "loot_store_pass.loot-boxes.possible-rewards.overview",
+        "loot_store_pass.loot-boxes.loot-boxes.overview",
+        "loot_store_pass.loot-boxes.loot-boxes.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Possible Rewards",
+        "What happens with Possible Rewards?",
+        "Show me the LOOT BOXES guide"
+      ]
+    },
+    {
+      "id": "loot_store_pass.point-store.point-store.overview",
+      "domain": "loot_store_pass",
+      "entities": [
+        "POINT STORE",
+        "POINT STORE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "POINT STORE",
+          "title": "POINT STORE"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/store"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is POINT STORE?",
+        "What are POINT STORE?",
+        "Tell me about POINT STORE",
+        "Explain POINT STORE",
+        "How does POINT STORE work?",
+        "I need information about POINT STORE",
+        "Give me the guide for POINT STORE"
+      ],
+      "related_intents": [
+        "loot_store_pass.point-store.point-store.rules",
+        "loot_store_pass.point-store.premium-items.overview",
+        "loot_store_pass.point-store.premium-items.rules"
+      ],
+      "follow_ups": [
+        "How do I use POINT STORE?",
+        "What are the rules for POINT STORE?",
+        "Where do I find POINT STORE?"
+      ]
+    },
+    {
+      "id": "loot_store_pass.point-store.point-store.rules",
+      "domain": "loot_store_pass",
+      "entities": [
+        "POINT STORE",
+        "POINT STORE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "POINT STORE",
+          "title": "POINT STORE"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/store"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for POINT STORE?",
+        "What happens with POINT STORE?",
+        "Does the FAQ explain POINT STORE?",
+        "Can you clarify POINT STORE?",
+        "Which FAQ covers POINT STORE?",
+        "I have a question about POINT STORE",
+        "How is POINT STORE supposed to work?"
+      ],
+      "related_intents": [
+        "loot_store_pass.point-store.point-store.overview",
+        "loot_store_pass.point-store.premium-items.overview",
+        "loot_store_pass.point-store.premium-items.rules"
+      ],
+      "follow_ups": [
+        "Tell me about POINT STORE",
+        "What happens with POINT STORE?",
+        "Show me the POINT STORE guide"
+      ]
+    },
+    {
+      "id": "loot_store_pass.point-store.premium-items.overview",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Premium Items",
+        "POINT STORE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "POINT STORE",
+          "title": "Premium Items"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/store"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Premium Items?",
+        "What are Premium Items?",
+        "Tell me about Premium Items",
+        "Explain Premium Items",
+        "How does Premium Items work?",
+        "I need information about Premium Items",
+        "Give me the guide for Premium Items"
+      ],
+      "related_intents": [
+        "loot_store_pass.point-store.premium-items.rules",
+        "loot_store_pass.point-store.point-store.overview",
+        "loot_store_pass.point-store.point-store.rules"
+      ],
+      "follow_ups": [
+        "How do I use Premium Items?",
+        "What are the rules for Premium Items?",
+        "Where do I find Premium Items?"
+      ]
+    },
+    {
+      "id": "loot_store_pass.point-store.premium-items.rules",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Premium Items",
+        "POINT STORE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "POINT STORE",
+          "title": "Premium Items"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/store"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Premium Items?",
+        "What happens with Premium Items?",
+        "Does the FAQ explain Premium Items?",
+        "Can you clarify Premium Items?",
+        "Which FAQ covers Premium Items?",
+        "I have a question about Premium Items",
+        "How is Premium Items supposed to work?"
+      ],
+      "related_intents": [
+        "loot_store_pass.point-store.premium-items.overview",
+        "loot_store_pass.point-store.point-store.overview",
+        "loot_store_pass.point-store.point-store.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Premium Items",
+        "What happens with Premium Items?",
+        "Show me the POINT STORE guide"
+      ]
+    },
+    {
+      "id": "loot_store_pass.point-store.combat-upgrades.overview",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Combat Upgrades",
+        "POINT STORE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "POINT STORE",
+          "title": "Combat Upgrades"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/store"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Combat Upgrades?",
+        "What are Combat Upgrades?",
+        "Tell me about Combat Upgrades",
+        "Explain Combat Upgrades",
+        "How does Combat Upgrades work?",
+        "I need information about Combat Upgrades",
+        "Give me the guide for Combat Upgrades"
+      ],
+      "related_intents": [
+        "loot_store_pass.point-store.combat-upgrades.rules",
+        "loot_store_pass.point-store.point-store.overview",
+        "loot_store_pass.point-store.point-store.rules",
+        "loot_store_pass.point-store.premium-items.overview"
+      ],
+      "follow_ups": [
+        "How do I use Combat Upgrades?",
+        "What are the rules for Combat Upgrades?",
+        "Where do I find Combat Upgrades?"
+      ]
+    },
+    {
+      "id": "loot_store_pass.point-store.combat-upgrades.rules",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Combat Upgrades",
+        "POINT STORE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "POINT STORE",
+          "title": "Combat Upgrades"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/store"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Combat Upgrades?",
+        "What happens with Combat Upgrades?",
+        "Does the FAQ explain Combat Upgrades?",
+        "Can you clarify Combat Upgrades?",
+        "Which FAQ covers Combat Upgrades?",
+        "I have a question about Combat Upgrades",
+        "How is Combat Upgrades supposed to work?"
+      ],
+      "related_intents": [
+        "loot_store_pass.point-store.combat-upgrades.overview",
+        "loot_store_pass.point-store.point-store.overview",
+        "loot_store_pass.point-store.point-store.rules",
+        "loot_store_pass.point-store.premium-items.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Combat Upgrades",
+        "What happens with Combat Upgrades?",
+        "Show me the POINT STORE guide"
+      ]
+    },
+    {
+      "id": "loot_store_pass.point-store.bullets.overview",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Bullets",
+        "POINT STORE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "POINT STORE",
+          "title": "Bullets"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/store"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Bullets in POINT STORE?",
+        "What is Bullets?",
+        "What are Bullets?",
+        "Tell me about Bullets",
+        "Explain Bullets",
+        "How does Bullets work?",
+        "I need information about Bullets"
+      ],
+      "related_intents": [
+        "loot_store_pass.point-store.bullets.rules",
+        "loot_store_pass.point-store.point-store.overview",
+        "loot_store_pass.point-store.point-store.rules",
+        "loot_store_pass.point-store.premium-items.overview"
+      ],
+      "follow_ups": [
+        "How do I use Bullets?",
+        "What are the rules for Bullets?",
+        "Where do I find Bullets?"
+      ]
+    },
+    {
+      "id": "loot_store_pass.point-store.bullets.rules",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Bullets",
+        "POINT STORE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "POINT STORE",
+          "title": "Bullets"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/store"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Bullets?",
+        "What happens with Bullets?",
+        "Does the FAQ explain Bullets?",
+        "Can you clarify Bullets?",
+        "Which FAQ covers Bullets?",
+        "I have a question about Bullets",
+        "How is Bullets supposed to work?"
+      ],
+      "related_intents": [
+        "loot_store_pass.point-store.bullets.overview",
+        "loot_store_pass.point-store.point-store.overview",
+        "loot_store_pass.point-store.point-store.rules",
+        "loot_store_pass.point-store.premium-items.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Bullets",
+        "What happens with Bullets?",
+        "Show me the POINT STORE guide"
+      ]
+    },
+    {
+      "id": "loot_store_pass.point-store.tokens-1-hour-stacks.overview",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Tokens (1-hour stacks)",
+        "POINT STORE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "POINT STORE",
+          "title": "Tokens (1-hour stacks)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/store"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Tokens (1-hour stacks)?",
+        "What are Tokens (1-hour stacks)?",
+        "Tell me about Tokens (1-hour stacks)",
+        "Explain Tokens (1-hour stacks)",
+        "How does Tokens (1-hour stacks) work?",
+        "I need information about Tokens (1-hour stacks)",
+        "Give me the guide for Tokens (1-hour stacks)"
+      ],
+      "related_intents": [
+        "loot_store_pass.point-store.tokens-1-hour-stacks.rules",
+        "loot_store_pass.point-store.point-store.overview",
+        "loot_store_pass.point-store.point-store.rules",
+        "loot_store_pass.point-store.premium-items.overview"
+      ],
+      "follow_ups": [
+        "How do I use Tokens (1-hour stacks)?",
+        "What are the rules for Tokens (1-hour stacks)?",
+        "Where do I find Tokens (1-hour stacks)?"
+      ]
+    },
+    {
+      "id": "loot_store_pass.point-store.tokens-1-hour-stacks.rules",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Tokens (1-hour stacks)",
+        "POINT STORE"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "POINT STORE",
+          "title": "Tokens (1-hour stacks)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/store"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Tokens (1-hour stacks)?",
+        "What happens with Tokens (1-hour stacks)?",
+        "Does the FAQ explain Tokens (1-hour stacks)?",
+        "Can you clarify Tokens (1-hour stacks)?",
+        "Which FAQ covers Tokens (1-hour stacks)?",
+        "I have a question about Tokens (1-hour stacks)",
+        "How is Tokens (1-hour stacks) supposed to work?"
+      ],
+      "related_intents": [
+        "loot_store_pass.point-store.tokens-1-hour-stacks.overview",
+        "loot_store_pass.point-store.point-store.overview",
+        "loot_store_pass.point-store.point-store.rules",
+        "loot_store_pass.point-store.premium-items.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Tokens (1-hour stacks)",
+        "What happens with Tokens (1-hour stacks)?",
+        "Show me the POINT STORE guide"
+      ]
+    },
+    {
+      "id": "loot_store_pass.game-pass.game-pass.overview",
+      "domain": "loot_store_pass",
+      "entities": [
+        "GAME PASS",
+        "GAME PASS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "GAME PASS",
+          "title": "GAME PASS"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game-pass"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is GAME PASS in GAME PASS?",
+        "What is GAME PASS?",
+        "What are GAME PASS?",
+        "Tell me about GAME PASS",
+        "Explain GAME PASS",
+        "How does GAME PASS work?",
+        "I need information about GAME PASS"
+      ],
+      "related_intents": [
+        "loot_store_pass.game-pass.game-pass.rules",
+        "loot_store_pass.game-pass.overview.overview",
+        "loot_store_pass.game-pass.overview.rules"
+      ],
+      "follow_ups": [
+        "How do I use GAME PASS?",
+        "What are the rules for GAME PASS?",
+        "Where do I find GAME PASS?"
+      ]
+    },
+    {
+      "id": "loot_store_pass.game-pass.game-pass.rules",
+      "domain": "loot_store_pass",
+      "entities": [
+        "GAME PASS",
+        "GAME PASS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "GAME PASS",
+          "title": "GAME PASS"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game-pass"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for GAME PASS?",
+        "What happens with GAME PASS?",
+        "Does the FAQ explain GAME PASS?",
+        "Can you clarify GAME PASS?",
+        "Which FAQ covers GAME PASS?",
+        "I have a question about GAME PASS",
+        "How is GAME PASS supposed to work?"
+      ],
+      "related_intents": [
+        "loot_store_pass.game-pass.game-pass.overview",
+        "loot_store_pass.game-pass.overview.overview",
+        "loot_store_pass.game-pass.overview.rules"
+      ],
+      "follow_ups": [
+        "Tell me about GAME PASS",
+        "What happens with GAME PASS?",
+        "Show me the GAME PASS guide"
+      ]
+    },
+    {
+      "id": "loot_store_pass.game-pass.overview.overview",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Overview",
+        "GAME PASS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "GAME PASS",
+          "title": "Overview"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game-pass"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Overview in GAME PASS?",
+        "What is Overview?",
+        "What are Overview?",
+        "Tell me about Overview",
+        "Explain Overview",
+        "How does Overview work?",
+        "I need information about Overview"
+      ],
+      "related_intents": [
+        "loot_store_pass.game-pass.overview.rules",
+        "loot_store_pass.game-pass.game-pass.overview",
+        "loot_store_pass.game-pass.game-pass.rules"
+      ],
+      "follow_ups": [
+        "How do I use Overview?",
+        "What are the rules for Overview?",
+        "Where do I find Overview?"
+      ]
+    },
+    {
+      "id": "loot_store_pass.game-pass.overview.rules",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Overview",
+        "GAME PASS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "GAME PASS",
+          "title": "Overview"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game-pass"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Overview?",
+        "What happens with Overview?",
+        "Does the FAQ explain Overview?",
+        "Can you clarify Overview?",
+        "Which FAQ covers Overview?",
+        "I have a question about Overview",
+        "How is Overview supposed to work?"
+      ],
+      "related_intents": [
+        "loot_store_pass.game-pass.overview.overview",
+        "loot_store_pass.game-pass.game-pass.overview",
+        "loot_store_pass.game-pass.game-pass.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Overview",
+        "What happens with Overview?",
+        "Show me the GAME PASS guide"
+      ]
+    },
+    {
+      "id": "loot_store_pass.store-and-game-pass.store-and-game-pass.overview",
+      "domain": "loot_store_pass",
+      "entities": [
+        "STORE & GAME PASS",
+        "STORE & GAME PASS"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "STORE & GAME PASS",
+          "title": "STORE & GAME PASS"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is STORE & GAME PASS?",
+        "What are STORE & GAME PASS?",
+        "Tell me about STORE & GAME PASS",
+        "Explain STORE & GAME PASS",
+        "How does STORE & GAME PASS work?",
+        "I need information about STORE & GAME PASS",
+        "Give me the guide for STORE & GAME PASS"
+      ],
+      "related_intents": [
+        "loot_store_pass.store-and-game-pass.store-and-game-pass.procedure",
+        "loot_store_pass.store-and-game-pass.game-store.overview",
+        "loot_store_pass.store-and-game-pass.game-store.procedure"
+      ],
+      "follow_ups": [
+        "How do I use STORE & GAME PASS?",
+        "What are the rules for STORE & GAME PASS?",
+        "Where do I find STORE & GAME PASS?"
+      ]
+    },
+    {
+      "id": "loot_store_pass.store-and-game-pass.store-and-game-pass.procedure",
+      "domain": "loot_store_pass",
+      "entities": [
+        "STORE & GAME PASS",
+        "STORE & GAME PASS"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "STORE & GAME PASS",
+          "title": "STORE & GAME PASS"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use STORE & GAME PASS?",
+        "How do I start STORE & GAME PASS?",
+        "Where do I find STORE & GAME PASS?",
+        "What do I do for STORE & GAME PASS?",
+        "Show me how to do STORE & GAME PASS",
+        "Help me with STORE & GAME PASS",
+        "Which menu has STORE & GAME PASS?"
+      ],
+      "related_intents": [
+        "loot_store_pass.store-and-game-pass.store-and-game-pass.overview",
+        "loot_store_pass.store-and-game-pass.game-store.overview",
+        "loot_store_pass.store-and-game-pass.game-store.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about STORE & GAME PASS",
+        "What happens with STORE & GAME PASS?",
+        "Show me the STORE & GAME PASS guide"
+      ]
+    },
+    {
+      "id": "loot_store_pass.store-and-game-pass.game-store.overview",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Game → Store",
+        "STORE & GAME PASS"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "STORE & GAME PASS",
+          "title": "Game → Store"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Game → Store?",
+        "What are Game → Store?",
+        "Tell me about Game → Store",
+        "Explain Game → Store",
+        "How does Game → Store work?",
+        "I need information about Game → Store",
+        "Give me the guide for Game → Store"
+      ],
+      "related_intents": [
+        "loot_store_pass.store-and-game-pass.game-store.procedure",
+        "loot_store_pass.store-and-game-pass.store-and-game-pass.overview",
+        "loot_store_pass.store-and-game-pass.store-and-game-pass.procedure"
+      ],
+      "follow_ups": [
+        "How do I use Game → Store?",
+        "What are the rules for Game → Store?",
+        "Where do I find Game → Store?"
+      ]
+    },
+    {
+      "id": "loot_store_pass.store-and-game-pass.game-store.procedure",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Game → Store",
+        "STORE & GAME PASS"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "STORE & GAME PASS",
+          "title": "Game → Store"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Game → Store?",
+        "How do I start Game → Store?",
+        "Where do I find Game → Store?",
+        "What do I do for Game → Store?",
+        "Show me how to do Game → Store",
+        "Help me with Game → Store",
+        "Which menu has Game → Store?"
+      ],
+      "related_intents": [
+        "loot_store_pass.store-and-game-pass.game-store.overview",
+        "loot_store_pass.store-and-game-pass.store-and-game-pass.overview",
+        "loot_store_pass.store-and-game-pass.store-and-game-pass.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about Game → Store",
+        "What happens with Game → Store?",
+        "Show me the STORE & GAME PASS guide"
+      ]
+    },
+    {
+      "id": "loot_store_pass.store-and-game-pass.game-pass.overview",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Game Pass",
+        "STORE & GAME PASS"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "STORE & GAME PASS",
+          "title": "Game Pass"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Game Pass in STORE & GAME PASS?",
+        "What is Game Pass?",
+        "What are Game Pass?",
+        "Tell me about Game Pass",
+        "Explain Game Pass",
+        "How does Game Pass work?",
+        "I need information about Game Pass"
+      ],
+      "related_intents": [
+        "loot_store_pass.store-and-game-pass.game-pass.procedure",
+        "loot_store_pass.store-and-game-pass.store-and-game-pass.overview",
+        "loot_store_pass.store-and-game-pass.store-and-game-pass.procedure",
+        "loot_store_pass.store-and-game-pass.game-store.overview"
+      ],
+      "follow_ups": [
+        "How do I use Game Pass?",
+        "What are the rules for Game Pass?",
+        "Where do I find Game Pass?"
+      ]
+    },
+    {
+      "id": "loot_store_pass.store-and-game-pass.game-pass.procedure",
+      "domain": "loot_store_pass",
+      "entities": [
+        "Game Pass",
+        "STORE & GAME PASS"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "STORE & GAME PASS",
+          "title": "Game Pass"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Game Pass?",
+        "How do I start Game Pass?",
+        "Where do I find Game Pass?",
+        "What do I do for Game Pass?",
+        "Show me how to do Game Pass",
+        "Help me with Game Pass",
+        "Which menu has Game Pass?"
+      ],
+      "related_intents": [
+        "loot_store_pass.store-and-game-pass.game-pass.overview",
+        "loot_store_pass.store-and-game-pass.store-and-game-pass.overview",
+        "loot_store_pass.store-and-game-pass.store-and-game-pass.procedure",
+        "loot_store_pass.store-and-game-pass.game-store.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Game Pass",
+        "What happens with Game Pass?",
+        "Show me the STORE & GAME PASS guide"
+      ]
+    }
+  ]
+}

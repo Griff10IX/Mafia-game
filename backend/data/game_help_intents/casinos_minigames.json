@@ -1,0 +1,1873 @@
+{
+  "domain": "casinos_minigames",
+  "intents": [
+    {
+      "id": "casinos_minigames.casinos.casinos.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "CASINOS",
+        "CASINOS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "CASINOS",
+          "title": "CASINOS"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino",
+        "/sports-betting"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is CASINOS?",
+        "What are CASINOS?",
+        "Tell me about CASINOS",
+        "Explain CASINOS",
+        "How does CASINOS work?",
+        "I need information about CASINOS",
+        "Give me the guide for CASINOS"
+      ],
+      "related_intents": [
+        "casinos_minigames.casinos.casinos.rules",
+        "casinos_minigames.casinos.solo-games.overview",
+        "casinos_minigames.casinos.solo-games.rules"
+      ],
+      "follow_ups": [
+        "How do I use CASINOS?",
+        "What are the rules for CASINOS?",
+        "Where do I find CASINOS?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casinos.casinos.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "CASINOS",
+        "CASINOS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "CASINOS",
+          "title": "CASINOS"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino",
+        "/sports-betting"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for CASINOS?",
+        "What happens with CASINOS?",
+        "Does the FAQ explain CASINOS?",
+        "Can you clarify CASINOS?",
+        "Which FAQ covers CASINOS?",
+        "I have a question about CASINOS",
+        "How is CASINOS supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.casinos.casinos.overview",
+        "casinos_minigames.casinos.solo-games.overview",
+        "casinos_minigames.casinos.solo-games.rules"
+      ],
+      "follow_ups": [
+        "Tell me about CASINOS",
+        "What happens with CASINOS?",
+        "Show me the CASINOS guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casinos.solo-games.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Solo Games",
+        "CASINOS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CASINOS",
+          "title": "Solo Games"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino",
+        "/sports-betting"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Solo Games?",
+        "What are Solo Games?",
+        "Tell me about Solo Games",
+        "Explain Solo Games",
+        "How does Solo Games work?",
+        "I need information about Solo Games",
+        "Give me the guide for Solo Games"
+      ],
+      "related_intents": [
+        "casinos_minigames.casinos.solo-games.rules",
+        "casinos_minigames.casinos.casinos.overview",
+        "casinos_minigames.casinos.casinos.rules"
+      ],
+      "follow_ups": [
+        "How do I use Solo Games?",
+        "What are the rules for Solo Games?",
+        "Where do I find Solo Games?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casinos.solo-games.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Solo Games",
+        "CASINOS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CASINOS",
+          "title": "Solo Games"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino",
+        "/sports-betting"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Solo Games?",
+        "What happens with Solo Games?",
+        "Does the FAQ explain Solo Games?",
+        "Can you clarify Solo Games?",
+        "Which FAQ covers Solo Games?",
+        "I have a question about Solo Games",
+        "How is Solo Games supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.casinos.solo-games.overview",
+        "casinos_minigames.casinos.casinos.overview",
+        "casinos_minigames.casinos.casinos.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Solo Games",
+        "What happens with Solo Games?",
+        "Show me the CASINOS guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casinos.multiplayer-games.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Multiplayer Games",
+        "CASINOS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CASINOS",
+          "title": "Multiplayer Games"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino",
+        "/sports-betting"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Multiplayer Games?",
+        "What are Multiplayer Games?",
+        "Tell me about Multiplayer Games",
+        "Explain Multiplayer Games",
+        "How does Multiplayer Games work?",
+        "I need information about Multiplayer Games",
+        "Give me the guide for Multiplayer Games"
+      ],
+      "related_intents": [
+        "casinos_minigames.casinos.multiplayer-games.rules",
+        "casinos_minigames.casinos.casinos.overview",
+        "casinos_minigames.casinos.casinos.rules",
+        "casinos_minigames.casinos.solo-games.overview"
+      ],
+      "follow_ups": [
+        "How do I use Multiplayer Games?",
+        "What are the rules for Multiplayer Games?",
+        "Where do I find Multiplayer Games?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casinos.multiplayer-games.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Multiplayer Games",
+        "CASINOS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CASINOS",
+          "title": "Multiplayer Games"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino",
+        "/sports-betting"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Multiplayer Games?",
+        "What happens with Multiplayer Games?",
+        "Does the FAQ explain Multiplayer Games?",
+        "Can you clarify Multiplayer Games?",
+        "Which FAQ covers Multiplayer Games?",
+        "I have a question about Multiplayer Games",
+        "How is Multiplayer Games supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.casinos.multiplayer-games.overview",
+        "casinos_minigames.casinos.casinos.overview",
+        "casinos_minigames.casinos.casinos.rules",
+        "casinos_minigames.casinos.solo-games.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Multiplayer Games",
+        "What happens with Multiplayer Games?",
+        "Show me the CASINOS guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casinos.casino-tips.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Casino Tips",
+        "CASINOS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CASINOS",
+          "title": "Casino Tips"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino",
+        "/sports-betting"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Casino Tips?",
+        "What are Casino Tips?",
+        "Tell me about Casino Tips",
+        "Explain Casino Tips",
+        "How does Casino Tips work?",
+        "I need information about Casino Tips",
+        "Give me the guide for Casino Tips"
+      ],
+      "related_intents": [
+        "casinos_minigames.casinos.casino-tips.rules",
+        "casinos_minigames.casinos.casinos.overview",
+        "casinos_minigames.casinos.casinos.rules",
+        "casinos_minigames.casinos.solo-games.overview"
+      ],
+      "follow_ups": [
+        "How do I use Casino Tips?",
+        "What are the rules for Casino Tips?",
+        "Where do I find Casino Tips?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casinos.casino-tips.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Casino Tips",
+        "CASINOS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CASINOS",
+          "title": "Casino Tips"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino",
+        "/sports-betting"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Casino Tips?",
+        "What happens with Casino Tips?",
+        "Does the FAQ explain Casino Tips?",
+        "Can you clarify Casino Tips?",
+        "Which FAQ covers Casino Tips?",
+        "I have a question about Casino Tips",
+        "How is Casino Tips supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.casinos.casino-tips.overview",
+        "casinos_minigames.casinos.casinos.overview",
+        "casinos_minigames.casinos.casinos.rules",
+        "casinos_minigames.casinos.solo-games.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Casino Tips",
+        "What happens with Casino Tips?",
+        "Show me the CASINOS guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casinos.casino-ownership.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Casino Ownership",
+        "CASINOS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CASINOS",
+          "title": "Casino Ownership"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino",
+        "/sports-betting"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Casino Ownership?",
+        "What are Casino Ownership?",
+        "Tell me about Casino Ownership",
+        "Explain Casino Ownership",
+        "How does Casino Ownership work?",
+        "I need information about Casino Ownership",
+        "Give me the guide for Casino Ownership"
+      ],
+      "related_intents": [
+        "casinos_minigames.casinos.casino-ownership.rules",
+        "casinos_minigames.casinos.casinos.overview",
+        "casinos_minigames.casinos.casinos.rules",
+        "casinos_minigames.casinos.solo-games.overview"
+      ],
+      "follow_ups": [
+        "How do I use Casino Ownership?",
+        "What are the rules for Casino Ownership?",
+        "Where do I find Casino Ownership?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casinos.casino-ownership.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Casino Ownership",
+        "CASINOS"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CASINOS",
+          "title": "Casino Ownership"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino",
+        "/sports-betting"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Casino Ownership?",
+        "What happens with Casino Ownership?",
+        "Does the FAQ explain Casino Ownership?",
+        "Can you clarify Casino Ownership?",
+        "Which FAQ covers Casino Ownership?",
+        "I have a question about Casino Ownership",
+        "How is Casino Ownership supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.casinos.casino-ownership.overview",
+        "casinos_minigames.casinos.casinos.overview",
+        "casinos_minigames.casinos.casinos.rules",
+        "casinos_minigames.casinos.solo-games.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Casino Ownership",
+        "What happens with Casino Ownership?",
+        "Show me the CASINOS guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.mini-games.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "MINI-GAMES",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "MINI-GAMES",
+          "title": "MINI-GAMES"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is MINI-GAMES?",
+        "What are MINI-GAMES?",
+        "Tell me about MINI-GAMES",
+        "Explain MINI-GAMES",
+        "How does MINI-GAMES work?",
+        "I need information about MINI-GAMES"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range.rules"
+      ],
+      "follow_ups": [
+        "How do I use MINI-GAMES?",
+        "What are the rules for MINI-GAMES?",
+        "Where do I find MINI-GAMES?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.mini-games.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "MINI-GAMES",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "MINI-GAMES",
+          "title": "MINI-GAMES"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for MINI-GAMES?",
+        "What happens with MINI-GAMES?",
+        "Does the FAQ explain MINI-GAMES?",
+        "Can you clarify MINI-GAMES?",
+        "Which FAQ covers MINI-GAMES?",
+        "I have a question about MINI-GAMES",
+        "How is MINI-GAMES supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range.rules"
+      ],
+      "follow_ups": [
+        "Tell me about MINI-GAMES",
+        "What happens with MINI-GAMES?",
+        "Show me the MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.shooting-range.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Shooting Range",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Shooting Range"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Shooting Range?",
+        "What are Shooting Range?",
+        "Tell me about Shooting Range",
+        "Explain Shooting Range",
+        "How does Shooting Range work?",
+        "I need information about Shooting Range",
+        "Give me the guide for Shooting Range"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.shooting-range.rules",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules"
+      ],
+      "follow_ups": [
+        "How do I use Shooting Range?",
+        "What are the rules for Shooting Range?",
+        "Where do I find Shooting Range?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.shooting-range.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Shooting Range",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Shooting Range"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Shooting Range?",
+        "What happens with Shooting Range?",
+        "Does the FAQ explain Shooting Range?",
+        "Can you clarify Shooting Range?",
+        "Which FAQ covers Shooting Range?",
+        "I have a question about Shooting Range",
+        "How is Shooting Range supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Shooting Range",
+        "What happens with Shooting Range?",
+        "Show me the MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.shooting-range-3d.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Shooting Range 3D",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Shooting Range 3D"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Shooting Range 3D?",
+        "What are Shooting Range 3D?",
+        "Tell me about Shooting Range 3D",
+        "Explain Shooting Range 3D",
+        "How does Shooting Range 3D work?",
+        "I need information about Shooting Range 3D",
+        "Give me the guide for Shooting Range 3D"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.shooting-range-3d.rules",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "How do I use Shooting Range 3D?",
+        "What are the rules for Shooting Range 3D?",
+        "Where do I find Shooting Range 3D?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.shooting-range-3d.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Shooting Range 3D",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Shooting Range 3D"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Shooting Range 3D?",
+        "What happens with Shooting Range 3D?",
+        "Does the FAQ explain Shooting Range 3D?",
+        "Can you clarify Shooting Range 3D?",
+        "Which FAQ covers Shooting Range 3D?",
+        "I have a question about Shooting Range 3D",
+        "How is Shooting Range 3D supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.shooting-range-3d.overview",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Shooting Range 3D",
+        "What happens with Shooting Range 3D?",
+        "Show me the MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.snake-package-run.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Snake (Package Run)",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Snake (Package Run)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Snake (Package Run)?",
+        "What are Snake (Package Run)?",
+        "Tell me about Snake (Package Run)",
+        "Explain Snake (Package Run)",
+        "How does Snake (Package Run) work?",
+        "I need information about Snake (Package Run)",
+        "Give me the guide for Snake (Package Run)"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.snake-package-run.rules",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "How do I use Snake (Package Run)?",
+        "What are the rules for Snake (Package Run)?",
+        "Where do I find Snake (Package Run)?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.snake-package-run.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Snake (Package Run)",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Snake (Package Run)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Snake (Package Run)?",
+        "What happens with Snake (Package Run)?",
+        "Does the FAQ explain Snake (Package Run)?",
+        "Can you clarify Snake (Package Run)?",
+        "Which FAQ covers Snake (Package Run)?",
+        "I have a question about Snake (Package Run)",
+        "How is Snake (Package Run) supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.snake-package-run.overview",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Snake (Package Run)",
+        "What happens with Snake (Package Run)?",
+        "Show me the MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.minesweeper-minefield.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Minesweeper (Minefield)",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Minesweeper (Minefield)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Minesweeper (Minefield)?",
+        "What are Minesweeper (Minefield)?",
+        "Tell me about Minesweeper (Minefield)",
+        "Explain Minesweeper (Minefield)",
+        "How does Minesweeper (Minefield) work?",
+        "I need information about Minesweeper (Minefield)",
+        "Give me the guide for Minesweeper (Minefield)"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.minesweeper-minefield.rules",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "How do I use Minesweeper (Minefield)?",
+        "What are the rules for Minesweeper (Minefield)?",
+        "Where do I find Minesweeper (Minefield)?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.minesweeper-minefield.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Minesweeper (Minefield)",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Minesweeper (Minefield)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Minesweeper (Minefield)?",
+        "What happens with Minesweeper (Minefield)?",
+        "Does the FAQ explain Minesweeper (Minefield)?",
+        "Can you clarify Minesweeper (Minefield)?",
+        "Which FAQ covers Minesweeper (Minefield)?",
+        "I have a question about Minesweeper (Minefield)",
+        "How is Minesweeper (Minefield) supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.minesweeper-minefield.overview",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Minesweeper (Minefield)",
+        "What happens with Minesweeper (Minefield)?",
+        "Show me the MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.racing.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Racing",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Racing"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Racing?",
+        "What are Racing?",
+        "Tell me about Racing",
+        "Explain Racing",
+        "How does Racing work?",
+        "I need information about Racing",
+        "Give me the guide for Racing"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.racing.rules",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "How do I use Racing?",
+        "What are the rules for Racing?",
+        "Where do I find Racing?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.racing.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Racing",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Racing"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Racing?",
+        "What happens with Racing?",
+        "Does the FAQ explain Racing?",
+        "Can you clarify Racing?",
+        "Which FAQ covers Racing?",
+        "I have a question about Racing",
+        "How is Racing supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.racing.overview",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Racing",
+        "What happens with Racing?",
+        "Show me the MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.boxing.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Boxing",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Boxing"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Boxing?",
+        "What are Boxing?",
+        "Tell me about Boxing",
+        "Explain Boxing",
+        "How does Boxing work?",
+        "I need information about Boxing",
+        "Give me the guide for Boxing"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.boxing.rules",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "How do I use Boxing?",
+        "What are the rules for Boxing?",
+        "Where do I find Boxing?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.boxing.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Boxing",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Boxing"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Boxing?",
+        "What happens with Boxing?",
+        "Does the FAQ explain Boxing?",
+        "Can you clarify Boxing?",
+        "Which FAQ covers Boxing?",
+        "I have a question about Boxing",
+        "How is Boxing supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.boxing.overview",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Boxing",
+        "What happens with Boxing?",
+        "Show me the MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.flappy-gangster-gauntlet.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Flappy Gangster (Gauntlet)",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Flappy Gangster (Gauntlet)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Flappy Gangster (Gauntlet)?",
+        "What are Flappy Gangster (Gauntlet)?",
+        "Tell me about Flappy Gangster (Gauntlet)",
+        "Explain Flappy Gangster (Gauntlet)",
+        "How does Flappy Gangster (Gauntlet) work?",
+        "I need information about Flappy Gangster (Gauntlet)",
+        "Give me the guide for Flappy Gangster (Gauntlet)"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.flappy-gangster-gauntlet.rules",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "How do I use Flappy Gangster (Gauntlet)?",
+        "What are the rules for Flappy Gangster (Gauntlet)?",
+        "Where do I find Flappy Gangster (Gauntlet)?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.flappy-gangster-gauntlet.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Flappy Gangster (Gauntlet)",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Flappy Gangster (Gauntlet)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Flappy Gangster (Gauntlet)?",
+        "What happens with Flappy Gangster (Gauntlet)?",
+        "Does the FAQ explain Flappy Gangster (Gauntlet)?",
+        "Can you clarify Flappy Gangster (Gauntlet)?",
+        "Which FAQ covers Flappy Gangster (Gauntlet)?",
+        "I have a question about Flappy Gangster (Gauntlet)",
+        "How is Flappy Gangster (Gauntlet) supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.flappy-gangster-gauntlet.overview",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Flappy Gangster (Gauntlet)",
+        "What happens with Flappy Gangster (Gauntlet)?",
+        "Show me the MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.whack-a-copper.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Whack-a-Copper",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Whack-a-Copper"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Whack-a-Copper?",
+        "What are Whack-a-Copper?",
+        "Tell me about Whack-a-Copper",
+        "Explain Whack-a-Copper",
+        "How does Whack-a-Copper work?",
+        "I need information about Whack-a-Copper",
+        "Give me the guide for Whack-a-Copper"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.whack-a-copper.rules",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "How do I use Whack-a-Copper?",
+        "What are the rules for Whack-a-Copper?",
+        "Where do I find Whack-a-Copper?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.whack-a-copper.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Whack-a-Copper",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Whack-a-Copper"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Whack-a-Copper?",
+        "What happens with Whack-a-Copper?",
+        "Does the FAQ explain Whack-a-Copper?",
+        "Can you clarify Whack-a-Copper?",
+        "Which FAQ covers Whack-a-Copper?",
+        "I have a question about Whack-a-Copper",
+        "How is Whack-a-Copper supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.whack-a-copper.overview",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Whack-a-Copper",
+        "What happens with Whack-a-Copper?",
+        "Show me the MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.rum-runner-battleships.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Rum Runner (Battleships)",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Rum Runner (Battleships)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Rum Runner (Battleships)?",
+        "What are Rum Runner (Battleships)?",
+        "Tell me about Rum Runner (Battleships)",
+        "Explain Rum Runner (Battleships)",
+        "How does Rum Runner (Battleships) work?",
+        "I need information about Rum Runner (Battleships)",
+        "Give me the guide for Rum Runner (Battleships)"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.rum-runner-battleships.rules",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "How do I use Rum Runner (Battleships)?",
+        "What are the rules for Rum Runner (Battleships)?",
+        "Where do I find Rum Runner (Battleships)?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.rum-runner-battleships.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Rum Runner (Battleships)",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Rum Runner (Battleships)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Rum Runner (Battleships)?",
+        "What happens with Rum Runner (Battleships)?",
+        "Does the FAQ explain Rum Runner (Battleships)?",
+        "Can you clarify Rum Runner (Battleships)?",
+        "Which FAQ covers Rum Runner (Battleships)?",
+        "I have a question about Rum Runner (Battleships)",
+        "How is Rum Runner (Battleships) supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.rum-runner-battleships.overview",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Rum Runner (Battleships)",
+        "What happens with Rum Runner (Battleships)?",
+        "Show me the MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.the-getaway.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "The Getaway",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "The Getaway"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is The Getaway?",
+        "What are The Getaway?",
+        "Tell me about The Getaway",
+        "Explain The Getaway",
+        "How does The Getaway work?",
+        "I need information about The Getaway",
+        "Give me the guide for The Getaway"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.the-getaway.rules",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "How do I use The Getaway?",
+        "What are the rules for The Getaway?",
+        "Where do I find The Getaway?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.the-getaway.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "The Getaway",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "The Getaway"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for The Getaway?",
+        "What happens with The Getaway?",
+        "Does the FAQ explain The Getaway?",
+        "Can you clarify The Getaway?",
+        "Which FAQ covers The Getaway?",
+        "I have a question about The Getaway",
+        "How is The Getaway supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.the-getaway.overview",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "Tell me about The Getaway",
+        "What happens with The Getaway?",
+        "Show me the MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.family-run.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Family Run",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Family Run"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Family Run?",
+        "What are Family Run?",
+        "Tell me about Family Run",
+        "Explain Family Run",
+        "How does Family Run work?",
+        "I need information about Family Run",
+        "Give me the guide for Family Run"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.family-run.rules",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "How do I use Family Run?",
+        "What are the rules for Family Run?",
+        "Where do I find Family Run?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.family-run.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Family Run",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Family Run"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Family Run?",
+        "What happens with Family Run?",
+        "Does the FAQ explain Family Run?",
+        "Can you clarify Family Run?",
+        "Which FAQ covers Family Run?",
+        "I have a question about Family Run",
+        "How is Family Run supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.family-run.overview",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Family Run",
+        "What happens with Family Run?",
+        "Show me the MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.famiglia-mafia-rpg.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Famiglia (Mafia RPG)",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Famiglia (Mafia RPG)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Famiglia (Mafia RPG)?",
+        "What are Famiglia (Mafia RPG)?",
+        "Tell me about Famiglia (Mafia RPG)",
+        "Explain Famiglia (Mafia RPG)",
+        "How does Famiglia (Mafia RPG) work?",
+        "I need information about Famiglia (Mafia RPG)",
+        "Give me the guide for Famiglia (Mafia RPG)"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.famiglia-mafia-rpg.rules",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "How do I use Famiglia (Mafia RPG)?",
+        "What are the rules for Famiglia (Mafia RPG)?",
+        "Where do I find Famiglia (Mafia RPG)?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.famiglia-mafia-rpg.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Famiglia (Mafia RPG)",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Famiglia (Mafia RPG)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Famiglia (Mafia RPG)?",
+        "What happens with Famiglia (Mafia RPG)?",
+        "Does the FAQ explain Famiglia (Mafia RPG)?",
+        "Can you clarify Famiglia (Mafia RPG)?",
+        "Which FAQ covers Famiglia (Mafia RPG)?",
+        "I have a question about Famiglia (Mafia RPG)",
+        "How is Famiglia (Mafia RPG) supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.famiglia-mafia-rpg.overview",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Famiglia (Mafia RPG)",
+        "What happens with Famiglia (Mafia RPG)?",
+        "Show me the MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.mini-games-leaderboard.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Mini-Games Leaderboard",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Mini-Games Leaderboard"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Mini-Games Leaderboard?",
+        "What are Mini-Games Leaderboard?",
+        "Tell me about Mini-Games Leaderboard",
+        "Explain Mini-Games Leaderboard",
+        "How does Mini-Games Leaderboard work?",
+        "I need information about Mini-Games Leaderboard",
+        "Give me the guide for Mini-Games Leaderboard"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.mini-games-leaderboard.rules",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "How do I use Mini-Games Leaderboard?",
+        "What are the rules for Mini-Games Leaderboard?",
+        "Where do I find Mini-Games Leaderboard?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.mini-games.mini-games-leaderboard.rules",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Mini-Games Leaderboard",
+        "MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Mini-Games Leaderboard"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/casino/mini-games"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Mini-Games Leaderboard?",
+        "What happens with Mini-Games Leaderboard?",
+        "Does the FAQ explain Mini-Games Leaderboard?",
+        "Can you clarify Mini-Games Leaderboard?",
+        "Which FAQ covers Mini-Games Leaderboard?",
+        "I have a question about Mini-Games Leaderboard",
+        "How is Mini-Games Leaderboard supposed to work?"
+      ],
+      "related_intents": [
+        "casinos_minigames.mini-games.mini-games-leaderboard.overview",
+        "casinos_minigames.mini-games.mini-games.overview",
+        "casinos_minigames.mini-games.mini-games.rules",
+        "casinos_minigames.mini-games.shooting-range.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Mini-Games Leaderboard",
+        "What happens with Mini-Games Leaderboard?",
+        "Show me the MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "CASINO & MINI-GAMES",
+        "CASINO & MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "CASINO & MINI-GAMES",
+          "title": "CASINO & MINI-GAMES"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is CASINO & MINI-GAMES?",
+        "What are CASINO & MINI-GAMES?",
+        "Tell me about CASINO & MINI-GAMES",
+        "Explain CASINO & MINI-GAMES",
+        "How does CASINO & MINI-GAMES work?",
+        "I need information about CASINO & MINI-GAMES",
+        "Give me the guide for CASINO & MINI-GAMES"
+      ],
+      "related_intents": [
+        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure",
+        "casinos_minigames.casino-and-mini-games.casino-hub.overview",
+        "casinos_minigames.casino-and-mini-games.casino-hub.procedure"
+      ],
+      "follow_ups": [
+        "How do I use CASINO & MINI-GAMES?",
+        "What are the rules for CASINO & MINI-GAMES?",
+        "Where do I find CASINO & MINI-GAMES?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure",
+      "domain": "casinos_minigames",
+      "entities": [
+        "CASINO & MINI-GAMES",
+        "CASINO & MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "CASINO & MINI-GAMES",
+          "title": "CASINO & MINI-GAMES"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use CASINO & MINI-GAMES?",
+        "How do I start CASINO & MINI-GAMES?",
+        "Where do I find CASINO & MINI-GAMES?",
+        "What do I do for CASINO & MINI-GAMES?",
+        "Show me how to do CASINO & MINI-GAMES",
+        "Help me with CASINO & MINI-GAMES",
+        "Which menu has CASINO & MINI-GAMES?"
+      ],
+      "related_intents": [
+        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
+        "casinos_minigames.casino-and-mini-games.casino-hub.overview",
+        "casinos_minigames.casino-and-mini-games.casino-hub.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about CASINO & MINI-GAMES",
+        "What happens with CASINO & MINI-GAMES?",
+        "Show me the CASINO & MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casino-and-mini-games.casino-hub.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Casino hub",
+        "CASINO & MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CASINO & MINI-GAMES",
+          "title": "Casino hub"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Casino hub?",
+        "What are Casino hub?",
+        "Tell me about Casino hub",
+        "Explain Casino hub",
+        "How does Casino hub work?",
+        "I need information about Casino hub",
+        "Give me the guide for Casino hub"
+      ],
+      "related_intents": [
+        "casinos_minigames.casino-and-mini-games.casino-hub.procedure",
+        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
+        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure"
+      ],
+      "follow_ups": [
+        "How do I use Casino hub?",
+        "What are the rules for Casino hub?",
+        "Where do I find Casino hub?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casino-and-mini-games.casino-hub.procedure",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Casino hub",
+        "CASINO & MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CASINO & MINI-GAMES",
+          "title": "Casino hub"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Casino hub?",
+        "How do I start Casino hub?",
+        "Where do I find Casino hub?",
+        "What do I do for Casino hub?",
+        "Show me how to do Casino hub",
+        "Help me with Casino hub",
+        "Which menu has Casino hub?"
+      ],
+      "related_intents": [
+        "casinos_minigames.casino-and-mini-games.casino-hub.overview",
+        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
+        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about Casino hub",
+        "What happens with Casino hub?",
+        "Show me the CASINO & MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casino-and-mini-games.sports-betting.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Sports betting",
+        "CASINO & MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CASINO & MINI-GAMES",
+          "title": "Sports betting"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Sports betting in CASINO & MINI-GAMES?",
+        "What is Sports betting?",
+        "What are Sports betting?",
+        "Tell me about Sports betting",
+        "Explain Sports betting",
+        "How does Sports betting work?",
+        "I need information about Sports betting"
+      ],
+      "related_intents": [
+        "casinos_minigames.casino-and-mini-games.sports-betting.procedure",
+        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
+        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure",
+        "casinos_minigames.casino-and-mini-games.casino-hub.overview"
+      ],
+      "follow_ups": [
+        "How do I use Sports betting?",
+        "What are the rules for Sports betting?",
+        "Where do I find Sports betting?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casino-and-mini-games.sports-betting.procedure",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Sports betting",
+        "CASINO & MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CASINO & MINI-GAMES",
+          "title": "Sports betting"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Sports betting?",
+        "How do I start Sports betting?",
+        "Where do I find Sports betting?",
+        "What do I do for Sports betting?",
+        "Show me how to do Sports betting",
+        "Help me with Sports betting",
+        "Which menu has Sports betting?"
+      ],
+      "related_intents": [
+        "casinos_minigames.casino-and-mini-games.sports-betting.overview",
+        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
+        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure",
+        "casinos_minigames.casino-and-mini-games.casino-hub.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Sports betting",
+        "What happens with Sports betting?",
+        "Show me the CASINO & MINI-GAMES guide"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casino-and-mini-games.mini-games.overview",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Mini-games",
+        "CASINO & MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CASINO & MINI-GAMES",
+          "title": "Mini-games"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Mini-games in CASINO & MINI-GAMES?",
+        "What is Mini-games?",
+        "What are Mini-games?",
+        "Tell me about Mini-games",
+        "Explain Mini-games",
+        "How does Mini-games work?",
+        "I need information about Mini-games"
+      ],
+      "related_intents": [
+        "casinos_minigames.casino-and-mini-games.mini-games.procedure",
+        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
+        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure",
+        "casinos_minigames.casino-and-mini-games.casino-hub.overview"
+      ],
+      "follow_ups": [
+        "How do I use Mini-games?",
+        "What are the rules for Mini-games?",
+        "Where do I find Mini-games?"
+      ]
+    },
+    {
+      "id": "casinos_minigames.casino-and-mini-games.mini-games.procedure",
+      "domain": "casinos_minigames",
+      "entities": [
+        "Mini-games",
+        "CASINO & MINI-GAMES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CASINO & MINI-GAMES",
+          "title": "Mini-games"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Mini-games?",
+        "How do I start Mini-games?",
+        "Where do I find Mini-games?",
+        "What do I do for Mini-games?",
+        "Show me how to do Mini-games",
+        "Help me with Mini-games",
+        "Which menu has Mini-games?"
+      ],
+      "related_intents": [
+        "casinos_minigames.casino-and-mini-games.mini-games.overview",
+        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
+        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure",
+        "casinos_minigames.casino-and-mini-games.casino-hub.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Mini-games",
+        "What happens with Mini-games?",
+        "Show me the CASINO & MINI-GAMES guide"
+      ]
+    }
+  ]
+}

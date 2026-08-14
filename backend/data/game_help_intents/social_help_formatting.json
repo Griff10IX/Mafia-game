@@ -1,0 +1,1783 @@
+{
+  "domain": "social_help_formatting",
+  "intents": [
+    {
+      "id": "social_help_formatting.social-features.social-features.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "SOCIAL FEATURES",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "SOCIAL FEATURES",
+          "title": "SOCIAL FEATURES"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is SOCIAL FEATURES?",
+        "What are SOCIAL FEATURES?",
+        "Tell me about SOCIAL FEATURES",
+        "Explain SOCIAL FEATURES",
+        "How does SOCIAL FEATURES work?",
+        "I need information about SOCIAL FEATURES",
+        "Give me the guide for SOCIAL FEATURES"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.forum.rules"
+      ],
+      "follow_ups": [
+        "How do I use SOCIAL FEATURES?",
+        "What are the rules for SOCIAL FEATURES?",
+        "Where do I find SOCIAL FEATURES?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.social-features.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "SOCIAL FEATURES",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "SOCIAL FEATURES",
+          "title": "SOCIAL FEATURES"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for SOCIAL FEATURES?",
+        "What happens with SOCIAL FEATURES?",
+        "Does the FAQ explain SOCIAL FEATURES?",
+        "Can you clarify SOCIAL FEATURES?",
+        "Which FAQ covers SOCIAL FEATURES?",
+        "I have a question about SOCIAL FEATURES",
+        "How is SOCIAL FEATURES supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.forum.rules"
+      ],
+      "follow_ups": [
+        "Tell me about SOCIAL FEATURES",
+        "What happens with SOCIAL FEATURES?",
+        "Show me the SOCIAL FEATURES guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.forum.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Forum",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Forum"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Forum?",
+        "What are Forum?",
+        "Tell me about Forum",
+        "Explain Forum",
+        "How does Forum work?",
+        "I need information about Forum",
+        "Give me the guide for Forum"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.forum.rules",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules"
+      ],
+      "follow_ups": [
+        "How do I use Forum?",
+        "What are the rules for Forum?",
+        "Where do I find Forum?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.forum.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Forum",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Forum"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Forum?",
+        "What happens with Forum?",
+        "Does the FAQ explain Forum?",
+        "Can you clarify Forum?",
+        "Which FAQ covers Forum?",
+        "I have a question about Forum",
+        "How is Forum supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Forum",
+        "What happens with Forum?",
+        "Show me the SOCIAL FEATURES guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.image-host.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Image Host",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Image Host"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Image Host?",
+        "What are Image Host?",
+        "Tell me about Image Host",
+        "Explain Image Host",
+        "How does Image Host work?",
+        "I need information about Image Host",
+        "Give me the guide for Image Host"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.image-host.rules",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "How do I use Image Host?",
+        "What are the rules for Image Host?",
+        "Where do I find Image Host?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.image-host.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Image Host",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Image Host"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Image Host?",
+        "What happens with Image Host?",
+        "Does the FAQ explain Image Host?",
+        "Can you clarify Image Host?",
+        "Which FAQ covers Image Host?",
+        "I have a question about Image Host",
+        "How is Image Host supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.image-host.overview",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Image Host",
+        "What happens with Image Host?",
+        "Show me the SOCIAL FEATURES guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.users-online.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Users online",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Users online"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Users online?",
+        "What are Users online?",
+        "Tell me about Users online",
+        "Explain Users online",
+        "How does Users online work?",
+        "I need information about Users online",
+        "Give me the guide for Users online"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.users-online.rules",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "How do I use Users online?",
+        "What are the rules for Users online?",
+        "Where do I find Users online?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.users-online.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Users online",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Users online"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Users online?",
+        "What happens with Users online?",
+        "Does the FAQ explain Users online?",
+        "Can you clarify Users online?",
+        "Which FAQ covers Users online?",
+        "I have a question about Users online",
+        "How is Users online supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.users-online.overview",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Users online",
+        "What happens with Users online?",
+        "Show me the SOCIAL FEATURES guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.referrals.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Referrals",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Referrals"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Referrals?",
+        "What are Referrals?",
+        "Tell me about Referrals",
+        "Explain Referrals",
+        "How does Referrals work?",
+        "I need information about Referrals",
+        "Give me the guide for Referrals"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.referrals.rules",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "How do I use Referrals?",
+        "What are the rules for Referrals?",
+        "Where do I find Referrals?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.referrals.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Referrals",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Referrals"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Referrals?",
+        "What happens with Referrals?",
+        "Does the FAQ explain Referrals?",
+        "Can you clarify Referrals?",
+        "Which FAQ covers Referrals?",
+        "I have a question about Referrals",
+        "How is Referrals supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.referrals.overview",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Referrals",
+        "What happens with Referrals?",
+        "Show me the SOCIAL FEATURES guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.pre-launch-registration-founding-member.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Pre-launch registration (Founding Member)",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Pre-launch registration (Founding Member)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Pre-launch registration (Founding Member)?",
+        "What are Pre-launch registration (Founding Member)?",
+        "Tell me about Pre-launch registration (Founding Member)",
+        "Explain Pre-launch registration (Founding Member)",
+        "How does Pre-launch registration (Founding Member) work?",
+        "I need information about Pre-launch registration (Founding Member)",
+        "Give me the guide for Pre-launch registration (Founding Member)"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.pre-launch-registration-founding-member.rules",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "How do I use Pre-launch registration (Founding Member)?",
+        "What are the rules for Pre-launch registration (Founding Member)?",
+        "Where do I find Pre-launch registration (Founding Member)?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.pre-launch-registration-founding-member.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Pre-launch registration (Founding Member)",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Pre-launch registration (Founding Member)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Pre-launch registration (Founding Member)?",
+        "What happens with Pre-launch registration (Founding Member)?",
+        "Does the FAQ explain Pre-launch registration (Founding Member)?",
+        "Can you clarify Pre-launch registration (Founding Member)?",
+        "Which FAQ covers Pre-launch registration (Founding Member)?",
+        "I have a question about Pre-launch registration (Founding Member)",
+        "How is Pre-launch registration (Founding Member) supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.pre-launch-registration-founding-member.overview",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Pre-launch registration (Founding Member)",
+        "What happens with Pre-launch registration (Founding Member)?",
+        "Show me the SOCIAL FEATURES guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.inbox-and-notifications.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Inbox & notifications",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Inbox & notifications"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Inbox & notifications?",
+        "What are Inbox & notifications?",
+        "Tell me about Inbox & notifications",
+        "Explain Inbox & notifications",
+        "How does Inbox & notifications work?",
+        "I need information about Inbox & notifications",
+        "Give me the guide for Inbox & notifications"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.inbox-and-notifications.rules",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "How do I use Inbox & notifications?",
+        "What are the rules for Inbox & notifications?",
+        "Where do I find Inbox & notifications?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.inbox-and-notifications.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Inbox & notifications",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Inbox & notifications"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Inbox & notifications?",
+        "What happens with Inbox & notifications?",
+        "Does the FAQ explain Inbox & notifications?",
+        "Can you clarify Inbox & notifications?",
+        "Which FAQ covers Inbox & notifications?",
+        "I have a question about Inbox & notifications",
+        "How is Inbox & notifications supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.inbox-and-notifications.overview",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Inbox & notifications",
+        "What happens with Inbox & notifications?",
+        "Show me the SOCIAL FEATURES guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.direct-messages.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Direct Messages",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Direct Messages"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Direct Messages in SOCIAL FEATURES?",
+        "What is Direct Messages?",
+        "What are Direct Messages?",
+        "Tell me about Direct Messages",
+        "Explain Direct Messages",
+        "How does Direct Messages work?",
+        "I need information about Direct Messages"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.direct-messages.rules",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "How do I use Direct Messages?",
+        "What are the rules for Direct Messages?",
+        "Where do I find Direct Messages?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.direct-messages.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Direct Messages",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Direct Messages"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Direct Messages?",
+        "What happens with Direct Messages?",
+        "Does the FAQ explain Direct Messages?",
+        "Can you clarify Direct Messages?",
+        "Which FAQ covers Direct Messages?",
+        "I have a question about Direct Messages",
+        "How is Direct Messages supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.direct-messages.overview",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Direct Messages",
+        "What happens with Direct Messages?",
+        "Show me the SOCIAL FEATURES guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.game-chat.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Game Chat",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Game Chat"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Game Chat?",
+        "What are Game Chat?",
+        "Tell me about Game Chat",
+        "Explain Game Chat",
+        "How does Game Chat work?",
+        "I need information about Game Chat",
+        "Give me the guide for Game Chat"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.game-chat.rules",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "How do I use Game Chat?",
+        "What are the rules for Game Chat?",
+        "Where do I find Game Chat?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.game-chat.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Game Chat",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Game Chat"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Game Chat?",
+        "What happens with Game Chat?",
+        "Does the FAQ explain Game Chat?",
+        "Can you clarify Game Chat?",
+        "Which FAQ covers Game Chat?",
+        "I have a question about Game Chat",
+        "How is Game Chat supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.game-chat.overview",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Game Chat",
+        "What happens with Game Chat?",
+        "Show me the SOCIAL FEATURES guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.profile-customization.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Profile Customization",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Profile Customization"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Profile Customization?",
+        "What are Profile Customization?",
+        "Tell me about Profile Customization",
+        "Explain Profile Customization",
+        "How does Profile Customization work?",
+        "I need information about Profile Customization",
+        "Give me the guide for Profile Customization"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.profile-customization.rules",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "How do I use Profile Customization?",
+        "What are the rules for Profile Customization?",
+        "Where do I find Profile Customization?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-features.profile-customization.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Profile Customization",
+        "SOCIAL FEATURES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Profile Customization"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/social/forum",
+        "/social/inbox",
+        "/game/help-desk"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Profile Customization?",
+        "What happens with Profile Customization?",
+        "Does the FAQ explain Profile Customization?",
+        "Can you clarify Profile Customization?",
+        "Which FAQ covers Profile Customization?",
+        "I have a question about Profile Customization",
+        "How is Profile Customization supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-features.profile-customization.overview",
+        "social_help_formatting.social-features.social-features.overview",
+        "social_help_formatting.social-features.social-features.rules",
+        "social_help_formatting.social-features.forum.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Profile Customization",
+        "What happens with Profile Customization?",
+        "Show me the SOCIAL FEATURES guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "SMILEYS & FORMATTING",
+        "SMILEYS & FORMATTING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "SMILEYS & FORMATTING",
+          "title": "SMILEYS & FORMATTING"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is SMILEYS & FORMATTING?",
+        "What are SMILEYS & FORMATTING?",
+        "Tell me about SMILEYS & FORMATTING",
+        "Explain SMILEYS & FORMATTING",
+        "How does SMILEYS & FORMATTING work?",
+        "I need information about SMILEYS & FORMATTING",
+        "Give me the guide for SMILEYS & FORMATTING"
+      ],
+      "related_intents": [
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview",
+        "social_help_formatting.smileys-and-formatting.classic-smileys.rules"
+      ],
+      "follow_ups": [
+        "How do I use SMILEYS & FORMATTING?",
+        "What are the rules for SMILEYS & FORMATTING?",
+        "Where do I find SMILEYS & FORMATTING?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "SMILEYS & FORMATTING",
+        "SMILEYS & FORMATTING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "SMILEYS & FORMATTING",
+          "title": "SMILEYS & FORMATTING"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for SMILEYS & FORMATTING?",
+        "What happens with SMILEYS & FORMATTING?",
+        "Does the FAQ explain SMILEYS & FORMATTING?",
+        "Can you clarify SMILEYS & FORMATTING?",
+        "Which FAQ covers SMILEYS & FORMATTING?",
+        "I have a question about SMILEYS & FORMATTING",
+        "How is SMILEYS & FORMATTING supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview",
+        "social_help_formatting.smileys-and-formatting.classic-smileys.rules"
+      ],
+      "follow_ups": [
+        "Tell me about SMILEYS & FORMATTING",
+        "What happens with SMILEYS & FORMATTING?",
+        "Show me the SMILEYS & FORMATTING guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.smileys-and-formatting.classic-smileys.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Classic Smileys",
+        "SMILEYS & FORMATTING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SMILEYS & FORMATTING",
+          "title": "Classic Smileys"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Classic Smileys?",
+        "What are Classic Smileys?",
+        "Tell me about Classic Smileys",
+        "Explain Classic Smileys",
+        "How does Classic Smileys work?",
+        "I need information about Classic Smileys",
+        "Give me the guide for Classic Smileys"
+      ],
+      "related_intents": [
+        "social_help_formatting.smileys-and-formatting.classic-smileys.rules",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules"
+      ],
+      "follow_ups": [
+        "How do I use Classic Smileys?",
+        "What are the rules for Classic Smileys?",
+        "Where do I find Classic Smileys?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.smileys-and-formatting.classic-smileys.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Classic Smileys",
+        "SMILEYS & FORMATTING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SMILEYS & FORMATTING",
+          "title": "Classic Smileys"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Classic Smileys?",
+        "What happens with Classic Smileys?",
+        "Does the FAQ explain Classic Smileys?",
+        "Can you clarify Classic Smileys?",
+        "Which FAQ covers Classic Smileys?",
+        "I have a question about Classic Smileys",
+        "How is Classic Smileys supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Classic Smileys",
+        "What happens with Classic Smileys?",
+        "Show me the SMILEYS & FORMATTING guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.smileys-and-formatting.meme-smileys.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Meme Smileys",
+        "SMILEYS & FORMATTING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SMILEYS & FORMATTING",
+          "title": "Meme Smileys"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Meme Smileys?",
+        "What are Meme Smileys?",
+        "Tell me about Meme Smileys",
+        "Explain Meme Smileys",
+        "How does Meme Smileys work?",
+        "I need information about Meme Smileys",
+        "Give me the guide for Meme Smileys"
+      ],
+      "related_intents": [
+        "social_help_formatting.smileys-and-formatting.meme-smileys.rules",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
+      ],
+      "follow_ups": [
+        "How do I use Meme Smileys?",
+        "What are the rules for Meme Smileys?",
+        "Where do I find Meme Smileys?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.smileys-and-formatting.meme-smileys.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Meme Smileys",
+        "SMILEYS & FORMATTING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SMILEYS & FORMATTING",
+          "title": "Meme Smileys"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Meme Smileys?",
+        "What happens with Meme Smileys?",
+        "Does the FAQ explain Meme Smileys?",
+        "Can you clarify Meme Smileys?",
+        "Which FAQ covers Meme Smileys?",
+        "I have a question about Meme Smileys",
+        "How is Meme Smileys supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.smileys-and-formatting.meme-smileys.overview",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Meme Smileys",
+        "What happens with Meme Smileys?",
+        "Show me the SMILEYS & FORMATTING guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.smileys-and-formatting.unicode-smileys-and-text-faces.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Unicode smileys & text faces",
+        "SMILEYS & FORMATTING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SMILEYS & FORMATTING",
+          "title": "Unicode smileys & text faces"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Unicode smileys & text faces?",
+        "What are Unicode smileys & text faces?",
+        "Tell me about Unicode smileys & text faces",
+        "Explain Unicode smileys & text faces",
+        "How does Unicode smileys & text faces work?",
+        "I need information about Unicode smileys & text faces",
+        "Give me the guide for Unicode smileys & text faces"
+      ],
+      "related_intents": [
+        "social_help_formatting.smileys-and-formatting.unicode-smileys-and-text-faces.rules",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
+      ],
+      "follow_ups": [
+        "How do I use Unicode smileys & text faces?",
+        "What are the rules for Unicode smileys & text faces?",
+        "Where do I find Unicode smileys & text faces?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.smileys-and-formatting.unicode-smileys-and-text-faces.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Unicode smileys & text faces",
+        "SMILEYS & FORMATTING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SMILEYS & FORMATTING",
+          "title": "Unicode smileys & text faces"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Unicode smileys & text faces?",
+        "What happens with Unicode smileys & text faces?",
+        "Does the FAQ explain Unicode smileys & text faces?",
+        "Can you clarify Unicode smileys & text faces?",
+        "Which FAQ covers Unicode smileys & text faces?",
+        "I have a question about Unicode smileys & text faces",
+        "How is Unicode smileys & text faces supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.smileys-and-formatting.unicode-smileys-and-text-faces.overview",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Unicode smileys & text faces",
+        "What happens with Unicode smileys & text faces?",
+        "Show me the SMILEYS & FORMATTING guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.smileys-and-formatting.direct-messages.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Direct messages",
+        "SMILEYS & FORMATTING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SMILEYS & FORMATTING",
+          "title": "Direct messages"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Direct messages in SMILEYS & FORMATTING?",
+        "What is Direct messages?",
+        "What are Direct messages?",
+        "Tell me about Direct messages",
+        "Explain Direct messages",
+        "How does Direct messages work?",
+        "I need information about Direct messages"
+      ],
+      "related_intents": [
+        "social_help_formatting.smileys-and-formatting.direct-messages.rules",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
+      ],
+      "follow_ups": [
+        "How do I use Direct messages?",
+        "What are the rules for Direct messages?",
+        "Where do I find Direct messages?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.smileys-and-formatting.direct-messages.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Direct messages",
+        "SMILEYS & FORMATTING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SMILEYS & FORMATTING",
+          "title": "Direct messages"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Direct messages?",
+        "What happens with Direct messages?",
+        "Does the FAQ explain Direct messages?",
+        "Can you clarify Direct messages?",
+        "Which FAQ covers Direct messages?",
+        "I have a question about Direct messages",
+        "How is Direct messages supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.smileys-and-formatting.direct-messages.overview",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Direct messages",
+        "What happens with Direct messages?",
+        "Show me the SMILEYS & FORMATTING guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.smileys-and-formatting.bbcode-formatting.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "BBCode Formatting",
+        "SMILEYS & FORMATTING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SMILEYS & FORMATTING",
+          "title": "BBCode Formatting"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is BBCode Formatting?",
+        "What are BBCode Formatting?",
+        "Tell me about BBCode Formatting",
+        "Explain BBCode Formatting",
+        "How does BBCode Formatting work?",
+        "I need information about BBCode Formatting",
+        "Give me the guide for BBCode Formatting"
+      ],
+      "related_intents": [
+        "social_help_formatting.smileys-and-formatting.bbcode-formatting.rules",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
+      ],
+      "follow_ups": [
+        "How do I use BBCode Formatting?",
+        "What are the rules for BBCode Formatting?",
+        "Where do I find BBCode Formatting?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.smileys-and-formatting.bbcode-formatting.rules",
+      "domain": "social_help_formatting",
+      "entities": [
+        "BBCode Formatting",
+        "SMILEYS & FORMATTING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SMILEYS & FORMATTING",
+          "title": "BBCode Formatting"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for BBCode Formatting?",
+        "What happens with BBCode Formatting?",
+        "Does the FAQ explain BBCode Formatting?",
+        "Can you clarify BBCode Formatting?",
+        "Which FAQ covers BBCode Formatting?",
+        "I have a question about BBCode Formatting",
+        "How is BBCode Formatting supposed to work?"
+      ],
+      "related_intents": [
+        "social_help_formatting.smileys-and-formatting.bbcode-formatting.overview",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
+        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
+      ],
+      "follow_ups": [
+        "Tell me about BBCode Formatting",
+        "What happens with BBCode Formatting?",
+        "Show me the SMILEYS & FORMATTING guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.profile-and-account.profile-and-account.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "PROFILE & ACCOUNT",
+        "PROFILE & ACCOUNT"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "PROFILE & ACCOUNT",
+          "title": "PROFILE & ACCOUNT"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is PROFILE & ACCOUNT?",
+        "What are PROFILE & ACCOUNT?",
+        "Tell me about PROFILE & ACCOUNT",
+        "Explain PROFILE & ACCOUNT",
+        "How does PROFILE & ACCOUNT work?",
+        "I need information about PROFILE & ACCOUNT",
+        "Give me the guide for PROFILE & ACCOUNT"
+      ],
+      "related_intents": [
+        "social_help_formatting.profile-and-account.profile-and-account.procedure",
+        "social_help_formatting.profile-and-account.edit-profile.overview",
+        "social_help_formatting.profile-and-account.edit-profile.procedure"
+      ],
+      "follow_ups": [
+        "How do I use PROFILE & ACCOUNT?",
+        "What are the rules for PROFILE & ACCOUNT?",
+        "Where do I find PROFILE & ACCOUNT?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.profile-and-account.profile-and-account.procedure",
+      "domain": "social_help_formatting",
+      "entities": [
+        "PROFILE & ACCOUNT",
+        "PROFILE & ACCOUNT"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "PROFILE & ACCOUNT",
+          "title": "PROFILE & ACCOUNT"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use PROFILE & ACCOUNT?",
+        "How do I start PROFILE & ACCOUNT?",
+        "Where do I find PROFILE & ACCOUNT?",
+        "What do I do for PROFILE & ACCOUNT?",
+        "Show me how to do PROFILE & ACCOUNT",
+        "Help me with PROFILE & ACCOUNT",
+        "Which menu has PROFILE & ACCOUNT?"
+      ],
+      "related_intents": [
+        "social_help_formatting.profile-and-account.profile-and-account.overview",
+        "social_help_formatting.profile-and-account.edit-profile.overview",
+        "social_help_formatting.profile-and-account.edit-profile.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about PROFILE & ACCOUNT",
+        "What happens with PROFILE & ACCOUNT?",
+        "Show me the PROFILE & ACCOUNT guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.profile-and-account.edit-profile.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Edit profile",
+        "PROFILE & ACCOUNT"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROFILE & ACCOUNT",
+          "title": "Edit profile"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Edit profile?",
+        "What are Edit profile?",
+        "Tell me about Edit profile",
+        "Explain Edit profile",
+        "How does Edit profile work?",
+        "I need information about Edit profile",
+        "Give me the guide for Edit profile"
+      ],
+      "related_intents": [
+        "social_help_formatting.profile-and-account.edit-profile.procedure",
+        "social_help_formatting.profile-and-account.profile-and-account.overview",
+        "social_help_formatting.profile-and-account.profile-and-account.procedure"
+      ],
+      "follow_ups": [
+        "How do I use Edit profile?",
+        "What are the rules for Edit profile?",
+        "Where do I find Edit profile?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.profile-and-account.edit-profile.procedure",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Edit profile",
+        "PROFILE & ACCOUNT"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROFILE & ACCOUNT",
+          "title": "Edit profile"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Edit profile?",
+        "How do I start Edit profile?",
+        "Where do I find Edit profile?",
+        "What do I do for Edit profile?",
+        "Show me how to do Edit profile",
+        "Help me with Edit profile",
+        "Which menu has Edit profile?"
+      ],
+      "related_intents": [
+        "social_help_formatting.profile-and-account.edit-profile.overview",
+        "social_help_formatting.profile-and-account.profile-and-account.overview",
+        "social_help_formatting.profile-and-account.profile-and-account.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about Edit profile",
+        "What happens with Edit profile?",
+        "Show me the PROFILE & ACCOUNT guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.profile-and-account.referral-and-redeem.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Referral & redeem",
+        "PROFILE & ACCOUNT"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROFILE & ACCOUNT",
+          "title": "Referral & redeem"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Referral & redeem?",
+        "What are Referral & redeem?",
+        "Tell me about Referral & redeem",
+        "Explain Referral & redeem",
+        "How does Referral & redeem work?",
+        "I need information about Referral & redeem",
+        "Give me the guide for Referral & redeem"
+      ],
+      "related_intents": [
+        "social_help_formatting.profile-and-account.referral-and-redeem.procedure",
+        "social_help_formatting.profile-and-account.profile-and-account.overview",
+        "social_help_formatting.profile-and-account.profile-and-account.procedure",
+        "social_help_formatting.profile-and-account.edit-profile.overview"
+      ],
+      "follow_ups": [
+        "How do I use Referral & redeem?",
+        "What are the rules for Referral & redeem?",
+        "Where do I find Referral & redeem?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.profile-and-account.referral-and-redeem.procedure",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Referral & redeem",
+        "PROFILE & ACCOUNT"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROFILE & ACCOUNT",
+          "title": "Referral & redeem"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Referral & redeem?",
+        "How do I start Referral & redeem?",
+        "Where do I find Referral & redeem?",
+        "What do I do for Referral & redeem?",
+        "Show me how to do Referral & redeem",
+        "Help me with Referral & redeem",
+        "Which menu has Referral & redeem?"
+      ],
+      "related_intents": [
+        "social_help_formatting.profile-and-account.referral-and-redeem.overview",
+        "social_help_formatting.profile-and-account.profile-and-account.overview",
+        "social_help_formatting.profile-and-account.profile-and-account.procedure",
+        "social_help_formatting.profile-and-account.edit-profile.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Referral & redeem",
+        "What happens with Referral & redeem?",
+        "Show me the PROFILE & ACCOUNT guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.profile-and-account.ip-and-devices.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "IP & devices",
+        "PROFILE & ACCOUNT"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROFILE & ACCOUNT",
+          "title": "IP & devices"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is IP & devices?",
+        "What are IP & devices?",
+        "Tell me about IP & devices",
+        "Explain IP & devices",
+        "How does IP & devices work?",
+        "I need information about IP & devices",
+        "Give me the guide for IP & devices"
+      ],
+      "related_intents": [
+        "social_help_formatting.profile-and-account.ip-and-devices.procedure",
+        "social_help_formatting.profile-and-account.profile-and-account.overview",
+        "social_help_formatting.profile-and-account.profile-and-account.procedure",
+        "social_help_formatting.profile-and-account.edit-profile.overview"
+      ],
+      "follow_ups": [
+        "How do I use IP & devices?",
+        "What are the rules for IP & devices?",
+        "Where do I find IP & devices?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.profile-and-account.ip-and-devices.procedure",
+      "domain": "social_help_formatting",
+      "entities": [
+        "IP & devices",
+        "PROFILE & ACCOUNT"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROFILE & ACCOUNT",
+          "title": "IP & devices"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use IP & devices?",
+        "How do I start IP & devices?",
+        "Where do I find IP & devices?",
+        "What do I do for IP & devices?",
+        "Show me how to do IP & devices",
+        "Help me with IP & devices",
+        "Which menu has IP & devices?"
+      ],
+      "related_intents": [
+        "social_help_formatting.profile-and-account.ip-and-devices.overview",
+        "social_help_formatting.profile-and-account.profile-and-account.overview",
+        "social_help_formatting.profile-and-account.profile-and-account.procedure",
+        "social_help_formatting.profile-and-account.edit-profile.overview"
+      ],
+      "follow_ups": [
+        "Tell me about IP & devices",
+        "What happens with IP & devices?",
+        "Show me the PROFILE & ACCOUNT guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.profile-and-account.viewing-other-players.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Viewing other players",
+        "PROFILE & ACCOUNT"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROFILE & ACCOUNT",
+          "title": "Viewing other players"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Viewing other players?",
+        "What are Viewing other players?",
+        "Tell me about Viewing other players",
+        "Explain Viewing other players",
+        "How does Viewing other players work?",
+        "I need information about Viewing other players",
+        "Give me the guide for Viewing other players"
+      ],
+      "related_intents": [
+        "social_help_formatting.profile-and-account.viewing-other-players.procedure",
+        "social_help_formatting.profile-and-account.profile-and-account.overview",
+        "social_help_formatting.profile-and-account.profile-and-account.procedure",
+        "social_help_formatting.profile-and-account.edit-profile.overview"
+      ],
+      "follow_ups": [
+        "How do I use Viewing other players?",
+        "What are the rules for Viewing other players?",
+        "Where do I find Viewing other players?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.profile-and-account.viewing-other-players.procedure",
+      "domain": "social_help_formatting",
+      "entities": [
+        "Viewing other players",
+        "PROFILE & ACCOUNT"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROFILE & ACCOUNT",
+          "title": "Viewing other players"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Viewing other players?",
+        "How do I start Viewing other players?",
+        "Where do I find Viewing other players?",
+        "What do I do for Viewing other players?",
+        "Show me how to do Viewing other players",
+        "Help me with Viewing other players",
+        "Which menu has Viewing other players?"
+      ],
+      "related_intents": [
+        "social_help_formatting.profile-and-account.viewing-other-players.overview",
+        "social_help_formatting.profile-and-account.profile-and-account.overview",
+        "social_help_formatting.profile-and-account.profile-and-account.procedure",
+        "social_help_formatting.profile-and-account.edit-profile.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Viewing other players",
+        "What happens with Viewing other players?",
+        "Show me the PROFILE & ACCOUNT guide"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-and-help.social-and-help.overview",
+      "domain": "social_help_formatting",
+      "entities": [
+        "SOCIAL & HELP",
+        "SOCIAL & HELP"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "SOCIAL & HELP",
+          "title": "SOCIAL & HELP"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is SOCIAL & HELP?",
+        "What are SOCIAL & HELP?",
+        "Tell me about SOCIAL & HELP",
+        "Explain SOCIAL & HELP",
+        "How does SOCIAL & HELP work?",
+        "I need information about SOCIAL & HELP",
+        "Give me the guide for SOCIAL & HELP"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-and-help.social-and-help.procedure"
+      ],
+      "follow_ups": [
+        "How do I use SOCIAL & HELP?",
+        "What are the rules for SOCIAL & HELP?",
+        "Where do I find SOCIAL & HELP?"
+      ]
+    },
+    {
+      "id": "social_help_formatting.social-and-help.social-and-help.procedure",
+      "domain": "social_help_formatting",
+      "entities": [
+        "SOCIAL & HELP",
+        "SOCIAL & HELP"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "SOCIAL & HELP",
+          "title": "SOCIAL & HELP"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use SOCIAL & HELP?",
+        "How do I start SOCIAL & HELP?",
+        "Where do I find SOCIAL & HELP?",
+        "What do I do for SOCIAL & HELP?",
+        "Show me how to do SOCIAL & HELP",
+        "Help me with SOCIAL & HELP",
+        "Which menu has SOCIAL & HELP?"
+      ],
+      "related_intents": [
+        "social_help_formatting.social-and-help.social-and-help.overview"
+      ],
+      "follow_ups": [
+        "Tell me about SOCIAL & HELP",
+        "What happens with SOCIAL & HELP?",
+        "Show me the SOCIAL & HELP guide"
+      ]
+    }
+  ]
+}

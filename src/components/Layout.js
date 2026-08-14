@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment, lazy, Suspense } from 'react';
 import { Link, useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 import { SAME_ROUTE_NAV_CLICK } from '../constants/navigationEvents';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Flame, Leaf, Ban } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Flame, Leaf, Ban, BookOpen } from 'lucide-react';
 import api, {
   getApiErrorMessage,
   onCooldownChange,
@@ -62,7 +62,7 @@ function buildModStaffNavItems() {
   return buildLayoutStaffNavItems({ isAdmin: false, isModerator: true });
 }
 
-function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator, staffToolsNavVisible, hitmanForHireVisible, weedEmpireNavVisible) {
+function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator, staffToolsNavVisible, hitmanForHireVisible, weedEmpireNavVisible, gameGuideVisible) {
   const goItems = [
     { path: '/game/travel', label: 'Travel' },
     { path: '/game/states', label: 'States' },
@@ -222,6 +222,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/social/inbox', label: 'Inbox' },
         { path: '/social/image-host', label: 'Image host' },
         { path: '/game/help-desk', label: 'Help Desk' },
+        ...(gameGuideVisible ? [{ path: '/game/guide', label: 'Game Guide' }] : []),
         ...(isHelpDeskOperator ? [{ path: '/game/help-desk-hub', label: 'Help Desk Hub' }] : []),
         { path: '/game/users-online', label: 'Users Online' },
         { path: '/game/family/list', label: 'Families' },
@@ -505,6 +506,7 @@ export default function Layout({ children }) {
   const [pageLocks, setPageLocks] = useState({});
   const [hitmanForHireLive, setHitmanForHireLive] = useState(false);
   const [weedEmpireVisible, setWeedEmpireVisible] = useState(false);
+  const [gameGuideVisible, setGameGuideVisible] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const userSearchRef = useRef(null);
   const userSearchInputRef = useRef(null);
@@ -673,7 +675,7 @@ export default function Layout({ children }) {
   const hitmanForHireVisible = !!hitmanForHireLive;
   const weedEmpireNavVisible = !!weedEmpireVisible || !!(isAdmin || isModerator || hasAdminEmail);
   const mobileBottomNavItems = useMemo(() => {
-    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator, staffToolsNavVisible, hitmanForHireVisible, weedEmpireNavVisible);
+    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator, staffToolsNavVisible, hitmanForHireVisible, weedEmpireNavVisible, gameGuideVisible);
     if (hasAdminEmail && !isAdmin && !adminPreviewAsMod) {
       items = items.map((i) =>
         i.type === 'group' && i.id === 'you'
@@ -741,7 +743,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, weedEmpireReadyCount, hitmanForHireVisible, weedEmpireNavVisible, gameChatVisible, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
+  }, [isAdmin, isModerator, hasAdminEmail, adminPreviewAsMod, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, weedEmpireReadyCount, hitmanForHireVisible, weedEmpireNavVisible, gameGuideVisible, gameChatVisible, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -1595,9 +1597,15 @@ export default function Layout({ children }) {
         setWeedEmpireVisible(false);
       });
     }, 1600);
+    const tGuide = setTimeout(() => {
+      api.get('/help/chat/quota').then((r) => {
+        setGameGuideVisible(!!r.data?.allowed);
+      }).catch(() => setGameGuideVisible(false));
+    }, 1650);
     return () => {
       clearTimeout(t);
       clearTimeout(tHitman);
+      clearTimeout(tGuide);
     };
   }, []);
 
@@ -1872,6 +1880,7 @@ export default function Layout({ children }) {
     { path: '/game/users-online', icon: Users, label: 'Users Online', countBadge: usersOnlineCount },
     { path: '__messaging__', icon: MessageSquare, label: 'Forum & inbox' },
     { path: '/game/help-desk', icon: HelpCircle, label: 'Help Desk', badge: helpDeskOpenCount },
+    ...(gameGuideVisible ? [{ path: '/game/guide', icon: BookOpen, label: 'Game Guide' }] : []),
     { path: '/game/ranking', icon: Target, label: 'Ranking' },
     { path: '/cars/garage', icon: Car, label: 'Garage' },
     { path: '/cars/buy', icon: ShoppingBag, label: 'Buy Cars' },
@@ -3484,6 +3493,7 @@ export default function Layout({ children }) {
                 { path: '/game/users-online', label: 'Online', Icon: Users, badge: typeof usersOnlineCount === 'number' ? Math.min(usersOnlineCount, 99) : 0 },
                 { path: '/game/leaderboard', label: 'Leaderboard', Icon: Trophy },
                 { path: '/game/help-desk', label: 'Help Desk', Icon: HelpCircle, badge: helpDeskOpenCount },
+                ...(gameGuideVisible ? [{ path: '/game/guide', label: 'Game Guide', Icon: BookOpen }] : []),
                 { path: '/account/autorank', label: 'Auto Rank', Icon: Bot },
                 ...(needsEmailVerification ? [{ path: '/verify-email', label: 'Verify email', Icon: Mail }] : []),
               ],

@@ -1,0 +1,81 @@
+{
+  "domain": "auto_rank",
+  "intents": [
+    {
+      "id": "auto_rank.auto-rank.what-it-is.overview",
+      "domain": "auto_rank",
+      "entities": [
+        "What it is",
+        "AUTO RANK"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "AUTO RANK",
+          "title": "What it is"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/account/autorank"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is What it is?",
+        "What are What it is?",
+        "Tell me about What it is",
+        "Explain What it is",
+        "How does What it is work?",
+        "I need information about What it is",
+        "Give me the guide for What it is"
+      ],
+      "related_intents": [
+        "auto_rank.auto-rank.what-it-is.rules"
+      ],
+      "follow_ups": [
+        "How do I use What it is?",
+        "What are the rules for What it is?",
+        "Where do I find What it is?"
+      ]
+    },
+    {
+      "id": "auto_rank.auto-rank.what-it-is.rules",
+      "domain": "auto_rank",
+      "entities": [
+        "What it is",
+        "AUTO RANK"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "AUTO RANK",
+          "title": "What it is"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/account/autorank"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for What it is?",
+        "What happens with What it is?",
+        "Does the FAQ explain What it is?",
+        "Can you clarify What it is?",
+        "Which FAQ covers What it is?",
+        "I have a question about What it is",
+        "How is What it is supposed to work?"
+      ],
+      "related_intents": [
+        "auto_rank.auto-rank.what-it-is.overview"
+      ],
+      "follow_ups": [
+        "Tell me about What it is",
+        "What happens with What it is?",
+        "Show me the AUTO RANK guide"
+      ]
+    }
+  ]
+}

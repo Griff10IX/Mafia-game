@@ -1,0 +1,641 @@
+{
+  "domain": "distillery_rackets",
+  "intents": [
+    {
+      "id": "distillery_rackets.money-making.distillery.overview",
+      "domain": "distillery_rackets",
+      "entities": [
+        "Distillery",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Distillery"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Distillery?",
+        "What are Distillery?",
+        "Tell me about Distillery",
+        "Explain Distillery",
+        "How does Distillery work?",
+        "I need information about Distillery",
+        "Give me the guide for Distillery"
+      ],
+      "related_intents": [
+        "distillery_rackets.money-making.distillery.rules",
+        "distillery_rackets.money-making.illegal-business-personal-racket.overview",
+        "distillery_rackets.money-making.illegal-business-personal-racket.rules"
+      ],
+      "follow_ups": [
+        "How do I use Distillery?",
+        "What are the rules for Distillery?",
+        "Where do I find Distillery?"
+      ]
+    },
+    {
+      "id": "distillery_rackets.money-making.distillery.rules",
+      "domain": "distillery_rackets",
+      "entities": [
+        "Distillery",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Distillery"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Distillery?",
+        "What happens with Distillery?",
+        "Does the FAQ explain Distillery?",
+        "Can you clarify Distillery?",
+        "Which FAQ covers Distillery?",
+        "I have a question about Distillery",
+        "How is Distillery supposed to work?"
+      ],
+      "related_intents": [
+        "distillery_rackets.money-making.distillery.overview",
+        "distillery_rackets.money-making.illegal-business-personal-racket.overview",
+        "distillery_rackets.money-making.illegal-business-personal-racket.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Distillery",
+        "What happens with Distillery?",
+        "Show me the MONEY MAKING guide"
+      ]
+    },
+    {
+      "id": "distillery_rackets.money-making.illegal-business-personal-racket.overview",
+      "domain": "distillery_rackets",
+      "entities": [
+        "Illegal Business (Personal Racket)",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Illegal Business (Personal Racket)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Illegal Business (Personal Racket)?",
+        "What are Illegal Business (Personal Racket)?",
+        "Tell me about Illegal Business (Personal Racket)",
+        "Explain Illegal Business (Personal Racket)",
+        "How does Illegal Business (Personal Racket) work?",
+        "I need information about Illegal Business (Personal Racket)",
+        "Give me the guide for Illegal Business (Personal Racket)"
+      ],
+      "related_intents": [
+        "distillery_rackets.money-making.illegal-business-personal-racket.rules",
+        "distillery_rackets.money-making.distillery.overview",
+        "distillery_rackets.money-making.distillery.rules"
+      ],
+      "follow_ups": [
+        "How do I use Illegal Business (Personal Racket)?",
+        "What are the rules for Illegal Business (Personal Racket)?",
+        "Where do I find Illegal Business (Personal Racket)?"
+      ]
+    },
+    {
+      "id": "distillery_rackets.money-making.illegal-business-personal-racket.rules",
+      "domain": "distillery_rackets",
+      "entities": [
+        "Illegal Business (Personal Racket)",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Illegal Business (Personal Racket)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Illegal Business (Personal Racket)?",
+        "What happens with Illegal Business (Personal Racket)?",
+        "Does the FAQ explain Illegal Business (Personal Racket)?",
+        "Can you clarify Illegal Business (Personal Racket)?",
+        "Which FAQ covers Illegal Business (Personal Racket)?",
+        "I have a question about Illegal Business (Personal Racket)",
+        "How is Illegal Business (Personal Racket) supposed to work?"
+      ],
+      "related_intents": [
+        "distillery_rackets.money-making.illegal-business-personal-racket.overview",
+        "distillery_rackets.money-making.distillery.overview",
+        "distillery_rackets.money-making.distillery.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Illegal Business (Personal Racket)",
+        "What happens with Illegal Business (Personal Racket)?",
+        "Show me the MONEY MAKING guide"
+      ]
+    },
+    {
+      "id": "distillery_rackets.families.rackets.overview",
+      "domain": "distillery_rackets",
+      "entities": [
+        "Rackets",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Rackets"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Rackets?",
+        "What are Rackets?",
+        "Tell me about Rackets",
+        "Explain Rackets",
+        "How does Rackets work?",
+        "I need information about Rackets",
+        "Give me the guide for Rackets"
+      ],
+      "related_intents": [
+        "distillery_rackets.families.rackets.rules",
+        "distillery_rackets.families.racket-raids.overview",
+        "distillery_rackets.families.racket-raids.rules"
+      ],
+      "follow_ups": [
+        "How do I use Rackets?",
+        "What are the rules for Rackets?",
+        "Where do I find Rackets?"
+      ]
+    },
+    {
+      "id": "distillery_rackets.families.rackets.rules",
+      "domain": "distillery_rackets",
+      "entities": [
+        "Rackets",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Rackets"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Rackets?",
+        "What happens with Rackets?",
+        "Does the FAQ explain Rackets?",
+        "Can you clarify Rackets?",
+        "Which FAQ covers Rackets?",
+        "I have a question about Rackets",
+        "How is Rackets supposed to work?"
+      ],
+      "related_intents": [
+        "distillery_rackets.families.rackets.overview",
+        "distillery_rackets.families.racket-raids.overview",
+        "distillery_rackets.families.racket-raids.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Rackets",
+        "What happens with Rackets?",
+        "Show me the FAMILIES guide"
+      ]
+    },
+    {
+      "id": "distillery_rackets.families.racket-raids.overview",
+      "domain": "distillery_rackets",
+      "entities": [
+        "Racket Raids",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Racket Raids"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Racket Raids?",
+        "What are Racket Raids?",
+        "Tell me about Racket Raids",
+        "Explain Racket Raids",
+        "How does Racket Raids work?",
+        "I need information about Racket Raids",
+        "Give me the guide for Racket Raids"
+      ],
+      "related_intents": [
+        "distillery_rackets.families.racket-raids.rules",
+        "distillery_rackets.families.rackets.overview",
+        "distillery_rackets.families.rackets.rules"
+      ],
+      "follow_ups": [
+        "How do I use Racket Raids?",
+        "What are the rules for Racket Raids?",
+        "Where do I find Racket Raids?"
+      ]
+    },
+    {
+      "id": "distillery_rackets.families.racket-raids.rules",
+      "domain": "distillery_rackets",
+      "entities": [
+        "Racket Raids",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Racket Raids"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Racket Raids?",
+        "What happens with Racket Raids?",
+        "Does the FAQ explain Racket Raids?",
+        "Can you clarify Racket Raids?",
+        "Which FAQ covers Racket Raids?",
+        "I have a question about Racket Raids",
+        "How is Racket Raids supposed to work?"
+      ],
+      "related_intents": [
+        "distillery_rackets.families.racket-raids.overview",
+        "distillery_rackets.families.rackets.overview",
+        "distillery_rackets.families.rackets.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Racket Raids",
+        "What happens with Racket Raids?",
+        "Show me the FAMILIES guide"
+      ]
+    },
+    {
+      "id": "distillery_rackets.faq.how-does-the-distillery-work.overview",
+      "domain": "distillery_rackets",
+      "entities": [
+        "How does the Distillery work?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How does the Distillery work?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does the Distillery work?",
+        "What is How does the Distillery work??",
+        "What are How does the Distillery work??",
+        "Tell me about How does the Distillery work?",
+        "Explain How does the Distillery work?",
+        "How does How does the Distillery work? work?",
+        "I need information about How does the Distillery work?"
+      ],
+      "related_intents": [
+        "distillery_rackets.faq.how-does-the-distillery-work.rules",
+        "distillery_rackets.faq.what-do-i-get-when-i-kill-someone-with-properties-or-a-distillery.overview",
+        "distillery_rackets.faq.what-do-i-get-when-i-kill-someone-with-properties-or-a-distillery.rules"
+      ],
+      "follow_ups": [
+        "How do I use How does the Distillery work??",
+        "What are the rules for How does the Distillery work??",
+        "Where do I find How does the Distillery work??"
+      ]
+    },
+    {
+      "id": "distillery_rackets.faq.how-does-the-distillery-work.rules",
+      "domain": "distillery_rackets",
+      "entities": [
+        "How does the Distillery work?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How does the Distillery work?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for How does the Distillery work??",
+        "What happens with How does the Distillery work??",
+        "Does the FAQ explain How does the Distillery work??",
+        "Can you clarify How does the Distillery work??",
+        "Which FAQ covers How does the Distillery work??",
+        "I have a question about How does the Distillery work?",
+        "How is How does the Distillery work? supposed to work?"
+      ],
+      "related_intents": [
+        "distillery_rackets.faq.how-does-the-distillery-work.overview",
+        "distillery_rackets.faq.what-do-i-get-when-i-kill-someone-with-properties-or-a-distillery.overview",
+        "distillery_rackets.faq.what-do-i-get-when-i-kill-someone-with-properties-or-a-distillery.rules"
+      ],
+      "follow_ups": [
+        "Tell me about How does the Distillery work?",
+        "What happens with How does the Distillery work??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "distillery_rackets.faq.what-do-i-get-when-i-kill-someone-with-properties-or-a-distillery.overview",
+      "domain": "distillery_rackets",
+      "entities": [
+        "What do I get when I kill someone with Properties or a Distillery?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What do I get when I kill someone with Properties or a Distillery?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What do I get when I kill someone with Properties or a Distillery?",
+        "What is What do I get when I kill someone with Properties or a Distillery??",
+        "What are What do I get when I kill someone with Properties or a Distillery??",
+        "Tell me about What do I get when I kill someone with Properties or a Distillery?",
+        "Explain What do I get when I kill someone with Properties or a Distillery?",
+        "How does What do I get when I kill someone with Properties or a Distillery? work?",
+        "I need information about What do I get when I kill someone with Properties or a Distillery?"
+      ],
+      "related_intents": [
+        "distillery_rackets.faq.what-do-i-get-when-i-kill-someone-with-properties-or-a-distillery.rules",
+        "distillery_rackets.faq.how-does-the-distillery-work.overview",
+        "distillery_rackets.faq.how-does-the-distillery-work.rules"
+      ],
+      "follow_ups": [
+        "How do I use What do I get when I kill someone with Properties or a Distillery??",
+        "What are the rules for What do I get when I kill someone with Properties or a Distillery??",
+        "Where do I find What do I get when I kill someone with Properties or a Distillery??"
+      ]
+    },
+    {
+      "id": "distillery_rackets.faq.what-do-i-get-when-i-kill-someone-with-properties-or-a-distillery.rules",
+      "domain": "distillery_rackets",
+      "entities": [
+        "What do I get when I kill someone with Properties or a Distillery?",
+        "FAQ"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What do I get when I kill someone with Properties or a Distillery?"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for What do I get when I kill someone with Properties or a Distillery??",
+        "What happens with What do I get when I kill someone with Properties or a Distillery??",
+        "Does the FAQ explain What do I get when I kill someone with Properties or a Distillery??",
+        "Can you clarify What do I get when I kill someone with Properties or a Distillery??",
+        "Which FAQ covers What do I get when I kill someone with Properties or a Distillery??",
+        "I have a question about What do I get when I kill someone with Properties or a Distillery?",
+        "How is What do I get when I kill someone with Properties or a Distillery? supposed to work?"
+      ],
+      "related_intents": [
+        "distillery_rackets.faq.what-do-i-get-when-i-kill-someone-with-properties-or-a-distillery.overview",
+        "distillery_rackets.faq.how-does-the-distillery-work.overview",
+        "distillery_rackets.faq.how-does-the-distillery-work.rules"
+      ],
+      "follow_ups": [
+        "Tell me about What do I get when I kill someone with Properties or a Distillery?",
+        "What happens with What do I get when I kill someone with Properties or a Distillery??",
+        "Show me the FAQ guide"
+      ]
+    },
+    {
+      "id": "distillery_rackets.money-and-businesses.illegal-businesses-and-collecting.overview",
+      "domain": "distillery_rackets",
+      "entities": [
+        "Illegal businesses & collecting",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Illegal businesses & collecting"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Illegal businesses & collecting?",
+        "What are Illegal businesses & collecting?",
+        "Tell me about Illegal businesses & collecting",
+        "Explain Illegal businesses & collecting",
+        "How does Illegal businesses & collecting work?",
+        "I need information about Illegal businesses & collecting",
+        "Give me the guide for Illegal businesses & collecting"
+      ],
+      "related_intents": [
+        "distillery_rackets.money-and-businesses.illegal-businesses-and-collecting.procedure",
+        "distillery_rackets.money-and-businesses.distillery-quick-tour.overview",
+        "distillery_rackets.money-and-businesses.distillery-quick-tour.procedure"
+      ],
+      "follow_ups": [
+        "How do I use Illegal businesses & collecting?",
+        "What are the rules for Illegal businesses & collecting?",
+        "Where do I find Illegal businesses & collecting?"
+      ]
+    },
+    {
+      "id": "distillery_rackets.money-and-businesses.illegal-businesses-and-collecting.procedure",
+      "domain": "distillery_rackets",
+      "entities": [
+        "Illegal businesses & collecting",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Illegal businesses & collecting"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Illegal businesses & collecting?",
+        "How do I start Illegal businesses & collecting?",
+        "Where do I find Illegal businesses & collecting?",
+        "What do I do for Illegal businesses & collecting?",
+        "Show me how to do Illegal businesses & collecting",
+        "Help me with Illegal businesses & collecting",
+        "Which menu has Illegal businesses & collecting?"
+      ],
+      "related_intents": [
+        "distillery_rackets.money-and-businesses.illegal-businesses-and-collecting.overview",
+        "distillery_rackets.money-and-businesses.distillery-quick-tour.overview",
+        "distillery_rackets.money-and-businesses.distillery-quick-tour.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about Illegal businesses & collecting",
+        "What happens with Illegal businesses & collecting?",
+        "Show me the MONEY & BUSINESSES guide"
+      ]
+    },
+    {
+      "id": "distillery_rackets.money-and-businesses.distillery-quick-tour.overview",
+      "domain": "distillery_rackets",
+      "entities": [
+        "Distillery (quick tour)",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Distillery (quick tour)"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Distillery (quick tour)?",
+        "What are Distillery (quick tour)?",
+        "Tell me about Distillery (quick tour)",
+        "Explain Distillery (quick tour)",
+        "How does Distillery (quick tour) work?",
+        "I need information about Distillery (quick tour)",
+        "Give me the guide for Distillery (quick tour)"
+      ],
+      "related_intents": [
+        "distillery_rackets.money-and-businesses.distillery-quick-tour.procedure",
+        "distillery_rackets.money-and-businesses.illegal-businesses-and-collecting.overview",
+        "distillery_rackets.money-and-businesses.illegal-businesses-and-collecting.procedure"
+      ],
+      "follow_ups": [
+        "How do I use Distillery (quick tour)?",
+        "What are the rules for Distillery (quick tour)?",
+        "Where do I find Distillery (quick tour)?"
+      ]
+    },
+    {
+      "id": "distillery_rackets.money-and-businesses.distillery-quick-tour.procedure",
+      "domain": "distillery_rackets",
+      "entities": [
+        "Distillery (quick tour)",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Distillery (quick tour)"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Distillery (quick tour)?",
+        "How do I start Distillery (quick tour)?",
+        "Where do I find Distillery (quick tour)?",
+        "What do I do for Distillery (quick tour)?",
+        "Show me how to do Distillery (quick tour)",
+        "Help me with Distillery (quick tour)",
+        "Which menu has Distillery (quick tour)?"
+      ],
+      "related_intents": [
+        "distillery_rackets.money-and-businesses.distillery-quick-tour.overview",
+        "distillery_rackets.money-and-businesses.illegal-businesses-and-collecting.overview",
+        "distillery_rackets.money-and-businesses.illegal-businesses-and-collecting.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about Distillery (quick tour)",
+        "What happens with Distillery (quick tour)?",
+        "Show me the MONEY & BUSINESSES guide"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+[
+  {
+    "question": "Interest Bank vs Swiss Bank",
+    "answer_type": "comparison",
+    "intent_id": "cross_feature.compare.interest-bank-vs-swiss-bank",
+    "titles": ["Banks", "Q: What's the Interest Bank vs Swiss Bank?", "Bank"]
+  },
+  {
+    "question": "RP rank vs wealth rank",
+    "answer_type": "comparison",
+    "intent_id": "cross_feature.compare.rp-rank-vs-wealth-rank",
+    "titles": ["Ranks (13 total)", "Wealth ranks (cash on hand)"]
+  },
+  {
+    "question": "Personal racket vs family racket",
+    "answer_type": "comparison",
+    "intent_id": "cross_feature.compare.personal-vs-family-racket",
+    "titles": ["Illegal Business (Personal Racket)", "Rackets"]
+  },
+  {
+    "question": "Property heat vs distillery heat",
+    "answer_type": "comparison",
+    "intent_id": "cross_feature.compare.property-heat-vs-distillery-heat",
+    "titles": [
+      "Q: Why can't I collect property income? / What is Heat?",
+      "Q: Why are property collections still blocked when Heat is low?",
+      "Q: How does the Distillery work?"
+    ]
+  },
+  {
+    "question": "Does bank money count for wealth rank?",
+    "answer_type": "yes_no",
+    "intent_id": "cross_feature.yes-no.bank-money-counts-for-wealth",
+    "titles": ["Wealth ranks (cash on hand)", "Cash vs bank"]
+  },
+  {
+    "question": "Why can't I attack a new player?",
+    "answer_type": "troubleshooting",
+    "intent_id": "cross_feature.troubleshoot.new-player-attack",
+    "titles": [
+      "New-account protection",
+      "Q: Why can’t I attack / hire a Hitman on a new player?"
+    ]
+  },
+  {
+    "question": "My property collection is blocked",
+    "answer_type": "troubleshooting",
+    "intent_id": "cross_feature.troubleshoot.property-collection",
+    "titles": [
+      "Q: Why can't I collect property income? / What is Heat?",
+      "Q: Why are property collections still blocked when Heat is low?",
+      "My Properties"
+    ]
+  },
+  {
+    "question": "Can I attack from jail?",
+    "answer_type": "yes_no",
+    "intent_id": "cross_feature.yes-no.jail-blocks-actions",
+    "titles": ["What the server blocks while you’re in jail", "Jail"]
+  },
+  {
+    "question": "How do I travel?",
+    "answer_type": "procedure",
+    "title_contains": "travel"
+  },
+  {
+    "question": "What is Prestige?",
+    "answer_type": "definition",
+    "title_contains": "prestige"
+  },
+  {
+    "question": "How do I get out of jail?",
+    "answer_type": "procedure",
+    "title_contains": "getting out"
+  },
+  {
+    "question": "What are family wars?",
+    "answer_type": "definition",
+    "title_contains": "war"
+  },
+  {
+    "question": "How can I buy a car?",
+    "answer_type": "procedure",
+    "title_contains": "buy"
+  },
+  {
+    "question": "What are Daily Rewards?",
+    "answer_type": "definition",
+    "title_contains": "daily reward"
+  },
+  {
+    "question": "How do tokens work?",
+    "answer_type": "procedure",
+    "title_contains": "token"
+  }
+]

@@ -1,0 +1,1325 @@
+{
+  "domain": "money_banks_properties",
+  "intents": [
+    {
+      "id": "money_banks_properties.money-making.money-making.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "MONEY MAKING",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "MONEY MAKING",
+          "title": "MONEY MAKING"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is MONEY MAKING?",
+        "What are MONEY MAKING?",
+        "Tell me about MONEY MAKING",
+        "Explain MONEY MAKING",
+        "How does MONEY MAKING work?",
+        "I need information about MONEY MAKING",
+        "Give me the guide for MONEY MAKING"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.money-making.rules",
+        "money_banks_properties.money-making.properties.overview",
+        "money_banks_properties.money-making.properties.rules"
+      ],
+      "follow_ups": [
+        "How do I use MONEY MAKING?",
+        "What are the rules for MONEY MAKING?",
+        "Where do I find MONEY MAKING?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-making.money-making.rules",
+      "domain": "money_banks_properties",
+      "entities": [
+        "MONEY MAKING",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "MONEY MAKING",
+          "title": "MONEY MAKING"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for MONEY MAKING?",
+        "What happens with MONEY MAKING?",
+        "Does the FAQ explain MONEY MAKING?",
+        "Can you clarify MONEY MAKING?",
+        "Which FAQ covers MONEY MAKING?",
+        "I have a question about MONEY MAKING",
+        "How is MONEY MAKING supposed to work?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.money-making.overview",
+        "money_banks_properties.money-making.properties.overview",
+        "money_banks_properties.money-making.properties.rules"
+      ],
+      "follow_ups": [
+        "Tell me about MONEY MAKING",
+        "What happens with MONEY MAKING?",
+        "Show me the MONEY MAKING guide"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-making.properties.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Properties",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Properties"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Properties?",
+        "What are Properties?",
+        "Tell me about Properties",
+        "Explain Properties",
+        "How does Properties work?",
+        "I need information about Properties",
+        "Give me the guide for Properties"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.properties.rules",
+        "money_banks_properties.money-making.money-making.overview",
+        "money_banks_properties.money-making.money-making.rules"
+      ],
+      "follow_ups": [
+        "How do I use Properties?",
+        "What are the rules for Properties?",
+        "Where do I find Properties?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-making.properties.rules",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Properties",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Properties"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Properties?",
+        "What happens with Properties?",
+        "Does the FAQ explain Properties?",
+        "Can you clarify Properties?",
+        "Which FAQ covers Properties?",
+        "I have a question about Properties",
+        "How is Properties supposed to work?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.properties.overview",
+        "money_banks_properties.money-making.money-making.overview",
+        "money_banks_properties.money-making.money-making.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Properties",
+        "What happens with Properties?",
+        "Show me the MONEY MAKING guide"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-making.booze-runs.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Booze Runs",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Booze Runs"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Booze Runs?",
+        "What are Booze Runs?",
+        "Tell me about Booze Runs",
+        "Explain Booze Runs",
+        "How does Booze Runs work?",
+        "I need information about Booze Runs",
+        "Give me the guide for Booze Runs"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.booze-runs.rules",
+        "money_banks_properties.money-making.money-making.overview",
+        "money_banks_properties.money-making.money-making.rules",
+        "money_banks_properties.money-making.properties.overview"
+      ],
+      "follow_ups": [
+        "How do I use Booze Runs?",
+        "What are the rules for Booze Runs?",
+        "Where do I find Booze Runs?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-making.booze-runs.rules",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Booze Runs",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Booze Runs"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Booze Runs?",
+        "What happens with Booze Runs?",
+        "Does the FAQ explain Booze Runs?",
+        "Can you clarify Booze Runs?",
+        "Which FAQ covers Booze Runs?",
+        "I have a question about Booze Runs",
+        "How is Booze Runs supposed to work?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.booze-runs.overview",
+        "money_banks_properties.money-making.money-making.overview",
+        "money_banks_properties.money-making.money-making.rules",
+        "money_banks_properties.money-making.properties.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Booze Runs",
+        "What happens with Booze Runs?",
+        "Show me the MONEY MAKING guide"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-making.banks.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Banks",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Banks"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Banks?",
+        "What are Banks?",
+        "Tell me about Banks",
+        "Explain Banks",
+        "How does Banks work?",
+        "I need information about Banks",
+        "Give me the guide for Banks"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.banks.rules",
+        "money_banks_properties.money-making.money-making.overview",
+        "money_banks_properties.money-making.money-making.rules",
+        "money_banks_properties.money-making.properties.overview"
+      ],
+      "follow_ups": [
+        "How do I use Banks?",
+        "What are the rules for Banks?",
+        "Where do I find Banks?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-making.banks.rules",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Banks",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Banks"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Banks?",
+        "What happens with Banks?",
+        "Does the FAQ explain Banks?",
+        "Can you clarify Banks?",
+        "Which FAQ covers Banks?",
+        "I have a question about Banks",
+        "How is Banks supposed to work?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.banks.overview",
+        "money_banks_properties.money-making.money-making.overview",
+        "money_banks_properties.money-making.money-making.rules",
+        "money_banks_properties.money-making.properties.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Banks",
+        "What happens with Banks?",
+        "Show me the MONEY MAKING guide"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-making.daily-global-events.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Daily global events",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Daily global events"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Daily global events?",
+        "What are Daily global events?",
+        "Tell me about Daily global events",
+        "Explain Daily global events",
+        "How does Daily global events work?",
+        "I need information about Daily global events",
+        "Give me the guide for Daily global events"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.daily-global-events.rules",
+        "money_banks_properties.money-making.money-making.overview",
+        "money_banks_properties.money-making.money-making.rules",
+        "money_banks_properties.money-making.properties.overview"
+      ],
+      "follow_ups": [
+        "How do I use Daily global events?",
+        "What are the rules for Daily global events?",
+        "Where do I find Daily global events?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-making.daily-global-events.rules",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Daily global events",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Daily global events"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Daily global events?",
+        "What happens with Daily global events?",
+        "Does the FAQ explain Daily global events?",
+        "Can you clarify Daily global events?",
+        "Which FAQ covers Daily global events?",
+        "I have a question about Daily global events",
+        "How is Daily global events supposed to work?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.daily-global-events.overview",
+        "money_banks_properties.money-making.money-making.overview",
+        "money_banks_properties.money-making.money-making.rules",
+        "money_banks_properties.money-making.properties.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Daily global events",
+        "What happens with Daily global events?",
+        "Show me the MONEY MAKING guide"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-making.stock-market-crypto-trading.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Stock Market (Crypto Trading)",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Stock Market (Crypto Trading)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Stock Market (Crypto Trading)?",
+        "What are Stock Market (Crypto Trading)?",
+        "Tell me about Stock Market (Crypto Trading)",
+        "Explain Stock Market (Crypto Trading)",
+        "How does Stock Market (Crypto Trading) work?",
+        "I need information about Stock Market (Crypto Trading)",
+        "Give me the guide for Stock Market (Crypto Trading)"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.stock-market-crypto-trading.rules",
+        "money_banks_properties.money-making.money-making.overview",
+        "money_banks_properties.money-making.money-making.rules",
+        "money_banks_properties.money-making.properties.overview"
+      ],
+      "follow_ups": [
+        "How do I use Stock Market (Crypto Trading)?",
+        "What are the rules for Stock Market (Crypto Trading)?",
+        "Where do I find Stock Market (Crypto Trading)?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-making.stock-market-crypto-trading.rules",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Stock Market (Crypto Trading)",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Stock Market (Crypto Trading)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Stock Market (Crypto Trading)?",
+        "What happens with Stock Market (Crypto Trading)?",
+        "Does the FAQ explain Stock Market (Crypto Trading)?",
+        "Can you clarify Stock Market (Crypto Trading)?",
+        "Which FAQ covers Stock Market (Crypto Trading)?",
+        "I have a question about Stock Market (Crypto Trading)",
+        "How is Stock Market (Crypto Trading) supposed to work?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.stock-market-crypto-trading.overview",
+        "money_banks_properties.money-making.money-making.overview",
+        "money_banks_properties.money-making.money-making.rules",
+        "money_banks_properties.money-making.properties.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Stock Market (Crypto Trading)",
+        "What happens with Stock Market (Crypto Trading)?",
+        "Show me the MONEY MAKING guide"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-making.sports-betting.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Sports Betting",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Sports Betting"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Sports Betting in MONEY MAKING?",
+        "What is Sports Betting?",
+        "What are Sports Betting?",
+        "Tell me about Sports Betting",
+        "Explain Sports Betting",
+        "How does Sports Betting work?",
+        "I need information about Sports Betting"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.sports-betting.rules",
+        "money_banks_properties.money-making.money-making.overview",
+        "money_banks_properties.money-making.money-making.rules",
+        "money_banks_properties.money-making.properties.overview"
+      ],
+      "follow_ups": [
+        "How do I use Sports Betting?",
+        "What are the rules for Sports Betting?",
+        "Where do I find Sports Betting?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-making.sports-betting.rules",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Sports Betting",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Sports Betting"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Sports Betting?",
+        "What happens with Sports Betting?",
+        "Does the FAQ explain Sports Betting?",
+        "Can you clarify Sports Betting?",
+        "Which FAQ covers Sports Betting?",
+        "I have a question about Sports Betting",
+        "How is Sports Betting supposed to work?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.sports-betting.overview",
+        "money_banks_properties.money-making.money-making.overview",
+        "money_banks_properties.money-making.money-making.rules",
+        "money_banks_properties.money-making.properties.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Sports Betting",
+        "What happens with Sports Betting?",
+        "Show me the MONEY MAKING guide"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-making.crack-safe.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Crack Safe",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Crack Safe"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Crack Safe?",
+        "What are Crack Safe?",
+        "Tell me about Crack Safe",
+        "Explain Crack Safe",
+        "How does Crack Safe work?",
+        "I need information about Crack Safe",
+        "Give me the guide for Crack Safe"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.crack-safe.rules",
+        "money_banks_properties.money-making.money-making.overview",
+        "money_banks_properties.money-making.money-making.rules",
+        "money_banks_properties.money-making.properties.overview"
+      ],
+      "follow_ups": [
+        "How do I use Crack Safe?",
+        "What are the rules for Crack Safe?",
+        "Where do I find Crack Safe?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-making.crack-safe.rules",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Crack Safe",
+        "MONEY MAKING"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Crack Safe"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/money/bank",
+        "/money/property",
+        "/money/racket",
+        "/money/booze-run"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Crack Safe?",
+        "What happens with Crack Safe?",
+        "Does the FAQ explain Crack Safe?",
+        "Can you clarify Crack Safe?",
+        "Which FAQ covers Crack Safe?",
+        "I have a question about Crack Safe",
+        "How is Crack Safe supposed to work?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-making.crack-safe.overview",
+        "money_banks_properties.money-making.money-making.overview",
+        "money_banks_properties.money-making.money-making.rules",
+        "money_banks_properties.money-making.properties.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Crack Safe",
+        "What happens with Crack Safe?",
+        "Show me the MONEY MAKING guide"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "MONEY & BUSINESSES",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "MONEY & BUSINESSES",
+          "title": "MONEY & BUSINESSES"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is MONEY & BUSINESSES?",
+        "What are MONEY & BUSINESSES?",
+        "Tell me about MONEY & BUSINESSES",
+        "Explain MONEY & BUSINESSES",
+        "How does MONEY & BUSINESSES work?",
+        "I need information about MONEY & BUSINESSES",
+        "Give me the guide for MONEY & BUSINESSES"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
+        "money_banks_properties.money-and-businesses.bank.overview",
+        "money_banks_properties.money-and-businesses.bank.procedure"
+      ],
+      "follow_ups": [
+        "How do I use MONEY & BUSINESSES?",
+        "What are the rules for MONEY & BUSINESSES?",
+        "Where do I find MONEY & BUSINESSES?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
+      "domain": "money_banks_properties",
+      "entities": [
+        "MONEY & BUSINESSES",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "MONEY & BUSINESSES",
+          "title": "MONEY & BUSINESSES"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use MONEY & BUSINESSES?",
+        "How do I start MONEY & BUSINESSES?",
+        "Where do I find MONEY & BUSINESSES?",
+        "What do I do for MONEY & BUSINESSES?",
+        "Show me how to do MONEY & BUSINESSES",
+        "Help me with MONEY & BUSINESSES",
+        "Which menu has MONEY & BUSINESSES?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+        "money_banks_properties.money-and-businesses.bank.overview",
+        "money_banks_properties.money-and-businesses.bank.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about MONEY & BUSINESSES",
+        "What happens with MONEY & BUSINESSES?",
+        "Show me the MONEY & BUSINESSES guide"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.bank.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Bank",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Bank"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Bank?",
+        "What are Bank?",
+        "Tell me about Bank",
+        "Explain Bank",
+        "How does Bank work?",
+        "I need information about Bank",
+        "Give me the guide for Bank"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.bank.procedure",
+        "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.procedure"
+      ],
+      "follow_ups": [
+        "How do I use Bank?",
+        "What are the rules for Bank?",
+        "Where do I find Bank?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.bank.procedure",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Bank",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Bank"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Bank?",
+        "How do I start Bank?",
+        "Where do I find Bank?",
+        "What do I do for Bank?",
+        "Show me how to do Bank",
+        "Help me with Bank",
+        "Which menu has Bank?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.bank.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.procedure"
+      ],
+      "follow_ups": [
+        "Tell me about Bank",
+        "What happens with Bank?",
+        "Show me the MONEY & BUSINESSES guide"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.property.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Property",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Property"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Property?",
+        "What are Property?",
+        "Tell me about Property",
+        "Explain Property",
+        "How does Property work?",
+        "I need information about Property",
+        "Give me the guide for Property"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.property.procedure",
+        "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
+        "money_banks_properties.money-and-businesses.bank.overview"
+      ],
+      "follow_ups": [
+        "How do I use Property?",
+        "What are the rules for Property?",
+        "Where do I find Property?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.property.procedure",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Property",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Property"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Property?",
+        "How do I start Property?",
+        "Where do I find Property?",
+        "What do I do for Property?",
+        "Show me how to do Property",
+        "Help me with Property",
+        "Which menu has Property?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.property.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
+        "money_banks_properties.money-and-businesses.bank.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Property",
+        "What happens with Property?",
+        "Show me the MONEY & BUSINESSES guide"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.quick-trade.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Quick Trade",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Quick Trade"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Quick Trade?",
+        "What are Quick Trade?",
+        "Tell me about Quick Trade",
+        "Explain Quick Trade",
+        "How does Quick Trade work?",
+        "I need information about Quick Trade",
+        "Give me the guide for Quick Trade"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.quick-trade.procedure",
+        "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
+        "money_banks_properties.money-and-businesses.bank.overview"
+      ],
+      "follow_ups": [
+        "How do I use Quick Trade?",
+        "What are the rules for Quick Trade?",
+        "Where do I find Quick Trade?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.quick-trade.procedure",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Quick Trade",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Quick Trade"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Quick Trade?",
+        "How do I start Quick Trade?",
+        "Where do I find Quick Trade?",
+        "What do I do for Quick Trade?",
+        "Show me how to do Quick Trade",
+        "Help me with Quick Trade",
+        "Which menu has Quick Trade?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.quick-trade.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
+        "money_banks_properties.money-and-businesses.bank.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Quick Trade",
+        "What happens with Quick Trade?",
+        "Show me the MONEY & BUSINESSES guide"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.lottery.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Lottery",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Lottery"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Lottery?",
+        "What are Lottery?",
+        "Tell me about Lottery",
+        "Explain Lottery",
+        "How does Lottery work?",
+        "I need information about Lottery",
+        "Give me the guide for Lottery"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.lottery.procedure",
+        "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
+        "money_banks_properties.money-and-businesses.bank.overview"
+      ],
+      "follow_ups": [
+        "How do I use Lottery?",
+        "What are the rules for Lottery?",
+        "Where do I find Lottery?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.lottery.procedure",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Lottery",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Lottery"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Lottery?",
+        "How do I start Lottery?",
+        "Where do I find Lottery?",
+        "What do I do for Lottery?",
+        "Show me how to do Lottery",
+        "Help me with Lottery",
+        "Which menu has Lottery?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.lottery.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
+        "money_banks_properties.money-and-businesses.bank.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Lottery",
+        "What happens with Lottery?",
+        "Show me the MONEY & BUSINESSES guide"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.loot-box.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Loot Box",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Loot Box"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Loot Box?",
+        "What are Loot Box?",
+        "Tell me about Loot Box",
+        "Explain Loot Box",
+        "How does Loot Box work?",
+        "I need information about Loot Box",
+        "Give me the guide for Loot Box"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.loot-box.procedure",
+        "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
+        "money_banks_properties.money-and-businesses.bank.overview"
+      ],
+      "follow_ups": [
+        "How do I use Loot Box?",
+        "What are the rules for Loot Box?",
+        "Where do I find Loot Box?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.loot-box.procedure",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Loot Box",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Loot Box"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Loot Box?",
+        "How do I start Loot Box?",
+        "Where do I find Loot Box?",
+        "What do I do for Loot Box?",
+        "Show me how to do Loot Box",
+        "Help me with Loot Box",
+        "Which menu has Loot Box?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.loot-box.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
+        "money_banks_properties.money-and-businesses.bank.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Loot Box",
+        "What happens with Loot Box?",
+        "Show me the MONEY & BUSINESSES guide"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.my-properties.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "My Properties",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "My Properties"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is My Properties?",
+        "What are My Properties?",
+        "Tell me about My Properties",
+        "Explain My Properties",
+        "How does My Properties work?",
+        "I need information about My Properties",
+        "Give me the guide for My Properties"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.my-properties.procedure",
+        "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
+        "money_banks_properties.money-and-businesses.bank.overview"
+      ],
+      "follow_ups": [
+        "How do I use My Properties?",
+        "What are the rules for My Properties?",
+        "Where do I find My Properties?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.my-properties.procedure",
+      "domain": "money_banks_properties",
+      "entities": [
+        "My Properties",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "My Properties"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use My Properties?",
+        "How do I start My Properties?",
+        "Where do I find My Properties?",
+        "What do I do for My Properties?",
+        "Show me how to do My Properties",
+        "Help me with My Properties",
+        "Which menu has My Properties?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.my-properties.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
+        "money_banks_properties.money-and-businesses.bank.overview"
+      ],
+      "follow_ups": [
+        "Tell me about My Properties",
+        "What happens with My Properties?",
+        "Show me the MONEY & BUSINESSES guide"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.other-money-pages.overview",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Other money pages",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Other money pages"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What is Other money pages?",
+        "What are Other money pages?",
+        "Tell me about Other money pages",
+        "Explain Other money pages",
+        "How does Other money pages work?",
+        "I need information about Other money pages",
+        "Give me the guide for Other money pages"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.other-money-pages.procedure",
+        "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
+        "money_banks_properties.money-and-businesses.bank.overview"
+      ],
+      "follow_ups": [
+        "How do I use Other money pages?",
+        "What are the rules for Other money pages?",
+        "Where do I find Other money pages?"
+      ]
+    },
+    {
+      "id": "money_banks_properties.money-and-businesses.other-money-pages.procedure",
+      "domain": "money_banks_properties",
+      "entities": [
+        "Other money pages",
+        "MONEY & BUSINESSES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Other money pages"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use Other money pages?",
+        "How do I start Other money pages?",
+        "Where do I find Other money pages?",
+        "What do I do for Other money pages?",
+        "Show me how to do Other money pages",
+        "Help me with Other money pages",
+        "Which menu has Other money pages?"
+      ],
+      "related_intents": [
+        "money_banks_properties.money-and-businesses.other-money-pages.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.overview",
+        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
+        "money_banks_properties.money-and-businesses.bank.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Other money pages",
+        "What happens with Other money pages?",
+        "Show me the MONEY & BUSINESSES guide"
+      ]
+    }
+  ]
+}

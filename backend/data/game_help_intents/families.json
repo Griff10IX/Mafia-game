@@ -1,0 +1,575 @@
+{
+  "domain": "families",
+  "intents": [
+    {
+      "id": "families.families.families.overview",
+      "domain": "families",
+      "entities": [
+        "FAMILIES",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "FAMILIES",
+          "title": "FAMILIES"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is FAMILIES in FAMILIES?",
+        "What is FAMILIES?",
+        "What are FAMILIES?",
+        "Tell me about FAMILIES",
+        "Explain FAMILIES",
+        "How does FAMILIES work?",
+        "I need information about FAMILIES"
+      ],
+      "related_intents": [
+        "families.families.families.rules",
+        "families.families.family-hierarchy.overview",
+        "families.families.family-hierarchy.rules"
+      ],
+      "follow_ups": [
+        "How do I use FAMILIES?",
+        "What are the rules for FAMILIES?",
+        "Where do I find FAMILIES?"
+      ]
+    },
+    {
+      "id": "families.families.families.rules",
+      "domain": "families",
+      "entities": [
+        "FAMILIES",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "FAMILIES",
+          "title": "FAMILIES"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for FAMILIES?",
+        "What happens with FAMILIES?",
+        "Does the FAQ explain FAMILIES?",
+        "Can you clarify FAMILIES?",
+        "Which FAQ covers FAMILIES?",
+        "I have a question about FAMILIES",
+        "How is FAMILIES supposed to work?"
+      ],
+      "related_intents": [
+        "families.families.families.overview",
+        "families.families.family-hierarchy.overview",
+        "families.families.family-hierarchy.rules"
+      ],
+      "follow_ups": [
+        "Tell me about FAMILIES",
+        "What happens with FAMILIES?",
+        "Show me the FAMILIES guide"
+      ]
+    },
+    {
+      "id": "families.families.family-hierarchy.overview",
+      "domain": "families",
+      "entities": [
+        "Family Hierarchy",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Family Hierarchy"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Family Hierarchy?",
+        "What are Family Hierarchy?",
+        "Tell me about Family Hierarchy",
+        "Explain Family Hierarchy",
+        "How does Family Hierarchy work?",
+        "I need information about Family Hierarchy",
+        "Give me the guide for Family Hierarchy"
+      ],
+      "related_intents": [
+        "families.families.family-hierarchy.rules",
+        "families.families.families.overview",
+        "families.families.families.rules"
+      ],
+      "follow_ups": [
+        "How do I use Family Hierarchy?",
+        "What are the rules for Family Hierarchy?",
+        "Where do I find Family Hierarchy?"
+      ]
+    },
+    {
+      "id": "families.families.family-hierarchy.rules",
+      "domain": "families",
+      "entities": [
+        "Family Hierarchy",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Family Hierarchy"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Family Hierarchy?",
+        "What happens with Family Hierarchy?",
+        "Does the FAQ explain Family Hierarchy?",
+        "Can you clarify Family Hierarchy?",
+        "Which FAQ covers Family Hierarchy?",
+        "I have a question about Family Hierarchy",
+        "How is Family Hierarchy supposed to work?"
+      ],
+      "related_intents": [
+        "families.families.family-hierarchy.overview",
+        "families.families.families.overview",
+        "families.families.families.rules"
+      ],
+      "follow_ups": [
+        "Tell me about Family Hierarchy",
+        "What happens with Family Hierarchy?",
+        "Show me the FAMILIES guide"
+      ]
+    },
+    {
+      "id": "families.families.treasury-crew-vault.overview",
+      "domain": "families",
+      "entities": [
+        "Treasury (crew vault)",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Treasury (crew vault)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Treasury (crew vault)?",
+        "What are Treasury (crew vault)?",
+        "Tell me about Treasury (crew vault)",
+        "Explain Treasury (crew vault)",
+        "How does Treasury (crew vault) work?",
+        "I need information about Treasury (crew vault)",
+        "Give me the guide for Treasury (crew vault)"
+      ],
+      "related_intents": [
+        "families.families.treasury-crew-vault.rules",
+        "families.families.families.overview",
+        "families.families.families.rules",
+        "families.families.family-hierarchy.overview"
+      ],
+      "follow_ups": [
+        "How do I use Treasury (crew vault)?",
+        "What are the rules for Treasury (crew vault)?",
+        "Where do I find Treasury (crew vault)?"
+      ]
+    },
+    {
+      "id": "families.families.treasury-crew-vault.rules",
+      "domain": "families",
+      "entities": [
+        "Treasury (crew vault)",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Treasury (crew vault)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Treasury (crew vault)?",
+        "What happens with Treasury (crew vault)?",
+        "Does the FAQ explain Treasury (crew vault)?",
+        "Can you clarify Treasury (crew vault)?",
+        "Which FAQ covers Treasury (crew vault)?",
+        "I have a question about Treasury (crew vault)",
+        "How is Treasury (crew vault) supposed to work?"
+      ],
+      "related_intents": [
+        "families.families.treasury-crew-vault.overview",
+        "families.families.families.overview",
+        "families.families.families.rules",
+        "families.families.family-hierarchy.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Treasury (crew vault)",
+        "What happens with Treasury (crew vault)?",
+        "Show me the FAMILIES guide"
+      ]
+    },
+    {
+      "id": "families.families.compound.overview",
+      "domain": "families",
+      "entities": [
+        "Compound",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Compound"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Compound?",
+        "What are Compound?",
+        "Tell me about Compound",
+        "Explain Compound",
+        "How does Compound work?",
+        "I need information about Compound",
+        "Give me the guide for Compound"
+      ],
+      "related_intents": [
+        "families.families.compound.rules",
+        "families.families.families.overview",
+        "families.families.families.rules",
+        "families.families.family-hierarchy.overview"
+      ],
+      "follow_ups": [
+        "How do I use Compound?",
+        "What are the rules for Compound?",
+        "Where do I find Compound?"
+      ]
+    },
+    {
+      "id": "families.families.compound.rules",
+      "domain": "families",
+      "entities": [
+        "Compound",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Compound"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Compound?",
+        "What happens with Compound?",
+        "Does the FAQ explain Compound?",
+        "Can you clarify Compound?",
+        "Which FAQ covers Compound?",
+        "I have a question about Compound",
+        "How is Compound supposed to work?"
+      ],
+      "related_intents": [
+        "families.families.compound.overview",
+        "families.families.families.overview",
+        "families.families.families.rules",
+        "families.families.family-hierarchy.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Compound",
+        "What happens with Compound?",
+        "Show me the FAMILIES guide"
+      ]
+    },
+    {
+      "id": "families.families.family-wars-vendetta.overview",
+      "domain": "families",
+      "entities": [
+        "Family Wars (Vendetta)",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Family Wars (Vendetta)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Family Wars (Vendetta)?",
+        "What are Family Wars (Vendetta)?",
+        "Tell me about Family Wars (Vendetta)",
+        "Explain Family Wars (Vendetta)",
+        "How does Family Wars (Vendetta) work?",
+        "I need information about Family Wars (Vendetta)",
+        "Give me the guide for Family Wars (Vendetta)"
+      ],
+      "related_intents": [
+        "families.families.family-wars-vendetta.rules",
+        "families.families.families.overview",
+        "families.families.families.rules",
+        "families.families.family-hierarchy.overview"
+      ],
+      "follow_ups": [
+        "How do I use Family Wars (Vendetta)?",
+        "What are the rules for Family Wars (Vendetta)?",
+        "Where do I find Family Wars (Vendetta)?"
+      ]
+    },
+    {
+      "id": "families.families.family-wars-vendetta.rules",
+      "domain": "families",
+      "entities": [
+        "Family Wars (Vendetta)",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Family Wars (Vendetta)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Family Wars (Vendetta)?",
+        "What happens with Family Wars (Vendetta)?",
+        "Does the FAQ explain Family Wars (Vendetta)?",
+        "Can you clarify Family Wars (Vendetta)?",
+        "Which FAQ covers Family Wars (Vendetta)?",
+        "I have a question about Family Wars (Vendetta)",
+        "How is Family Wars (Vendetta) supposed to work?"
+      ],
+      "related_intents": [
+        "families.families.family-wars-vendetta.overview",
+        "families.families.families.overview",
+        "families.families.families.rules",
+        "families.families.family-hierarchy.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Family Wars (Vendetta)",
+        "What happens with Family Wars (Vendetta)?",
+        "Show me the FAMILIES guide"
+      ]
+    },
+    {
+      "id": "families.families.crew-oc.overview",
+      "domain": "families",
+      "entities": [
+        "Crew OC",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Crew OC"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is Crew OC?",
+        "What are Crew OC?",
+        "Tell me about Crew OC",
+        "Explain Crew OC",
+        "How does Crew OC work?",
+        "I need information about Crew OC",
+        "Give me the guide for Crew OC"
+      ],
+      "related_intents": [
+        "families.families.crew-oc.rules",
+        "families.families.families.overview",
+        "families.families.families.rules",
+        "families.families.family-hierarchy.overview"
+      ],
+      "follow_ups": [
+        "How do I use Crew OC?",
+        "What are the rules for Crew OC?",
+        "Where do I find Crew OC?"
+      ]
+    },
+    {
+      "id": "families.families.crew-oc.rules",
+      "domain": "families",
+      "entities": [
+        "Crew OC",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Crew OC"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "rules",
+      "variants": [
+        "What are the rules for Crew OC?",
+        "What happens with Crew OC?",
+        "Does the FAQ explain Crew OC?",
+        "Can you clarify Crew OC?",
+        "Which FAQ covers Crew OC?",
+        "I have a question about Crew OC",
+        "How is Crew OC supposed to work?"
+      ],
+      "related_intents": [
+        "families.families.crew-oc.overview",
+        "families.families.families.overview",
+        "families.families.families.rules",
+        "families.families.family-hierarchy.overview"
+      ],
+      "follow_ups": [
+        "Tell me about Crew OC",
+        "What happens with Crew OC?",
+        "Show me the FAMILIES guide"
+      ]
+    },
+    {
+      "id": "families.families.families-how_to.overview",
+      "domain": "families",
+      "entities": [
+        "FAMILIES",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "FAMILIES",
+          "title": "FAMILIES"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "definition",
+      "variants": [
+        "What is FAMILIES in FAMILIES?",
+        "What is FAMILIES?",
+        "What are FAMILIES?",
+        "Tell me about FAMILIES",
+        "Explain FAMILIES",
+        "How does FAMILIES work?",
+        "I need information about FAMILIES"
+      ],
+      "related_intents": [
+        "families.families.families-how_to.procedure",
+        "families.families.families.overview",
+        "families.families.families.rules",
+        "families.families.family-hierarchy.overview"
+      ],
+      "follow_ups": [
+        "How do I use FAMILIES?",
+        "What are the rules for FAMILIES?",
+        "Where do I find FAMILIES?"
+      ]
+    },
+    {
+      "id": "families.families.families-how_to.procedure",
+      "domain": "families",
+      "entities": [
+        "FAMILIES",
+        "FAMILIES"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "FAMILIES",
+          "title": "FAMILIES"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [
+        "/game/family"
+      ],
+      "intent_type": "procedure",
+      "variants": [
+        "How do I use FAMILIES?",
+        "How do I start FAMILIES?",
+        "Where do I find FAMILIES?",
+        "What do I do for FAMILIES?",
+        "Show me how to do FAMILIES",
+        "Help me with FAMILIES",
+        "Which menu has FAMILIES?"
+      ],
+      "related_intents": [
+        "families.families.families-how_to.overview",
+        "families.families.families.overview",
+        "families.families.families.rules",
+        "families.families.family-hierarchy.overview"
+      ],
+      "follow_ups": [
+        "Tell me about FAMILIES",
+        "What happens with FAMILIES?",
+        "Show me the FAMILIES guide"
+      ]
+    }
+  ]
+}
