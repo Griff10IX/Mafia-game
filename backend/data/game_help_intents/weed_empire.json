@@ -5,7 +5,6 @@
       "id": "weed_empire.weed-empire.weed-empire.overview",
       "domain": "weed_empire",
       "entities": [
-        "WEED EMPIRE",
         "WEED EMPIRE"
       ],
       "sections": [
@@ -33,19 +32,21 @@
       "related_intents": [
         "weed_empire.weed-empire.weed-empire.rules",
         "weed_empire.weed-empire.overview.overview",
-        "weed_empire.weed-empire.overview.rules"
+        "weed_empire.weed-empire.grow-loop.overview",
+        "weed_empire.weed-empire.business-cash.overview"
       ],
       "follow_ups": [
         "How do I use WEED EMPIRE?",
         "What are the rules for WEED EMPIRE?",
-        "Where do I find WEED EMPIRE?"
+        "Where do I find WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?",
+        "What is Grow loop?"
       ]
     },
     {
       "id": "weed_empire.weed-empire.weed-empire.rules",
       "domain": "weed_empire",
       "entities": [
-        "WEED EMPIRE",
         "WEED EMPIRE"
       ],
       "sections": [
@@ -73,12 +74,14 @@
       "related_intents": [
         "weed_empire.weed-empire.weed-empire.overview",
         "weed_empire.weed-empire.overview.overview",
-        "weed_empire.weed-empire.overview.rules"
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "Tell me about WEED EMPIRE",
         "What happens with WEED EMPIRE?",
-        "Show me the WEED EMPIRE guide"
+        "Show me the WEED EMPIRE guide",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -113,12 +116,15 @@
       "related_intents": [
         "weed_empire.weed-empire.overview.rules",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules"
+        "weed_empire.weed-empire.grow-loop.overview",
+        "weed_empire.weed-empire.business-cash.overview"
       ],
       "follow_ups": [
         "How do I use Overview?",
         "What are the rules for Overview?",
-        "Where do I find Overview?"
+        "Where do I find Overview?",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Grow loop?"
       ]
     },
     {
@@ -153,12 +159,14 @@
       "related_intents": [
         "weed_empire.weed-empire.overview.overview",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules"
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "Tell me about Overview",
         "What happens with Overview?",
-        "Show me the WEED EMPIRE guide"
+        "Show me the WEED EMPIRE guide",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -193,13 +201,15 @@
       "related_intents": [
         "weed_empire.weed-empire.grow-loop.rules",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.business-cash.overview"
       ],
       "follow_ups": [
         "How do I use Grow loop?",
         "What are the rules for Grow loop?",
-        "Where do I find Grow loop?"
+        "Where do I find Grow loop?",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -234,13 +244,14 @@
       "related_intents": [
         "weed_empire.weed-empire.grow-loop.overview",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
         "weed_empire.weed-empire.overview.overview"
       ],
       "follow_ups": [
         "Tell me about Grow loop",
         "What happens with Grow loop?",
-        "Show me the WEED EMPIRE guide"
+        "Show me the WEED EMPIRE guide",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -275,13 +286,15 @@
       "related_intents": [
         "weed_empire.weed-empire.business-cash.rules",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "How do I use Business cash?",
         "What are the rules for Business cash?",
-        "Where do I find Business cash?"
+        "Where do I find Business cash?",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -316,13 +329,15 @@
       "related_intents": [
         "weed_empire.weed-empire.business-cash.overview",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "Tell me about Business cash",
         "What happens with Business cash?",
-        "Show me the WEED EMPIRE guide"
+        "Show me the WEED EMPIRE guide",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -357,13 +372,15 @@
       "related_intents": [
         "weed_empire.weed-empire.heat-and-busts.rules",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "How do I use Heat & busts?",
         "What are the rules for Heat & busts?",
-        "Where do I find Heat & busts?"
+        "Where do I find Heat & busts?",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -398,13 +415,15 @@
       "related_intents": [
         "weed_empire.weed-empire.heat-and-busts.overview",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "Tell me about Heat & busts",
         "What happens with Heat & busts?",
-        "Show me the WEED EMPIRE guide"
+        "Show me the WEED EMPIRE guide",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -439,13 +458,15 @@
       "related_intents": [
         "weed_empire.weed-empire.raids.rules",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "How do I use Raids?",
         "What are the rules for Raids?",
-        "Where do I find Raids?"
+        "Where do I find Raids?",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -480,13 +501,15 @@
       "related_intents": [
         "weed_empire.weed-empire.raids.overview",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "Tell me about Raids",
         "What happens with Raids?",
-        "Show me the WEED EMPIRE guide"
+        "Show me the WEED EMPIRE guide",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -521,13 +544,15 @@
       "related_intents": [
         "weed_empire.weed-empire.crew.rules",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "How do I use Crew?",
         "What are the rules for Crew?",
-        "Where do I find Crew?"
+        "Where do I find Crew?",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -562,13 +587,15 @@
       "related_intents": [
         "weed_empire.weed-empire.crew.overview",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "Tell me about Crew",
         "What happens with Crew?",
-        "Show me the WEED EMPIRE guide"
+        "Show me the WEED EMPIRE guide",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -603,13 +630,15 @@
       "related_intents": [
         "weed_empire.weed-empire.special-strains.rules",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "How do I use Special strains?",
         "What are the rules for Special strains?",
-        "Where do I find Special strains?"
+        "Where do I find Special strains?",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -644,20 +673,21 @@
       "related_intents": [
         "weed_empire.weed-empire.special-strains.overview",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "Tell me about Special strains",
         "What happens with Special strains?",
-        "Show me the WEED EMPIRE guide"
+        "Show me the WEED EMPIRE guide",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
       "id": "weed_empire.weed-empire.weed-empire-how_to.overview",
       "domain": "weed_empire",
       "entities": [
-        "WEED EMPIRE",
         "WEED EMPIRE"
       ],
       "sections": [
@@ -685,20 +715,21 @@
       "related_intents": [
         "weed_empire.weed-empire.weed-empire-how_to.procedure",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "How do I use WEED EMPIRE?",
         "What are the rules for WEED EMPIRE?",
-        "Where do I find WEED EMPIRE?"
+        "Where do I find WEED EMPIRE?",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
       "id": "weed_empire.weed-empire.weed-empire-how_to.procedure",
       "domain": "weed_empire",
       "entities": [
-        "WEED EMPIRE",
         "WEED EMPIRE"
       ],
       "sections": [
@@ -726,13 +757,15 @@
       "related_intents": [
         "weed_empire.weed-empire.weed-empire-how_to.overview",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "Tell me about WEED EMPIRE",
         "What happens with WEED EMPIRE?",
-        "Show me the WEED EMPIRE guide"
+        "Show me the WEED EMPIRE guide",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -767,13 +800,15 @@
       "related_intents": [
         "weed_empire.weed-empire.open-the-farm.procedure",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "How do I use Open the farm?",
         "What are the rules for Open the farm?",
-        "Where do I find Open the farm?"
+        "Where do I find Open the farm?",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -808,13 +843,15 @@
       "related_intents": [
         "weed_empire.weed-empire.open-the-farm.overview",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "Tell me about Open the farm",
         "What happens with Open the farm?",
-        "Show me the WEED EMPIRE guide"
+        "Show me the WEED EMPIRE guide",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -849,13 +886,15 @@
       "related_intents": [
         "weed_empire.weed-empire.grow.procedure",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "How do I use Grow?",
         "What are the rules for Grow?",
-        "Where do I find Grow?"
+        "Where do I find Grow?",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -890,13 +929,15 @@
       "related_intents": [
         "weed_empire.weed-empire.grow.overview",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "Tell me about Grow",
         "What happens with Grow?",
-        "Show me the WEED EMPIRE guide"
+        "Show me the WEED EMPIRE guide",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -931,13 +972,15 @@
       "related_intents": [
         "weed_empire.weed-empire.cash-and-vault.procedure",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "How do I use Cash & vault?",
         "What are the rules for Cash & vault?",
-        "Where do I find Cash & vault?"
+        "Where do I find Cash & vault?",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -972,13 +1015,15 @@
       "related_intents": [
         "weed_empire.weed-empire.cash-and-vault.overview",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "Tell me about Cash & vault",
         "What happens with Cash & vault?",
-        "Show me the WEED EMPIRE guide"
+        "Show me the WEED EMPIRE guide",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -1013,13 +1058,15 @@
       "related_intents": [
         "weed_empire.weed-empire.crew-raids-heat.procedure",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "How do I use Crew, raids, heat?",
         "What are the rules for Crew, raids, heat?",
-        "Where do I find Crew, raids, heat?"
+        "Where do I find Crew, raids, heat?",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     },
     {
@@ -1054,13 +1101,15 @@
       "related_intents": [
         "weed_empire.weed-empire.crew-raids-heat.overview",
         "weed_empire.weed-empire.weed-empire.overview",
-        "weed_empire.weed-empire.weed-empire.rules",
-        "weed_empire.weed-empire.overview.overview"
+        "weed_empire.weed-empire.overview.overview",
+        "weed_empire.weed-empire.grow-loop.overview"
       ],
       "follow_ups": [
         "Tell me about Crew, raids, heat",
         "What happens with Crew, raids, heat?",
-        "Show me the WEED EMPIRE guide"
+        "Show me the WEED EMPIRE guide",
+        "What is WEED EMPIRE in WEED EMPIRE?",
+        "What is Overview in WEED EMPIRE?"
       ]
     }
   ]

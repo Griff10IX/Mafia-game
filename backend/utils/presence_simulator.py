@@ -385,11 +385,18 @@ async def _presence_simulator_tick_impl(db, admin_emails: List[str], *, force: b
             },
         ],
     }
+    skip_ids = list(active or [])
     if admin_emails:
-        offline_match["email"] = {"$nin": list(admin_emails)}
-
-    if active:
-        offline_match["id"] = {"$nin": active}
+        try:
+            import server as srv
+            admin_ids = await srv._get_admin_user_ids(db)
+            for uid in admin_ids or []:
+                if uid and uid not in skip_ids:
+                    skip_ids.append(uid)
+        except Exception:
+            logger.debug("presence simulator: admin id lookup failed", exc_info=True)
+    if skip_ids:
+        offline_match["id"] = {"$nin": skip_ids}
 
     cursor = db.users.find(offline_match, {"_id": 0, "id": 1, "username": 1})
     candidates = await cursor.limit(250).to_list(250)

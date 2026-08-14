@@ -203,12 +203,45 @@ def _phrase_score(query: str, variant: str) -> tuple[float, str]:
     return 0.0, "catalog_tokens"
 
 
+def _is_faq_qa_intent(intent: dict[str, Any]) -> bool:
+    refs = intent.get("sections") or []
+    return bool(refs) and all(str(ref.get("category") or "") == "FAQ" for ref in refs)
+
+
+def _is_feature_intent(intent: dict[str, Any]) -> bool:
+    return str(intent.get("id") or "").startswith("cross_feature.feature.")
+
+
+def _intent_priority(intent: dict[str, Any]) -> int:
+    intent_type = str(intent.get("intent_type") or "")
+    if intent_type in {"comparison", "yes_no", "troubleshooting"}:
+        return 0
+    if _is_feature_intent(intent):
+        return 1
+    return 2
+
+
+def _title_specificity(intent: dict[str, Any], query_tokens: set[str]) -> int:
+    refs = intent.get("sections") or []
+    if not refs:
+        return 0
+    return len(query_tokens & content_tokens(str(refs[0].get("title") or "")))
+
+
+def _kind_rank(intent: dict[str, Any]) -> int:
+    kinds = {str(ref.get("kind") or "") for ref in intent.get("sections") or []}
+    return 0 if "subsection" in kinds else 1
+
+
 def match_catalog(message: str, limit: int = 5) -> list[CatalogMatch]:
     """Rank catalog intents without generating or inspecting factual answer text."""
     query = normalize(message)
     query_tokens = content_tokens(message)
     if not query or not query_tokens:
         return []
+    how_like = bool(
+        re.search(r"\b(?:how|explain|what is|what are|tell me about)\b", query)
+    )
     best_by_intent: dict[str, tuple[float, str, str, dict[str, Any]]] = {}
     for variant, variant_tokens, intent, raw_variant in _variant_index():
         phrase_score, method = _phrase_score(query, variant)
@@ -227,11 +260,29 @@ def match_catalog(message: str, limit: int = 5) -> list[CatalogMatch]:
         if any(alias.lower() in message.lower() for alias in route_aliases):
             score += 9.0
             method = "route_alias"
-        score = min(score, 100.0)
+        if len(intent.get("sections") or []) > 1:
+            score += 5.0
+        if _is_feature_intent(intent):
+            score += 8.0
+        if _is_faq_qa_intent(intent):
+            score -= 18.0 if how_like else 6.0
+        score += min(10.0, _title_specificity(intent, query_tokens) * 3.0)
+        score = min(max(score, 0.0), 100.0)
         current = best_by_intent.get(intent["id"])
         if current is None or score > current[0]:
             best_by_intent[intent["id"]] = (score, method, raw_variant, intent)
-    ranked = sorted(best_by_intent.values(), key=lambda item: (-item[0], item[3]["id"]))
+    ranked = sorted(
+        best_by_intent.values(),
+        key=lambda item: (
+            -item[0],
+            _intent_priority(item[3]),
+            1 if _is_faq_qa_intent(item[3]) else 0,
+            -_title_specificity(item[3], query_tokens),
+            _kind_rank(item[3]),
+            -len(item[3].get("sections") or []),
+            item[3]["id"],
+        ),
+    )
     results: list[CatalogMatch] = []
     for score, method, variant, intent in ranked[:limit]:
         confidence = "high" if score >= 88 else "medium" if score >= 68 else "low"
@@ -247,12 +298,47 @@ def match_catalog(message: str, limit: int = 5) -> list[CatalogMatch]:
     return results
 
 
+def prefer_complete_match(matches: list[CatalogMatch]) -> list[CatalogMatch]:
+    """Skip short FAQ Q&A when a real feature chapter is almost as strong."""
+    if not matches:
+        return matches
+    top = matches[0]
+    if not _is_faq_qa_intent(top.intent):
+        return matches
+    better = next(
+        (
+            match
+            for match in matches[1:]
+            if not _is_faq_qa_intent(match.intent) and top.score - match.score <= 15
+        ),
+        None,
+    )
+    if better is None:
+        return matches
+    return [better] + [match for match in matches if match is not better]
+
+
 def resolve_sections(
     intent: dict[str, Any],
     sections: Iterable[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     by_key = {section_key(section): section for section in sections}
     return [by_key[section_key(ref)] for ref in intent["sections"] if section_key(ref) in by_key]
+
+
+_NESTED_CHIP_RE = re.compile(
+    r"\b(?:how do i use|how do i start|what are the rules for|where do i find|"
+    r"tell me about|what happens with|how does|explain|what is|what are)\s+"
+    r"(?:how|what|why|where|when|who|which|can|does|do)\b",
+    re.I,
+)
+
+
+def is_natural_chip(text: str) -> bool:
+    cleaned = (text or "").strip()
+    if not cleaned or "??" in cleaned:
+        return False
+    return not _NESTED_CHIP_RE.search(cleaned)
 
 
 def related_questions(intent: dict[str, Any], limit: int = 5) -> list[str]:
@@ -265,6 +351,8 @@ def related_questions(intent: dict[str, Any], limit: int = 5) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
     for question in questions:
+        if not is_natural_chip(question):
+            continue
         key = normalize(question)
         if key and key not in seen:
             seen.add(key)

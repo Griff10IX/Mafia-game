@@ -78,10 +78,10 @@
     },
     {
       "file": "cross_feature.json",
-      "intents": 38,
-      "variants": 266
+      "intents": 114,
+      "variants": 800
     }
   ],
-  "intent_count": 466,
-  "variant_count": 3262
+  "intent_count": 542,
+  "variant_count": 3796
 }

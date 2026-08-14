@@ -10,7 +10,9 @@ from typing import Any, Optional
 from utils.config import WEALTH_RANKS
 from utils.game_help_catalog import (
     catalog_by_id,
+    is_natural_chip,
     match_catalog,
+    prefer_complete_match,
     related_questions,
     resolve_sections,
 )
@@ -165,7 +167,9 @@ _BROAD_INTENTS = {
     "ranks": ("Ranks (13 total)", "Wealth ranks (cash on hand)", "AUTO RANK"),
     "bank": ("Banks", "Cash vs bank", "Wealth ranks (cash on hand)"),
     "banks": ("Banks", "Cash vs bank", "Wealth ranks (cash on hand)"),
-    "heat": ("Properties", "Distillery", "Racket Raids"),
+    "heat": ("Properties", "Distillery", "Heat & busts"),
+    "racket": ("Illegal Business (Personal Racket)", "Rackets"),
+    "rackets": ("Illegal Business (Personal Racket)", "Rackets"),
 }
 _MONEY_RE = re.compile(
     r"""
@@ -285,7 +289,7 @@ def detect_question_shape(message: str) -> dict[str, Any]:
         shape = "troubleshooting"
     elif re.match(r"^(?:can|could|do|does|did|is|are|will|would|should)\b", text):
         shape = "yes_no"
-    elif re.search(r"\b(?:how do(?: i)?|how can(?: i)?|where do(?: i)?|steps?|show me how)\b", text):
+    elif re.search(r"\b(?:how do i|how can i|where do i|steps?|show me how)\b", text):
         shape = "procedure"
     elif re.search(r"\b(?:rules?|allowed|punishment|happens if)\b", text):
         shape = "rules"
@@ -643,18 +647,25 @@ def _section_context(
     return context
 
 
+def _chip_from_title(title: str) -> str:
+    return re.sub(r"^\s*Q:\s*", "", title or "", flags=re.I).strip()
+
+
 def _section_suggestions(matches: list[dict[str, Any]], limit: int = 4) -> list[str]:
     suggestions: list[str] = []
     for match in matches:
         for section in load_sections():
+            chip = _chip_from_title(section["title"])
             if (
                 section["source"] == match["source"]
                 and section["category"] == match["category"]
                 and section["kind"] == "subsection"
                 and section["title"] != match["title"]
-                and section["title"] not in suggestions
+                and chip
+                and chip not in suggestions
+                and is_natural_chip(chip)
             ):
-                suggestions.append(section["title"])
+                suggestions.append(chip)
                 if len(suggestions) >= limit:
                     return suggestions
     return suggestions
@@ -769,12 +780,15 @@ def _answer_from_matches(
     primary = matches[0]
     source_name = "FAQs" if primary["source"] == "faq" else "How To"
     topic = primary["title"] if primary["kind"] == "category" else f"{primary['category']} → {primary['title']}"
+    sources = {section["source"] for section in matches}
     if answer_type == "comparison":
         preamble = "Here are the published guide sections for both sides, boss."
     elif answer_type == "troubleshooting":
         preamble = "These published guide sections cover that problem, boss."
     elif answer_type == "yes_no":
         preamble = f"The published guide answers that under {source_name}: {topic}."
+    elif "faq" in sources and "how_to" in sources:
+        preamble = f"Here's how it works, boss — from FAQs and How To: {topic}."
     else:
         preamble = f"Here's the score, boss — from {source_name}: {topic}."
     related = suggestions if suggestions is not None else _section_suggestions(matches)
@@ -983,7 +997,7 @@ def answer_question(message: str, context: Optional[dict[str, Any]] = None) -> d
             safe_context["title"],
         )
         catalog_query = f"{contextual_topic.group(1)} {anchor}"
-    catalog_matches = match_catalog(catalog_query, limit=6)
+    catalog_matches = prefer_complete_match(match_catalog(catalog_query, limit=6))
     catalog_threshold = 54 if shape["shape"] in {"procedure", "troubleshooting", "yes_no"} else 68
     confident_catalog = [match for match in catalog_matches if match.score >= catalog_threshold]
     if confident_catalog:
@@ -1006,6 +1020,8 @@ def answer_question(message: str, context: Optional[dict[str, Any]] = None) -> d
         )
         close_ambiguity = (
             top.score < 88
+            and not str(top.intent.get("id") or "").startswith("cross_feature.feature.")
+            and top.intent.get("intent_type") not in {"comparison", "yes_no", "troubleshooting"}
             and len(choices) > 1
             and len({choice["label"].lower() for choice in choices}) > 1
             and different_runner is not None
@@ -1053,7 +1069,7 @@ def answer_question(message: str, context: Optional[dict[str, Any]] = None) -> d
             }:
                 answer_type = shape["shape"]
             return _answer_from_matches(
-                matches[:4],
+                matches[:5],
                 intent="wealth_lookup" if wealth else "topic_search",
                 wealth=wealth,
                 intent_id=top.intent["id"],

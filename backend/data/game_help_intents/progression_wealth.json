@@ -80,14 +80,14 @@
       "follow_ups": [
         "Tell me about Wealth ranks (cash on hand)",
         "What happens with Wealth ranks (cash on hand)?",
-        "Show me the MONEY MAKING guide"
+        "Show me the MONEY MAKING guide",
+        "What is Wealth ranks (cash on hand)?"
       ]
     },
     {
       "id": "progression_wealth.progression.progression.overview",
       "domain": "progression_wealth",
       "entities": [
-        "PROGRESSION",
         "PROGRESSION"
       ],
       "sections": [
@@ -117,19 +117,21 @@
       "related_intents": [
         "progression_wealth.progression.progression.rules",
         "progression_wealth.progression.ranks-13-total.overview",
-        "progression_wealth.progression.ranks-13-total.rules"
+        "progression_wealth.progression.prestige-system.overview",
+        "progression_wealth.progression.missions.overview"
       ],
       "follow_ups": [
         "How do I use PROGRESSION?",
         "What are the rules for PROGRESSION?",
-        "Where do I find PROGRESSION?"
+        "Where do I find PROGRESSION?",
+        "What is Ranks (13 total)?",
+        "What is Prestige System?"
       ]
     },
     {
       "id": "progression_wealth.progression.progression.rules",
       "domain": "progression_wealth",
       "entities": [
-        "PROGRESSION",
         "PROGRESSION"
       ],
       "sections": [
@@ -159,12 +161,14 @@
       "related_intents": [
         "progression_wealth.progression.progression.overview",
         "progression_wealth.progression.ranks-13-total.overview",
-        "progression_wealth.progression.ranks-13-total.rules"
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about PROGRESSION",
         "What happens with PROGRESSION?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -201,12 +205,15 @@
       "related_intents": [
         "progression_wealth.progression.ranks-13-total.rules",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules"
+        "progression_wealth.progression.prestige-system.overview",
+        "progression_wealth.progression.missions.overview"
       ],
       "follow_ups": [
         "How do I use Ranks (13 total)?",
         "What are the rules for Ranks (13 total)?",
-        "Where do I find Ranks (13 total)?"
+        "Where do I find Ranks (13 total)?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Prestige System?"
       ]
     },
     {
@@ -243,12 +250,14 @@
       "related_intents": [
         "progression_wealth.progression.ranks-13-total.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules"
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about Ranks (13 total)",
         "What happens with Ranks (13 total)?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -285,13 +294,15 @@
       "related_intents": [
         "progression_wealth.progression.prestige-system.rules",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.missions.overview"
       ],
       "follow_ups": [
         "How do I use Prestige System?",
         "What are the rules for Prestige System?",
-        "Where do I find Prestige System?"
+        "Where do I find Prestige System?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -328,13 +339,14 @@
       "related_intents": [
         "progression_wealth.progression.prestige-system.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
         "progression_wealth.progression.ranks-13-total.overview"
       ],
       "follow_ups": [
         "Tell me about Prestige System",
         "What happens with Prestige System?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -371,13 +383,15 @@
       "related_intents": [
         "progression_wealth.progression.missions.rules",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "How do I use Missions?",
         "What are the rules for Missions?",
-        "Where do I find Missions?"
+        "Where do I find Missions?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -414,13 +428,15 @@
       "related_intents": [
         "progression_wealth.progression.missions.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about Missions",
         "What happens with Missions?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -457,13 +473,15 @@
       "related_intents": [
         "progression_wealth.progression.objectives.rules",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "How do I use Objectives?",
         "What are the rules for Objectives?",
-        "Where do I find Objectives?"
+        "Where do I find Objectives?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -500,13 +518,15 @@
       "related_intents": [
         "progression_wealth.progression.objectives.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about Objectives",
         "What happens with Objectives?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -543,13 +563,15 @@
       "related_intents": [
         "progression_wealth.progression.game-leaderboard.rules",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "How do I use Game Leaderboard?",
         "What are the rules for Game Leaderboard?",
-        "Where do I find Game Leaderboard?"
+        "Where do I find Game Leaderboard?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -586,13 +608,15 @@
       "related_intents": [
         "progression_wealth.progression.game-leaderboard.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about Game Leaderboard",
         "What happens with Game Leaderboard?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -629,13 +653,15 @@
       "related_intents": [
         "progression_wealth.progression.inventory.rules",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "How do I use Inventory?",
         "What are the rules for Inventory?",
-        "Where do I find Inventory?"
+        "Where do I find Inventory?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -672,13 +698,15 @@
       "related_intents": [
         "progression_wealth.progression.inventory.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about Inventory",
         "What happens with Inventory?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -715,13 +743,15 @@
       "related_intents": [
         "progression_wealth.progression.badges-and-achievements.rules",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "How do I use Badges & achievements?",
         "What are the rules for Badges & achievements?",
-        "Where do I find Badges & achievements?"
+        "Where do I find Badges & achievements?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -758,13 +788,15 @@
       "related_intents": [
         "progression_wealth.progression.badges-and-achievements.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about Badges & achievements",
         "What happens with Badges & achievements?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -801,13 +833,15 @@
       "related_intents": [
         "progression_wealth.progression.respect-secondary-currency.rules",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "How do I use Respect (secondary currency)?",
         "What are the rules for Respect (secondary currency)?",
-        "Where do I find Respect (secondary currency)?"
+        "Where do I find Respect (secondary currency)?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -844,20 +878,21 @@
       "related_intents": [
         "progression_wealth.progression.respect-secondary-currency.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about Respect (secondary currency)",
         "What happens with Respect (secondary currency)?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
       "id": "progression_wealth.auto-rank.auto-rank.overview",
       "domain": "progression_wealth",
       "entities": [
-        "AUTO RANK",
         "AUTO RANK"
       ],
       "sections": [
@@ -895,7 +930,6 @@
       "id": "progression_wealth.auto-rank.auto-rank.rules",
       "domain": "progression_wealth",
       "entities": [
-        "AUTO RANK",
         "AUTO RANK"
       ],
       "sections": [
@@ -926,13 +960,15 @@
       "follow_ups": [
         "Tell me about AUTO RANK",
         "What happens with AUTO RANK?",
-        "Show me the AUTO RANK guide"
+        "Show me the AUTO RANK guide",
+        "What is AUTO RANK in AUTO RANK?"
       ]
     },
     {
       "id": "progression_wealth.faq.how-does-auto-rank-work.overview",
       "domain": "progression_wealth",
       "entities": [
+        "Auto Rank",
         "How does Auto Rank work?",
         "FAQ"
       ],
@@ -949,28 +985,31 @@
       "intent_type": "definition",
       "variants": [
         "How does Auto Rank work?",
-        "What is How does Auto Rank work??",
-        "What are How does Auto Rank work??",
-        "Tell me about How does Auto Rank work?",
-        "Explain How does Auto Rank work?",
-        "How does How does Auto Rank work? work?",
-        "I need information about How does Auto Rank work?"
+        "What is Auto Rank?",
+        "What are Auto Rank?",
+        "Tell me about Auto Rank",
+        "Explain Auto Rank",
+        "I need information about Auto Rank",
+        "Give me the guide for Auto Rank"
       ],
       "related_intents": [
         "progression_wealth.faq.how-does-auto-rank-work.rules",
         "progression_wealth.faq.what-are-wealth-ranks.overview",
-        "progression_wealth.faq.what-are-wealth-ranks.rules"
+        "progression_wealth.faq.what-is-prestige.overview"
       ],
       "follow_ups": [
-        "How do I use How does Auto Rank work??",
-        "What are the rules for How does Auto Rank work??",
-        "Where do I find How does Auto Rank work??"
+        "Tell me about Auto Rank",
+        "Where do I find Auto Rank?",
+        "Show me the FAQ guide",
+        "What are wealth ranks?",
+        "What is Prestige?"
       ]
     },
     {
       "id": "progression_wealth.faq.how-does-auto-rank-work.rules",
       "domain": "progression_wealth",
       "entities": [
+        "Auto Rank",
         "How does Auto Rank work?",
         "FAQ"
       ],
@@ -986,29 +1025,31 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for How does Auto Rank work??",
-        "What happens with How does Auto Rank work??",
-        "Does the FAQ explain How does Auto Rank work??",
-        "Can you clarify How does Auto Rank work??",
-        "Which FAQ covers How does Auto Rank work??",
-        "I have a question about How does Auto Rank work?",
-        "How is How does Auto Rank work? supposed to work?"
+        "What are the rules for Auto Rank?",
+        "What happens with Auto Rank?",
+        "Does the FAQ explain Auto Rank?",
+        "Can you clarify Auto Rank?",
+        "Which FAQ covers Auto Rank?",
+        "I have a question about Auto Rank",
+        "How is Auto Rank supposed to work?"
       ],
       "related_intents": [
         "progression_wealth.faq.how-does-auto-rank-work.overview",
         "progression_wealth.faq.what-are-wealth-ranks.overview",
-        "progression_wealth.faq.what-are-wealth-ranks.rules"
+        "progression_wealth.faq.what-is-prestige.overview"
       ],
       "follow_ups": [
-        "Tell me about How does Auto Rank work?",
-        "What happens with How does Auto Rank work??",
-        "Show me the FAQ guide"
+        "How does Auto Rank work?",
+        "Show me the FAQ guide",
+        "What are wealth ranks?",
+        "What is Prestige?"
       ]
     },
     {
       "id": "progression_wealth.faq.what-are-wealth-ranks.overview",
       "domain": "progression_wealth",
       "entities": [
+        "Wealth ranks",
         "What are wealth ranks?",
         "FAQ"
       ],
@@ -1025,28 +1066,31 @@
       "intent_type": "definition",
       "variants": [
         "What are wealth ranks?",
-        "What is What are wealth ranks??",
-        "What are What are wealth ranks??",
-        "Tell me about What are wealth ranks?",
-        "Explain What are wealth ranks?",
-        "How does What are wealth ranks? work?",
-        "I need information about What are wealth ranks?"
+        "What is Wealth ranks?",
+        "Tell me about Wealth ranks",
+        "Explain Wealth ranks",
+        "How does Wealth ranks work?",
+        "I need information about Wealth ranks",
+        "Give me the guide for Wealth ranks"
       ],
       "related_intents": [
         "progression_wealth.faq.what-are-wealth-ranks.rules",
         "progression_wealth.faq.how-does-auto-rank-work.overview",
-        "progression_wealth.faq.how-does-auto-rank-work.rules"
+        "progression_wealth.faq.what-is-prestige.overview"
       ],
       "follow_ups": [
-        "How do I use What are wealth ranks??",
-        "What are the rules for What are wealth ranks??",
-        "Where do I find What are wealth ranks??"
+        "Tell me about Wealth ranks",
+        "Where do I find Wealth ranks?",
+        "Show me the FAQ guide",
+        "How does Auto Rank work?",
+        "What is Prestige?"
       ]
     },
     {
       "id": "progression_wealth.faq.what-are-wealth-ranks.rules",
       "domain": "progression_wealth",
       "entities": [
+        "Wealth ranks",
         "What are wealth ranks?",
         "FAQ"
       ],
@@ -1062,29 +1106,32 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for What are wealth ranks??",
-        "What happens with What are wealth ranks??",
-        "Does the FAQ explain What are wealth ranks??",
-        "Can you clarify What are wealth ranks??",
-        "Which FAQ covers What are wealth ranks??",
-        "I have a question about What are wealth ranks?",
-        "How is What are wealth ranks? supposed to work?"
+        "What are the rules for Wealth ranks?",
+        "What happens with Wealth ranks?",
+        "Does the FAQ explain Wealth ranks?",
+        "Can you clarify Wealth ranks?",
+        "Which FAQ covers Wealth ranks?",
+        "I have a question about Wealth ranks",
+        "How is Wealth ranks supposed to work?"
       ],
       "related_intents": [
         "progression_wealth.faq.what-are-wealth-ranks.overview",
         "progression_wealth.faq.how-does-auto-rank-work.overview",
-        "progression_wealth.faq.how-does-auto-rank-work.rules"
+        "progression_wealth.faq.what-is-prestige.overview"
       ],
       "follow_ups": [
-        "Tell me about What are wealth ranks?",
-        "What happens with What are wealth ranks??",
-        "Show me the FAQ guide"
+        "How does Wealth ranks work?",
+        "Show me the FAQ guide",
+        "How does Auto Rank work?",
+        "What are wealth ranks?",
+        "What is Prestige?"
       ]
     },
     {
       "id": "progression_wealth.faq.what-is-prestige.overview",
       "domain": "progression_wealth",
       "entities": [
+        "Prestige",
         "What is Prestige?",
         "FAQ"
       ],
@@ -1101,29 +1148,31 @@
       "intent_type": "definition",
       "variants": [
         "What is Prestige?",
-        "What is What is Prestige??",
-        "What are What is Prestige??",
-        "Tell me about What is Prestige?",
-        "Explain What is Prestige?",
-        "How does What is Prestige? work?",
-        "I need information about What is Prestige?"
+        "What are Prestige?",
+        "Tell me about Prestige",
+        "Explain Prestige",
+        "How does Prestige work?",
+        "I need information about Prestige",
+        "Give me the guide for Prestige"
       ],
       "related_intents": [
         "progression_wealth.faq.what-is-prestige.rules",
         "progression_wealth.faq.how-does-auto-rank-work.overview",
-        "progression_wealth.faq.how-does-auto-rank-work.rules",
         "progression_wealth.faq.what-are-wealth-ranks.overview"
       ],
       "follow_ups": [
-        "How do I use What is Prestige??",
-        "What are the rules for What is Prestige??",
-        "Where do I find What is Prestige??"
+        "Tell me about Prestige",
+        "Where do I find Prestige?",
+        "Show me the FAQ guide",
+        "How does Auto Rank work?",
+        "What are wealth ranks?"
       ]
     },
     {
       "id": "progression_wealth.faq.what-is-prestige.rules",
       "domain": "progression_wealth",
       "entities": [
+        "Prestige",
         "What is Prestige?",
         "FAQ"
       ],
@@ -1139,24 +1188,25 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for What is Prestige??",
-        "What happens with What is Prestige??",
-        "Does the FAQ explain What is Prestige??",
-        "Can you clarify What is Prestige??",
-        "Which FAQ covers What is Prestige??",
-        "I have a question about What is Prestige?",
-        "How is What is Prestige? supposed to work?"
+        "What are the rules for Prestige?",
+        "What happens with Prestige?",
+        "Does the FAQ explain Prestige?",
+        "Can you clarify Prestige?",
+        "Which FAQ covers Prestige?",
+        "I have a question about Prestige",
+        "How is Prestige supposed to work?"
       ],
       "related_intents": [
         "progression_wealth.faq.what-is-prestige.overview",
         "progression_wealth.faq.how-does-auto-rank-work.overview",
-        "progression_wealth.faq.how-does-auto-rank-work.rules",
         "progression_wealth.faq.what-are-wealth-ranks.overview"
       ],
       "follow_ups": [
-        "Tell me about What is Prestige?",
-        "What happens with What is Prestige??",
-        "Show me the FAQ guide"
+        "How does Prestige work?",
+        "Show me the FAQ guide",
+        "How does Auto Rank work?",
+        "What are wealth ranks?",
+        "What is Prestige?"
       ]
     },
     {
@@ -1228,14 +1278,14 @@
       "follow_ups": [
         "Tell me about Wealth rank",
         "What happens with Wealth rank?",
-        "Show me the FINDING YOUR WAY guide"
+        "Show me the FINDING YOUR WAY guide",
+        "What is Wealth rank?"
       ]
     },
     {
       "id": "progression_wealth.progression.progression-how_to.overview",
       "domain": "progression_wealth",
       "entities": [
-        "PROGRESSION",
         "PROGRESSION"
       ],
       "sections": [
@@ -1265,20 +1315,21 @@
       "related_intents": [
         "progression_wealth.progression.progression-how_to.procedure",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "How do I use PROGRESSION?",
         "What are the rules for PROGRESSION?",
-        "Where do I find PROGRESSION?"
+        "Where do I find PROGRESSION?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
       "id": "progression_wealth.progression.progression-how_to.procedure",
       "domain": "progression_wealth",
       "entities": [
-        "PROGRESSION",
         "PROGRESSION"
       ],
       "sections": [
@@ -1308,13 +1359,15 @@
       "related_intents": [
         "progression_wealth.progression.progression-how_to.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about PROGRESSION",
         "What happens with PROGRESSION?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -1351,13 +1404,15 @@
       "related_intents": [
         "progression_wealth.progression.dashboard.procedure",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "How do I use Dashboard?",
         "What are the rules for Dashboard?",
-        "Where do I find Dashboard?"
+        "Where do I find Dashboard?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -1394,13 +1449,15 @@
       "related_intents": [
         "progression_wealth.progression.dashboard.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about Dashboard",
         "What happens with Dashboard?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -1437,13 +1494,15 @@
       "related_intents": [
         "progression_wealth.progression.rank-badges-and-leaderboards.procedure",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "How do I use Rank, badges & leaderboards?",
         "What are the rules for Rank, badges & leaderboards?",
-        "Where do I find Rank, badges & leaderboards?"
+        "Where do I find Rank, badges & leaderboards?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -1480,13 +1539,15 @@
       "related_intents": [
         "progression_wealth.progression.rank-badges-and-leaderboards.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about Rank, badges & leaderboards",
         "What happens with Rank, badges & leaderboards?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -1523,13 +1584,15 @@
       "related_intents": [
         "progression_wealth.progression.missions-and-objectives.procedure",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "How do I use Missions & objectives?",
         "What are the rules for Missions & objectives?",
-        "Where do I find Missions & objectives?"
+        "Where do I find Missions & objectives?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -1566,13 +1629,15 @@
       "related_intents": [
         "progression_wealth.progression.missions-and-objectives.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about Missions & objectives",
         "What happens with Missions & objectives?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -1609,13 +1674,15 @@
       "related_intents": [
         "progression_wealth.progression.stats.procedure",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "How do I use Stats?",
         "What are the rules for Stats?",
-        "Where do I find Stats?"
+        "Where do I find Stats?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -1652,13 +1719,15 @@
       "related_intents": [
         "progression_wealth.progression.stats.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about Stats",
         "What happens with Stats?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -1695,13 +1764,15 @@
       "related_intents": [
         "progression_wealth.progression.prestige-and-inventory.procedure",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "How do I use Prestige & inventory?",
         "What are the rules for Prestige & inventory?",
-        "Where do I find Prestige & inventory?"
+        "Where do I find Prestige & inventory?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -1738,13 +1809,15 @@
       "related_intents": [
         "progression_wealth.progression.prestige-and-inventory.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about Prestige & inventory",
         "What happens with Prestige & inventory?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -1781,13 +1854,15 @@
       "related_intents": [
         "progression_wealth.progression.auto-rank.procedure",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "How do I use Auto Rank?",
         "What are the rules for Auto Rank?",
-        "Where do I find Auto Rank?"
+        "Where do I find Auto Rank?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -1824,13 +1899,15 @@
       "related_intents": [
         "progression_wealth.progression.auto-rank.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about Auto Rank",
         "What happens with Auto Rank?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -1867,13 +1944,15 @@
       "related_intents": [
         "progression_wealth.progression.daily-rewards.procedure",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "How do I use Daily rewards?",
         "What are the rules for Daily rewards?",
-        "Where do I find Daily rewards?"
+        "Where do I find Daily rewards?",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     },
     {
@@ -1910,13 +1989,15 @@
       "related_intents": [
         "progression_wealth.progression.daily-rewards.overview",
         "progression_wealth.progression.progression.overview",
-        "progression_wealth.progression.progression.rules",
-        "progression_wealth.progression.ranks-13-total.overview"
+        "progression_wealth.progression.ranks-13-total.overview",
+        "progression_wealth.progression.prestige-system.overview"
       ],
       "follow_ups": [
         "Tell me about Daily rewards",
         "What happens with Daily rewards?",
-        "Show me the PROGRESSION guide"
+        "Show me the PROGRESSION guide",
+        "What is PROGRESSION in PROGRESSION?",
+        "What is Ranks (13 total)?"
       ]
     }
   ]

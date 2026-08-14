@@ -806,7 +806,7 @@ MELT_BULLETS_VALUE_MULT_NUM = 165  # ~35% above prior 122 (122 × 1.35 ≈ 165)
 MELT_BULLETS_VALUE_MULT_DEN = 100
 
 # Bump when Cloudflare caches SPA HTML/404 for /images/gta/* (browsers then hide imgs via onError).
-GTA_IMAGE_CACHE_BUST = "4"
+GTA_IMAGE_CACHE_BUST = "6"
 
 
 def gta_car_image(filename: str) -> str:
@@ -841,13 +841,13 @@ CARS = [
     {"id": "car18", "name": "Bugatti Type 41 Royale", "rarity": "legendary", "min_difficulty": 5, "value": 35938, "travel_bonus": 50, "image": gta_car_image("car18.jpg")},
     {"id": "car19", "name": "Rolls-Royce Phantom II", "rarity": "legendary", "min_difficulty": 5, "value": 42226, "travel_bonus": 55, "image": gta_car_image("car19.jpg")},
     # Custom (store only, 500 pts)
-    {"id": "car_custom", "name": "Custom Car", "rarity": "custom", "min_difficulty": 5, "value": 71875, "travel_bonus": 55, "image": None},
+    {"id": "car_custom", "name": "Custom Car", "rarity": "custom", "min_difficulty": 5, "value": 71875, "travel_bonus": 55, "image": gta_car_image("car_custom.png")},
     # Exclusive (admin only)
     {"id": "car20", "name": "Al Capone's Armored Cadillac", "rarity": "exclusive", "min_difficulty": 5, "value": 71875000, "travel_bonus": 60, "image": gta_car_image("car20.png")},
     # Loot-exclusive (loot box only; global caps per type in loot_box.py)
     {"id": "car21", "name": "1930 Cadillac Series 452 V-16 Armored Sedan", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 143750000, "travel_bonus": 68, "image": gta_car_image("car21.png")},
     # VIP Game Pass tier 100 (once per account; custom image; survives death)
-    {"id": "car22", "name": "VIP Pass Car", "rarity": "vip_exclusive", "min_difficulty": 5, "value": 71875, "travel_bonus": 55, "image": None},
+    {"id": "car22", "name": "VIP Pass Car", "rarity": "vip_exclusive", "min_difficulty": 5, "value": 71875, "travel_bonus": 55, "image": gta_car_image("car22.png")},
     # Loot-exclusive: Rare 5% / Ultra Rare 10% loot boxes only; 1 game-wide; 2s travel
     {"id": "car23", "name": "Duesenberg Model SJ", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 143750000, "travel_bonus": 75, "image": gta_car_image("car23.png"), "travel_seconds": 2},
 ]
@@ -2882,6 +2882,15 @@ def _staff_exclude_user_filter(*, with_email_nor: bool = True) -> dict:
         # Exact lowercase match — emails are stored lowercased at registration.
         # Avoids case-insensitive regex scans on the email index.
         q["email"] = {"$nin": staff_emails}
+    return q
+
+
+async def staff_exclude_users_match(database=None) -> dict:
+    """Exclude staff from users queries without email $nin (that plan scans the whole email index)."""
+    ex = await honours_stat_excluded_user_ids(database)
+    q = _staff_exclude_user_filter(with_email_nor=False)
+    if ex:
+        q["id"] = {"$nin": ex}
     return q
 
 

@@ -5,7 +5,6 @@
       "id": "casinos_minigames.casinos.casinos.overview",
       "domain": "casinos_minigames",
       "entities": [
-        "CASINOS",
         "CASINOS"
       ],
       "sections": [
@@ -34,19 +33,21 @@
       "related_intents": [
         "casinos_minigames.casinos.casinos.rules",
         "casinos_minigames.casinos.solo-games.overview",
-        "casinos_minigames.casinos.solo-games.rules"
+        "casinos_minigames.casinos.multiplayer-games.overview",
+        "casinos_minigames.casinos.casino-tips.overview"
       ],
       "follow_ups": [
         "How do I use CASINOS?",
         "What are the rules for CASINOS?",
-        "Where do I find CASINOS?"
+        "Where do I find CASINOS?",
+        "What is Solo Games?",
+        "What is Multiplayer Games?"
       ]
     },
     {
       "id": "casinos_minigames.casinos.casinos.rules",
       "domain": "casinos_minigames",
       "entities": [
-        "CASINOS",
         "CASINOS"
       ],
       "sections": [
@@ -75,12 +76,14 @@
       "related_intents": [
         "casinos_minigames.casinos.casinos.overview",
         "casinos_minigames.casinos.solo-games.overview",
-        "casinos_minigames.casinos.solo-games.rules"
+        "casinos_minigames.casinos.multiplayer-games.overview"
       ],
       "follow_ups": [
         "Tell me about CASINOS",
         "What happens with CASINOS?",
-        "Show me the CASINOS guide"
+        "Show me the CASINOS guide",
+        "What is CASINOS?",
+        "What is Solo Games?"
       ]
     },
     {
@@ -116,12 +119,15 @@
       "related_intents": [
         "casinos_minigames.casinos.solo-games.rules",
         "casinos_minigames.casinos.casinos.overview",
-        "casinos_minigames.casinos.casinos.rules"
+        "casinos_minigames.casinos.multiplayer-games.overview",
+        "casinos_minigames.casinos.casino-tips.overview"
       ],
       "follow_ups": [
         "How do I use Solo Games?",
         "What are the rules for Solo Games?",
-        "Where do I find Solo Games?"
+        "Where do I find Solo Games?",
+        "What is CASINOS?",
+        "What is Multiplayer Games?"
       ]
     },
     {
@@ -157,12 +163,14 @@
       "related_intents": [
         "casinos_minigames.casinos.solo-games.overview",
         "casinos_minigames.casinos.casinos.overview",
-        "casinos_minigames.casinos.casinos.rules"
+        "casinos_minigames.casinos.multiplayer-games.overview"
       ],
       "follow_ups": [
         "Tell me about Solo Games",
         "What happens with Solo Games?",
-        "Show me the CASINOS guide"
+        "Show me the CASINOS guide",
+        "What is CASINOS?",
+        "What is Solo Games?"
       ]
     },
     {
@@ -198,13 +206,15 @@
       "related_intents": [
         "casinos_minigames.casinos.multiplayer-games.rules",
         "casinos_minigames.casinos.casinos.overview",
-        "casinos_minigames.casinos.casinos.rules",
-        "casinos_minigames.casinos.solo-games.overview"
+        "casinos_minigames.casinos.solo-games.overview",
+        "casinos_minigames.casinos.casino-tips.overview"
       ],
       "follow_ups": [
         "How do I use Multiplayer Games?",
         "What are the rules for Multiplayer Games?",
-        "Where do I find Multiplayer Games?"
+        "Where do I find Multiplayer Games?",
+        "What is CASINOS?",
+        "What is Solo Games?"
       ]
     },
     {
@@ -240,13 +250,14 @@
       "related_intents": [
         "casinos_minigames.casinos.multiplayer-games.overview",
         "casinos_minigames.casinos.casinos.overview",
-        "casinos_minigames.casinos.casinos.rules",
         "casinos_minigames.casinos.solo-games.overview"
       ],
       "follow_ups": [
         "Tell me about Multiplayer Games",
         "What happens with Multiplayer Games?",
-        "Show me the CASINOS guide"
+        "Show me the CASINOS guide",
+        "What is CASINOS?",
+        "What is Solo Games?"
       ]
     },
     {
@@ -282,13 +293,15 @@
       "related_intents": [
         "casinos_minigames.casinos.casino-tips.rules",
         "casinos_minigames.casinos.casinos.overview",
-        "casinos_minigames.casinos.casinos.rules",
-        "casinos_minigames.casinos.solo-games.overview"
+        "casinos_minigames.casinos.solo-games.overview",
+        "casinos_minigames.casinos.multiplayer-games.overview"
       ],
       "follow_ups": [
         "How do I use Casino Tips?",
         "What are the rules for Casino Tips?",
-        "Where do I find Casino Tips?"
+        "Where do I find Casino Tips?",
+        "What is CASINOS?",
+        "What is Solo Games?"
       ]
     },
     {
@@ -324,13 +337,15 @@
       "related_intents": [
         "casinos_minigames.casinos.casino-tips.overview",
         "casinos_minigames.casinos.casinos.overview",
-        "casinos_minigames.casinos.casinos.rules",
-        "casinos_minigames.casinos.solo-games.overview"
+        "casinos_minigames.casinos.solo-games.overview",
+        "casinos_minigames.casinos.multiplayer-games.overview"
       ],
       "follow_ups": [
         "Tell me about Casino Tips",
         "What happens with Casino Tips?",
-        "Show me the CASINOS guide"
+        "Show me the CASINOS guide",
+        "What is CASINOS?",
+        "What is Solo Games?"
       ]
     },
     {
@@ -366,13 +381,15 @@
       "related_intents": [
         "casinos_minigames.casinos.casino-ownership.rules",
         "casinos_minigames.casinos.casinos.overview",
-        "casinos_minigames.casinos.casinos.rules",
-        "casinos_minigames.casinos.solo-games.overview"
+        "casinos_minigames.casinos.solo-games.overview",
+        "casinos_minigames.casinos.multiplayer-games.overview"
       ],
       "follow_ups": [
         "How do I use Casino Ownership?",
         "What are the rules for Casino Ownership?",
-        "Where do I find Casino Ownership?"
+        "Where do I find Casino Ownership?",
+        "What is CASINOS?",
+        "What is Solo Games?"
       ]
     },
     {
@@ -408,20 +425,21 @@
       "related_intents": [
         "casinos_minigames.casinos.casino-ownership.overview",
         "casinos_minigames.casinos.casinos.overview",
-        "casinos_minigames.casinos.casinos.rules",
-        "casinos_minigames.casinos.solo-games.overview"
+        "casinos_minigames.casinos.solo-games.overview",
+        "casinos_minigames.casinos.multiplayer-games.overview"
       ],
       "follow_ups": [
         "Tell me about Casino Ownership",
         "What happens with Casino Ownership?",
-        "Show me the CASINOS guide"
+        "Show me the CASINOS guide",
+        "What is CASINOS?",
+        "What is Solo Games?"
       ]
     },
     {
       "id": "casinos_minigames.mini-games.mini-games.overview",
       "domain": "casinos_minigames",
       "entities": [
-        "MINI-GAMES",
         "MINI-GAMES"
       ],
       "sections": [
@@ -449,19 +467,21 @@
       "related_intents": [
         "casinos_minigames.mini-games.mini-games.rules",
         "casinos_minigames.mini-games.shooting-range.overview",
-        "casinos_minigames.mini-games.shooting-range.rules"
+        "casinos_minigames.mini-games.shooting-range-3d.overview",
+        "casinos_minigames.mini-games.snake-package-run.overview"
       ],
       "follow_ups": [
         "How do I use MINI-GAMES?",
         "What are the rules for MINI-GAMES?",
-        "Where do I find MINI-GAMES?"
+        "Where do I find MINI-GAMES?",
+        "What is Shooting Range?",
+        "What is Shooting Range 3D?"
       ]
     },
     {
       "id": "casinos_minigames.mini-games.mini-games.rules",
       "domain": "casinos_minigames",
       "entities": [
-        "MINI-GAMES",
         "MINI-GAMES"
       ],
       "sections": [
@@ -489,12 +509,14 @@
       "related_intents": [
         "casinos_minigames.mini-games.mini-games.overview",
         "casinos_minigames.mini-games.shooting-range.overview",
-        "casinos_minigames.mini-games.shooting-range.rules"
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "Tell me about MINI-GAMES",
         "What happens with MINI-GAMES?",
-        "Show me the MINI-GAMES guide"
+        "Show me the MINI-GAMES guide",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -529,12 +551,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.shooting-range.rules",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules"
+        "casinos_minigames.mini-games.shooting-range-3d.overview",
+        "casinos_minigames.mini-games.snake-package-run.overview"
       ],
       "follow_ups": [
         "How do I use Shooting Range?",
         "What are the rules for Shooting Range?",
-        "Where do I find Shooting Range?"
+        "Where do I find Shooting Range?",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range 3D?"
       ]
     },
     {
@@ -569,12 +594,14 @@
       "related_intents": [
         "casinos_minigames.mini-games.shooting-range.overview",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules"
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "Tell me about Shooting Range",
         "What happens with Shooting Range?",
-        "Show me the MINI-GAMES guide"
+        "Show me the MINI-GAMES guide",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -609,13 +636,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.shooting-range-3d.rules",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.snake-package-run.overview"
       ],
       "follow_ups": [
         "How do I use Shooting Range 3D?",
         "What are the rules for Shooting Range 3D?",
-        "Where do I find Shooting Range 3D?"
+        "Where do I find Shooting Range 3D?",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -650,13 +679,14 @@
       "related_intents": [
         "casinos_minigames.mini-games.shooting-range-3d.overview",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
         "casinos_minigames.mini-games.shooting-range.overview"
       ],
       "follow_ups": [
         "Tell me about Shooting Range 3D",
         "What happens with Shooting Range 3D?",
-        "Show me the MINI-GAMES guide"
+        "Show me the MINI-GAMES guide",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -691,13 +721,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.snake-package-run.rules",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "How do I use Snake (Package Run)?",
         "What are the rules for Snake (Package Run)?",
-        "Where do I find Snake (Package Run)?"
+        "Where do I find Snake (Package Run)?",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -732,13 +764,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.snake-package-run.overview",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "Tell me about Snake (Package Run)",
         "What happens with Snake (Package Run)?",
-        "Show me the MINI-GAMES guide"
+        "Show me the MINI-GAMES guide",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -773,13 +807,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.minesweeper-minefield.rules",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "How do I use Minesweeper (Minefield)?",
         "What are the rules for Minesweeper (Minefield)?",
-        "Where do I find Minesweeper (Minefield)?"
+        "Where do I find Minesweeper (Minefield)?",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -814,13 +850,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.minesweeper-minefield.overview",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "Tell me about Minesweeper (Minefield)",
         "What happens with Minesweeper (Minefield)?",
-        "Show me the MINI-GAMES guide"
+        "Show me the MINI-GAMES guide",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -855,13 +893,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.racing.rules",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "How do I use Racing?",
         "What are the rules for Racing?",
-        "Where do I find Racing?"
+        "Where do I find Racing?",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -896,13 +936,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.racing.overview",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "Tell me about Racing",
         "What happens with Racing?",
-        "Show me the MINI-GAMES guide"
+        "Show me the MINI-GAMES guide",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -937,13 +979,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.boxing.rules",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "How do I use Boxing?",
         "What are the rules for Boxing?",
-        "Where do I find Boxing?"
+        "Where do I find Boxing?",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -978,13 +1022,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.boxing.overview",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "Tell me about Boxing",
         "What happens with Boxing?",
-        "Show me the MINI-GAMES guide"
+        "Show me the MINI-GAMES guide",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -1019,13 +1065,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.flappy-gangster-gauntlet.rules",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "How do I use Flappy Gangster (Gauntlet)?",
         "What are the rules for Flappy Gangster (Gauntlet)?",
-        "Where do I find Flappy Gangster (Gauntlet)?"
+        "Where do I find Flappy Gangster (Gauntlet)?",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -1060,13 +1108,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.flappy-gangster-gauntlet.overview",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "Tell me about Flappy Gangster (Gauntlet)",
         "What happens with Flappy Gangster (Gauntlet)?",
-        "Show me the MINI-GAMES guide"
+        "Show me the MINI-GAMES guide",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -1101,13 +1151,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.whack-a-copper.rules",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "How do I use Whack-a-Copper?",
         "What are the rules for Whack-a-Copper?",
-        "Where do I find Whack-a-Copper?"
+        "Where do I find Whack-a-Copper?",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -1142,13 +1194,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.whack-a-copper.overview",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "Tell me about Whack-a-Copper",
         "What happens with Whack-a-Copper?",
-        "Show me the MINI-GAMES guide"
+        "Show me the MINI-GAMES guide",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -1183,13 +1237,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.rum-runner-battleships.rules",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "How do I use Rum Runner (Battleships)?",
         "What are the rules for Rum Runner (Battleships)?",
-        "Where do I find Rum Runner (Battleships)?"
+        "Where do I find Rum Runner (Battleships)?",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -1224,13 +1280,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.rum-runner-battleships.overview",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "Tell me about Rum Runner (Battleships)",
         "What happens with Rum Runner (Battleships)?",
-        "Show me the MINI-GAMES guide"
+        "Show me the MINI-GAMES guide",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -1265,13 +1323,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.the-getaway.rules",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "How do I use The Getaway?",
         "What are the rules for The Getaway?",
-        "Where do I find The Getaway?"
+        "Where do I find The Getaway?",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -1306,13 +1366,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.the-getaway.overview",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "Tell me about The Getaway",
         "What happens with The Getaway?",
-        "Show me the MINI-GAMES guide"
+        "Show me the MINI-GAMES guide",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -1347,13 +1409,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.family-run.rules",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "How do I use Family Run?",
         "What are the rules for Family Run?",
-        "Where do I find Family Run?"
+        "Where do I find Family Run?",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -1388,13 +1452,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.family-run.overview",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "Tell me about Family Run",
         "What happens with Family Run?",
-        "Show me the MINI-GAMES guide"
+        "Show me the MINI-GAMES guide",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -1429,13 +1495,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.famiglia-mafia-rpg.rules",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "How do I use Famiglia (Mafia RPG)?",
         "What are the rules for Famiglia (Mafia RPG)?",
-        "Where do I find Famiglia (Mafia RPG)?"
+        "Where do I find Famiglia (Mafia RPG)?",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -1470,13 +1538,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.famiglia-mafia-rpg.overview",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "Tell me about Famiglia (Mafia RPG)",
         "What happens with Famiglia (Mafia RPG)?",
-        "Show me the MINI-GAMES guide"
+        "Show me the MINI-GAMES guide",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -1511,13 +1581,15 @@
       "related_intents": [
         "casinos_minigames.mini-games.mini-games-leaderboard.rules",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "How do I use Mini-Games Leaderboard?",
         "What are the rules for Mini-Games Leaderboard?",
-        "Where do I find Mini-Games Leaderboard?"
+        "Where do I find Mini-Games Leaderboard?",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
@@ -1552,20 +1624,21 @@
       "related_intents": [
         "casinos_minigames.mini-games.mini-games-leaderboard.overview",
         "casinos_minigames.mini-games.mini-games.overview",
-        "casinos_minigames.mini-games.mini-games.rules",
-        "casinos_minigames.mini-games.shooting-range.overview"
+        "casinos_minigames.mini-games.shooting-range.overview",
+        "casinos_minigames.mini-games.shooting-range-3d.overview"
       ],
       "follow_ups": [
         "Tell me about Mini-Games Leaderboard",
         "What happens with Mini-Games Leaderboard?",
-        "Show me the MINI-GAMES guide"
+        "Show me the MINI-GAMES guide",
+        "What is MINI-GAMES in MINI-GAMES?",
+        "What is Shooting Range?"
       ]
     },
     {
       "id": "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
       "domain": "casinos_minigames",
       "entities": [
-        "CASINO & MINI-GAMES",
         "CASINO & MINI-GAMES"
       ],
       "sections": [
@@ -1591,19 +1664,21 @@
       "related_intents": [
         "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure",
         "casinos_minigames.casino-and-mini-games.casino-hub.overview",
-        "casinos_minigames.casino-and-mini-games.casino-hub.procedure"
+        "casinos_minigames.casino-and-mini-games.sports-betting.overview",
+        "casinos_minigames.casino-and-mini-games.mini-games.overview"
       ],
       "follow_ups": [
         "How do I use CASINO & MINI-GAMES?",
         "What are the rules for CASINO & MINI-GAMES?",
-        "Where do I find CASINO & MINI-GAMES?"
+        "Where do I find CASINO & MINI-GAMES?",
+        "What is Casino hub?",
+        "What is Sports betting in CASINO & MINI-GAMES?"
       ]
     },
     {
       "id": "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure",
       "domain": "casinos_minigames",
       "entities": [
-        "CASINO & MINI-GAMES",
         "CASINO & MINI-GAMES"
       ],
       "sections": [
@@ -1629,12 +1704,14 @@
       "related_intents": [
         "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
         "casinos_minigames.casino-and-mini-games.casino-hub.overview",
-        "casinos_minigames.casino-and-mini-games.casino-hub.procedure"
+        "casinos_minigames.casino-and-mini-games.sports-betting.overview"
       ],
       "follow_ups": [
         "Tell me about CASINO & MINI-GAMES",
         "What happens with CASINO & MINI-GAMES?",
-        "Show me the CASINO & MINI-GAMES guide"
+        "Show me the CASINO & MINI-GAMES guide",
+        "What is CASINO & MINI-GAMES?",
+        "What is Casino hub?"
       ]
     },
     {
@@ -1667,12 +1744,15 @@
       "related_intents": [
         "casinos_minigames.casino-and-mini-games.casino-hub.procedure",
         "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
-        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure"
+        "casinos_minigames.casino-and-mini-games.sports-betting.overview",
+        "casinos_minigames.casino-and-mini-games.mini-games.overview"
       ],
       "follow_ups": [
         "How do I use Casino hub?",
         "What are the rules for Casino hub?",
-        "Where do I find Casino hub?"
+        "Where do I find Casino hub?",
+        "What is CASINO & MINI-GAMES?",
+        "What is Sports betting in CASINO & MINI-GAMES?"
       ]
     },
     {
@@ -1705,12 +1785,14 @@
       "related_intents": [
         "casinos_minigames.casino-and-mini-games.casino-hub.overview",
         "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
-        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure"
+        "casinos_minigames.casino-and-mini-games.sports-betting.overview"
       ],
       "follow_ups": [
         "Tell me about Casino hub",
         "What happens with Casino hub?",
-        "Show me the CASINO & MINI-GAMES guide"
+        "Show me the CASINO & MINI-GAMES guide",
+        "What is CASINO & MINI-GAMES?",
+        "What is Casino hub?"
       ]
     },
     {
@@ -1743,13 +1825,15 @@
       "related_intents": [
         "casinos_minigames.casino-and-mini-games.sports-betting.procedure",
         "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
-        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure",
-        "casinos_minigames.casino-and-mini-games.casino-hub.overview"
+        "casinos_minigames.casino-and-mini-games.casino-hub.overview",
+        "casinos_minigames.casino-and-mini-games.mini-games.overview"
       ],
       "follow_ups": [
         "How do I use Sports betting?",
         "What are the rules for Sports betting?",
-        "Where do I find Sports betting?"
+        "Where do I find Sports betting?",
+        "What is CASINO & MINI-GAMES?",
+        "What is Casino hub?"
       ]
     },
     {
@@ -1782,13 +1866,14 @@
       "related_intents": [
         "casinos_minigames.casino-and-mini-games.sports-betting.overview",
         "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
-        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure",
         "casinos_minigames.casino-and-mini-games.casino-hub.overview"
       ],
       "follow_ups": [
         "Tell me about Sports betting",
         "What happens with Sports betting?",
-        "Show me the CASINO & MINI-GAMES guide"
+        "Show me the CASINO & MINI-GAMES guide",
+        "What is CASINO & MINI-GAMES?",
+        "What is Casino hub?"
       ]
     },
     {
@@ -1821,13 +1906,15 @@
       "related_intents": [
         "casinos_minigames.casino-and-mini-games.mini-games.procedure",
         "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
-        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure",
-        "casinos_minigames.casino-and-mini-games.casino-hub.overview"
+        "casinos_minigames.casino-and-mini-games.casino-hub.overview",
+        "casinos_minigames.casino-and-mini-games.sports-betting.overview"
       ],
       "follow_ups": [
         "How do I use Mini-games?",
         "What are the rules for Mini-games?",
-        "Where do I find Mini-games?"
+        "Where do I find Mini-games?",
+        "What is CASINO & MINI-GAMES?",
+        "What is Casino hub?"
       ]
     },
     {
@@ -1860,13 +1947,15 @@
       "related_intents": [
         "casinos_minigames.casino-and-mini-games.mini-games.overview",
         "casinos_minigames.casino-and-mini-games.casino-and-mini-games.overview",
-        "casinos_minigames.casino-and-mini-games.casino-and-mini-games.procedure",
-        "casinos_minigames.casino-and-mini-games.casino-hub.overview"
+        "casinos_minigames.casino-and-mini-games.casino-hub.overview",
+        "casinos_minigames.casino-and-mini-games.sports-betting.overview"
       ],
       "follow_ups": [
         "Tell me about Mini-games",
         "What happens with Mini-games?",
-        "Show me the CASINO & MINI-GAMES guide"
+        "Show me the CASINO & MINI-GAMES guide",
+        "What is CASINO & MINI-GAMES?",
+        "What is Casino hub?"
       ]
     }
   ]

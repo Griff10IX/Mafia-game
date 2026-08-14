@@ -661,6 +661,11 @@ export default function Crimes() {
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to commit crime');
       console.error('Error committing crime:', error);
+      const jailed = String(error.response?.data?.detail || '').toLowerCase().includes('while in jail');
+      if (jailed) {
+        try { window.dispatchEvent(new CustomEvent('app:refresh-user', { detail: { in_jail: true } })); } catch (_) { /* ignore */ }
+        return;
+      }
       // Keep cooldown UI authoritative on server state (important on mobile taps/races).
       clearCrimesPrefetch();
       await fetchCrimes(true);
@@ -735,6 +740,11 @@ export default function Crimes() {
       errors.slice(0, 3).forEach((msg) => toast.error(String(msg)));
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
+      const jailed = String(e.response?.data?.detail || '').toLowerCase().includes('while in jail');
+      if (jailed) {
+        try { window.dispatchEvent(new CustomEvent('app:refresh-user', { detail: { in_jail: true } })); } catch (_) { /* ignore */ }
+        return;
+      }
     } finally {
       setCommitAllLoading(false);
     }

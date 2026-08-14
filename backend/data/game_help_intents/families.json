@@ -5,7 +5,6 @@
       "id": "families.families.families.overview",
       "domain": "families",
       "entities": [
-        "FAMILIES",
         "FAMILIES"
       ],
       "sections": [
@@ -33,19 +32,21 @@
       "related_intents": [
         "families.families.families.rules",
         "families.families.family-hierarchy.overview",
-        "families.families.family-hierarchy.rules"
+        "families.families.treasury-crew-vault.overview",
+        "families.families.compound.overview"
       ],
       "follow_ups": [
         "How do I use FAMILIES?",
         "What are the rules for FAMILIES?",
-        "Where do I find FAMILIES?"
+        "Where do I find FAMILIES?",
+        "What is Family Hierarchy?",
+        "What is Treasury (crew vault)?"
       ]
     },
     {
       "id": "families.families.families.rules",
       "domain": "families",
       "entities": [
-        "FAMILIES",
         "FAMILIES"
       ],
       "sections": [
@@ -73,12 +74,14 @@
       "related_intents": [
         "families.families.families.overview",
         "families.families.family-hierarchy.overview",
-        "families.families.family-hierarchy.rules"
+        "families.families.treasury-crew-vault.overview"
       ],
       "follow_ups": [
         "Tell me about FAMILIES",
         "What happens with FAMILIES?",
-        "Show me the FAMILIES guide"
+        "Show me the FAMILIES guide",
+        "What is FAMILIES in FAMILIES?",
+        "What is Family Hierarchy?"
       ]
     },
     {
@@ -113,12 +116,15 @@
       "related_intents": [
         "families.families.family-hierarchy.rules",
         "families.families.families.overview",
-        "families.families.families.rules"
+        "families.families.treasury-crew-vault.overview",
+        "families.families.compound.overview"
       ],
       "follow_ups": [
         "How do I use Family Hierarchy?",
         "What are the rules for Family Hierarchy?",
-        "Where do I find Family Hierarchy?"
+        "Where do I find Family Hierarchy?",
+        "What is FAMILIES in FAMILIES?",
+        "What is Treasury (crew vault)?"
       ]
     },
     {
@@ -153,12 +159,14 @@
       "related_intents": [
         "families.families.family-hierarchy.overview",
         "families.families.families.overview",
-        "families.families.families.rules"
+        "families.families.treasury-crew-vault.overview"
       ],
       "follow_ups": [
         "Tell me about Family Hierarchy",
         "What happens with Family Hierarchy?",
-        "Show me the FAMILIES guide"
+        "Show me the FAMILIES guide",
+        "What is FAMILIES in FAMILIES?",
+        "What is Family Hierarchy?"
       ]
     },
     {
@@ -193,13 +201,15 @@
       "related_intents": [
         "families.families.treasury-crew-vault.rules",
         "families.families.families.overview",
-        "families.families.families.rules",
-        "families.families.family-hierarchy.overview"
+        "families.families.family-hierarchy.overview",
+        "families.families.compound.overview"
       ],
       "follow_ups": [
         "How do I use Treasury (crew vault)?",
         "What are the rules for Treasury (crew vault)?",
-        "Where do I find Treasury (crew vault)?"
+        "Where do I find Treasury (crew vault)?",
+        "What is FAMILIES in FAMILIES?",
+        "What is Family Hierarchy?"
       ]
     },
     {
@@ -234,13 +244,14 @@
       "related_intents": [
         "families.families.treasury-crew-vault.overview",
         "families.families.families.overview",
-        "families.families.families.rules",
         "families.families.family-hierarchy.overview"
       ],
       "follow_ups": [
         "Tell me about Treasury (crew vault)",
         "What happens with Treasury (crew vault)?",
-        "Show me the FAMILIES guide"
+        "Show me the FAMILIES guide",
+        "What is FAMILIES in FAMILIES?",
+        "What is Family Hierarchy?"
       ]
     },
     {
@@ -275,13 +286,15 @@
       "related_intents": [
         "families.families.compound.rules",
         "families.families.families.overview",
-        "families.families.families.rules",
-        "families.families.family-hierarchy.overview"
+        "families.families.family-hierarchy.overview",
+        "families.families.treasury-crew-vault.overview"
       ],
       "follow_ups": [
         "How do I use Compound?",
         "What are the rules for Compound?",
-        "Where do I find Compound?"
+        "Where do I find Compound?",
+        "What is FAMILIES in FAMILIES?",
+        "What is Family Hierarchy?"
       ]
     },
     {
@@ -316,13 +329,15 @@
       "related_intents": [
         "families.families.compound.overview",
         "families.families.families.overview",
-        "families.families.families.rules",
-        "families.families.family-hierarchy.overview"
+        "families.families.family-hierarchy.overview",
+        "families.families.treasury-crew-vault.overview"
       ],
       "follow_ups": [
         "Tell me about Compound",
         "What happens with Compound?",
-        "Show me the FAMILIES guide"
+        "Show me the FAMILIES guide",
+        "What is FAMILIES in FAMILIES?",
+        "What is Family Hierarchy?"
       ]
     },
     {
@@ -357,13 +372,15 @@
       "related_intents": [
         "families.families.family-wars-vendetta.rules",
         "families.families.families.overview",
-        "families.families.families.rules",
-        "families.families.family-hierarchy.overview"
+        "families.families.family-hierarchy.overview",
+        "families.families.treasury-crew-vault.overview"
       ],
       "follow_ups": [
         "How do I use Family Wars (Vendetta)?",
         "What are the rules for Family Wars (Vendetta)?",
-        "Where do I find Family Wars (Vendetta)?"
+        "Where do I find Family Wars (Vendetta)?",
+        "What is FAMILIES in FAMILIES?",
+        "What is Family Hierarchy?"
       ]
     },
     {
@@ -398,13 +415,15 @@
       "related_intents": [
         "families.families.family-wars-vendetta.overview",
         "families.families.families.overview",
-        "families.families.families.rules",
-        "families.families.family-hierarchy.overview"
+        "families.families.family-hierarchy.overview",
+        "families.families.treasury-crew-vault.overview"
       ],
       "follow_ups": [
         "Tell me about Family Wars (Vendetta)",
         "What happens with Family Wars (Vendetta)?",
-        "Show me the FAMILIES guide"
+        "Show me the FAMILIES guide",
+        "What is FAMILIES in FAMILIES?",
+        "What is Family Hierarchy?"
       ]
     },
     {
@@ -439,13 +458,15 @@
       "related_intents": [
         "families.families.crew-oc.rules",
         "families.families.families.overview",
-        "families.families.families.rules",
-        "families.families.family-hierarchy.overview"
+        "families.families.family-hierarchy.overview",
+        "families.families.treasury-crew-vault.overview"
       ],
       "follow_ups": [
         "How do I use Crew OC?",
         "What are the rules for Crew OC?",
-        "Where do I find Crew OC?"
+        "Where do I find Crew OC?",
+        "What is FAMILIES in FAMILIES?",
+        "What is Family Hierarchy?"
       ]
     },
     {
@@ -480,20 +501,21 @@
       "related_intents": [
         "families.families.crew-oc.overview",
         "families.families.families.overview",
-        "families.families.families.rules",
-        "families.families.family-hierarchy.overview"
+        "families.families.family-hierarchy.overview",
+        "families.families.treasury-crew-vault.overview"
       ],
       "follow_ups": [
         "Tell me about Crew OC",
         "What happens with Crew OC?",
-        "Show me the FAMILIES guide"
+        "Show me the FAMILIES guide",
+        "What is FAMILIES in FAMILIES?",
+        "What is Family Hierarchy?"
       ]
     },
     {
       "id": "families.families.families-how_to.overview",
       "domain": "families",
       "entities": [
-        "FAMILIES",
         "FAMILIES"
       ],
       "sections": [
@@ -521,20 +543,21 @@
       "related_intents": [
         "families.families.families-how_to.procedure",
         "families.families.families.overview",
-        "families.families.families.rules",
-        "families.families.family-hierarchy.overview"
+        "families.families.family-hierarchy.overview",
+        "families.families.treasury-crew-vault.overview"
       ],
       "follow_ups": [
         "How do I use FAMILIES?",
         "What are the rules for FAMILIES?",
-        "Where do I find FAMILIES?"
+        "Where do I find FAMILIES?",
+        "What is FAMILIES in FAMILIES?",
+        "What is Family Hierarchy?"
       ]
     },
     {
       "id": "families.families.families-how_to.procedure",
       "domain": "families",
       "entities": [
-        "FAMILIES",
         "FAMILIES"
       ],
       "sections": [
@@ -562,13 +585,15 @@
       "related_intents": [
         "families.families.families-how_to.overview",
         "families.families.families.overview",
-        "families.families.families.rules",
-        "families.families.family-hierarchy.overview"
+        "families.families.family-hierarchy.overview",
+        "families.families.treasury-crew-vault.overview"
       ],
       "follow_ups": [
         "Tell me about FAMILIES",
         "What happens with FAMILIES?",
-        "Show me the FAMILIES guide"
+        "Show me the FAMILIES guide",
+        "What is FAMILIES in FAMILIES?",
+        "What is Family Hierarchy?"
       ]
     }
   ]

@@ -21,11 +21,7 @@
     "question": "Property heat vs distillery heat",
     "answer_type": "comparison",
     "intent_id": "cross_feature.compare.property-heat-vs-distillery-heat",
-    "titles": [
-      "Q: Why can't I collect property income? / What is Heat?",
-      "Q: Why are property collections still blocked when Heat is low?",
-      "Q: How does the Distillery work?"
-    ]
+    "titles": ["Properties", "Distillery", "Heat & busts"]
   },
   {
     "question": "Does bank money count for wealth rank?",
@@ -81,6 +77,7 @@
   {
     "question": "How can I buy a car?",
     "answer_type": "procedure",
+    "intent_id": "cross_feature.feature.cars",
     "title_contains": "buy"
   },
   {
@@ -90,7 +87,37 @@
   },
   {
     "question": "How do tokens work?",
-    "answer_type": "procedure",
+    "answer_type": "definition",
     "title_contains": "token"
+  },
+  {
+    "question": "How does the Distillery work?",
+    "answer_type": "definition",
+    "intent_id": "cross_feature.feature.distillery",
+    "titles": ["Distillery", "Distillery (quick tour)"]
+  },
+  {
+    "question": "How does Weed Empire work?",
+    "answer_type": "definition",
+    "intent_id": "cross_feature.feature.weed-empire",
+    "title_contains": "weed"
+  },
+  {
+    "question": "How do properties work?",
+    "answer_type": "definition",
+    "intent_id": "cross_feature.feature.properties",
+    "titles": ["Properties", "Property", "My Properties"]
+  },
+  {
+    "question": "How do families work?",
+    "answer_type": "definition",
+    "intent_id": "cross_feature.feature.families",
+    "title_contains": "famil"
+  },
+  {
+    "question": "How does jail work?",
+    "answer_type": "definition",
+    "intent_id": "cross_feature.feature.jail",
+    "title_contains": "jail"
   }
 ]

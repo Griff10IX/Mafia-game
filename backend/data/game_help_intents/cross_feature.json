@@ -5,7 +5,6 @@
       "id": "cross_feature.faq.faq.overview",
       "domain": "cross_feature",
       "entities": [
-        "FAQ",
         "FAQ"
       ],
       "sections": [
@@ -31,19 +30,21 @@
       "related_intents": [
         "cross_feature.faq.faq.rules",
         "cross_feature.faq.how-do-i-make-money-fast.overview",
-        "cross_feature.faq.how-do-i-make-money-fast.rules"
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview",
+        "cross_feature.faq.why-are-property-collections-still-blocked-when-heat-is-low.overview"
       ],
       "follow_ups": [
         "How do I use FAQ?",
         "What are the rules for FAQ?",
-        "Where do I find FAQ?"
+        "Where do I find FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
       "id": "cross_feature.faq.faq.rules",
       "domain": "cross_feature",
       "entities": [
-        "FAQ",
         "FAQ"
       ],
       "sections": [
@@ -69,18 +70,21 @@
       "related_intents": [
         "cross_feature.faq.faq.overview",
         "cross_feature.faq.how-do-i-make-money-fast.overview",
-        "cross_feature.faq.how-do-i-make-money-fast.rules"
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
         "Tell me about FAQ",
         "What happens with FAQ?",
-        "Show me the FAQ guide"
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?"
       ]
     },
     {
       "id": "cross_feature.faq.how-do-i-make-money-fast.overview",
       "domain": "cross_feature",
       "entities": [
+        "Make money fast",
         "How do I make money fast?",
         "FAQ"
       ],
@@ -97,28 +101,32 @@
       "intent_type": "definition",
       "variants": [
         "How do I make money fast?",
-        "What is How do I make money fast??",
-        "What are How do I make money fast??",
-        "Tell me about How do I make money fast?",
-        "Explain How do I make money fast?",
-        "How does How do I make money fast? work?",
-        "I need information about How do I make money fast?"
+        "What is Make money fast?",
+        "What are Make money fast?",
+        "Tell me about Make money fast",
+        "Explain Make money fast",
+        "How does Make money fast work?",
+        "I need information about Make money fast"
       ],
       "related_intents": [
         "cross_feature.faq.how-do-i-make-money-fast.rules",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules"
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview",
+        "cross_feature.faq.why-are-property-collections-still-blocked-when-heat-is-low.overview"
       ],
       "follow_ups": [
-        "How do I use How do I make money fast??",
-        "What are the rules for How do I make money fast??",
-        "Where do I find How do I make money fast??"
+        "Tell me about Make money fast",
+        "Where do I find Make money fast?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
       "id": "cross_feature.faq.how-do-i-make-money-fast.rules",
       "domain": "cross_feature",
       "entities": [
+        "Make money fast",
         "How do I make money fast?",
         "FAQ"
       ],
@@ -134,29 +142,32 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for How do I make money fast??",
-        "What happens with How do I make money fast??",
-        "Does the FAQ explain How do I make money fast??",
-        "Can you clarify How do I make money fast??",
-        "Which FAQ covers How do I make money fast??",
-        "I have a question about How do I make money fast?",
-        "How is How do I make money fast? supposed to work?"
+        "What are the rules for Make money fast?",
+        "What happens with Make money fast?",
+        "Does the FAQ explain Make money fast?",
+        "Can you clarify Make money fast?",
+        "Which FAQ covers Make money fast?",
+        "I have a question about Make money fast",
+        "How is Make money fast supposed to work?"
       ],
       "related_intents": [
         "cross_feature.faq.how-do-i-make-money-fast.overview",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules"
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "Tell me about How do I make money fast?",
-        "What happens with How do I make money fast??",
-        "Show me the FAQ guide"
+        "How does Make money fast work?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
       "id": "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview",
       "domain": "cross_feature",
       "entities": [
+        "Heat",
         "Why can't I collect property income? / What is Heat?",
         "FAQ"
       ],
@@ -173,29 +184,32 @@
       "intent_type": "definition",
       "variants": [
         "Why can't I collect property income? / What is Heat?",
-        "What is Why can't I collect property income? / What is Heat??",
-        "What are Why can't I collect property income? / What is Heat??",
-        "Tell me about Why can't I collect property income? / What is Heat?",
-        "Explain Why can't I collect property income? / What is Heat?",
-        "How does Why can't I collect property income? / What is Heat? work?",
-        "I need information about Why can't I collect property income? / What is Heat?"
+        "What is Heat?",
+        "What are Heat?",
+        "Tell me about Heat",
+        "Explain Heat",
+        "How does Heat work?",
+        "I need information about Heat"
       ],
       "related_intents": [
         "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.rules",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-are-property-collections-still-blocked-when-heat-is-low.overview"
       ],
       "follow_ups": [
-        "How do I use Why can't I collect property income? / What is Heat??",
-        "What are the rules for Why can't I collect property income? / What is Heat??",
-        "Where do I find Why can't I collect property income? / What is Heat??"
+        "Tell me about Heat",
+        "Where do I find Heat?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?"
       ]
     },
     {
       "id": "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.rules",
       "domain": "cross_feature",
       "entities": [
+        "Heat",
         "Why can't I collect property income? / What is Heat?",
         "FAQ"
       ],
@@ -211,32 +225,33 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for Why can't I collect property income? / What is Heat??",
-        "What happens with Why can't I collect property income? / What is Heat??",
-        "Does the FAQ explain Why can't I collect property income? / What is Heat??",
-        "Can you clarify Why can't I collect property income? / What is Heat??",
-        "Which FAQ covers Why can't I collect property income? / What is Heat??",
-        "I have a question about Why can't I collect property income? / What is Heat?",
-        "How is Why can't I collect property income? / What is Heat? supposed to work?"
+        "What are the rules for Heat?",
+        "What happens with Heat?",
+        "Does the FAQ explain Heat?",
+        "Can you clarify Heat?",
+        "Which FAQ covers Heat?",
+        "I have a question about Heat",
+        "How is Heat supposed to work?"
       ],
       "related_intents": [
         "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
         "cross_feature.faq.how-do-i-make-money-fast.overview"
       ],
       "follow_ups": [
-        "Tell me about Why can't I collect property income? / What is Heat?",
-        "What happens with Why can't I collect property income? / What is Heat??",
-        "Show me the FAQ guide"
+        "How does Heat work?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
       "id": "cross_feature.faq.why-are-property-collections-still-blocked-when-heat-is-low.overview",
       "domain": "cross_feature",
       "entities": [
-        "Why are property collections still blocked when Heat is low?",
-        "FAQ"
+        "FAQ",
+        "Why are property collections still blocked when Heat is low?"
       ],
       "sections": [
         {
@@ -251,31 +266,33 @@
       "intent_type": "definition",
       "variants": [
         "Why are property collections still blocked when Heat is low?",
-        "What is Why are property collections still blocked when Heat is low??",
-        "What are Why are property collections still blocked when Heat is low??",
-        "Tell me about Why are property collections still blocked when Heat is low?",
-        "Explain Why are property collections still blocked when Heat is low?",
-        "How does Why are property collections still blocked when Heat is low? work?",
-        "I need information about Why are property collections still blocked when Heat is low?"
+        "What is FAQ?",
+        "What are FAQ?",
+        "Tell me about FAQ",
+        "Explain FAQ",
+        "How does FAQ work?",
+        "I need information about FAQ"
       ],
       "related_intents": [
         "cross_feature.faq.why-are-property-collections-still-blocked-when-heat-is-low.rules",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "How do I use Why are property collections still blocked when Heat is low??",
-        "What are the rules for Why are property collections still blocked when Heat is low??",
-        "Where do I find Why are property collections still blocked when Heat is low??"
+        "Tell me about FAQ",
+        "Where do I find FAQ?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?"
       ]
     },
     {
       "id": "cross_feature.faq.why-are-property-collections-still-blocked-when-heat-is-low.rules",
       "domain": "cross_feature",
       "entities": [
-        "Why are property collections still blocked when Heat is low?",
-        "FAQ"
+        "FAQ",
+        "Why are property collections still blocked when Heat is low?"
       ],
       "sections": [
         {
@@ -289,30 +306,33 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for Why are property collections still blocked when Heat is low??",
-        "What happens with Why are property collections still blocked when Heat is low??",
-        "Does the FAQ explain Why are property collections still blocked when Heat is low??",
-        "Can you clarify Why are property collections still blocked when Heat is low??",
-        "Which FAQ covers Why are property collections still blocked when Heat is low??",
-        "I have a question about Why are property collections still blocked when Heat is low?",
-        "How is Why are property collections still blocked when Heat is low? supposed to work?"
+        "What are the rules for FAQ?",
+        "What happens with FAQ?",
+        "Does the FAQ explain FAQ?",
+        "Can you clarify FAQ?",
+        "Which FAQ covers FAQ?",
+        "I have a question about FAQ",
+        "How is FAQ supposed to work?"
       ],
       "related_intents": [
         "cross_feature.faq.why-are-property-collections-still-blocked-when-heat-is-low.overview",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "Tell me about Why are property collections still blocked when Heat is low?",
-        "What happens with Why are property collections still blocked when Heat is low??",
-        "Show me the FAQ guide"
+        "How does FAQ work?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
       "id": "cross_feature.faq.how-do-i-get-bullets.overview",
       "domain": "cross_feature",
       "entities": [
+        "Get bullets",
         "How do I get bullets?",
         "FAQ"
       ],
@@ -329,29 +349,32 @@
       "intent_type": "definition",
       "variants": [
         "How do I get bullets?",
-        "What is How do I get bullets??",
-        "What are How do I get bullets??",
-        "Tell me about How do I get bullets?",
-        "Explain How do I get bullets?",
-        "How does How do I get bullets? work?",
-        "I need information about How do I get bullets?"
+        "What is Get bullets?",
+        "What are Get bullets?",
+        "Tell me about Get bullets",
+        "Explain Get bullets",
+        "How does Get bullets work?",
+        "I need information about Get bullets"
       ],
       "related_intents": [
         "cross_feature.faq.how-do-i-get-bullets.rules",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "How do I use How do I get bullets??",
-        "What are the rules for How do I get bullets??",
-        "Where do I find How do I get bullets??"
+        "Tell me about Get bullets",
+        "Where do I find Get bullets?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?"
       ]
     },
     {
       "id": "cross_feature.faq.how-do-i-get-bullets.rules",
       "domain": "cross_feature",
       "entities": [
+        "Get bullets",
         "How do I get bullets?",
         "FAQ"
       ],
@@ -367,32 +390,34 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for How do I get bullets??",
-        "What happens with How do I get bullets??",
-        "Does the FAQ explain How do I get bullets??",
-        "Can you clarify How do I get bullets??",
-        "Which FAQ covers How do I get bullets??",
-        "I have a question about How do I get bullets?",
-        "How is How do I get bullets? supposed to work?"
+        "What are the rules for Get bullets?",
+        "What happens with Get bullets?",
+        "Does the FAQ explain Get bullets?",
+        "Can you clarify Get bullets?",
+        "Which FAQ covers Get bullets?",
+        "I have a question about Get bullets",
+        "How is Get bullets supposed to work?"
       ],
       "related_intents": [
         "cross_feature.faq.how-do-i-get-bullets.overview",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "Tell me about How do I get bullets?",
-        "What happens with How do I get bullets??",
-        "Show me the FAQ guide"
+        "How does Get bullets work?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
       "id": "cross_feature.faq.what-happens-when-i-die.overview",
       "domain": "cross_feature",
       "entities": [
-        "What happens when I die?",
-        "FAQ"
+        "FAQ",
+        "What happens when I die?"
       ],
       "sections": [
         {
@@ -407,31 +432,33 @@
       "intent_type": "definition",
       "variants": [
         "What happens when I die?",
-        "What is What happens when I die??",
-        "What are What happens when I die??",
-        "Tell me about What happens when I die?",
-        "Explain What happens when I die?",
-        "How does What happens when I die? work?",
-        "I need information about What happens when I die?"
+        "What is FAQ?",
+        "What are FAQ?",
+        "Tell me about FAQ",
+        "Explain FAQ",
+        "How does FAQ work?",
+        "I need information about FAQ"
       ],
       "related_intents": [
         "cross_feature.faq.what-happens-when-i-die.rules",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "How do I use What happens when I die??",
-        "What are the rules for What happens when I die??",
-        "Where do I find What happens when I die??"
+        "Tell me about FAQ",
+        "Where do I find FAQ?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?"
       ]
     },
     {
       "id": "cross_feature.faq.what-happens-when-i-die.rules",
       "domain": "cross_feature",
       "entities": [
-        "What happens when I die?",
-        "FAQ"
+        "FAQ",
+        "What happens when I die?"
       ],
       "sections": [
         {
@@ -445,30 +472,33 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for What happens when I die??",
-        "What happens with What happens when I die??",
-        "Does the FAQ explain What happens when I die??",
-        "Can you clarify What happens when I die??",
-        "Which FAQ covers What happens when I die??",
-        "I have a question about What happens when I die?",
-        "How is What happens when I die? supposed to work?"
+        "What are the rules for FAQ?",
+        "What happens with FAQ?",
+        "Does the FAQ explain FAQ?",
+        "Can you clarify FAQ?",
+        "Which FAQ covers FAQ?",
+        "I have a question about FAQ",
+        "How is FAQ supposed to work?"
       ],
       "related_intents": [
         "cross_feature.faq.what-happens-when-i-die.overview",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "Tell me about What happens when I die?",
-        "What happens with What happens when I die??",
-        "Show me the FAQ guide"
+        "How does FAQ work?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
       "id": "cross_feature.faq.how-do-i-join-a-family.overview",
       "domain": "cross_feature",
       "entities": [
+        "Join a family",
         "How do I join a family?",
         "FAQ"
       ],
@@ -485,29 +515,32 @@
       "intent_type": "definition",
       "variants": [
         "How do I join a family?",
-        "What is How do I join a family??",
-        "What are How do I join a family??",
-        "Tell me about How do I join a family?",
-        "Explain How do I join a family?",
-        "How does How do I join a family? work?",
-        "I need information about How do I join a family?"
+        "What is Join a family?",
+        "What are Join a family?",
+        "Tell me about Join a family",
+        "Explain Join a family",
+        "How does Join a family work?",
+        "I need information about Join a family"
       ],
       "related_intents": [
         "cross_feature.faq.how-do-i-join-a-family.rules",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "How do I use How do I join a family??",
-        "What are the rules for How do I join a family??",
-        "Where do I find How do I join a family??"
+        "Tell me about Join a family",
+        "Where do I find Join a family?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?"
       ]
     },
     {
       "id": "cross_feature.faq.how-do-i-join-a-family.rules",
       "domain": "cross_feature",
       "entities": [
+        "Join a family",
         "How do I join a family?",
         "FAQ"
       ],
@@ -523,30 +556,33 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for How do I join a family??",
-        "What happens with How do I join a family??",
-        "Does the FAQ explain How do I join a family??",
-        "Can you clarify How do I join a family??",
-        "Which FAQ covers How do I join a family??",
-        "I have a question about How do I join a family?",
-        "How is How do I join a family? supposed to work?"
+        "What are the rules for Join a family?",
+        "What happens with Join a family?",
+        "Does the FAQ explain Join a family?",
+        "Can you clarify Join a family?",
+        "Which FAQ covers Join a family?",
+        "I have a question about Join a family",
+        "How is Join a family supposed to work?"
       ],
       "related_intents": [
         "cross_feature.faq.how-do-i-join-a-family.overview",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "Tell me about How do I join a family?",
-        "What happens with How do I join a family??",
-        "Show me the FAQ guide"
+        "How does Join a family work?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
       "id": "cross_feature.faq.can-i-get-my-points-back-if-i-die.overview",
       "domain": "cross_feature",
       "entities": [
+        "Get my points back if I die",
         "Can I get my points back if I die?",
         "FAQ"
       ],
@@ -563,29 +599,32 @@
       "intent_type": "definition",
       "variants": [
         "Can I get my points back if I die?",
-        "What is Can I get my points back if I die??",
-        "What are Can I get my points back if I die??",
-        "Tell me about Can I get my points back if I die?",
-        "Explain Can I get my points back if I die?",
-        "How does Can I get my points back if I die? work?",
-        "I need information about Can I get my points back if I die?"
+        "What is Get my points back if I die?",
+        "What are Get my points back if I die?",
+        "Tell me about Get my points back if I die",
+        "Explain Get my points back if I die",
+        "How does Get my points back if I die work?",
+        "I need information about Get my points back if I die"
       ],
       "related_intents": [
         "cross_feature.faq.can-i-get-my-points-back-if-i-die.rules",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "How do I use Can I get my points back if I die??",
-        "What are the rules for Can I get my points back if I die??",
-        "Where do I find Can I get my points back if I die??"
+        "Tell me about Get my points back if I die",
+        "Where do I find Get my points back if I die?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?"
       ]
     },
     {
       "id": "cross_feature.faq.can-i-get-my-points-back-if-i-die.rules",
       "domain": "cross_feature",
       "entities": [
+        "Get my points back if I die",
         "Can I get my points back if I die?",
         "FAQ"
       ],
@@ -601,32 +640,34 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for Can I get my points back if I die??",
-        "What happens with Can I get my points back if I die??",
-        "Does the FAQ explain Can I get my points back if I die??",
-        "Can you clarify Can I get my points back if I die??",
-        "Which FAQ covers Can I get my points back if I die??",
-        "I have a question about Can I get my points back if I die?",
-        "How is Can I get my points back if I die? supposed to work?"
+        "What are the rules for Get my points back if I die?",
+        "What happens with Get my points back if I die?",
+        "Does the FAQ explain Get my points back if I die?",
+        "Can you clarify Get my points back if I die?",
+        "Which FAQ covers Get my points back if I die?",
+        "I have a question about Get my points back if I die",
+        "How is Get my points back if I die supposed to work?"
       ],
       "related_intents": [
         "cross_feature.faq.can-i-get-my-points-back-if-i-die.overview",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "Tell me about Can I get my points back if I die?",
-        "What happens with Can I get my points back if I die??",
-        "Show me the FAQ guide"
+        "How does Get my points back if I die work?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
       "id": "cross_feature.faq.what-s-the-interest-bank-vs-swiss-bank.overview",
       "domain": "cross_feature",
       "entities": [
-        "What's the Interest Bank vs Swiss Bank?",
-        "FAQ"
+        "FAQ",
+        "What's the Interest Bank vs Swiss Bank?"
       ],
       "sections": [
         {
@@ -641,31 +682,33 @@
       "intent_type": "definition",
       "variants": [
         "What's the Interest Bank vs Swiss Bank?",
-        "What is What's the Interest Bank vs Swiss Bank??",
-        "What are What's the Interest Bank vs Swiss Bank??",
-        "Tell me about What's the Interest Bank vs Swiss Bank?",
-        "Explain What's the Interest Bank vs Swiss Bank?",
-        "How does What's the Interest Bank vs Swiss Bank? work?",
-        "I need information about What's the Interest Bank vs Swiss Bank?"
+        "What is FAQ?",
+        "What are FAQ?",
+        "Tell me about FAQ",
+        "Explain FAQ",
+        "How does FAQ work?",
+        "I need information about FAQ"
       ],
       "related_intents": [
         "cross_feature.faq.what-s-the-interest-bank-vs-swiss-bank.rules",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "How do I use What's the Interest Bank vs Swiss Bank??",
-        "What are the rules for What's the Interest Bank vs Swiss Bank??",
-        "Where do I find What's the Interest Bank vs Swiss Bank??"
+        "Tell me about FAQ",
+        "Where do I find FAQ?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?"
       ]
     },
     {
       "id": "cross_feature.faq.what-s-the-interest-bank-vs-swiss-bank.rules",
       "domain": "cross_feature",
       "entities": [
-        "What's the Interest Bank vs Swiss Bank?",
-        "FAQ"
+        "FAQ",
+        "What's the Interest Bank vs Swiss Bank?"
       ],
       "sections": [
         {
@@ -679,30 +722,33 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for What's the Interest Bank vs Swiss Bank??",
-        "What happens with What's the Interest Bank vs Swiss Bank??",
-        "Does the FAQ explain What's the Interest Bank vs Swiss Bank??",
-        "Can you clarify What's the Interest Bank vs Swiss Bank??",
-        "Which FAQ covers What's the Interest Bank vs Swiss Bank??",
-        "I have a question about What's the Interest Bank vs Swiss Bank?",
-        "How is What's the Interest Bank vs Swiss Bank? supposed to work?"
+        "What are the rules for FAQ?",
+        "What happens with FAQ?",
+        "Does the FAQ explain FAQ?",
+        "Can you clarify FAQ?",
+        "Which FAQ covers FAQ?",
+        "I have a question about FAQ",
+        "How is FAQ supposed to work?"
       ],
       "related_intents": [
         "cross_feature.faq.what-s-the-interest-bank-vs-swiss-bank.overview",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "Tell me about What's the Interest Bank vs Swiss Bank?",
-        "What happens with What's the Interest Bank vs Swiss Bank??",
-        "Show me the FAQ guide"
+        "How does FAQ work?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
       "id": "cross_feature.faq.how-do-i-report-a-bug.overview",
       "domain": "cross_feature",
       "entities": [
+        "Report a bug",
         "How do I report a bug?",
         "FAQ"
       ],
@@ -719,29 +765,32 @@
       "intent_type": "definition",
       "variants": [
         "How do I report a bug?",
-        "What is How do I report a bug??",
-        "What are How do I report a bug??",
-        "Tell me about How do I report a bug?",
-        "Explain How do I report a bug?",
-        "How does How do I report a bug? work?",
-        "I need information about How do I report a bug?"
+        "What is Report a bug?",
+        "What are Report a bug?",
+        "Tell me about Report a bug",
+        "Explain Report a bug",
+        "How does Report a bug work?",
+        "I need information about Report a bug"
       ],
       "related_intents": [
         "cross_feature.faq.how-do-i-report-a-bug.rules",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "How do I use How do I report a bug??",
-        "What are the rules for How do I report a bug??",
-        "Where do I find How do I report a bug??"
+        "Tell me about Report a bug",
+        "Where do I find Report a bug?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?"
       ]
     },
     {
       "id": "cross_feature.faq.how-do-i-report-a-bug.rules",
       "domain": "cross_feature",
       "entities": [
+        "Report a bug",
         "How do I report a bug?",
         "FAQ"
       ],
@@ -757,30 +806,33 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for How do I report a bug??",
-        "What happens with How do I report a bug??",
-        "Does the FAQ explain How do I report a bug??",
-        "Can you clarify How do I report a bug??",
-        "Which FAQ covers How do I report a bug??",
-        "I have a question about How do I report a bug?",
-        "How is How do I report a bug? supposed to work?"
+        "What are the rules for Report a bug?",
+        "What happens with Report a bug?",
+        "Does the FAQ explain Report a bug?",
+        "Can you clarify Report a bug?",
+        "Which FAQ covers Report a bug?",
+        "I have a question about Report a bug",
+        "How is Report a bug supposed to work?"
       ],
       "related_intents": [
         "cross_feature.faq.how-do-i-report-a-bug.overview",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "Tell me about How do I report a bug?",
-        "What happens with How do I report a bug??",
-        "Show me the FAQ guide"
+        "How does Report a bug work?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
       "id": "cross_feature.faq.how-do-tokens-work.overview",
       "domain": "cross_feature",
       "entities": [
+        "Tokens",
         "How do tokens work?",
         "FAQ"
       ],
@@ -797,29 +849,32 @@
       "intent_type": "definition",
       "variants": [
         "How do tokens work?",
-        "What is How do tokens work??",
-        "What are How do tokens work??",
-        "Tell me about How do tokens work?",
-        "Explain How do tokens work?",
-        "How does How do tokens work? work?",
-        "I need information about How do tokens work?"
+        "What is Tokens?",
+        "What are Tokens?",
+        "Tell me about Tokens",
+        "Explain Tokens",
+        "How does Tokens work?",
+        "I need information about Tokens"
       ],
       "related_intents": [
         "cross_feature.faq.how-do-tokens-work.rules",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "How do I use How do tokens work??",
-        "What are the rules for How do tokens work??",
-        "Where do I find How do tokens work??"
+        "Tell me about Tokens",
+        "Where do I find Tokens?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?"
       ]
     },
     {
       "id": "cross_feature.faq.how-do-tokens-work.rules",
       "domain": "cross_feature",
       "entities": [
+        "Tokens",
         "How do tokens work?",
         "FAQ"
       ],
@@ -835,30 +890,33 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for How do tokens work??",
-        "What happens with How do tokens work??",
-        "Does the FAQ explain How do tokens work??",
-        "Can you clarify How do tokens work??",
-        "Which FAQ covers How do tokens work??",
-        "I have a question about How do tokens work?",
-        "How is How do tokens work? supposed to work?"
+        "What are the rules for Tokens?",
+        "What happens with Tokens?",
+        "Does the FAQ explain Tokens?",
+        "Can you clarify Tokens?",
+        "Which FAQ covers Tokens?",
+        "I have a question about Tokens",
+        "How is Tokens supposed to work?"
       ],
       "related_intents": [
         "cross_feature.faq.how-do-tokens-work.overview",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "Tell me about How do tokens work?",
-        "What happens with How do tokens work??",
-        "Show me the FAQ guide"
+        "How does Tokens work?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
       "id": "cross_feature.faq.how-do-family-wars-work.overview",
       "domain": "cross_feature",
       "entities": [
+        "Family wars",
         "How do family wars work?",
         "FAQ"
       ],
@@ -875,29 +933,32 @@
       "intent_type": "definition",
       "variants": [
         "How do family wars work?",
-        "What is How do family wars work??",
-        "What are How do family wars work??",
-        "Tell me about How do family wars work?",
-        "Explain How do family wars work?",
-        "How does How do family wars work? work?",
-        "I need information about How do family wars work?"
+        "What is Family wars?",
+        "What are Family wars?",
+        "Tell me about Family wars",
+        "Explain Family wars",
+        "How does Family wars work?",
+        "I need information about Family wars"
       ],
       "related_intents": [
         "cross_feature.faq.how-do-family-wars-work.rules",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "How do I use How do family wars work??",
-        "What are the rules for How do family wars work??",
-        "Where do I find How do family wars work??"
+        "Tell me about Family wars",
+        "Where do I find Family wars?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?"
       ]
     },
     {
       "id": "cross_feature.faq.how-do-family-wars-work.rules",
       "domain": "cross_feature",
       "entities": [
+        "Family wars",
         "How do family wars work?",
         "FAQ"
       ],
@@ -913,30 +974,33 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for How do family wars work??",
-        "What happens with How do family wars work??",
-        "Does the FAQ explain How do family wars work??",
-        "Can you clarify How do family wars work??",
-        "Which FAQ covers How do family wars work??",
-        "I have a question about How do family wars work?",
-        "How is How do family wars work? supposed to work?"
+        "What are the rules for Family wars?",
+        "What happens with Family wars?",
+        "Does the FAQ explain Family wars?",
+        "Can you clarify Family wars?",
+        "Which FAQ covers Family wars?",
+        "I have a question about Family wars",
+        "How is Family wars supposed to work?"
       ],
       "related_intents": [
         "cross_feature.faq.how-do-family-wars-work.overview",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "Tell me about How do family wars work?",
-        "What happens with How do family wars work??",
-        "Show me the FAQ guide"
+        "How does Family wars work?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
       "id": "cross_feature.faq.what-are-daily-rewards.overview",
       "domain": "cross_feature",
       "entities": [
+        "Daily Rewards",
         "What are Daily Rewards?",
         "FAQ"
       ],
@@ -953,29 +1017,32 @@
       "intent_type": "definition",
       "variants": [
         "What are Daily Rewards?",
-        "What is What are Daily Rewards??",
-        "What are What are Daily Rewards??",
-        "Tell me about What are Daily Rewards?",
-        "Explain What are Daily Rewards?",
-        "How does What are Daily Rewards? work?",
-        "I need information about What are Daily Rewards?"
+        "What is Daily Rewards?",
+        "Tell me about Daily Rewards",
+        "Explain Daily Rewards",
+        "How does Daily Rewards work?",
+        "I need information about Daily Rewards",
+        "Give me the guide for Daily Rewards"
       ],
       "related_intents": [
         "cross_feature.faq.what-are-daily-rewards.rules",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "How do I use What are Daily Rewards??",
-        "What are the rules for What are Daily Rewards??",
-        "Where do I find What are Daily Rewards??"
+        "Tell me about Daily Rewards",
+        "Where do I find Daily Rewards?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?"
       ]
     },
     {
       "id": "cross_feature.faq.what-are-daily-rewards.rules",
       "domain": "cross_feature",
       "entities": [
+        "Daily Rewards",
         "What are Daily Rewards?",
         "FAQ"
       ],
@@ -991,30 +1058,33 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for What are Daily Rewards??",
-        "What happens with What are Daily Rewards??",
-        "Does the FAQ explain What are Daily Rewards??",
-        "Can you clarify What are Daily Rewards??",
-        "Which FAQ covers What are Daily Rewards??",
-        "I have a question about What are Daily Rewards?",
-        "How is What are Daily Rewards? supposed to work?"
+        "What are the rules for Daily Rewards?",
+        "What happens with Daily Rewards?",
+        "Does the FAQ explain Daily Rewards?",
+        "Can you clarify Daily Rewards?",
+        "Which FAQ covers Daily Rewards?",
+        "I have a question about Daily Rewards",
+        "How is Daily Rewards supposed to work?"
       ],
       "related_intents": [
         "cross_feature.faq.what-are-daily-rewards.overview",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "Tell me about What are Daily Rewards?",
-        "What happens with What are Daily Rewards??",
-        "Show me the FAQ guide"
+        "How does Daily Rewards work?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
       "id": "cross_feature.faq.how-do-i-own-a-casino-table-or-airport-slot.overview",
       "domain": "cross_feature",
       "entities": [
+        "Own a casino table or airport slot",
         "How do I own a casino table or airport slot?",
         "FAQ"
       ],
@@ -1031,29 +1101,32 @@
       "intent_type": "definition",
       "variants": [
         "How do I own a casino table or airport slot?",
-        "What is How do I own a casino table or airport slot??",
-        "What are How do I own a casino table or airport slot??",
-        "Tell me about How do I own a casino table or airport slot?",
-        "Explain How do I own a casino table or airport slot?",
-        "How does How do I own a casino table or airport slot? work?",
-        "I need information about How do I own a casino table or airport slot?"
+        "What is Own a casino table or airport slot?",
+        "What are Own a casino table or airport slot?",
+        "Tell me about Own a casino table or airport slot",
+        "Explain Own a casino table or airport slot",
+        "How does Own a casino table or airport slot work?",
+        "I need information about Own a casino table or airport slot"
       ],
       "related_intents": [
         "cross_feature.faq.how-do-i-own-a-casino-table-or-airport-slot.rules",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "How do I use How do I own a casino table or airport slot??",
-        "What are the rules for How do I own a casino table or airport slot??",
-        "Where do I find How do I own a casino table or airport slot??"
+        "Tell me about Own a casino table",
+        "Where do I find Own a casino table?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?"
       ]
     },
     {
       "id": "cross_feature.faq.how-do-i-own-a-casino-table-or-airport-slot.rules",
       "domain": "cross_feature",
       "entities": [
+        "Own a casino table or airport slot",
         "How do I own a casino table or airport slot?",
         "FAQ"
       ],
@@ -1069,31 +1142,32 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for How do I own a casino table or airport slot??",
-        "What happens with How do I own a casino table or airport slot??",
-        "Does the FAQ explain How do I own a casino table or airport slot??",
-        "Can you clarify How do I own a casino table or airport slot??",
-        "Which FAQ covers How do I own a casino table or airport slot??",
-        "I have a question about How do I own a casino table or airport slot?",
-        "How is How do I own a casino table or airport slot? supposed to work?"
+        "What are the rules for Own a casino table?",
+        "What happens with Own a casino table?",
+        "Does the FAQ explain Own a casino table?",
+        "Can you clarify Own a casino table?",
+        "Which FAQ covers Own a casino table?",
+        "I have a question about Own a casino table",
+        "How is Own a casino table supposed to work?"
       ],
       "related_intents": [
         "cross_feature.faq.how-do-i-own-a-casino-table-or-airport-slot.overview",
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
-        "Tell me about How do I own a casino table or airport slot?",
-        "What happens with How do I own a casino table or airport slot??",
-        "Show me the FAQ guide"
+        "How does Own a casino table work?",
+        "Show me the FAQ guide",
+        "What is FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
       "id": "cross_feature.pro-tips.pro-tips.overview",
       "domain": "cross_feature",
       "entities": [
-        "PRO TIPS",
         "PRO TIPS"
       ],
       "sections": [
@@ -1129,7 +1203,6 @@
       "id": "cross_feature.pro-tips.pro-tips.rules",
       "domain": "cross_feature",
       "entities": [
-        "PRO TIPS",
         "PRO TIPS"
       ],
       "sections": [
@@ -1158,7 +1231,8 @@
       "follow_ups": [
         "Tell me about PRO TIPS",
         "What happens with PRO TIPS?",
-        "Show me the PRO TIPS guide"
+        "Show me the PRO TIPS guide",
+        "What is PRO TIPS?"
       ]
     },
     {
@@ -1202,12 +1276,16 @@
         "Swiss or Interest Bank?"
       ],
       "related_intents": [
-        "cross_feature.compare.personal-vs-family-racket",
-        "cross_feature.yes-no.bank-money-counts-for-wealth"
+        "cross_feature.feature.distillery",
+        "cross_feature.feature.personal-racket",
+        "cross_feature.feature.properties"
       ],
       "follow_ups": [
         "Does bank money count for wealth rank?",
-        "How do I use the bank?"
+        "How do I use the bank?",
+        "How does the Distillery work?",
+        "How do personal rackets work?",
+        "How do properties work?"
       ]
     },
     {
@@ -1244,10 +1322,17 @@
         "Which rank uses RP?",
         "Explain the two types of rank"
       ],
-      "related_intents": [],
+      "related_intents": [
+        "cross_feature.feature.prestige",
+        "cross_feature.feature.ranks",
+        "cross_feature.feature.missions"
+      ],
       "follow_ups": [
         "What are wealth ranks?",
-        "How does normal ranking work?"
+        "How does normal ranking work?",
+        "How does Prestige work?",
+        "How do ranks work?",
+        "How do missions work?"
       ]
     },
     {
@@ -1278,6 +1363,8 @@
       "variants": [
         "What is the difference between a personal racket and family racket?",
         "Personal racket vs family racket",
+        "How do rackets work?",
+        "Explain rackets",
         "Compare illegal businesses and family rackets",
         "Are personal and family rackets the same?",
         "Which racket belongs to my family?",
@@ -1285,12 +1372,16 @@
         "Explain both kinds of racket"
       ],
       "related_intents": [
-        "cross_feature.compare.interest-bank-vs-swiss-bank",
-        "cross_feature.yes-no.bank-money-counts-for-wealth"
+        "cross_feature.feature.distillery",
+        "cross_feature.feature.personal-racket",
+        "cross_feature.feature.properties"
       ],
       "follow_ups": [
         "How do personal rackets work?",
-        "How do family rackets work?"
+        "How do family rackets work?",
+        "How does the Distillery work?",
+        "How do properties work?",
+        "How do banks work?"
       ]
     },
     {
@@ -1305,20 +1396,20 @@
         {
           "source": "faq",
           "kind": "subsection",
-          "category": "FAQ",
-          "title": "Q: Why can't I collect property income? / What is Heat?"
+          "category": "MONEY MAKING",
+          "title": "Properties"
         },
         {
           "source": "faq",
           "kind": "subsection",
-          "category": "FAQ",
-          "title": "Q: Why are property collections still blocked when Heat is low?"
+          "category": "MONEY MAKING",
+          "title": "Distillery"
         },
         {
           "source": "faq",
           "kind": "subsection",
-          "category": "FAQ",
-          "title": "Q: How does the Distillery work?"
+          "category": "WEED EMPIRE",
+          "title": "Heat & busts"
         }
       ],
       "source_preference": "faq",
@@ -1334,13 +1425,16 @@
         "Explain both kinds of heat"
       ],
       "related_intents": [
-        "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.feature.distillery",
+        "cross_feature.feature.personal-racket",
+        "cross_feature.feature.properties"
       ],
       "follow_ups": [
         "Why can't I collect property income?",
-        "How does the Distillery work?"
+        "How does the Distillery work?",
+        "How do personal rackets work?",
+        "How do properties work?",
+        "How do banks work?"
       ]
     },
     {
@@ -1378,12 +1472,16 @@
         "Is wealth based on cash on hand?"
       ],
       "related_intents": [
-        "cross_feature.compare.interest-bank-vs-swiss-bank",
-        "cross_feature.compare.personal-vs-family-racket"
+        "cross_feature.feature.distillery",
+        "cross_feature.feature.personal-racket",
+        "cross_feature.feature.properties"
       ],
       "follow_ups": [
         "What are wealth ranks?",
-        "Interest Bank vs Swiss Bank"
+        "Interest Bank vs Swiss Bank",
+        "How does the Distillery work?",
+        "How do personal rackets work?",
+        "How do properties work?"
       ]
     },
     {
@@ -1421,10 +1519,17 @@
         "Can I attack someone who just joined?",
         "Hitman is blocked on a new account"
       ],
-      "related_intents": [],
+      "related_intents": [
+        "cross_feature.feature.combat",
+        "cross_feature.feature.weapons",
+        "cross_feature.feature.armour"
+      ],
       "follow_ups": [
         "How does attacking work?",
-        "What is Hitman for Hire?"
+        "What is Hitman for Hire?",
+        "How do weapons work?",
+        "How does armour work?",
+        "How does the hitlist work?"
       ]
     },
     {
@@ -1469,12 +1574,15 @@
       ],
       "related_intents": [
         "cross_feature.faq.faq.overview",
-        "cross_feature.faq.faq.rules",
-        "cross_feature.faq.how-do-i-make-money-fast.overview"
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
       ],
       "follow_ups": [
         "What is property heat?",
-        "Where is My Properties?"
+        "Where is My Properties?",
+        "What is FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
       ]
     },
     {
@@ -1512,10 +1620,3374 @@
         "What can I do while jailed?",
         "Which actions are unavailable in jail?"
       ],
-      "related_intents": [],
+      "related_intents": [
+        "cross_feature.feature.jail",
+        "cross_feature.feature.busting",
+        "cross_feature.feature.snitching"
+      ],
       "follow_ups": [
         "How do I get out of jail?",
+        "How do I bust someone?",
+        "How does jail work?",
+        "How does snitching work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.distillery",
+      "domain": "cross_feature",
+      "entities": [
+        "Distillery",
+        "vault",
+        "heat",
+        "workers"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Distillery"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Distillery (quick tour)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does the Distillery work?",
+        "How does Distillery work?",
+        "Explain the Distillery",
+        "Tell me about the Distillery",
+        "How do I use the Distillery?",
+        "What is the Distillery?",
+        "Distillery guide",
+        "How do I run a distillery?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.personal-racket",
+        "cross_feature.feature.properties",
+        "cross_feature.feature.banks"
+      ],
+      "follow_ups": [
+        "What is Distillery heat?",
+        "How do personal rackets work?",
+        "What do I get when I kill someone with a Distillery?",
+        "How do properties work?",
+        "How do banks work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.weed-empire",
+      "domain": "cross_feature",
+      "entities": [
+        "Weed Empire",
+        "grow",
+        "heat",
+        "raids",
+        "crew"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "WEED EMPIRE",
+          "title": "WEED EMPIRE"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Open the farm"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Grow"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Cash & vault"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Crew, raids, heat"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does Weed Empire work?",
+        "How does the Weed Empire work?",
+        "Explain Weed Empire",
+        "Tell me about Weed Empire",
+        "How do I use Weed Empire?",
+        "Weed Empire guide",
+        "How does the weed farm work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.weed-grow",
+        "cross_feature.feature.weed-cash",
+        "cross_feature.feature.weed-heat"
+      ],
+      "follow_ups": [
+        "How do Weed Empire raids work?",
+        "What are special strains?",
+        "How does weed business cash work?",
+        "How do I grow weed?",
+        "How does Weed Empire heat work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.personal-racket",
+      "domain": "cross_feature",
+      "entities": [
+        "personal racket",
+        "illegal business"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Illegal Business (Personal Racket)"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Illegal businesses & collecting"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do personal rackets work?",
+        "How does my illegal business work?",
+        "Explain personal rackets",
+        "How do I collect from my racket?",
+        "What is an illegal business?",
+        "How do rackets work for me?",
+        "Personal racket guide"
+      ],
+      "related_intents": [
+        "cross_feature.feature.distillery",
+        "cross_feature.feature.properties",
+        "cross_feature.feature.banks"
+      ],
+      "follow_ups": [
+        "How do family rackets work?",
+        "How does the Distillery work?",
+        "How do properties work?",
+        "How do banks work?",
+        "How do booze runs work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.properties",
+      "domain": "cross_feature",
+      "entities": [
+        "properties",
+        "property heat",
+        "upkeep"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Properties"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Property"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "My Properties"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do properties work?",
+        "How does property income work?",
+        "Explain properties",
+        "How do I collect property income?",
+        "What are properties?",
+        "Property guide",
+        "How do I buy property?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.distillery",
+        "cross_feature.feature.personal-racket",
+        "cross_feature.feature.banks"
+      ],
+      "follow_ups": [
+        "Why can't I collect property income?",
+        "What is property heat?",
+        "How does the Distillery work?",
+        "How do personal rackets work?",
+        "How do banks work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.banks",
+      "domain": "cross_feature",
+      "entities": [
+        "bank",
+        "Swiss Bank",
+        "Interest Bank"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Banks"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Bank"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Cash vs bank"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do banks work?",
+        "How does the bank work?",
+        "Explain the banks",
+        "How do I use the bank?",
+        "What are the banks?",
+        "Bank guide",
+        "How do I deposit money?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.distillery",
+        "cross_feature.feature.personal-racket",
+        "cross_feature.feature.properties"
+      ],
+      "follow_ups": [
+        "Interest Bank vs Swiss Bank",
+        "Does bank money count for wealth rank?",
+        "How does the Distillery work?",
+        "How do personal rackets work?",
+        "How do properties work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.jail",
+      "domain": "cross_feature",
+      "entities": [
+        "jail",
+        "bust",
+        "snitching"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "JAIL SYSTEM",
+          "title": "JAIL SYSTEM"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "JAIL SYSTEM",
+          "title": "Getting Out"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "Jail"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does jail work?",
+        "Explain jail",
+        "Tell me about jail",
+        "How do I get out of jail?",
+        "What happens in jail?",
+        "Jail guide",
+        "How do busts work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.busting",
+        "cross_feature.feature.snitching"
+      ],
+      "follow_ups": [
+        "Can I attack from jail?",
+        "How do I bust someone?",
+        "How does snitching work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.families",
+      "domain": "cross_feature",
+      "entities": [
+        "families",
+        "crew",
+        "compound"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "FAMILIES",
+          "title": "FAMILIES"
+        },
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "FAMILIES",
+          "title": "FAMILIES"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do families work?",
+        "Explain families",
+        "Tell me about families",
+        "How do I join a family?",
+        "What are families?",
+        "Family guide",
+        "How does a crew work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.family-rackets",
+        "cross_feature.feature.family-hierarchy",
+        "cross_feature.feature.family-treasury"
+      ],
+      "follow_ups": [
+        "How do family rackets work?",
+        "How do family wars work?",
+        "How does family hierarchy work?",
+        "How does the family treasury work?",
+        "How does the compound work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.travel",
+      "domain": "cross_feature",
+      "entities": [
+        "travel",
+        "states",
+        "airport"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "TRAVEL",
+          "title": "TRAVEL"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "TRAVEL & STATES",
+          "title": "Travel"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "TRAVEL & STATES",
+          "title": "States"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does travel work?",
+        "How do I travel?",
+        "Explain travel",
+        "How do I change cities?",
+        "What is travel?",
+        "Travel guide",
+        "How do states work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.cities",
+        "cross_feature.feature.airport-ownership"
+      ],
+      "follow_ups": [
+        "Why should I travel?",
+        "How do cars affect travel?",
+        "How do cities work?",
+        "How does airport ownership work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.combat",
+      "domain": "cross_feature",
+      "entities": [
+        "attack",
+        "combat",
+        "bullets"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "COMBAT",
+          "title": "How Attacking Works"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "COMBAT & LOADOUT",
+          "title": "Attacking"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does attacking work?",
+        "How do I attack?",
+        "Explain combat",
+        "How does combat work?",
+        "How do I kill someone?",
+        "Attack guide",
+        "How do fights work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.weapons",
+        "cross_feature.feature.armour",
+        "cross_feature.feature.hitlist"
+      ],
+      "follow_ups": [
+        "How do bodyguards work?",
+        "What is Hitman for Hire?",
+        "How do weapons work?",
+        "How does armour work?",
+        "How does the hitlist work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.cars",
+      "domain": "cross_feature",
+      "entities": [
+        "cars",
+        "garage",
+        "vehicles"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "GARAGE & VEHICLES",
+          "title": "GARAGE & VEHICLES"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CARS & GARAGE",
+          "title": "Garage"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CARS & GARAGE",
+          "title": "Buy & sell"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do cars work?",
+        "How does the garage work?",
+        "Explain cars",
+        "How do I use the garage?",
+        "What are cars for?",
+        "Garage guide",
+        "How do vehicles work?",
+        "How can I buy a car?",
+        "How do I buy a car?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.car-rarities",
+        "cross_feature.feature.melt-cars"
+      ],
+      "follow_ups": [
+        "How can I buy a car?",
+        "How do I melt cars for bullets?",
+        "How do car rarities work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.crimes",
+      "domain": "cross_feature",
+      "entities": [
+        "crimes",
+        "GTA",
+        "organised crime"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CRIMES",
+          "title": "Regular Crimes"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CRIMES",
+          "title": "GTA (Car Theft)"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "Solo crimes"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "GTA (car theft)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do crimes work?",
+        "How do I commit crimes?",
+        "Explain crimes",
+        "How do solo crimes work?",
+        "What are crimes?",
+        "Crime guide"
+      ],
+      "related_intents": [
+        "cross_feature.feature.organised-crime",
+        "cross_feature.feature.gta"
+      ],
+      "follow_ups": [
+        "How does Organised Crime work?",
+        "How does jail work?",
+        "How does GTA work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.organised-crime",
+      "domain": "cross_feature",
+      "entities": [
+        "organised crime",
+        "OC",
+        "heists"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CRIMES",
+          "title": "Organised Crime (OC/Heists)"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "Organised Crime"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does Organised Crime work?",
+        "How do heists work?",
+        "Explain OC",
+        "How do I start an OC?",
+        "What is organised crime?",
+        "Organised Crime guide",
+        "How do crew OCs work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.crimes",
+        "cross_feature.feature.gta"
+      ],
+      "follow_ups": [
+        "How do crimes work?",
+        "How do families work?",
+        "How does GTA work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.casinos",
+      "domain": "cross_feature",
+      "entities": [
+        "casino",
+        "gambling",
+        "sports betting"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "CASINOS",
+          "title": "CASINOS"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CASINO & MINI-GAMES",
+          "title": "Casino hub"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CASINO & MINI-GAMES",
+          "title": "Sports betting"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do casinos work?",
+        "Explain the casino",
+        "How do I gamble?",
+        "What games are in the casino?",
+        "Casino guide",
+        "How do I play casino games?"
+      ],
+      "related_intents": [],
+      "follow_ups": [
+        "How do mini-games work?",
+        "How do I own a casino table?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.mini-games",
+      "domain": "cross_feature",
+      "entities": [
+        "mini-games",
+        "Famiglia"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "MINI-GAMES",
+          "title": "MINI-GAMES"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CASINO & MINI-GAMES",
+          "title": "Mini-games"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do mini-games work?",
+        "Explain mini-games",
+        "What mini-games are there?",
+        "Mini-games guide",
+        "How do I play mini-games?",
+        "Tell me about mini-games"
+      ],
+      "related_intents": [
+        "cross_feature.feature.famiglia",
+        "cross_feature.feature.mini-games-leaderboard"
+      ],
+      "follow_ups": [
+        "How do casinos work?",
+        "How does the mini-games leaderboard work?",
+        "How does Famiglia work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.prestige",
+      "domain": "cross_feature",
+      "entities": [
+        "prestige",
+        "inventory"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Prestige System"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Prestige & inventory"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does Prestige work?",
+        "What is Prestige?",
+        "Explain Prestige",
+        "How do I prestige?",
+        "Prestige guide",
+        "Tell me about Prestige",
+        "What does Prestige do?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.ranks",
+        "cross_feature.feature.missions",
+        "cross_feature.feature.objectives"
+      ],
+      "follow_ups": [
+        "How do ranks work?",
+        "How does Auto Rank work?",
+        "How do missions work?",
+        "How do objectives work?",
+        "How does the game leaderboard work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.auto-rank",
+      "domain": "cross_feature",
+      "entities": [
+        "Auto Rank",
+        "autorank"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "AUTO RANK",
+          "title": "What it is"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Auto Rank"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does Auto Rank work?",
+        "Explain Auto Rank",
+        "What is Auto Rank?",
+        "How do I use Auto Rank?",
+        "Auto Rank guide",
+        "Tell me about Auto Rank",
+        "How does autorank work?"
+      ],
+      "related_intents": [],
+      "follow_ups": [
+        "How do crimes work?",
+        "How does GTA work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.game-pass",
+      "domain": "cross_feature",
+      "entities": [
+        "Game Pass",
+        "VIP"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "GAME PASS",
+          "title": "GAME PASS"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "STORE & GAME PASS",
+          "title": "Game Pass"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does Game Pass work?",
+        "Explain Game Pass",
+        "What is Game Pass?",
+        "How do I use Game Pass?",
+        "Game Pass guide",
+        "Tell me about Game Pass",
+        "How do I activate Game Pass?"
+      ],
+      "related_intents": [],
+      "follow_ups": [
+        "How does the store work?",
+        "What are special strains?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.booze-runs",
+      "domain": "cross_feature",
+      "entities": [
+        "booze runs",
+        "booze"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Booze Runs"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Other money pages"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do booze runs work?",
+        "Explain booze runs",
+        "How do I smuggle booze?",
+        "What are booze runs?",
+        "Booze run guide",
+        "How does booze work?",
+        "Tell me about booze runs"
+      ],
+      "related_intents": [
+        "cross_feature.feature.distillery",
+        "cross_feature.feature.personal-racket",
+        "cross_feature.feature.properties"
+      ],
+      "follow_ups": [
+        "How does travel work?",
+        "How does the Distillery work?",
+        "How do personal rackets work?",
+        "How do properties work?",
+        "How do banks work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.weapons",
+      "domain": "cross_feature",
+      "entities": [
+        "weapons",
+        "armoury"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "COMBAT",
+          "title": "Weapons"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "COMBAT & LOADOUT",
+          "title": "Weapons & armour"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do weapons work?",
+        "Explain weapons",
+        "How do I buy weapons?",
+        "What weapons are there?",
+        "Weapons guide",
+        "How does the armoury weapons work?",
+        "Tell me about weapons"
+      ],
+      "related_intents": [
+        "cross_feature.feature.combat",
+        "cross_feature.feature.armour",
+        "cross_feature.feature.hitlist"
+      ],
+      "follow_ups": [
+        "How does armour work?",
+        "How does attacking work?",
+        "How does the hitlist work?",
+        "How do bodyguards work?",
+        "How does Hitman for Hire work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.armour",
+      "domain": "cross_feature",
+      "entities": [
+        "armour",
+        "armor"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "COMBAT",
+          "title": "Armour"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "COMBAT & LOADOUT",
+          "title": "Weapons & armour"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does armour work?",
+        "Explain armour",
+        "How do I buy armour?",
+        "What armour is there?",
+        "Armour guide",
+        "Tell me about armor",
+        "How does armor work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.combat",
+        "cross_feature.feature.weapons",
+        "cross_feature.feature.hitlist"
+      ],
+      "follow_ups": [
+        "How do weapons work?",
+        "How do bodyguards work?",
+        "How does attacking work?",
+        "How does the hitlist work?",
+        "How does Hitman for Hire work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.hitlist",
+      "domain": "cross_feature",
+      "entities": [
+        "hitlist",
+        "bounties"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "COMBAT",
+          "title": "Hitlist (Bounties)"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "COMBAT & LOADOUT",
+          "title": "Hitlist"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does the hitlist work?",
+        "Explain hitlist",
+        "How do bounties work?",
+        "What is the hitlist?",
+        "Hitlist guide",
+        "How do I place a bounty?",
+        "Tell me about hitlist"
+      ],
+      "related_intents": [
+        "cross_feature.feature.combat",
+        "cross_feature.feature.weapons",
+        "cross_feature.feature.armour"
+      ],
+      "follow_ups": [
+        "How does attacking work?",
+        "What is Hitman for Hire?",
+        "How do weapons work?",
+        "How does armour work?",
+        "How do bodyguards work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.bodyguards",
+      "domain": "cross_feature",
+      "entities": [
+        "bodyguards",
+        "guards"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "COMBAT",
+          "title": "Bodyguards"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "COMBAT & LOADOUT",
+          "title": "Bodyguards"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do bodyguards work?",
+        "Explain bodyguards",
+        "How do I hire bodyguards?",
+        "What are bodyguards?",
+        "Bodyguards guide",
+        "Tell me about bodyguards",
+        "How do robot bodyguards work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.combat",
+        "cross_feature.feature.weapons",
+        "cross_feature.feature.armour"
+      ],
+      "follow_ups": [
+        "What is Hitman for Hire?",
+        "How does attacking work?",
+        "How do weapons work?",
+        "How does armour work?",
+        "How does the hitlist work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.hitman",
+      "domain": "cross_feature",
+      "entities": [
+        "hitman",
+        "Hitman for Hire"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "COMBAT",
+          "title": "Hitman for Hire"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "COMBAT & LOADOUT",
+          "title": "Hitman for Hire"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does Hitman for Hire work?",
+        "What is Hitman for Hire?",
+        "Explain Hitman for Hire",
+        "How do I hire a hitman?",
+        "Hitman guide",
+        "Tell me about hitman",
+        "How does hitman work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.combat",
+        "cross_feature.feature.weapons",
+        "cross_feature.feature.armour"
+      ],
+      "follow_ups": [
+        "How do bodyguards work?",
+        "Why can't I attack a new player?",
+        "How does attacking work?",
+        "How do weapons work?",
+        "How does armour work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.molotovs",
+      "domain": "cross_feature",
+      "entities": [
+        "molotovs",
+        "molotov"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "COMBAT",
+          "title": "Molotovs"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "COMBAT & LOADOUT",
+          "title": "Molotovs"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do molotovs work?",
+        "Explain molotovs",
+        "What are molotovs?",
+        "Molotov guide",
+        "How do I use a molotov?",
+        "Tell me about molotovs",
+        "How does molotov damage work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.combat",
+        "cross_feature.feature.weapons",
+        "cross_feature.feature.armour"
+      ],
+      "follow_ups": [
+        "How does attacking work?",
+        "How does health work?",
+        "How do weapons work?",
+        "How does armour work?",
+        "How does the hitlist work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.health",
+      "domain": "cross_feature",
+      "entities": [
+        "health",
+        "HP"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "COMBAT",
+          "title": "Health System"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Health"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does health work?",
+        "Explain health",
+        "What is the health system?",
+        "Health guide",
+        "How do I heal?",
+        "Tell me about health",
+        "How does HP work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.combat",
+        "cross_feature.feature.weapons",
+        "cross_feature.feature.armour"
+      ],
+      "follow_ups": [
+        "How do molotovs work?",
+        "How does attacking work?",
+        "How do weapons work?",
+        "How does armour work?",
+        "How does the hitlist work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.witnesses",
+      "domain": "cross_feature",
+      "entities": [
+        "witnesses",
+        "witness statements"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "COMBAT",
+          "title": "Witness Statements"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do witness statements work?",
+        "Explain witnesses",
+        "What are witness statements?",
+        "Witness guide",
+        "How do witnesses work?",
+        "Tell me about witnesses",
+        "What is a witness statement?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.combat",
+        "cross_feature.feature.weapons",
+        "cross_feature.feature.armour"
+      ],
+      "follow_ups": [
+        "How does attacking work?",
+        "How does jail work?",
+        "How do weapons work?",
+        "How does armour work?",
+        "How does the hitlist work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.death-revive",
+      "domain": "cross_feature",
+      "entities": [
+        "Dead to Alive",
+        "revive",
+        "death"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "COMBAT & LOADOUT",
+          "title": "After death: Dead > Alive & revive"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What is Dead to Alive?"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What happens when I die?"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does Dead to Alive work?",
+        "What is Dead to Alive?",
+        "How do I revive?",
+        "What happens when I die?",
+        "Explain Dead > Alive",
+        "Death and revive guide",
+        "How does revive work?"
+      ],
+      "related_intents": [],
+      "follow_ups": [
+        "How does attacking work?",
+        "Can I get my points back if I die?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.wealth-ranks",
+      "domain": "cross_feature",
+      "entities": [
+        "wealth ranks",
+        "cash on hand"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Wealth ranks (cash on hand)"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Wealth rank"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do wealth ranks work?",
+        "What are wealth ranks?",
+        "Explain wealth ranks",
+        "What is wealth rank?",
+        "Wealth rank guide",
+        "Tell me about wealth ranks",
+        "How does cash on hand rank work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.distillery",
+        "cross_feature.feature.personal-racket",
+        "cross_feature.feature.properties"
+      ],
+      "follow_ups": [
+        "Does bank money count for wealth rank?",
+        "RP rank vs wealth rank",
+        "How does the Distillery work?",
+        "How do personal rackets work?",
+        "How do properties work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.stocks",
+      "domain": "cross_feature",
+      "entities": [
+        "stock market",
+        "crypto"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Stock Market (Crypto Trading)"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Other money pages"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does the stock market work?",
+        "Explain stocks",
+        "How do I trade crypto?",
+        "What is the stock market?",
+        "Stock market guide",
+        "How does crypto trading work?",
+        "Tell me about stocks"
+      ],
+      "related_intents": [
+        "cross_feature.feature.distillery",
+        "cross_feature.feature.personal-racket",
+        "cross_feature.feature.properties"
+      ],
+      "follow_ups": [
+        "How do banks work?",
+        "How does the store work?",
+        "How does the Distillery work?",
+        "How do personal rackets work?",
+        "How do properties work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.sports-betting",
+      "domain": "cross_feature",
+      "entities": [
+        "sports betting",
+        "betting"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Sports Betting"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CASINO & MINI-GAMES",
+          "title": "Sports betting"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does sports betting work?",
+        "Explain sports betting",
+        "How do I bet on sports?",
+        "What is sports betting?",
+        "Sports betting guide",
+        "Tell me about sports betting",
+        "How do book events work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.distillery",
+        "cross_feature.feature.personal-racket",
+        "cross_feature.feature.properties"
+      ],
+      "follow_ups": [
+        "How do casinos work?",
+        "How do mini-games work?",
+        "How does the Distillery work?",
+        "How do personal rackets work?",
+        "How do properties work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.crack-safe",
+      "domain": "cross_feature",
+      "entities": [
+        "Crack Safe",
+        "safe"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Crack Safe"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Other money pages"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does Crack Safe work?",
+        "Explain Crack the Safe",
+        "How do I crack a safe?",
+        "What is Crack Safe?",
+        "Crack Safe guide",
+        "Tell me about crack safe",
+        "How does crack the safe work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.distillery",
+        "cross_feature.feature.personal-racket",
+        "cross_feature.feature.properties"
+      ],
+      "follow_ups": [
+        "How do loot boxes work?",
+        "How do crimes work?",
+        "How does the Distillery work?",
+        "How do personal rackets work?",
+        "How do properties work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.quick-trade",
+      "domain": "cross_feature",
+      "entities": [
+        "Quick Trade",
+        "points"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Quick Trade"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does Quick Trade work?",
+        "Explain Quick Trade",
+        "How do I trade points?",
+        "What is Quick Trade?",
+        "Quick Trade guide",
+        "Tell me about quick trade",
+        "How do I send points?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.lottery"
+      ],
+      "follow_ups": [
+        "How does the store work?",
+        "How do banks work?",
+        "How does the lottery work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.lottery",
+      "domain": "cross_feature",
+      "entities": [
+        "lottery"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Lottery"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does the lottery work?",
+        "Explain lottery",
+        "How do I buy lottery tickets?",
+        "What is the lottery?",
+        "Lottery guide",
+        "Tell me about the lottery",
+        "How do lottery draws work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.quick-trade"
+      ],
+      "follow_ups": [
+        "How do loot boxes work?",
+        "How do casinos work?",
+        "How does Quick Trade work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.loot-boxes",
+      "domain": "cross_feature",
+      "entities": [
+        "loot boxes",
+        "loot"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "LOOT BOXES",
+          "title": "LOOT BOXES"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "MONEY & BUSINESSES",
+          "title": "Loot Box"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do loot boxes work?",
+        "Explain loot boxes",
+        "How do I open loot?",
+        "What are loot boxes?",
+        "Loot box guide",
+        "Tell me about loot boxes",
+        "How does the loot box work?"
+      ],
+      "related_intents": [],
+      "follow_ups": [
+        "What is a Loot Weapon?",
+        "How does Game Pass work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.armoury-factory",
+      "domain": "cross_feature",
+      "entities": [
+        "armoury",
+        "bullet factory",
+        "bullets"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MONEY MAKING",
+          "title": "Armoury & bullet factory (per city)"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Bullets"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does the armoury work?",
+        "How does the bullet factory work?",
+        "Explain the armoury",
+        "What is the bullet factory?",
+        "Armoury guide",
+        "How do I buy bullets with cash?",
+        "Tell me about the armoury"
+      ],
+      "related_intents": [
+        "cross_feature.feature.distillery",
+        "cross_feature.feature.personal-racket",
+        "cross_feature.feature.properties"
+      ],
+      "follow_ups": [
+        "How do I melt cars for bullets?",
+        "How do weapons work?",
+        "How does the Distillery work?",
+        "How do personal rackets work?",
+        "How do properties work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.family-rackets",
+      "domain": "cross_feature",
+      "entities": [
+        "family racket",
+        "crew racket"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Rackets"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do family rackets work?",
+        "Explain family rackets",
+        "What is a family racket?",
+        "Family racket guide",
+        "How do crew rackets work?",
+        "Tell me about family rackets",
+        "How does a family Distillery racket work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.families",
+        "cross_feature.feature.family-hierarchy",
+        "cross_feature.feature.family-treasury"
+      ],
+      "follow_ups": [
+        "Personal racket vs family racket",
+        "How do racket raids work?",
+        "How do families work?",
+        "How does family hierarchy work?",
+        "How does the family treasury work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.family-hierarchy",
+      "domain": "cross_feature",
+      "entities": [
+        "family hierarchy",
+        "family ranks"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Family Hierarchy"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does family hierarchy work?",
+        "Explain family ranks",
+        "What ranks are in a family?",
+        "Family hierarchy guide",
+        "How do family roles work?",
+        "Tell me about family hierarchy",
+        "What is a family boss?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.families",
+        "cross_feature.feature.family-rackets",
+        "cross_feature.feature.family-treasury"
+      ],
+      "follow_ups": [
+        "How do families work?",
+        "How does the family treasury work?",
+        "How do family rackets work?",
+        "How does the compound work?",
+        "How do racket raids work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.family-treasury",
+      "domain": "cross_feature",
+      "entities": [
+        "treasury",
+        "crew vault"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Treasury (crew vault)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does the family treasury work?",
+        "Explain the crew vault",
+        "What is the family bank?",
+        "Family treasury guide",
+        "How do I donate to my family?",
+        "Tell me about the crew vault",
+        "How does the family vault work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.families",
+        "cross_feature.feature.family-rackets",
+        "cross_feature.feature.family-hierarchy"
+      ],
+      "follow_ups": [
+        "How do families work?",
+        "How does the compound work?",
+        "How do family rackets work?",
+        "How does family hierarchy work?",
+        "How do racket raids work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.compound",
+      "domain": "cross_feature",
+      "entities": [
+        "compound"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Compound"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does the compound work?",
+        "Explain the family compound",
+        "What is the compound?",
+        "Compound guide",
+        "How do I use the compound?",
+        "Tell me about the compound",
+        "How does family compound storage work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.families",
+        "cross_feature.feature.family-rackets",
+        "cross_feature.feature.family-hierarchy"
+      ],
+      "follow_ups": [
+        "How does the family treasury work?",
+        "How does Dead to Alive work?",
+        "How do families work?",
+        "How do family rackets work?",
+        "How does family hierarchy work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.racket-raids",
+      "domain": "cross_feature",
+      "entities": [
+        "racket raids",
+        "raids"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Racket Raids"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do racket raids work?",
+        "Explain racket raids",
+        "How do I raid a racket?",
+        "What are racket raids?",
+        "Racket raid guide",
+        "Tell me about racket raids",
+        "How does raiding a family racket work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.families",
+        "cross_feature.feature.family-rackets",
+        "cross_feature.feature.family-hierarchy"
+      ],
+      "follow_ups": [
+        "How do family rackets work?",
+        "How do family wars work?",
+        "How do families work?",
+        "How does family hierarchy work?",
+        "How does the family treasury work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.family-wars",
+      "domain": "cross_feature",
+      "entities": [
+        "family wars",
+        "Vendetta"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Family Wars (Vendetta)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do family wars work?",
+        "What are family wars?",
+        "Explain Vendetta",
+        "How does Vendetta work?",
+        "Family war guide",
+        "Tell me about family wars",
+        "How do I start a family war?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.families",
+        "cross_feature.feature.family-rackets",
+        "cross_feature.feature.family-hierarchy"
+      ],
+      "follow_ups": [
+        "How do families work?",
+        "How do racket raids work?",
+        "How do family rackets work?",
+        "How does family hierarchy work?",
+        "How does the family treasury work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.crew-oc",
+      "domain": "cross_feature",
+      "entities": [
+        "crew OC",
+        "family OC"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAMILIES",
+          "title": "Crew OC"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does crew OC work?",
+        "Explain crew organised crime",
+        "What is crew OC?",
+        "Crew OC guide",
+        "How do family heists work?",
+        "Tell me about crew OC",
+        "How does family OC work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.families",
+        "cross_feature.feature.family-rackets",
+        "cross_feature.feature.family-hierarchy"
+      ],
+      "follow_ups": [
+        "How does Organised Crime work?",
+        "How do families work?",
+        "How do family rackets work?",
+        "How does family hierarchy work?",
+        "How does the family treasury work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.car-rarities",
+      "domain": "cross_feature",
+      "entities": [
+        "car rarities",
+        "travel speed"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "GARAGE & VEHICLES",
+          "title": "Car Rarities"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "GARAGE & VEHICLES",
+          "title": "Travel Speed by Rarity"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CARS & GARAGE",
+          "title": "Travel"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do car rarities work?",
+        "Explain car rarities",
+        "What car rarities are there?",
+        "Car rarity guide",
+        "How does travel speed by rarity work?",
+        "Tell me about car rarities",
+        "How fast do cars travel?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.cars",
+        "cross_feature.feature.melt-cars"
+      ],
+      "follow_ups": [
+        "How do cars work?",
+        "How do I melt cars for bullets?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.melt-cars",
+      "domain": "cross_feature",
+      "entities": [
+        "melting cars",
+        "bullets"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "GARAGE & VEHICLES",
+          "title": "Melting Cars for Bullets"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "Bullets"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do I melt cars for bullets?",
+        "How does melting cars work?",
+        "Explain melting cars",
+        "How do I turn cars into bullets?",
+        "Melt cars guide",
+        "Tell me about melting cars",
+        "How many bullets do cars give?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.cars",
+        "cross_feature.feature.car-rarities"
+      ],
+      "follow_ups": [
+        "How do cars work?",
+        "How does the armoury work?",
+        "How do car rarities work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.busting",
+      "domain": "cross_feature",
+      "entities": [
+        "busting",
+        "bust"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "JAIL SYSTEM",
+          "title": "Busting Others"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do I bust someone?",
+        "How does busting work?",
+        "Explain busting others",
+        "How do I bust people out of jail?",
+        "Busting guide",
+        "Tell me about busts",
+        "How do jail busts work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.jail",
+        "cross_feature.feature.snitching"
+      ],
+      "follow_ups": [
+        "How does jail work?",
+        "How does snitching work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.snitching",
+      "domain": "cross_feature",
+      "entities": [
+        "snitching"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "JAIL SYSTEM",
+          "title": "Snitching"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does snitching work?",
+        "Explain snitching",
+        "What is snitching?",
+        "Snitching guide",
+        "How do I snitch?",
+        "Tell me about snitching",
+        "What happens if I snitch?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.jail",
+        "cross_feature.feature.busting"
+      ],
+      "follow_ups": [
+        "How does jail work?",
         "How do I bust someone?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.cities",
+      "domain": "cross_feature",
+      "entities": [
+        "cities",
+        "states"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "TRAVEL",
+          "title": "Cities"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "TRAVEL",
+          "title": "States (city overview)"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "TRAVEL & STATES",
+          "title": "States"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do cities work?",
+        "Explain cities",
+        "What cities are there?",
+        "Cities guide",
+        "How do I change city?",
+        "Tell me about cities",
+        "What is each city for?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.travel",
+        "cross_feature.feature.airport-ownership"
+      ],
+      "follow_ups": [
+        "How does travel work?",
+        "How does airport ownership work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.airport-ownership",
+      "domain": "cross_feature",
+      "entities": [
+        "airport",
+        "airport ownership"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "TRAVEL",
+          "title": "Airport Ownership"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does airport ownership work?",
+        "Explain airports",
+        "How do I own an airport?",
+        "What is airport ownership?",
+        "Airport guide",
+        "Tell me about airports",
+        "How do airport slots work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.travel",
+        "cross_feature.feature.cities"
+      ],
+      "follow_ups": [
+        "How does travel work?",
+        "How do I own a casino table?",
+        "How do cities work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.ranks",
+      "domain": "cross_feature",
+      "entities": [
+        "ranks",
+        "rank points",
+        "RP"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Ranks (13 total)"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Rank, badges & leaderboards"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do ranks work?",
+        "Explain rank points",
+        "What are the ranks?",
+        "Rank guide",
+        "How does RP rank work?",
+        "Tell me about ranks",
+        "How do I rank up?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.prestige",
+        "cross_feature.feature.missions",
+        "cross_feature.feature.objectives"
+      ],
+      "follow_ups": [
+        "RP rank vs wealth rank",
+        "How does Auto Rank work?",
+        "How does Prestige work?",
+        "How do missions work?",
+        "How do objectives work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.missions",
+      "domain": "cross_feature",
+      "entities": [
+        "missions"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Missions"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Missions & objectives"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do missions work?",
+        "Explain missions",
+        "What are missions?",
+        "Missions guide",
+        "How do I do missions?",
+        "Tell me about missions",
+        "How do story missions work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.prestige",
+        "cross_feature.feature.ranks",
+        "cross_feature.feature.objectives"
+      ],
+      "follow_ups": [
+        "How do objectives work?",
+        "How does Prestige work?",
+        "How do ranks work?",
+        "How does the game leaderboard work?",
+        "How does inventory work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.objectives",
+      "domain": "cross_feature",
+      "entities": [
+        "objectives"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Objectives"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Missions & objectives"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do objectives work?",
+        "Explain objectives",
+        "What are objectives?",
+        "Objectives guide",
+        "How do I complete objectives?",
+        "Tell me about objectives",
+        "How do daily objectives work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.prestige",
+        "cross_feature.feature.ranks",
+        "cross_feature.feature.missions"
+      ],
+      "follow_ups": [
+        "How do missions work?",
+        "What are Daily Rewards?",
+        "How does Prestige work?",
+        "How do ranks work?",
+        "How does the game leaderboard work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.leaderboard",
+      "domain": "cross_feature",
+      "entities": [
+        "leaderboard"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Game Leaderboard"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Rank, badges & leaderboards"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does the game leaderboard work?",
+        "Explain the leaderboard",
+        "What is the game leaderboard?",
+        "Leaderboard guide",
+        "How do leaderboards work?",
+        "Tell me about the leaderboard",
+        "How does ranking on the leaderboard work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.prestige",
+        "cross_feature.feature.ranks",
+        "cross_feature.feature.missions"
+      ],
+      "follow_ups": [
+        "How do ranks work?",
+        "How does the mini-games leaderboard work?",
+        "How does Prestige work?",
+        "How do missions work?",
+        "How do objectives work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.inventory",
+      "domain": "cross_feature",
+      "entities": [
+        "inventory"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Inventory"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Prestige & inventory"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does inventory work?",
+        "Explain inventory",
+        "What is my inventory?",
+        "Inventory guide",
+        "How do I use inventory items?",
+        "Tell me about inventory",
+        "Where is my inventory?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.prestige",
+        "cross_feature.feature.ranks",
+        "cross_feature.feature.missions"
+      ],
+      "follow_ups": [
+        "How does Prestige work?",
+        "How do tokens work?",
+        "How do ranks work?",
+        "How do missions work?",
+        "How do objectives work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.badges",
+      "domain": "cross_feature",
+      "entities": [
+        "badges",
+        "achievements"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Badges & achievements"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Rank, badges & leaderboards"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do badges work?",
+        "Explain badges",
+        "What are badges?",
+        "Badges guide",
+        "How do achievements work?",
+        "Tell me about badges",
+        "How do I get badges?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.prestige",
+        "cross_feature.feature.ranks",
+        "cross_feature.feature.missions"
+      ],
+      "follow_ups": [
+        "How do ranks work?",
+        "How do missions work?",
+        "How does Prestige work?",
+        "How do objectives work?",
+        "How does the game leaderboard work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.respect",
+      "domain": "cross_feature",
+      "entities": [
+        "respect"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Respect (secondary currency)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does respect work?",
+        "Explain respect",
+        "What is respect?",
+        "Respect guide",
+        "How do I earn respect?",
+        "Tell me about respect",
+        "What is the respect currency?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.prestige",
+        "cross_feature.feature.ranks",
+        "cross_feature.feature.missions"
+      ],
+      "follow_ups": [
+        "How does the store work?",
+        "How do mini-games work?",
+        "How does Prestige work?",
+        "How do ranks work?",
+        "How do missions work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.daily-rewards",
+      "domain": "cross_feature",
+      "entities": [
+        "Daily Rewards"
+      ],
+      "sections": [
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROGRESSION",
+          "title": "Daily rewards"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: What are Daily Rewards?"
+        }
+      ],
+      "source_preference": "how_to",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What are Daily Rewards?",
+        "How do Daily Rewards work?",
+        "Explain Daily Rewards",
+        "Daily Rewards guide",
+        "How do I claim daily rewards?",
+        "Tell me about daily rewards",
+        "How does Rock Paper Scissors daily work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.prestige",
+        "cross_feature.feature.ranks",
+        "cross_feature.feature.missions"
+      ],
+      "follow_ups": [
+        "How do objectives work?",
+        "How do mini-games work?",
+        "How does Prestige work?",
+        "How do ranks work?",
+        "How do missions work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.point-store",
+      "domain": "cross_feature",
+      "entities": [
+        "point store",
+        "store"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "category",
+          "category": "POINT STORE",
+          "title": "POINT STORE"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "STORE & GAME PASS",
+          "title": "Game → Store"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does the store work?",
+        "How does the point store work?",
+        "Explain the store",
+        "What can I buy in the store?",
+        "Point store guide",
+        "Tell me about the store",
+        "How do I spend points?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.tokens"
+      ],
+      "follow_ups": [
+        "How do tokens work?",
+        "How does Game Pass work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.tokens",
+      "domain": "cross_feature",
+      "entities": [
+        "tokens"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "POINT STORE",
+          "title": "Tokens (1-hour stacks)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do tokens work?",
+        "Explain tokens",
+        "What are tokens?",
+        "Token guide",
+        "How do 1-hour tokens work?",
+        "Tell me about tokens",
+        "How do I use tokens?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.point-store"
+      ],
+      "follow_ups": [
+        "How does the store work?",
+        "How does Auto Rank work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.gta",
+      "domain": "cross_feature",
+      "entities": [
+        "GTA",
+        "car theft"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "CRIMES",
+          "title": "GTA (Car Theft)"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "CRIMES & ORGANISED CRIME",
+          "title": "GTA (car theft)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does GTA work?",
+        "Explain car theft",
+        "How do I steal cars?",
+        "What is GTA?",
+        "GTA guide",
+        "Tell me about GTA",
+        "How does car theft work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.crimes",
+        "cross_feature.feature.organised-crime"
+      ],
+      "follow_ups": [
+        "How do cars work?",
+        "How do crimes work?",
+        "How does Organised Crime work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.forum",
+      "domain": "cross_feature",
+      "entities": [
+        "forum"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Forum"
+        },
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "SOCIAL & HELP",
+          "title": "SOCIAL & HELP"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does the forum work?",
+        "Explain the forum",
+        "How do I use the forum?",
+        "What is the forum?",
+        "Forum guide",
+        "Tell me about the forum",
+        "How do forum posts work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.inbox",
+        "cross_feature.feature.direct-messages",
+        "cross_feature.feature.game-chat"
+      ],
+      "follow_ups": [
+        "How do direct messages work?",
+        "How do I report a bug?",
+        "How does the inbox work?",
+        "How does game chat work?",
+        "How does profile customization work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.inbox",
+      "domain": "cross_feature",
+      "entities": [
+        "inbox",
+        "notifications"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Inbox & notifications"
+        },
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "SOCIAL & HELP",
+          "title": "SOCIAL & HELP"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does the inbox work?",
+        "Explain inbox",
+        "How do notifications work?",
+        "What is the inbox?",
+        "Inbox guide",
+        "Tell me about inbox",
+        "How do I read mail?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.forum",
+        "cross_feature.feature.direct-messages",
+        "cross_feature.feature.game-chat"
+      ],
+      "follow_ups": [
+        "How do direct messages work?",
+        "How does game chat work?",
+        "How does the forum work?",
+        "How does profile customization work?",
+        "How do referrals work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.direct-messages",
+      "domain": "cross_feature",
+      "entities": [
+        "direct messages",
+        "DMs"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Direct Messages"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do direct messages work?",
+        "Explain DMs",
+        "How do I send a private message?",
+        "What are direct messages?",
+        "DM guide",
+        "Tell me about direct messages",
+        "How does private chat work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.forum",
+        "cross_feature.feature.inbox",
+        "cross_feature.feature.game-chat"
+      ],
+      "follow_ups": [
+        "How does the inbox work?",
+        "How does game chat work?",
+        "How does the forum work?",
+        "How does profile customization work?",
+        "How do referrals work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.game-chat",
+      "domain": "cross_feature",
+      "entities": [
+        "game chat",
+        "chat"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Game Chat"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does game chat work?",
+        "Explain chat",
+        "How do I use chat?",
+        "What is game chat?",
+        "Chat guide",
+        "Tell me about game chat",
+        "How does public chat work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.forum",
+        "cross_feature.feature.inbox",
+        "cross_feature.feature.direct-messages"
+      ],
+      "follow_ups": [
+        "How do direct messages work?",
+        "What are the chat rules?",
+        "How does the forum work?",
+        "How does the inbox work?",
+        "How does profile customization work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.profile",
+      "domain": "cross_feature",
+      "entities": [
+        "profile",
+        "avatar"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Profile Customization"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROFILE & ACCOUNT",
+          "title": "Edit profile"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does profile customization work?",
+        "Explain profiles",
+        "How do I edit my profile?",
+        "What can I change on my profile?",
+        "Profile guide",
+        "Tell me about profile customization",
+        "How do avatars work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.forum",
+        "cross_feature.feature.inbox",
+        "cross_feature.feature.direct-messages"
+      ],
+      "follow_ups": [
+        "How do referrals work?",
+        "How do badges work?",
+        "How does the forum work?",
+        "How does the inbox work?",
+        "How do direct messages work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.referrals",
+      "domain": "cross_feature",
+      "entities": [
+        "referrals",
+        "redeem"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Referrals"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "PROFILE & ACCOUNT",
+          "title": "Referral & redeem"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do referrals work?",
+        "Explain referrals",
+        "How do I invite players?",
+        "What is the referral system?",
+        "Referral guide",
+        "Tell me about referrals",
+        "How do I redeem a code?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.forum",
+        "cross_feature.feature.inbox",
+        "cross_feature.feature.direct-messages"
+      ],
+      "follow_ups": [
+        "How do I edit my profile?",
+        "How does the store work?",
+        "How does the forum work?",
+        "How does the inbox work?",
+        "How do direct messages work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.users-online",
+      "domain": "cross_feature",
+      "entities": [
+        "users online"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "SOCIAL FEATURES",
+          "title": "Users online"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does users online work?",
+        "Explain the online list",
+        "How do I see who is online?",
+        "What is users online?",
+        "Users online guide",
+        "Tell me about users online",
+        "How do I find online players?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.forum",
+        "cross_feature.feature.inbox",
+        "cross_feature.feature.direct-messages"
+      ],
+      "follow_ups": [
+        "How do families work?",
+        "How does attacking work?",
+        "How does the forum work?",
+        "How does the inbox work?",
+        "How do direct messages work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.help-desk",
+      "domain": "cross_feature",
+      "entities": [
+        "Help Desk",
+        "bug"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "FAQ",
+          "title": "Q: How do I report a bug?"
+        },
+        {
+          "source": "how_to",
+          "kind": "category",
+          "category": "SOCIAL & HELP",
+          "title": "SOCIAL & HELP"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do I report a bug?",
+        "How does Help Desk work?",
+        "Explain Help Desk",
+        "How do I contact staff?",
+        "Help Desk guide",
+        "How do I make a ticket?",
+        "Where is Help Desk?"
+      ],
+      "related_intents": [
+        "cross_feature.faq.faq.overview",
+        "cross_feature.faq.how-do-i-make-money-fast.overview",
+        "cross_feature.faq.why-can-t-i-collect-property-income-what-is-heat.overview"
+      ],
+      "follow_ups": [
+        "How does the forum work?",
+        "What are the rules?",
+        "What is FAQ?",
+        "How do I make money fast?",
+        "Why can't I collect property income? / What is Heat?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.weed-grow",
+      "domain": "cross_feature",
+      "entities": [
+        "grow",
+        "plant",
+        "harvest"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Grow loop"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Grow"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do I grow weed?",
+        "How does the Weed Empire grow loop work?",
+        "Explain growing in Weed Empire",
+        "How do I plant weed?",
+        "Weed grow guide",
+        "How do I harvest weed?",
+        "Tell me about growing weed"
+      ],
+      "related_intents": [
+        "cross_feature.feature.weed-empire",
+        "cross_feature.feature.weed-cash",
+        "cross_feature.feature.weed-heat"
+      ],
+      "follow_ups": [
+        "How does Weed Empire work?",
+        "How does weed business cash work?",
+        "How does Weed Empire heat work?",
+        "How do Weed Empire raids work?",
+        "How does Weed Empire crew work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.weed-cash",
+      "domain": "cross_feature",
+      "entities": [
+        "weed business cash",
+        "Safety Deposit"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Business cash"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Cash & vault"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does weed business cash work?",
+        "Explain the weed vault",
+        "How do I withdraw weed cash?",
+        "What is weed business cash?",
+        "Weed cash guide",
+        "How does Safety Deposit work?",
+        "Tell me about weed cash"
+      ],
+      "related_intents": [
+        "cross_feature.feature.weed-empire",
+        "cross_feature.feature.weed-grow",
+        "cross_feature.feature.weed-heat"
+      ],
+      "follow_ups": [
+        "How does Weed Empire work?",
+        "How do Weed Empire raids work?",
+        "How do I grow weed?",
+        "How does Weed Empire heat work?",
+        "How does Weed Empire crew work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.weed-heat",
+      "domain": "cross_feature",
+      "entities": [
+        "weed heat",
+        "heat bust"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Heat & busts"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Crew, raids, heat"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does Weed Empire heat work?",
+        "Explain weed heat",
+        "What is a heat bust?",
+        "Weed heat guide",
+        "How do I cool weed heat?",
+        "Tell me about weed busts",
+        "How do weed heat busts work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.weed-empire",
+        "cross_feature.feature.weed-grow",
+        "cross_feature.feature.weed-cash"
+      ],
+      "follow_ups": [
+        "How does Weed Empire work?",
+        "How do Weed Empire raids work?",
+        "How do I grow weed?",
+        "How does weed business cash work?",
+        "How does Weed Empire crew work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.weed-raids",
+      "domain": "cross_feature",
+      "entities": [
+        "weed raids",
+        "grower"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Raids"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Crew, raids, heat"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do Weed Empire raids work?",
+        "Explain weed raids",
+        "How do I raid another grower?",
+        "What are Weed Empire raids?",
+        "Weed raid guide",
+        "Tell me about weed raids",
+        "How does raiding farms work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.weed-empire",
+        "cross_feature.feature.weed-grow",
+        "cross_feature.feature.weed-cash"
+      ],
+      "follow_ups": [
+        "How does Weed Empire heat work?",
+        "How does Weed Empire crew work?",
+        "How does Weed Empire work?",
+        "How do I grow weed?",
+        "How does weed business cash work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.weed-crew",
+      "domain": "cross_feature",
+      "entities": [
+        "weed crew",
+        "farm workers"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Crew"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Crew, raids, heat"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does Weed Empire crew work?",
+        "Explain weed workers",
+        "How do I hire weed crew?",
+        "What do farm workers do?",
+        "Weed crew guide",
+        "Tell me about weed crew",
+        "How do Weed Empire assistants work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.weed-empire",
+        "cross_feature.feature.weed-grow",
+        "cross_feature.feature.weed-cash"
+      ],
+      "follow_ups": [
+        "How do I grow weed?",
+        "How do Weed Empire raids work?",
+        "How does Weed Empire work?",
+        "How does weed business cash work?",
+        "How does Weed Empire heat work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.special-strains",
+      "domain": "cross_feature",
+      "entities": [
+        "special strains",
+        "loot exclusive"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Special strains"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "What are special strains?",
+        "How do Weed Empire special strains work?",
+        "Explain special strains",
+        "How do loot exclusive strains work?",
+        "Special strains guide",
+        "Tell me about special strains",
+        "How do Game Pass strains work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.weed-empire",
+        "cross_feature.feature.weed-grow",
+        "cross_feature.feature.weed-cash"
+      ],
+      "follow_ups": [
+        "How does Weed Empire work?",
+        "How do loot boxes work?",
+        "How do I grow weed?",
+        "How does weed business cash work?",
+        "How does Weed Empire heat work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.famiglia",
+      "domain": "cross_feature",
+      "entities": [
+        "Famiglia"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Famiglia (Mafia RPG)"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does Famiglia work?",
+        "Explain Famiglia",
+        "What is Famiglia?",
+        "Famiglia guide",
+        "How do I play Famiglia?",
+        "Tell me about Famiglia",
+        "How does the Mafia RPG work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.mini-games",
+        "cross_feature.feature.mini-games-leaderboard"
+      ],
+      "follow_ups": [
+        "How do mini-games work?",
+        "How does respect work?",
+        "How does the mini-games leaderboard work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.mini-games-leaderboard",
+      "domain": "cross_feature",
+      "entities": [
+        "mini-games leaderboard"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "MINI-GAMES",
+          "title": "Mini-Games Leaderboard"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does the mini-games leaderboard work?",
+        "Explain mini-game points",
+        "What is the mini-games leaderboard?",
+        "Mini-games leaderboard guide",
+        "How do weekly mini-game prizes work?",
+        "Tell me about the mini-games leaderboard",
+        "How do mini-game weeks work?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.mini-games",
+        "cross_feature.feature.famiglia"
+      ],
+      "follow_ups": [
+        "How do mini-games work?",
+        "How does the game leaderboard work?",
+        "How does Famiglia work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.new-accounts",
+      "domain": "cross_feature",
+      "entities": [
+        "new-account protection",
+        "new accounts"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "COMBAT",
+          "title": "New-account protection"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "FINDING YOUR WAY",
+          "title": "New accounts"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does new-account protection work?",
+        "Explain new accounts",
+        "What is new-account protection?",
+        "New account guide",
+        "How do new accounts work?",
+        "Tell me about new-account protection",
+        "Why are new players protected?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.combat",
+        "cross_feature.feature.weapons",
+        "cross_feature.feature.armour"
+      ],
+      "follow_ups": [
+        "Why can't I attack a new player?",
+        "How does attacking work?",
+        "How do weapons work?",
+        "How does armour work?",
+        "How does the hitlist work?"
       ]
     }
   ]

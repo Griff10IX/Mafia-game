@@ -5,7 +5,6 @@
       "id": "loot_store_pass.loot-boxes.loot-boxes.overview",
       "domain": "loot_store_pass",
       "entities": [
-        "LOOT BOXES",
         "LOOT BOXES"
       ],
       "sections": [
@@ -30,20 +29,19 @@
       ],
       "related_intents": [
         "loot_store_pass.loot-boxes.loot-boxes.rules",
-        "loot_store_pass.loot-boxes.possible-rewards.overview",
-        "loot_store_pass.loot-boxes.possible-rewards.rules"
+        "loot_store_pass.loot-boxes.possible-rewards.overview"
       ],
       "follow_ups": [
         "How do I use LOOT BOXES?",
         "What are the rules for LOOT BOXES?",
-        "Where do I find LOOT BOXES?"
+        "Where do I find LOOT BOXES?",
+        "What is Possible Rewards?"
       ]
     },
     {
       "id": "loot_store_pass.loot-boxes.loot-boxes.rules",
       "domain": "loot_store_pass",
       "entities": [
-        "LOOT BOXES",
         "LOOT BOXES"
       ],
       "sections": [
@@ -68,13 +66,14 @@
       ],
       "related_intents": [
         "loot_store_pass.loot-boxes.loot-boxes.overview",
-        "loot_store_pass.loot-boxes.possible-rewards.overview",
-        "loot_store_pass.loot-boxes.possible-rewards.rules"
+        "loot_store_pass.loot-boxes.possible-rewards.overview"
       ],
       "follow_ups": [
         "Tell me about LOOT BOXES",
         "What happens with LOOT BOXES?",
-        "Show me the LOOT BOXES guide"
+        "Show me the LOOT BOXES guide",
+        "What is LOOT BOXES?",
+        "What is Possible Rewards?"
       ]
     },
     {
@@ -106,13 +105,13 @@
       ],
       "related_intents": [
         "loot_store_pass.loot-boxes.possible-rewards.rules",
-        "loot_store_pass.loot-boxes.loot-boxes.overview",
-        "loot_store_pass.loot-boxes.loot-boxes.rules"
+        "loot_store_pass.loot-boxes.loot-boxes.overview"
       ],
       "follow_ups": [
         "How do I use Possible Rewards?",
         "What are the rules for Possible Rewards?",
-        "Where do I find Possible Rewards?"
+        "Where do I find Possible Rewards?",
+        "What is LOOT BOXES?"
       ]
     },
     {
@@ -144,20 +143,20 @@
       ],
       "related_intents": [
         "loot_store_pass.loot-boxes.possible-rewards.overview",
-        "loot_store_pass.loot-boxes.loot-boxes.overview",
-        "loot_store_pass.loot-boxes.loot-boxes.rules"
+        "loot_store_pass.loot-boxes.loot-boxes.overview"
       ],
       "follow_ups": [
         "Tell me about Possible Rewards",
         "What happens with Possible Rewards?",
-        "Show me the LOOT BOXES guide"
+        "Show me the LOOT BOXES guide",
+        "What is LOOT BOXES?",
+        "What is Possible Rewards?"
       ]
     },
     {
       "id": "loot_store_pass.point-store.point-store.overview",
       "domain": "loot_store_pass",
       "entities": [
-        "POINT STORE",
         "POINT STORE"
       ],
       "sections": [
@@ -185,19 +184,21 @@
       "related_intents": [
         "loot_store_pass.point-store.point-store.rules",
         "loot_store_pass.point-store.premium-items.overview",
-        "loot_store_pass.point-store.premium-items.rules"
+        "loot_store_pass.point-store.combat-upgrades.overview",
+        "loot_store_pass.point-store.bullets.overview"
       ],
       "follow_ups": [
         "How do I use POINT STORE?",
         "What are the rules for POINT STORE?",
-        "Where do I find POINT STORE?"
+        "Where do I find POINT STORE?",
+        "What is Premium Items?",
+        "What is Combat Upgrades?"
       ]
     },
     {
       "id": "loot_store_pass.point-store.point-store.rules",
       "domain": "loot_store_pass",
       "entities": [
-        "POINT STORE",
         "POINT STORE"
       ],
       "sections": [
@@ -225,12 +226,14 @@
       "related_intents": [
         "loot_store_pass.point-store.point-store.overview",
         "loot_store_pass.point-store.premium-items.overview",
-        "loot_store_pass.point-store.premium-items.rules"
+        "loot_store_pass.point-store.combat-upgrades.overview"
       ],
       "follow_ups": [
         "Tell me about POINT STORE",
         "What happens with POINT STORE?",
-        "Show me the POINT STORE guide"
+        "Show me the POINT STORE guide",
+        "What is POINT STORE?",
+        "What is Premium Items?"
       ]
     },
     {
@@ -265,12 +268,15 @@
       "related_intents": [
         "loot_store_pass.point-store.premium-items.rules",
         "loot_store_pass.point-store.point-store.overview",
-        "loot_store_pass.point-store.point-store.rules"
+        "loot_store_pass.point-store.combat-upgrades.overview",
+        "loot_store_pass.point-store.bullets.overview"
       ],
       "follow_ups": [
         "How do I use Premium Items?",
         "What are the rules for Premium Items?",
-        "Where do I find Premium Items?"
+        "Where do I find Premium Items?",
+        "What is POINT STORE?",
+        "What is Combat Upgrades?"
       ]
     },
     {
@@ -305,12 +311,14 @@
       "related_intents": [
         "loot_store_pass.point-store.premium-items.overview",
         "loot_store_pass.point-store.point-store.overview",
-        "loot_store_pass.point-store.point-store.rules"
+        "loot_store_pass.point-store.combat-upgrades.overview"
       ],
       "follow_ups": [
         "Tell me about Premium Items",
         "What happens with Premium Items?",
-        "Show me the POINT STORE guide"
+        "Show me the POINT STORE guide",
+        "What is POINT STORE?",
+        "What is Premium Items?"
       ]
     },
     {
@@ -345,13 +353,15 @@
       "related_intents": [
         "loot_store_pass.point-store.combat-upgrades.rules",
         "loot_store_pass.point-store.point-store.overview",
-        "loot_store_pass.point-store.point-store.rules",
-        "loot_store_pass.point-store.premium-items.overview"
+        "loot_store_pass.point-store.premium-items.overview",
+        "loot_store_pass.point-store.bullets.overview"
       ],
       "follow_ups": [
         "How do I use Combat Upgrades?",
         "What are the rules for Combat Upgrades?",
-        "Where do I find Combat Upgrades?"
+        "Where do I find Combat Upgrades?",
+        "What is POINT STORE?",
+        "What is Premium Items?"
       ]
     },
     {
@@ -386,13 +396,14 @@
       "related_intents": [
         "loot_store_pass.point-store.combat-upgrades.overview",
         "loot_store_pass.point-store.point-store.overview",
-        "loot_store_pass.point-store.point-store.rules",
         "loot_store_pass.point-store.premium-items.overview"
       ],
       "follow_ups": [
         "Tell me about Combat Upgrades",
         "What happens with Combat Upgrades?",
-        "Show me the POINT STORE guide"
+        "Show me the POINT STORE guide",
+        "What is POINT STORE?",
+        "What is Premium Items?"
       ]
     },
     {
@@ -427,13 +438,15 @@
       "related_intents": [
         "loot_store_pass.point-store.bullets.rules",
         "loot_store_pass.point-store.point-store.overview",
-        "loot_store_pass.point-store.point-store.rules",
-        "loot_store_pass.point-store.premium-items.overview"
+        "loot_store_pass.point-store.premium-items.overview",
+        "loot_store_pass.point-store.combat-upgrades.overview"
       ],
       "follow_ups": [
         "How do I use Bullets?",
         "What are the rules for Bullets?",
-        "Where do I find Bullets?"
+        "Where do I find Bullets?",
+        "What is POINT STORE?",
+        "What is Premium Items?"
       ]
     },
     {
@@ -468,13 +481,15 @@
       "related_intents": [
         "loot_store_pass.point-store.bullets.overview",
         "loot_store_pass.point-store.point-store.overview",
-        "loot_store_pass.point-store.point-store.rules",
-        "loot_store_pass.point-store.premium-items.overview"
+        "loot_store_pass.point-store.premium-items.overview",
+        "loot_store_pass.point-store.combat-upgrades.overview"
       ],
       "follow_ups": [
         "Tell me about Bullets",
         "What happens with Bullets?",
-        "Show me the POINT STORE guide"
+        "Show me the POINT STORE guide",
+        "What is POINT STORE?",
+        "What is Premium Items?"
       ]
     },
     {
@@ -509,13 +524,15 @@
       "related_intents": [
         "loot_store_pass.point-store.tokens-1-hour-stacks.rules",
         "loot_store_pass.point-store.point-store.overview",
-        "loot_store_pass.point-store.point-store.rules",
-        "loot_store_pass.point-store.premium-items.overview"
+        "loot_store_pass.point-store.premium-items.overview",
+        "loot_store_pass.point-store.combat-upgrades.overview"
       ],
       "follow_ups": [
         "How do I use Tokens (1-hour stacks)?",
         "What are the rules for Tokens (1-hour stacks)?",
-        "Where do I find Tokens (1-hour stacks)?"
+        "Where do I find Tokens (1-hour stacks)?",
+        "What is POINT STORE?",
+        "What is Premium Items?"
       ]
     },
     {
@@ -550,20 +567,21 @@
       "related_intents": [
         "loot_store_pass.point-store.tokens-1-hour-stacks.overview",
         "loot_store_pass.point-store.point-store.overview",
-        "loot_store_pass.point-store.point-store.rules",
-        "loot_store_pass.point-store.premium-items.overview"
+        "loot_store_pass.point-store.premium-items.overview",
+        "loot_store_pass.point-store.combat-upgrades.overview"
       ],
       "follow_ups": [
         "Tell me about Tokens (1-hour stacks)",
         "What happens with Tokens (1-hour stacks)?",
-        "Show me the POINT STORE guide"
+        "Show me the POINT STORE guide",
+        "What is POINT STORE?",
+        "What is Premium Items?"
       ]
     },
     {
       "id": "loot_store_pass.game-pass.game-pass.overview",
       "domain": "loot_store_pass",
       "entities": [
-        "GAME PASS",
         "GAME PASS"
       ],
       "sections": [
@@ -590,20 +608,19 @@
       ],
       "related_intents": [
         "loot_store_pass.game-pass.game-pass.rules",
-        "loot_store_pass.game-pass.overview.overview",
-        "loot_store_pass.game-pass.overview.rules"
+        "loot_store_pass.game-pass.overview.overview"
       ],
       "follow_ups": [
         "How do I use GAME PASS?",
         "What are the rules for GAME PASS?",
-        "Where do I find GAME PASS?"
+        "Where do I find GAME PASS?",
+        "What is Overview in GAME PASS?"
       ]
     },
     {
       "id": "loot_store_pass.game-pass.game-pass.rules",
       "domain": "loot_store_pass",
       "entities": [
-        "GAME PASS",
         "GAME PASS"
       ],
       "sections": [
@@ -630,13 +647,14 @@
       ],
       "related_intents": [
         "loot_store_pass.game-pass.game-pass.overview",
-        "loot_store_pass.game-pass.overview.overview",
-        "loot_store_pass.game-pass.overview.rules"
+        "loot_store_pass.game-pass.overview.overview"
       ],
       "follow_ups": [
         "Tell me about GAME PASS",
         "What happens with GAME PASS?",
-        "Show me the GAME PASS guide"
+        "Show me the GAME PASS guide",
+        "What is GAME PASS in GAME PASS?",
+        "What is Overview in GAME PASS?"
       ]
     },
     {
@@ -670,13 +688,13 @@
       ],
       "related_intents": [
         "loot_store_pass.game-pass.overview.rules",
-        "loot_store_pass.game-pass.game-pass.overview",
-        "loot_store_pass.game-pass.game-pass.rules"
+        "loot_store_pass.game-pass.game-pass.overview"
       ],
       "follow_ups": [
         "How do I use Overview?",
         "What are the rules for Overview?",
-        "Where do I find Overview?"
+        "Where do I find Overview?",
+        "What is GAME PASS in GAME PASS?"
       ]
     },
     {
@@ -710,20 +728,20 @@
       ],
       "related_intents": [
         "loot_store_pass.game-pass.overview.overview",
-        "loot_store_pass.game-pass.game-pass.overview",
-        "loot_store_pass.game-pass.game-pass.rules"
+        "loot_store_pass.game-pass.game-pass.overview"
       ],
       "follow_ups": [
         "Tell me about Overview",
         "What happens with Overview?",
-        "Show me the GAME PASS guide"
+        "Show me the GAME PASS guide",
+        "What is GAME PASS in GAME PASS?",
+        "What is Overview in GAME PASS?"
       ]
     },
     {
       "id": "loot_store_pass.store-and-game-pass.store-and-game-pass.overview",
       "domain": "loot_store_pass",
       "entities": [
-        "STORE & GAME PASS",
         "STORE & GAME PASS"
       ],
       "sections": [
@@ -749,19 +767,20 @@
       "related_intents": [
         "loot_store_pass.store-and-game-pass.store-and-game-pass.procedure",
         "loot_store_pass.store-and-game-pass.game-store.overview",
-        "loot_store_pass.store-and-game-pass.game-store.procedure"
+        "loot_store_pass.store-and-game-pass.game-pass.overview"
       ],
       "follow_ups": [
         "How do I use STORE & GAME PASS?",
         "What are the rules for STORE & GAME PASS?",
-        "Where do I find STORE & GAME PASS?"
+        "Where do I find STORE & GAME PASS?",
+        "What is Game → Store?",
+        "What is Game Pass in STORE & GAME PASS?"
       ]
     },
     {
       "id": "loot_store_pass.store-and-game-pass.store-and-game-pass.procedure",
       "domain": "loot_store_pass",
       "entities": [
-        "STORE & GAME PASS",
         "STORE & GAME PASS"
       ],
       "sections": [
@@ -787,12 +806,14 @@
       "related_intents": [
         "loot_store_pass.store-and-game-pass.store-and-game-pass.overview",
         "loot_store_pass.store-and-game-pass.game-store.overview",
-        "loot_store_pass.store-and-game-pass.game-store.procedure"
+        "loot_store_pass.store-and-game-pass.game-pass.overview"
       ],
       "follow_ups": [
         "Tell me about STORE & GAME PASS",
         "What happens with STORE & GAME PASS?",
-        "Show me the STORE & GAME PASS guide"
+        "Show me the STORE & GAME PASS guide",
+        "What is STORE & GAME PASS?",
+        "What is Game → Store?"
       ]
     },
     {
@@ -825,12 +846,14 @@
       "related_intents": [
         "loot_store_pass.store-and-game-pass.game-store.procedure",
         "loot_store_pass.store-and-game-pass.store-and-game-pass.overview",
-        "loot_store_pass.store-and-game-pass.store-and-game-pass.procedure"
+        "loot_store_pass.store-and-game-pass.game-pass.overview"
       ],
       "follow_ups": [
         "How do I use Game → Store?",
         "What are the rules for Game → Store?",
-        "Where do I find Game → Store?"
+        "Where do I find Game → Store?",
+        "What is STORE & GAME PASS?",
+        "What is Game Pass in STORE & GAME PASS?"
       ]
     },
     {
@@ -863,12 +886,14 @@
       "related_intents": [
         "loot_store_pass.store-and-game-pass.game-store.overview",
         "loot_store_pass.store-and-game-pass.store-and-game-pass.overview",
-        "loot_store_pass.store-and-game-pass.store-and-game-pass.procedure"
+        "loot_store_pass.store-and-game-pass.game-pass.overview"
       ],
       "follow_ups": [
         "Tell me about Game → Store",
         "What happens with Game → Store?",
-        "Show me the STORE & GAME PASS guide"
+        "Show me the STORE & GAME PASS guide",
+        "What is STORE & GAME PASS?",
+        "What is Game → Store?"
       ]
     },
     {
@@ -901,13 +926,14 @@
       "related_intents": [
         "loot_store_pass.store-and-game-pass.game-pass.procedure",
         "loot_store_pass.store-and-game-pass.store-and-game-pass.overview",
-        "loot_store_pass.store-and-game-pass.store-and-game-pass.procedure",
         "loot_store_pass.store-and-game-pass.game-store.overview"
       ],
       "follow_ups": [
         "How do I use Game Pass?",
         "What are the rules for Game Pass?",
-        "Where do I find Game Pass?"
+        "Where do I find Game Pass?",
+        "What is STORE & GAME PASS?",
+        "What is Game → Store?"
       ]
     },
     {
@@ -940,13 +966,14 @@
       "related_intents": [
         "loot_store_pass.store-and-game-pass.game-pass.overview",
         "loot_store_pass.store-and-game-pass.store-and-game-pass.overview",
-        "loot_store_pass.store-and-game-pass.store-and-game-pass.procedure",
         "loot_store_pass.store-and-game-pass.game-store.overview"
       ],
       "follow_ups": [
         "Tell me about Game Pass",
         "What happens with Game Pass?",
-        "Show me the STORE & GAME PASS guide"
+        "Show me the STORE & GAME PASS guide",
+        "What is STORE & GAME PASS?",
+        "What is Game → Store?"
       ]
     }
   ]

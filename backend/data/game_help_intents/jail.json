@@ -5,7 +5,6 @@
       "id": "jail.jail-system.jail-system.overview",
       "domain": "jail",
       "entities": [
-        "JAIL SYSTEM",
         "JAIL SYSTEM"
       ],
       "sections": [
@@ -33,19 +32,21 @@
       "related_intents": [
         "jail.jail-system.jail-system.rules",
         "jail.jail-system.getting-jailed.overview",
-        "jail.jail-system.getting-jailed.rules"
+        "jail.jail-system.getting-out.overview",
+        "jail.jail-system.busting-others.overview"
       ],
       "follow_ups": [
         "How do I use JAIL SYSTEM?",
         "What are the rules for JAIL SYSTEM?",
-        "Where do I find JAIL SYSTEM?"
+        "Where do I find JAIL SYSTEM?",
+        "What is Getting Jailed?",
+        "What is Getting Out?"
       ]
     },
     {
       "id": "jail.jail-system.jail-system.rules",
       "domain": "jail",
       "entities": [
-        "JAIL SYSTEM",
         "JAIL SYSTEM"
       ],
       "sections": [
@@ -73,12 +74,14 @@
       "related_intents": [
         "jail.jail-system.jail-system.overview",
         "jail.jail-system.getting-jailed.overview",
-        "jail.jail-system.getting-jailed.rules"
+        "jail.jail-system.getting-out.overview"
       ],
       "follow_ups": [
         "Tell me about JAIL SYSTEM",
         "What happens with JAIL SYSTEM?",
-        "Show me the JAIL SYSTEM guide"
+        "Show me the JAIL SYSTEM guide",
+        "What is JAIL SYSTEM?",
+        "What is Getting Jailed?"
       ]
     },
     {
@@ -113,12 +116,15 @@
       "related_intents": [
         "jail.jail-system.getting-jailed.rules",
         "jail.jail-system.jail-system.overview",
-        "jail.jail-system.jail-system.rules"
+        "jail.jail-system.getting-out.overview",
+        "jail.jail-system.busting-others.overview"
       ],
       "follow_ups": [
         "How do I use Getting Jailed?",
         "What are the rules for Getting Jailed?",
-        "Where do I find Getting Jailed?"
+        "Where do I find Getting Jailed?",
+        "What is JAIL SYSTEM?",
+        "What is Getting Out?"
       ]
     },
     {
@@ -153,12 +159,14 @@
       "related_intents": [
         "jail.jail-system.getting-jailed.overview",
         "jail.jail-system.jail-system.overview",
-        "jail.jail-system.jail-system.rules"
+        "jail.jail-system.getting-out.overview"
       ],
       "follow_ups": [
         "Tell me about Getting Jailed",
         "What happens with Getting Jailed?",
-        "Show me the JAIL SYSTEM guide"
+        "Show me the JAIL SYSTEM guide",
+        "What is JAIL SYSTEM?",
+        "What is Getting Jailed?"
       ]
     },
     {
@@ -193,13 +201,15 @@
       "related_intents": [
         "jail.jail-system.getting-out.rules",
         "jail.jail-system.jail-system.overview",
-        "jail.jail-system.jail-system.rules",
-        "jail.jail-system.getting-jailed.overview"
+        "jail.jail-system.getting-jailed.overview",
+        "jail.jail-system.busting-others.overview"
       ],
       "follow_ups": [
         "How do I use Getting Out?",
         "What are the rules for Getting Out?",
-        "Where do I find Getting Out?"
+        "Where do I find Getting Out?",
+        "What is JAIL SYSTEM?",
+        "What is Getting Jailed?"
       ]
     },
     {
@@ -234,13 +244,14 @@
       "related_intents": [
         "jail.jail-system.getting-out.overview",
         "jail.jail-system.jail-system.overview",
-        "jail.jail-system.jail-system.rules",
         "jail.jail-system.getting-jailed.overview"
       ],
       "follow_ups": [
         "Tell me about Getting Out",
         "What happens with Getting Out?",
-        "Show me the JAIL SYSTEM guide"
+        "Show me the JAIL SYSTEM guide",
+        "What is JAIL SYSTEM?",
+        "What is Getting Jailed?"
       ]
     },
     {
@@ -275,13 +286,15 @@
       "related_intents": [
         "jail.jail-system.busting-others.rules",
         "jail.jail-system.jail-system.overview",
-        "jail.jail-system.jail-system.rules",
-        "jail.jail-system.getting-jailed.overview"
+        "jail.jail-system.getting-jailed.overview",
+        "jail.jail-system.getting-out.overview"
       ],
       "follow_ups": [
         "How do I use Busting Others?",
         "What are the rules for Busting Others?",
-        "Where do I find Busting Others?"
+        "Where do I find Busting Others?",
+        "What is JAIL SYSTEM?",
+        "What is Getting Jailed?"
       ]
     },
     {
@@ -316,13 +329,15 @@
       "related_intents": [
         "jail.jail-system.busting-others.overview",
         "jail.jail-system.jail-system.overview",
-        "jail.jail-system.jail-system.rules",
-        "jail.jail-system.getting-jailed.overview"
+        "jail.jail-system.getting-jailed.overview",
+        "jail.jail-system.getting-out.overview"
       ],
       "follow_ups": [
         "Tell me about Busting Others",
         "What happens with Busting Others?",
-        "Show me the JAIL SYSTEM guide"
+        "Show me the JAIL SYSTEM guide",
+        "What is JAIL SYSTEM?",
+        "What is Getting Jailed?"
       ]
     },
     {
@@ -357,13 +372,15 @@
       "related_intents": [
         "jail.jail-system.snitching.rules",
         "jail.jail-system.jail-system.overview",
-        "jail.jail-system.jail-system.rules",
-        "jail.jail-system.getting-jailed.overview"
+        "jail.jail-system.getting-jailed.overview",
+        "jail.jail-system.getting-out.overview"
       ],
       "follow_ups": [
         "How do I use Snitching?",
         "What are the rules for Snitching?",
-        "Where do I find Snitching?"
+        "Where do I find Snitching?",
+        "What is JAIL SYSTEM?",
+        "What is Getting Jailed?"
       ]
     },
     {
@@ -398,21 +415,23 @@
       "related_intents": [
         "jail.jail-system.snitching.overview",
         "jail.jail-system.jail-system.overview",
-        "jail.jail-system.jail-system.rules",
-        "jail.jail-system.getting-jailed.overview"
+        "jail.jail-system.getting-jailed.overview",
+        "jail.jail-system.getting-out.overview"
       ],
       "follow_ups": [
         "Tell me about Snitching",
         "What happens with Snitching?",
-        "Show me the JAIL SYSTEM guide"
+        "Show me the JAIL SYSTEM guide",
+        "What is JAIL SYSTEM?",
+        "What is Getting Jailed?"
       ]
     },
     {
       "id": "jail.jail-system.what-the-server-blocks-while-you-re-in-jail.overview",
       "domain": "jail",
       "entities": [
-        "What the server blocks while you’re in jail",
-        "JAIL SYSTEM"
+        "JAIL SYSTEM",
+        "What the server blocks while you’re in jail"
       ],
       "sections": [
         {
@@ -428,32 +447,34 @@
       ],
       "intent_type": "definition",
       "variants": [
-        "What is What the server blocks while you’re in jail?",
-        "What are What the server blocks while you’re in jail?",
-        "Tell me about What the server blocks while you’re in jail",
-        "Explain What the server blocks while you’re in jail",
-        "How does What the server blocks while you’re in jail work?",
-        "I need information about What the server blocks while you’re in jail",
-        "Give me the guide for What the server blocks while you’re in jail"
+        "What the server blocks while you’re in jail?",
+        "What is JAIL SYSTEM?",
+        "What are JAIL SYSTEM?",
+        "Tell me about JAIL SYSTEM",
+        "Explain JAIL SYSTEM",
+        "How does JAIL SYSTEM work?",
+        "I need information about JAIL SYSTEM"
       ],
       "related_intents": [
         "jail.jail-system.what-the-server-blocks-while-you-re-in-jail.rules",
         "jail.jail-system.jail-system.overview",
-        "jail.jail-system.jail-system.rules",
-        "jail.jail-system.getting-jailed.overview"
+        "jail.jail-system.getting-jailed.overview",
+        "jail.jail-system.getting-out.overview"
       ],
       "follow_ups": [
-        "How do I use What the server blocks while you’re in jail?",
-        "What are the rules for What the server blocks while you’re in jail?",
-        "Where do I find What the server blocks while you’re in jail?"
+        "Tell me about JAIL SYSTEM",
+        "Where do I find JAIL SYSTEM?",
+        "Show me the JAIL SYSTEM guide",
+        "What is JAIL SYSTEM?",
+        "What is Getting Jailed?"
       ]
     },
     {
       "id": "jail.jail-system.what-the-server-blocks-while-you-re-in-jail.rules",
       "domain": "jail",
       "entities": [
-        "What the server blocks while you’re in jail",
-        "JAIL SYSTEM"
+        "JAIL SYSTEM",
+        "What the server blocks while you’re in jail"
       ],
       "sections": [
         {
@@ -469,24 +490,26 @@
       ],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for What the server blocks while you’re in jail?",
-        "What happens with What the server blocks while you’re in jail?",
-        "Does the FAQ explain What the server blocks while you’re in jail?",
-        "Can you clarify What the server blocks while you’re in jail?",
-        "Which FAQ covers What the server blocks while you’re in jail?",
-        "I have a question about What the server blocks while you’re in jail",
-        "How is What the server blocks while you’re in jail supposed to work?"
+        "What are the rules for JAIL SYSTEM?",
+        "What happens with JAIL SYSTEM?",
+        "Does the FAQ explain JAIL SYSTEM?",
+        "Can you clarify JAIL SYSTEM?",
+        "Which FAQ covers JAIL SYSTEM?",
+        "I have a question about JAIL SYSTEM",
+        "How is JAIL SYSTEM supposed to work?"
       ],
       "related_intents": [
         "jail.jail-system.what-the-server-blocks-while-you-re-in-jail.overview",
         "jail.jail-system.jail-system.overview",
-        "jail.jail-system.jail-system.rules",
-        "jail.jail-system.getting-jailed.overview"
+        "jail.jail-system.getting-jailed.overview",
+        "jail.jail-system.getting-out.overview"
       ],
       "follow_ups": [
-        "Tell me about What the server blocks while you’re in jail",
-        "What happens with What the server blocks while you’re in jail?",
-        "Show me the JAIL SYSTEM guide"
+        "How does JAIL SYSTEM work?",
+        "Show me the JAIL SYSTEM guide",
+        "What is JAIL SYSTEM?",
+        "What is Getting Jailed?",
+        "What is Getting Out?"
       ]
     }
   ]

@@ -5,7 +5,6 @@
       "id": "money_banks_properties.money-making.money-making.overview",
       "domain": "money_banks_properties",
       "entities": [
-        "MONEY MAKING",
         "MONEY MAKING"
       ],
       "sections": [
@@ -36,19 +35,21 @@
       "related_intents": [
         "money_banks_properties.money-making.money-making.rules",
         "money_banks_properties.money-making.properties.overview",
-        "money_banks_properties.money-making.properties.rules"
+        "money_banks_properties.money-making.booze-runs.overview",
+        "money_banks_properties.money-making.banks.overview"
       ],
       "follow_ups": [
         "How do I use MONEY MAKING?",
         "What are the rules for MONEY MAKING?",
-        "Where do I find MONEY MAKING?"
+        "Where do I find MONEY MAKING?",
+        "What is Properties?",
+        "What is Booze Runs?"
       ]
     },
     {
       "id": "money_banks_properties.money-making.money-making.rules",
       "domain": "money_banks_properties",
       "entities": [
-        "MONEY MAKING",
         "MONEY MAKING"
       ],
       "sections": [
@@ -79,12 +80,14 @@
       "related_intents": [
         "money_banks_properties.money-making.money-making.overview",
         "money_banks_properties.money-making.properties.overview",
-        "money_banks_properties.money-making.properties.rules"
+        "money_banks_properties.money-making.booze-runs.overview"
       ],
       "follow_ups": [
         "Tell me about MONEY MAKING",
         "What happens with MONEY MAKING?",
-        "Show me the MONEY MAKING guide"
+        "Show me the MONEY MAKING guide",
+        "What is MONEY MAKING?",
+        "What is Properties?"
       ]
     },
     {
@@ -122,12 +125,15 @@
       "related_intents": [
         "money_banks_properties.money-making.properties.rules",
         "money_banks_properties.money-making.money-making.overview",
-        "money_banks_properties.money-making.money-making.rules"
+        "money_banks_properties.money-making.booze-runs.overview",
+        "money_banks_properties.money-making.banks.overview"
       ],
       "follow_ups": [
         "How do I use Properties?",
         "What are the rules for Properties?",
-        "Where do I find Properties?"
+        "Where do I find Properties?",
+        "What is MONEY MAKING?",
+        "What is Booze Runs?"
       ]
     },
     {
@@ -165,12 +171,14 @@
       "related_intents": [
         "money_banks_properties.money-making.properties.overview",
         "money_banks_properties.money-making.money-making.overview",
-        "money_banks_properties.money-making.money-making.rules"
+        "money_banks_properties.money-making.booze-runs.overview"
       ],
       "follow_ups": [
         "Tell me about Properties",
         "What happens with Properties?",
-        "Show me the MONEY MAKING guide"
+        "Show me the MONEY MAKING guide",
+        "What is MONEY MAKING?",
+        "What is Properties?"
       ]
     },
     {
@@ -208,13 +216,15 @@
       "related_intents": [
         "money_banks_properties.money-making.booze-runs.rules",
         "money_banks_properties.money-making.money-making.overview",
-        "money_banks_properties.money-making.money-making.rules",
-        "money_banks_properties.money-making.properties.overview"
+        "money_banks_properties.money-making.properties.overview",
+        "money_banks_properties.money-making.banks.overview"
       ],
       "follow_ups": [
         "How do I use Booze Runs?",
         "What are the rules for Booze Runs?",
-        "Where do I find Booze Runs?"
+        "Where do I find Booze Runs?",
+        "What is MONEY MAKING?",
+        "What is Properties?"
       ]
     },
     {
@@ -252,13 +262,14 @@
       "related_intents": [
         "money_banks_properties.money-making.booze-runs.overview",
         "money_banks_properties.money-making.money-making.overview",
-        "money_banks_properties.money-making.money-making.rules",
         "money_banks_properties.money-making.properties.overview"
       ],
       "follow_ups": [
         "Tell me about Booze Runs",
         "What happens with Booze Runs?",
-        "Show me the MONEY MAKING guide"
+        "Show me the MONEY MAKING guide",
+        "What is MONEY MAKING?",
+        "What is Properties?"
       ]
     },
     {
@@ -296,13 +307,15 @@
       "related_intents": [
         "money_banks_properties.money-making.banks.rules",
         "money_banks_properties.money-making.money-making.overview",
-        "money_banks_properties.money-making.money-making.rules",
-        "money_banks_properties.money-making.properties.overview"
+        "money_banks_properties.money-making.properties.overview",
+        "money_banks_properties.money-making.booze-runs.overview"
       ],
       "follow_ups": [
         "How do I use Banks?",
         "What are the rules for Banks?",
-        "Where do I find Banks?"
+        "Where do I find Banks?",
+        "What is MONEY MAKING?",
+        "What is Properties?"
       ]
     },
     {
@@ -340,13 +353,15 @@
       "related_intents": [
         "money_banks_properties.money-making.banks.overview",
         "money_banks_properties.money-making.money-making.overview",
-        "money_banks_properties.money-making.money-making.rules",
-        "money_banks_properties.money-making.properties.overview"
+        "money_banks_properties.money-making.properties.overview",
+        "money_banks_properties.money-making.booze-runs.overview"
       ],
       "follow_ups": [
         "Tell me about Banks",
         "What happens with Banks?",
-        "Show me the MONEY MAKING guide"
+        "Show me the MONEY MAKING guide",
+        "What is MONEY MAKING?",
+        "What is Properties?"
       ]
     },
     {
@@ -384,13 +399,15 @@
       "related_intents": [
         "money_banks_properties.money-making.daily-global-events.rules",
         "money_banks_properties.money-making.money-making.overview",
-        "money_banks_properties.money-making.money-making.rules",
-        "money_banks_properties.money-making.properties.overview"
+        "money_banks_properties.money-making.properties.overview",
+        "money_banks_properties.money-making.booze-runs.overview"
       ],
       "follow_ups": [
         "How do I use Daily global events?",
         "What are the rules for Daily global events?",
-        "Where do I find Daily global events?"
+        "Where do I find Daily global events?",
+        "What is MONEY MAKING?",
+        "What is Properties?"
       ]
     },
     {
@@ -428,13 +445,15 @@
       "related_intents": [
         "money_banks_properties.money-making.daily-global-events.overview",
         "money_banks_properties.money-making.money-making.overview",
-        "money_banks_properties.money-making.money-making.rules",
-        "money_banks_properties.money-making.properties.overview"
+        "money_banks_properties.money-making.properties.overview",
+        "money_banks_properties.money-making.booze-runs.overview"
       ],
       "follow_ups": [
         "Tell me about Daily global events",
         "What happens with Daily global events?",
-        "Show me the MONEY MAKING guide"
+        "Show me the MONEY MAKING guide",
+        "What is MONEY MAKING?",
+        "What is Properties?"
       ]
     },
     {
@@ -472,13 +491,15 @@
       "related_intents": [
         "money_banks_properties.money-making.stock-market-crypto-trading.rules",
         "money_banks_properties.money-making.money-making.overview",
-        "money_banks_properties.money-making.money-making.rules",
-        "money_banks_properties.money-making.properties.overview"
+        "money_banks_properties.money-making.properties.overview",
+        "money_banks_properties.money-making.booze-runs.overview"
       ],
       "follow_ups": [
         "How do I use Stock Market (Crypto Trading)?",
         "What are the rules for Stock Market (Crypto Trading)?",
-        "Where do I find Stock Market (Crypto Trading)?"
+        "Where do I find Stock Market (Crypto Trading)?",
+        "What is MONEY MAKING?",
+        "What is Properties?"
       ]
     },
     {
@@ -516,13 +537,15 @@
       "related_intents": [
         "money_banks_properties.money-making.stock-market-crypto-trading.overview",
         "money_banks_properties.money-making.money-making.overview",
-        "money_banks_properties.money-making.money-making.rules",
-        "money_banks_properties.money-making.properties.overview"
+        "money_banks_properties.money-making.properties.overview",
+        "money_banks_properties.money-making.booze-runs.overview"
       ],
       "follow_ups": [
         "Tell me about Stock Market (Crypto Trading)",
         "What happens with Stock Market (Crypto Trading)?",
-        "Show me the MONEY MAKING guide"
+        "Show me the MONEY MAKING guide",
+        "What is MONEY MAKING?",
+        "What is Properties?"
       ]
     },
     {
@@ -560,13 +583,15 @@
       "related_intents": [
         "money_banks_properties.money-making.sports-betting.rules",
         "money_banks_properties.money-making.money-making.overview",
-        "money_banks_properties.money-making.money-making.rules",
-        "money_banks_properties.money-making.properties.overview"
+        "money_banks_properties.money-making.properties.overview",
+        "money_banks_properties.money-making.booze-runs.overview"
       ],
       "follow_ups": [
         "How do I use Sports Betting?",
         "What are the rules for Sports Betting?",
-        "Where do I find Sports Betting?"
+        "Where do I find Sports Betting?",
+        "What is MONEY MAKING?",
+        "What is Properties?"
       ]
     },
     {
@@ -604,13 +629,15 @@
       "related_intents": [
         "money_banks_properties.money-making.sports-betting.overview",
         "money_banks_properties.money-making.money-making.overview",
-        "money_banks_properties.money-making.money-making.rules",
-        "money_banks_properties.money-making.properties.overview"
+        "money_banks_properties.money-making.properties.overview",
+        "money_banks_properties.money-making.booze-runs.overview"
       ],
       "follow_ups": [
         "Tell me about Sports Betting",
         "What happens with Sports Betting?",
-        "Show me the MONEY MAKING guide"
+        "Show me the MONEY MAKING guide",
+        "What is MONEY MAKING?",
+        "What is Properties?"
       ]
     },
     {
@@ -648,13 +675,15 @@
       "related_intents": [
         "money_banks_properties.money-making.crack-safe.rules",
         "money_banks_properties.money-making.money-making.overview",
-        "money_banks_properties.money-making.money-making.rules",
-        "money_banks_properties.money-making.properties.overview"
+        "money_banks_properties.money-making.properties.overview",
+        "money_banks_properties.money-making.booze-runs.overview"
       ],
       "follow_ups": [
         "How do I use Crack Safe?",
         "What are the rules for Crack Safe?",
-        "Where do I find Crack Safe?"
+        "Where do I find Crack Safe?",
+        "What is MONEY MAKING?",
+        "What is Properties?"
       ]
     },
     {
@@ -692,20 +721,21 @@
       "related_intents": [
         "money_banks_properties.money-making.crack-safe.overview",
         "money_banks_properties.money-making.money-making.overview",
-        "money_banks_properties.money-making.money-making.rules",
-        "money_banks_properties.money-making.properties.overview"
+        "money_banks_properties.money-making.properties.overview",
+        "money_banks_properties.money-making.booze-runs.overview"
       ],
       "follow_ups": [
         "Tell me about Crack Safe",
         "What happens with Crack Safe?",
-        "Show me the MONEY MAKING guide"
+        "Show me the MONEY MAKING guide",
+        "What is MONEY MAKING?",
+        "What is Properties?"
       ]
     },
     {
       "id": "money_banks_properties.money-and-businesses.money-and-businesses.overview",
       "domain": "money_banks_properties",
       "entities": [
-        "MONEY & BUSINESSES",
         "MONEY & BUSINESSES"
       ],
       "sections": [
@@ -731,19 +761,21 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
         "money_banks_properties.money-and-businesses.bank.overview",
-        "money_banks_properties.money-and-businesses.bank.procedure"
+        "money_banks_properties.money-and-businesses.property.overview",
+        "money_banks_properties.money-and-businesses.quick-trade.overview"
       ],
       "follow_ups": [
         "How do I use MONEY & BUSINESSES?",
         "What are the rules for MONEY & BUSINESSES?",
-        "Where do I find MONEY & BUSINESSES?"
+        "Where do I find MONEY & BUSINESSES?",
+        "What is Bank?",
+        "What is Property?"
       ]
     },
     {
       "id": "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
       "domain": "money_banks_properties",
       "entities": [
-        "MONEY & BUSINESSES",
         "MONEY & BUSINESSES"
       ],
       "sections": [
@@ -769,12 +801,14 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.money-and-businesses.overview",
         "money_banks_properties.money-and-businesses.bank.overview",
-        "money_banks_properties.money-and-businesses.bank.procedure"
+        "money_banks_properties.money-and-businesses.property.overview"
       ],
       "follow_ups": [
         "Tell me about MONEY & BUSINESSES",
         "What happens with MONEY & BUSINESSES?",
-        "Show me the MONEY & BUSINESSES guide"
+        "Show me the MONEY & BUSINESSES guide",
+        "What is MONEY & BUSINESSES?",
+        "What is Bank?"
       ]
     },
     {
@@ -807,12 +841,15 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.bank.procedure",
         "money_banks_properties.money-and-businesses.money-and-businesses.overview",
-        "money_banks_properties.money-and-businesses.money-and-businesses.procedure"
+        "money_banks_properties.money-and-businesses.property.overview",
+        "money_banks_properties.money-and-businesses.quick-trade.overview"
       ],
       "follow_ups": [
         "How do I use Bank?",
         "What are the rules for Bank?",
-        "Where do I find Bank?"
+        "Where do I find Bank?",
+        "What is MONEY & BUSINESSES?",
+        "What is Property?"
       ]
     },
     {
@@ -845,12 +882,14 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.bank.overview",
         "money_banks_properties.money-and-businesses.money-and-businesses.overview",
-        "money_banks_properties.money-and-businesses.money-and-businesses.procedure"
+        "money_banks_properties.money-and-businesses.property.overview"
       ],
       "follow_ups": [
         "Tell me about Bank",
         "What happens with Bank?",
-        "Show me the MONEY & BUSINESSES guide"
+        "Show me the MONEY & BUSINESSES guide",
+        "What is MONEY & BUSINESSES?",
+        "What is Bank?"
       ]
     },
     {
@@ -883,13 +922,15 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.property.procedure",
         "money_banks_properties.money-and-businesses.money-and-businesses.overview",
-        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
-        "money_banks_properties.money-and-businesses.bank.overview"
+        "money_banks_properties.money-and-businesses.bank.overview",
+        "money_banks_properties.money-and-businesses.quick-trade.overview"
       ],
       "follow_ups": [
         "How do I use Property?",
         "What are the rules for Property?",
-        "Where do I find Property?"
+        "Where do I find Property?",
+        "What is MONEY & BUSINESSES?",
+        "What is Bank?"
       ]
     },
     {
@@ -922,13 +963,14 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.property.overview",
         "money_banks_properties.money-and-businesses.money-and-businesses.overview",
-        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
         "money_banks_properties.money-and-businesses.bank.overview"
       ],
       "follow_ups": [
         "Tell me about Property",
         "What happens with Property?",
-        "Show me the MONEY & BUSINESSES guide"
+        "Show me the MONEY & BUSINESSES guide",
+        "What is MONEY & BUSINESSES?",
+        "What is Bank?"
       ]
     },
     {
@@ -961,13 +1003,15 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.quick-trade.procedure",
         "money_banks_properties.money-and-businesses.money-and-businesses.overview",
-        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
-        "money_banks_properties.money-and-businesses.bank.overview"
+        "money_banks_properties.money-and-businesses.bank.overview",
+        "money_banks_properties.money-and-businesses.property.overview"
       ],
       "follow_ups": [
         "How do I use Quick Trade?",
         "What are the rules for Quick Trade?",
-        "Where do I find Quick Trade?"
+        "Where do I find Quick Trade?",
+        "What is MONEY & BUSINESSES?",
+        "What is Bank?"
       ]
     },
     {
@@ -1000,13 +1044,15 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.quick-trade.overview",
         "money_banks_properties.money-and-businesses.money-and-businesses.overview",
-        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
-        "money_banks_properties.money-and-businesses.bank.overview"
+        "money_banks_properties.money-and-businesses.bank.overview",
+        "money_banks_properties.money-and-businesses.property.overview"
       ],
       "follow_ups": [
         "Tell me about Quick Trade",
         "What happens with Quick Trade?",
-        "Show me the MONEY & BUSINESSES guide"
+        "Show me the MONEY & BUSINESSES guide",
+        "What is MONEY & BUSINESSES?",
+        "What is Bank?"
       ]
     },
     {
@@ -1039,13 +1085,15 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.lottery.procedure",
         "money_banks_properties.money-and-businesses.money-and-businesses.overview",
-        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
-        "money_banks_properties.money-and-businesses.bank.overview"
+        "money_banks_properties.money-and-businesses.bank.overview",
+        "money_banks_properties.money-and-businesses.property.overview"
       ],
       "follow_ups": [
         "How do I use Lottery?",
         "What are the rules for Lottery?",
-        "Where do I find Lottery?"
+        "Where do I find Lottery?",
+        "What is MONEY & BUSINESSES?",
+        "What is Bank?"
       ]
     },
     {
@@ -1078,13 +1126,15 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.lottery.overview",
         "money_banks_properties.money-and-businesses.money-and-businesses.overview",
-        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
-        "money_banks_properties.money-and-businesses.bank.overview"
+        "money_banks_properties.money-and-businesses.bank.overview",
+        "money_banks_properties.money-and-businesses.property.overview"
       ],
       "follow_ups": [
         "Tell me about Lottery",
         "What happens with Lottery?",
-        "Show me the MONEY & BUSINESSES guide"
+        "Show me the MONEY & BUSINESSES guide",
+        "What is MONEY & BUSINESSES?",
+        "What is Bank?"
       ]
     },
     {
@@ -1117,13 +1167,15 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.loot-box.procedure",
         "money_banks_properties.money-and-businesses.money-and-businesses.overview",
-        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
-        "money_banks_properties.money-and-businesses.bank.overview"
+        "money_banks_properties.money-and-businesses.bank.overview",
+        "money_banks_properties.money-and-businesses.property.overview"
       ],
       "follow_ups": [
         "How do I use Loot Box?",
         "What are the rules for Loot Box?",
-        "Where do I find Loot Box?"
+        "Where do I find Loot Box?",
+        "What is MONEY & BUSINESSES?",
+        "What is Bank?"
       ]
     },
     {
@@ -1156,13 +1208,15 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.loot-box.overview",
         "money_banks_properties.money-and-businesses.money-and-businesses.overview",
-        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
-        "money_banks_properties.money-and-businesses.bank.overview"
+        "money_banks_properties.money-and-businesses.bank.overview",
+        "money_banks_properties.money-and-businesses.property.overview"
       ],
       "follow_ups": [
         "Tell me about Loot Box",
         "What happens with Loot Box?",
-        "Show me the MONEY & BUSINESSES guide"
+        "Show me the MONEY & BUSINESSES guide",
+        "What is MONEY & BUSINESSES?",
+        "What is Bank?"
       ]
     },
     {
@@ -1195,13 +1249,15 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.my-properties.procedure",
         "money_banks_properties.money-and-businesses.money-and-businesses.overview",
-        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
-        "money_banks_properties.money-and-businesses.bank.overview"
+        "money_banks_properties.money-and-businesses.bank.overview",
+        "money_banks_properties.money-and-businesses.property.overview"
       ],
       "follow_ups": [
         "How do I use My Properties?",
         "What are the rules for My Properties?",
-        "Where do I find My Properties?"
+        "Where do I find My Properties?",
+        "What is MONEY & BUSINESSES?",
+        "What is Bank?"
       ]
     },
     {
@@ -1234,13 +1290,15 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.my-properties.overview",
         "money_banks_properties.money-and-businesses.money-and-businesses.overview",
-        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
-        "money_banks_properties.money-and-businesses.bank.overview"
+        "money_banks_properties.money-and-businesses.bank.overview",
+        "money_banks_properties.money-and-businesses.property.overview"
       ],
       "follow_ups": [
         "Tell me about My Properties",
         "What happens with My Properties?",
-        "Show me the MONEY & BUSINESSES guide"
+        "Show me the MONEY & BUSINESSES guide",
+        "What is MONEY & BUSINESSES?",
+        "What is Bank?"
       ]
     },
     {
@@ -1273,13 +1331,15 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.other-money-pages.procedure",
         "money_banks_properties.money-and-businesses.money-and-businesses.overview",
-        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
-        "money_banks_properties.money-and-businesses.bank.overview"
+        "money_banks_properties.money-and-businesses.bank.overview",
+        "money_banks_properties.money-and-businesses.property.overview"
       ],
       "follow_ups": [
         "How do I use Other money pages?",
         "What are the rules for Other money pages?",
-        "Where do I find Other money pages?"
+        "Where do I find Other money pages?",
+        "What is MONEY & BUSINESSES?",
+        "What is Bank?"
       ]
     },
     {
@@ -1312,13 +1372,15 @@
       "related_intents": [
         "money_banks_properties.money-and-businesses.other-money-pages.overview",
         "money_banks_properties.money-and-businesses.money-and-businesses.overview",
-        "money_banks_properties.money-and-businesses.money-and-businesses.procedure",
-        "money_banks_properties.money-and-businesses.bank.overview"
+        "money_banks_properties.money-and-businesses.bank.overview",
+        "money_banks_properties.money-and-businesses.property.overview"
       ],
       "follow_ups": [
         "Tell me about Other money pages",
         "What happens with Other money pages?",
-        "Show me the MONEY & BUSINESSES guide"
+        "Show me the MONEY & BUSINESSES guide",
+        "What is MONEY & BUSINESSES?",
+        "What is Bank?"
       ]
     }
   ]

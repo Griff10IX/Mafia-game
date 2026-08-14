@@ -5,7 +5,6 @@
       "id": "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
       "domain": "cars_crimes",
       "entities": [
-        "GARAGE & VEHICLES",
         "GARAGE & VEHICLES"
       ],
       "sections": [
@@ -35,19 +34,21 @@
       "related_intents": [
         "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
         "cars_crimes.garage-and-vehicles.car-rarities.overview",
-        "cars_crimes.garage-and-vehicles.car-rarities.rules"
+        "cars_crimes.garage-and-vehicles.travel-speed-by-rarity.overview",
+        "cars_crimes.garage-and-vehicles.melting-cars-for-bullets.overview"
       ],
       "follow_ups": [
         "How do I use GARAGE & VEHICLES?",
         "What are the rules for GARAGE & VEHICLES?",
-        "Where do I find GARAGE & VEHICLES?"
+        "Where do I find GARAGE & VEHICLES?",
+        "What is Car Rarities?",
+        "What is Travel Speed by Rarity?"
       ]
     },
     {
       "id": "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
       "domain": "cars_crimes",
       "entities": [
-        "GARAGE & VEHICLES",
         "GARAGE & VEHICLES"
       ],
       "sections": [
@@ -77,12 +78,14 @@
       "related_intents": [
         "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
         "cars_crimes.garage-and-vehicles.car-rarities.overview",
-        "cars_crimes.garage-and-vehicles.car-rarities.rules"
+        "cars_crimes.garage-and-vehicles.travel-speed-by-rarity.overview"
       ],
       "follow_ups": [
         "Tell me about GARAGE & VEHICLES",
         "What happens with GARAGE & VEHICLES?",
-        "Show me the GARAGE & VEHICLES guide"
+        "Show me the GARAGE & VEHICLES guide",
+        "What is GARAGE & VEHICLES?",
+        "What is Car Rarities?"
       ]
     },
     {
@@ -119,12 +122,15 @@
       "related_intents": [
         "cars_crimes.garage-and-vehicles.car-rarities.rules",
         "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
-        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules"
+        "cars_crimes.garage-and-vehicles.travel-speed-by-rarity.overview",
+        "cars_crimes.garage-and-vehicles.melting-cars-for-bullets.overview"
       ],
       "follow_ups": [
         "How do I use Car Rarities?",
         "What are the rules for Car Rarities?",
-        "Where do I find Car Rarities?"
+        "Where do I find Car Rarities?",
+        "What is GARAGE & VEHICLES?",
+        "What is Travel Speed by Rarity?"
       ]
     },
     {
@@ -161,12 +167,14 @@
       "related_intents": [
         "cars_crimes.garage-and-vehicles.car-rarities.overview",
         "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
-        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules"
+        "cars_crimes.garage-and-vehicles.travel-speed-by-rarity.overview"
       ],
       "follow_ups": [
         "Tell me about Car Rarities",
         "What happens with Car Rarities?",
-        "Show me the GARAGE & VEHICLES guide"
+        "Show me the GARAGE & VEHICLES guide",
+        "What is GARAGE & VEHICLES?",
+        "What is Car Rarities?"
       ]
     },
     {
@@ -203,13 +211,15 @@
       "related_intents": [
         "cars_crimes.garage-and-vehicles.travel-speed-by-rarity.rules",
         "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
-        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
-        "cars_crimes.garage-and-vehicles.car-rarities.overview"
+        "cars_crimes.garage-and-vehicles.car-rarities.overview",
+        "cars_crimes.garage-and-vehicles.melting-cars-for-bullets.overview"
       ],
       "follow_ups": [
         "How do I use Travel Speed by Rarity?",
         "What are the rules for Travel Speed by Rarity?",
-        "Where do I find Travel Speed by Rarity?"
+        "Where do I find Travel Speed by Rarity?",
+        "What is GARAGE & VEHICLES?",
+        "What is Car Rarities?"
       ]
     },
     {
@@ -246,13 +256,14 @@
       "related_intents": [
         "cars_crimes.garage-and-vehicles.travel-speed-by-rarity.overview",
         "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
-        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
         "cars_crimes.garage-and-vehicles.car-rarities.overview"
       ],
       "follow_ups": [
         "Tell me about Travel Speed by Rarity",
         "What happens with Travel Speed by Rarity?",
-        "Show me the GARAGE & VEHICLES guide"
+        "Show me the GARAGE & VEHICLES guide",
+        "What is GARAGE & VEHICLES?",
+        "What is Car Rarities?"
       ]
     },
     {
@@ -289,13 +300,15 @@
       "related_intents": [
         "cars_crimes.garage-and-vehicles.melting-cars-for-bullets.rules",
         "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
-        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
-        "cars_crimes.garage-and-vehicles.car-rarities.overview"
+        "cars_crimes.garage-and-vehicles.car-rarities.overview",
+        "cars_crimes.garage-and-vehicles.travel-speed-by-rarity.overview"
       ],
       "follow_ups": [
         "How do I use Melting Cars for Bullets?",
         "What are the rules for Melting Cars for Bullets?",
-        "Where do I find Melting Cars for Bullets?"
+        "Where do I find Melting Cars for Bullets?",
+        "What is GARAGE & VEHICLES?",
+        "What is Car Rarities?"
       ]
     },
     {
@@ -332,13 +345,15 @@
       "related_intents": [
         "cars_crimes.garage-and-vehicles.melting-cars-for-bullets.overview",
         "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
-        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
-        "cars_crimes.garage-and-vehicles.car-rarities.overview"
+        "cars_crimes.garage-and-vehicles.car-rarities.overview",
+        "cars_crimes.garage-and-vehicles.travel-speed-by-rarity.overview"
       ],
       "follow_ups": [
         "Tell me about Melting Cars for Bullets",
         "What happens with Melting Cars for Bullets?",
-        "Show me the GARAGE & VEHICLES guide"
+        "Show me the GARAGE & VEHICLES guide",
+        "What is GARAGE & VEHICLES?",
+        "What is Car Rarities?"
       ]
     },
     {
@@ -375,13 +390,15 @@
       "related_intents": [
         "cars_crimes.garage-and-vehicles.other-car-options.rules",
         "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
-        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
-        "cars_crimes.garage-and-vehicles.car-rarities.overview"
+        "cars_crimes.garage-and-vehicles.car-rarities.overview",
+        "cars_crimes.garage-and-vehicles.travel-speed-by-rarity.overview"
       ],
       "follow_ups": [
         "How do I use Other Car Options?",
         "What are the rules for Other Car Options?",
-        "Where do I find Other Car Options?"
+        "Where do I find Other Car Options?",
+        "What is GARAGE & VEHICLES?",
+        "What is Car Rarities?"
       ]
     },
     {
@@ -418,20 +435,21 @@
       "related_intents": [
         "cars_crimes.garage-and-vehicles.other-car-options.overview",
         "cars_crimes.garage-and-vehicles.garage-and-vehicles.overview",
-        "cars_crimes.garage-and-vehicles.garage-and-vehicles.rules",
-        "cars_crimes.garage-and-vehicles.car-rarities.overview"
+        "cars_crimes.garage-and-vehicles.car-rarities.overview",
+        "cars_crimes.garage-and-vehicles.travel-speed-by-rarity.overview"
       ],
       "follow_ups": [
         "Tell me about Other Car Options",
         "What happens with Other Car Options?",
-        "Show me the GARAGE & VEHICLES guide"
+        "Show me the GARAGE & VEHICLES guide",
+        "What is GARAGE & VEHICLES?",
+        "What is Car Rarities?"
       ]
     },
     {
       "id": "cars_crimes.crimes.crimes.overview",
       "domain": "cars_crimes",
       "entities": [
-        "CRIMES",
         "CRIMES"
       ],
       "sections": [
@@ -461,19 +479,21 @@
       "related_intents": [
         "cars_crimes.crimes.crimes.rules",
         "cars_crimes.crimes.regular-crimes.overview",
-        "cars_crimes.crimes.regular-crimes.rules"
+        "cars_crimes.crimes.organised-crime-oc-heists.overview",
+        "cars_crimes.crimes.gta-car-theft.overview"
       ],
       "follow_ups": [
         "How do I use CRIMES?",
         "What are the rules for CRIMES?",
-        "Where do I find CRIMES?"
+        "Where do I find CRIMES?",
+        "What is Regular Crimes?",
+        "What is Organised Crime (OC/Heists)?"
       ]
     },
     {
       "id": "cars_crimes.crimes.crimes.rules",
       "domain": "cars_crimes",
       "entities": [
-        "CRIMES",
         "CRIMES"
       ],
       "sections": [
@@ -503,12 +523,14 @@
       "related_intents": [
         "cars_crimes.crimes.crimes.overview",
         "cars_crimes.crimes.regular-crimes.overview",
-        "cars_crimes.crimes.regular-crimes.rules"
+        "cars_crimes.crimes.organised-crime-oc-heists.overview"
       ],
       "follow_ups": [
         "Tell me about CRIMES",
         "What happens with CRIMES?",
-        "Show me the CRIMES guide"
+        "Show me the CRIMES guide",
+        "What is CRIMES?",
+        "What is Regular Crimes?"
       ]
     },
     {
@@ -545,12 +567,15 @@
       "related_intents": [
         "cars_crimes.crimes.regular-crimes.rules",
         "cars_crimes.crimes.crimes.overview",
-        "cars_crimes.crimes.crimes.rules"
+        "cars_crimes.crimes.organised-crime-oc-heists.overview",
+        "cars_crimes.crimes.gta-car-theft.overview"
       ],
       "follow_ups": [
         "How do I use Regular Crimes?",
         "What are the rules for Regular Crimes?",
-        "Where do I find Regular Crimes?"
+        "Where do I find Regular Crimes?",
+        "What is CRIMES?",
+        "What is Organised Crime (OC/Heists)?"
       ]
     },
     {
@@ -587,12 +612,14 @@
       "related_intents": [
         "cars_crimes.crimes.regular-crimes.overview",
         "cars_crimes.crimes.crimes.overview",
-        "cars_crimes.crimes.crimes.rules"
+        "cars_crimes.crimes.organised-crime-oc-heists.overview"
       ],
       "follow_ups": [
         "Tell me about Regular Crimes",
         "What happens with Regular Crimes?",
-        "Show me the CRIMES guide"
+        "Show me the CRIMES guide",
+        "What is CRIMES?",
+        "What is Regular Crimes?"
       ]
     },
     {
@@ -629,13 +656,15 @@
       "related_intents": [
         "cars_crimes.crimes.organised-crime-oc-heists.rules",
         "cars_crimes.crimes.crimes.overview",
-        "cars_crimes.crimes.crimes.rules",
-        "cars_crimes.crimes.regular-crimes.overview"
+        "cars_crimes.crimes.regular-crimes.overview",
+        "cars_crimes.crimes.gta-car-theft.overview"
       ],
       "follow_ups": [
         "How do I use Organised Crime (OC/Heists)?",
         "What are the rules for Organised Crime (OC/Heists)?",
-        "Where do I find Organised Crime (OC/Heists)?"
+        "Where do I find Organised Crime (OC/Heists)?",
+        "What is CRIMES?",
+        "What is Regular Crimes?"
       ]
     },
     {
@@ -672,13 +701,14 @@
       "related_intents": [
         "cars_crimes.crimes.organised-crime-oc-heists.overview",
         "cars_crimes.crimes.crimes.overview",
-        "cars_crimes.crimes.crimes.rules",
         "cars_crimes.crimes.regular-crimes.overview"
       ],
       "follow_ups": [
         "Tell me about Organised Crime (OC/Heists)",
         "What happens with Organised Crime (OC/Heists)?",
-        "Show me the CRIMES guide"
+        "Show me the CRIMES guide",
+        "What is CRIMES?",
+        "What is Regular Crimes?"
       ]
     },
     {
@@ -715,13 +745,15 @@
       "related_intents": [
         "cars_crimes.crimes.gta-car-theft.rules",
         "cars_crimes.crimes.crimes.overview",
-        "cars_crimes.crimes.crimes.rules",
-        "cars_crimes.crimes.regular-crimes.overview"
+        "cars_crimes.crimes.regular-crimes.overview",
+        "cars_crimes.crimes.organised-crime-oc-heists.overview"
       ],
       "follow_ups": [
         "How do I use GTA (Car Theft)?",
         "What are the rules for GTA (Car Theft)?",
-        "Where do I find GTA (Car Theft)?"
+        "Where do I find GTA (Car Theft)?",
+        "What is CRIMES?",
+        "What is Regular Crimes?"
       ]
     },
     {
@@ -758,20 +790,21 @@
       "related_intents": [
         "cars_crimes.crimes.gta-car-theft.overview",
         "cars_crimes.crimes.crimes.overview",
-        "cars_crimes.crimes.crimes.rules",
-        "cars_crimes.crimes.regular-crimes.overview"
+        "cars_crimes.crimes.regular-crimes.overview",
+        "cars_crimes.crimes.organised-crime-oc-heists.overview"
       ],
       "follow_ups": [
         "Tell me about GTA (Car Theft)",
         "What happens with GTA (Car Theft)?",
-        "Show me the CRIMES guide"
+        "Show me the CRIMES guide",
+        "What is CRIMES?",
+        "What is Regular Crimes?"
       ]
     },
     {
       "id": "cars_crimes.cars-and-garage.cars-and-garage.overview",
       "domain": "cars_crimes",
       "entities": [
-        "CARS & GARAGE",
         "CARS & GARAGE"
       ],
       "sections": [
@@ -797,19 +830,21 @@
       "related_intents": [
         "cars_crimes.cars-and-garage.cars-and-garage.procedure",
         "cars_crimes.cars-and-garage.garage.overview",
-        "cars_crimes.cars-and-garage.garage.procedure"
+        "cars_crimes.cars-and-garage.car-details.overview",
+        "cars_crimes.cars-and-garage.buy-and-sell.overview"
       ],
       "follow_ups": [
         "How do I use CARS & GARAGE?",
         "What are the rules for CARS & GARAGE?",
-        "Where do I find CARS & GARAGE?"
+        "Where do I find CARS & GARAGE?",
+        "What is Garage?",
+        "What is Car details?"
       ]
     },
     {
       "id": "cars_crimes.cars-and-garage.cars-and-garage.procedure",
       "domain": "cars_crimes",
       "entities": [
-        "CARS & GARAGE",
         "CARS & GARAGE"
       ],
       "sections": [
@@ -835,12 +870,14 @@
       "related_intents": [
         "cars_crimes.cars-and-garage.cars-and-garage.overview",
         "cars_crimes.cars-and-garage.garage.overview",
-        "cars_crimes.cars-and-garage.garage.procedure"
+        "cars_crimes.cars-and-garage.car-details.overview"
       ],
       "follow_ups": [
         "Tell me about CARS & GARAGE",
         "What happens with CARS & GARAGE?",
-        "Show me the CARS & GARAGE guide"
+        "Show me the CARS & GARAGE guide",
+        "What is CARS & GARAGE?",
+        "What is Garage?"
       ]
     },
     {
@@ -873,12 +910,15 @@
       "related_intents": [
         "cars_crimes.cars-and-garage.garage.procedure",
         "cars_crimes.cars-and-garage.cars-and-garage.overview",
-        "cars_crimes.cars-and-garage.cars-and-garage.procedure"
+        "cars_crimes.cars-and-garage.car-details.overview",
+        "cars_crimes.cars-and-garage.buy-and-sell.overview"
       ],
       "follow_ups": [
         "How do I use Garage?",
         "What are the rules for Garage?",
-        "Where do I find Garage?"
+        "Where do I find Garage?",
+        "What is CARS & GARAGE?",
+        "What is Car details?"
       ]
     },
     {
@@ -911,12 +951,14 @@
       "related_intents": [
         "cars_crimes.cars-and-garage.garage.overview",
         "cars_crimes.cars-and-garage.cars-and-garage.overview",
-        "cars_crimes.cars-and-garage.cars-and-garage.procedure"
+        "cars_crimes.cars-and-garage.car-details.overview"
       ],
       "follow_ups": [
         "Tell me about Garage",
         "What happens with Garage?",
-        "Show me the CARS & GARAGE guide"
+        "Show me the CARS & GARAGE guide",
+        "What is CARS & GARAGE?",
+        "What is Garage?"
       ]
     },
     {
@@ -949,13 +991,15 @@
       "related_intents": [
         "cars_crimes.cars-and-garage.car-details.procedure",
         "cars_crimes.cars-and-garage.cars-and-garage.overview",
-        "cars_crimes.cars-and-garage.cars-and-garage.procedure",
-        "cars_crimes.cars-and-garage.garage.overview"
+        "cars_crimes.cars-and-garage.garage.overview",
+        "cars_crimes.cars-and-garage.buy-and-sell.overview"
       ],
       "follow_ups": [
         "How do I use Car details?",
         "What are the rules for Car details?",
-        "Where do I find Car details?"
+        "Where do I find Car details?",
+        "What is CARS & GARAGE?",
+        "What is Garage?"
       ]
     },
     {
@@ -988,13 +1032,14 @@
       "related_intents": [
         "cars_crimes.cars-and-garage.car-details.overview",
         "cars_crimes.cars-and-garage.cars-and-garage.overview",
-        "cars_crimes.cars-and-garage.cars-and-garage.procedure",
         "cars_crimes.cars-and-garage.garage.overview"
       ],
       "follow_ups": [
         "Tell me about Car details",
         "What happens with Car details?",
-        "Show me the CARS & GARAGE guide"
+        "Show me the CARS & GARAGE guide",
+        "What is CARS & GARAGE?",
+        "What is Garage?"
       ]
     },
     {
@@ -1027,13 +1072,15 @@
       "related_intents": [
         "cars_crimes.cars-and-garage.buy-and-sell.procedure",
         "cars_crimes.cars-and-garage.cars-and-garage.overview",
-        "cars_crimes.cars-and-garage.cars-and-garage.procedure",
-        "cars_crimes.cars-and-garage.garage.overview"
+        "cars_crimes.cars-and-garage.garage.overview",
+        "cars_crimes.cars-and-garage.car-details.overview"
       ],
       "follow_ups": [
         "How do I use Buy & sell?",
         "What are the rules for Buy & sell?",
-        "Where do I find Buy & sell?"
+        "Where do I find Buy & sell?",
+        "What is CARS & GARAGE?",
+        "What is Garage?"
       ]
     },
     {
@@ -1066,13 +1113,15 @@
       "related_intents": [
         "cars_crimes.cars-and-garage.buy-and-sell.overview",
         "cars_crimes.cars-and-garage.cars-and-garage.overview",
-        "cars_crimes.cars-and-garage.cars-and-garage.procedure",
-        "cars_crimes.cars-and-garage.garage.overview"
+        "cars_crimes.cars-and-garage.garage.overview",
+        "cars_crimes.cars-and-garage.car-details.overview"
       ],
       "follow_ups": [
         "Tell me about Buy & sell",
         "What happens with Buy & sell?",
-        "Show me the CARS & GARAGE guide"
+        "Show me the CARS & GARAGE guide",
+        "What is CARS & GARAGE?",
+        "What is Garage?"
       ]
     },
     {
@@ -1105,13 +1154,15 @@
       "related_intents": [
         "cars_crimes.cars-and-garage.travel.procedure",
         "cars_crimes.cars-and-garage.cars-and-garage.overview",
-        "cars_crimes.cars-and-garage.cars-and-garage.procedure",
-        "cars_crimes.cars-and-garage.garage.overview"
+        "cars_crimes.cars-and-garage.garage.overview",
+        "cars_crimes.cars-and-garage.car-details.overview"
       ],
       "follow_ups": [
         "How do I use Travel?",
         "What are the rules for Travel?",
-        "Where do I find Travel?"
+        "Where do I find Travel?",
+        "What is CARS & GARAGE?",
+        "What is Garage?"
       ]
     },
     {
@@ -1144,20 +1195,21 @@
       "related_intents": [
         "cars_crimes.cars-and-garage.travel.overview",
         "cars_crimes.cars-and-garage.cars-and-garage.overview",
-        "cars_crimes.cars-and-garage.cars-and-garage.procedure",
-        "cars_crimes.cars-and-garage.garage.overview"
+        "cars_crimes.cars-and-garage.garage.overview",
+        "cars_crimes.cars-and-garage.car-details.overview"
       ],
       "follow_ups": [
         "Tell me about Travel",
         "What happens with Travel?",
-        "Show me the CARS & GARAGE guide"
+        "Show me the CARS & GARAGE guide",
+        "What is CARS & GARAGE?",
+        "What is Garage?"
       ]
     },
     {
       "id": "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
       "domain": "cars_crimes",
       "entities": [
-        "CRIMES & ORGANISED CRIME",
         "CRIMES & ORGANISED CRIME"
       ],
       "sections": [
@@ -1183,19 +1235,21 @@
       "related_intents": [
         "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
         "cars_crimes.crimes-and-organised-crime.solo-crimes.overview",
-        "cars_crimes.crimes-and-organised-crime.solo-crimes.procedure"
+        "cars_crimes.crimes-and-organised-crime.gta-car-theft.overview",
+        "cars_crimes.crimes-and-organised-crime.jail.overview"
       ],
       "follow_ups": [
         "How do I use CRIMES & ORGANISED CRIME?",
         "What are the rules for CRIMES & ORGANISED CRIME?",
-        "Where do I find CRIMES & ORGANISED CRIME?"
+        "Where do I find CRIMES & ORGANISED CRIME?",
+        "What is Solo crimes?",
+        "What is GTA (car theft) in CRIMES & ORGANISED CRIME?"
       ]
     },
     {
       "id": "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
       "domain": "cars_crimes",
       "entities": [
-        "CRIMES & ORGANISED CRIME",
         "CRIMES & ORGANISED CRIME"
       ],
       "sections": [
@@ -1221,12 +1275,14 @@
       "related_intents": [
         "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
         "cars_crimes.crimes-and-organised-crime.solo-crimes.overview",
-        "cars_crimes.crimes-and-organised-crime.solo-crimes.procedure"
+        "cars_crimes.crimes-and-organised-crime.gta-car-theft.overview"
       ],
       "follow_ups": [
         "Tell me about CRIMES & ORGANISED CRIME",
         "What happens with CRIMES & ORGANISED CRIME?",
-        "Show me the CRIMES & ORGANISED CRIME guide"
+        "Show me the CRIMES & ORGANISED CRIME guide",
+        "What is CRIMES & ORGANISED CRIME?",
+        "What is Solo crimes?"
       ]
     },
     {
@@ -1259,12 +1315,15 @@
       "related_intents": [
         "cars_crimes.crimes-and-organised-crime.solo-crimes.procedure",
         "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
-        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure"
+        "cars_crimes.crimes-and-organised-crime.gta-car-theft.overview",
+        "cars_crimes.crimes-and-organised-crime.jail.overview"
       ],
       "follow_ups": [
         "How do I use Solo crimes?",
         "What are the rules for Solo crimes?",
-        "Where do I find Solo crimes?"
+        "Where do I find Solo crimes?",
+        "What is CRIMES & ORGANISED CRIME?",
+        "What is GTA (car theft) in CRIMES & ORGANISED CRIME?"
       ]
     },
     {
@@ -1297,12 +1356,14 @@
       "related_intents": [
         "cars_crimes.crimes-and-organised-crime.solo-crimes.overview",
         "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
-        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure"
+        "cars_crimes.crimes-and-organised-crime.gta-car-theft.overview"
       ],
       "follow_ups": [
         "Tell me about Solo crimes",
         "What happens with Solo crimes?",
-        "Show me the CRIMES & ORGANISED CRIME guide"
+        "Show me the CRIMES & ORGANISED CRIME guide",
+        "What is CRIMES & ORGANISED CRIME?",
+        "What is Solo crimes?"
       ]
     },
     {
@@ -1335,13 +1396,15 @@
       "related_intents": [
         "cars_crimes.crimes-and-organised-crime.gta-car-theft.procedure",
         "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
-        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
-        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview"
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview",
+        "cars_crimes.crimes-and-organised-crime.jail.overview"
       ],
       "follow_ups": [
         "How do I use GTA (car theft)?",
         "What are the rules for GTA (car theft)?",
-        "Where do I find GTA (car theft)?"
+        "Where do I find GTA (car theft)?",
+        "What is CRIMES & ORGANISED CRIME?",
+        "What is Solo crimes?"
       ]
     },
     {
@@ -1374,13 +1437,14 @@
       "related_intents": [
         "cars_crimes.crimes-and-organised-crime.gta-car-theft.overview",
         "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
-        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
         "cars_crimes.crimes-and-organised-crime.solo-crimes.overview"
       ],
       "follow_ups": [
         "Tell me about GTA (car theft)",
         "What happens with GTA (car theft)?",
-        "Show me the CRIMES & ORGANISED CRIME guide"
+        "Show me the CRIMES & ORGANISED CRIME guide",
+        "What is CRIMES & ORGANISED CRIME?",
+        "What is Solo crimes?"
       ]
     },
     {
@@ -1413,13 +1477,15 @@
       "related_intents": [
         "cars_crimes.crimes-and-organised-crime.jail.procedure",
         "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
-        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
-        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview"
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview",
+        "cars_crimes.crimes-and-organised-crime.gta-car-theft.overview"
       ],
       "follow_ups": [
         "How do I use Jail?",
         "What are the rules for Jail?",
-        "Where do I find Jail?"
+        "Where do I find Jail?",
+        "What is CRIMES & ORGANISED CRIME?",
+        "What is Solo crimes?"
       ]
     },
     {
@@ -1452,13 +1518,15 @@
       "related_intents": [
         "cars_crimes.crimes-and-organised-crime.jail.overview",
         "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
-        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
-        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview"
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview",
+        "cars_crimes.crimes-and-organised-crime.gta-car-theft.overview"
       ],
       "follow_ups": [
         "Tell me about Jail",
         "What happens with Jail?",
-        "Show me the CRIMES & ORGANISED CRIME guide"
+        "Show me the CRIMES & ORGANISED CRIME guide",
+        "What is CRIMES & ORGANISED CRIME?",
+        "What is Solo crimes?"
       ]
     },
     {
@@ -1491,13 +1559,15 @@
       "related_intents": [
         "cars_crimes.crimes-and-organised-crime.organised-crime.procedure",
         "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
-        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
-        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview"
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview",
+        "cars_crimes.crimes-and-organised-crime.gta-car-theft.overview"
       ],
       "follow_ups": [
         "How do I use Organised Crime?",
         "What are the rules for Organised Crime?",
-        "Where do I find Organised Crime?"
+        "Where do I find Organised Crime?",
+        "What is CRIMES & ORGANISED CRIME?",
+        "What is Solo crimes?"
       ]
     },
     {
@@ -1530,13 +1600,15 @@
       "related_intents": [
         "cars_crimes.crimes-and-organised-crime.organised-crime.overview",
         "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.overview",
-        "cars_crimes.crimes-and-organised-crime.crimes-and-organised-crime.procedure",
-        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview"
+        "cars_crimes.crimes-and-organised-crime.solo-crimes.overview",
+        "cars_crimes.crimes-and-organised-crime.gta-car-theft.overview"
       ],
       "follow_ups": [
         "Tell me about Organised Crime",
         "What happens with Organised Crime?",
-        "Show me the CRIMES & ORGANISED CRIME guide"
+        "Show me the CRIMES & ORGANISED CRIME guide",
+        "What is CRIMES & ORGANISED CRIME?",
+        "What is Solo crimes?"
       ]
     }
   ]

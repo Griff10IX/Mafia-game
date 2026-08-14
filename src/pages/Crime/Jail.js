@@ -686,6 +686,13 @@ export default function Jail() {
             ? String(detail.message)
             : 'Failed to bust out';
       toast.error(msg);
+      if (/not in jail|no longer in jail/i.test(msg)) {
+        setJailedPlayers((prev) =>
+          (Array.isArray(prev) ? prev : []).filter(
+            (p) => String(p?.username || '').toLowerCase() !== String(username || '').toLowerCase(),
+          ),
+        );
+      }
     } finally {
       bustInFlightRef.current = false;
       setLoading(false);

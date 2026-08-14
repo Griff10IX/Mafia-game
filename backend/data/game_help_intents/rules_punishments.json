@@ -5,7 +5,6 @@
       "id": "rules_punishments.rules-and-policies.rules-and-policies.overview",
       "domain": "rules_punishments",
       "entities": [
-        "RULES & POLICIES",
         "RULES & POLICIES"
       ],
       "sections": [
@@ -31,19 +30,21 @@
       "related_intents": [
         "rules_punishments.rules-and-policies.rules-and-policies.rules",
         "rules_punishments.rules-and-policies.general-rules.overview",
-        "rules_punishments.rules-and-policies.general-rules.rules"
+        "rules_punishments.rules-and-policies.combat-rules.overview",
+        "rules_punishments.rules-and-policies.chat-and-forum-rules.overview"
       ],
       "follow_ups": [
         "How do I use RULES & POLICIES?",
         "What are the rules for RULES & POLICIES?",
-        "Where do I find RULES & POLICIES?"
+        "Where do I find RULES & POLICIES?",
+        "What is General Rules?",
+        "What is Combat Rules?"
       ]
     },
     {
       "id": "rules_punishments.rules-and-policies.rules-and-policies.rules",
       "domain": "rules_punishments",
       "entities": [
-        "RULES & POLICIES",
         "RULES & POLICIES"
       ],
       "sections": [
@@ -69,12 +70,14 @@
       "related_intents": [
         "rules_punishments.rules-and-policies.rules-and-policies.overview",
         "rules_punishments.rules-and-policies.general-rules.overview",
-        "rules_punishments.rules-and-policies.general-rules.rules"
+        "rules_punishments.rules-and-policies.combat-rules.overview"
       ],
       "follow_ups": [
         "Tell me about RULES & POLICIES",
         "What happens with RULES & POLICIES?",
-        "Show me the RULES & POLICIES guide"
+        "Show me the RULES & POLICIES guide",
+        "What is RULES & POLICIES?",
+        "What is General Rules?"
       ]
     },
     {
@@ -107,12 +110,15 @@
       "related_intents": [
         "rules_punishments.rules-and-policies.general-rules.rules",
         "rules_punishments.rules-and-policies.rules-and-policies.overview",
-        "rules_punishments.rules-and-policies.rules-and-policies.rules"
+        "rules_punishments.rules-and-policies.combat-rules.overview",
+        "rules_punishments.rules-and-policies.chat-and-forum-rules.overview"
       ],
       "follow_ups": [
         "How do I use General Rules?",
         "What are the rules for General Rules?",
-        "Where do I find General Rules?"
+        "Where do I find General Rules?",
+        "What is RULES & POLICIES?",
+        "What is Combat Rules?"
       ]
     },
     {
@@ -145,12 +151,14 @@
       "related_intents": [
         "rules_punishments.rules-and-policies.general-rules.overview",
         "rules_punishments.rules-and-policies.rules-and-policies.overview",
-        "rules_punishments.rules-and-policies.rules-and-policies.rules"
+        "rules_punishments.rules-and-policies.combat-rules.overview"
       ],
       "follow_ups": [
         "Tell me about General Rules",
         "What happens with General Rules?",
-        "Show me the RULES & POLICIES guide"
+        "Show me the RULES & POLICIES guide",
+        "What is RULES & POLICIES?",
+        "What is General Rules?"
       ]
     },
     {
@@ -183,13 +191,15 @@
       "related_intents": [
         "rules_punishments.rules-and-policies.combat-rules.rules",
         "rules_punishments.rules-and-policies.rules-and-policies.overview",
-        "rules_punishments.rules-and-policies.rules-and-policies.rules",
-        "rules_punishments.rules-and-policies.general-rules.overview"
+        "rules_punishments.rules-and-policies.general-rules.overview",
+        "rules_punishments.rules-and-policies.chat-and-forum-rules.overview"
       ],
       "follow_ups": [
         "How do I use Combat Rules?",
         "What are the rules for Combat Rules?",
-        "Where do I find Combat Rules?"
+        "Where do I find Combat Rules?",
+        "What is RULES & POLICIES?",
+        "What is General Rules?"
       ]
     },
     {
@@ -222,13 +232,14 @@
       "related_intents": [
         "rules_punishments.rules-and-policies.combat-rules.overview",
         "rules_punishments.rules-and-policies.rules-and-policies.overview",
-        "rules_punishments.rules-and-policies.rules-and-policies.rules",
         "rules_punishments.rules-and-policies.general-rules.overview"
       ],
       "follow_ups": [
         "Tell me about Combat Rules",
         "What happens with Combat Rules?",
-        "Show me the RULES & POLICIES guide"
+        "Show me the RULES & POLICIES guide",
+        "What is RULES & POLICIES?",
+        "What is General Rules?"
       ]
     },
     {
@@ -261,13 +272,15 @@
       "related_intents": [
         "rules_punishments.rules-and-policies.chat-and-forum-rules.rules",
         "rules_punishments.rules-and-policies.rules-and-policies.overview",
-        "rules_punishments.rules-and-policies.rules-and-policies.rules",
-        "rules_punishments.rules-and-policies.general-rules.overview"
+        "rules_punishments.rules-and-policies.general-rules.overview",
+        "rules_punishments.rules-and-policies.combat-rules.overview"
       ],
       "follow_ups": [
         "How do I use Chat & Forum Rules?",
         "What are the rules for Chat & Forum Rules?",
-        "Where do I find Chat & Forum Rules?"
+        "Where do I find Chat & Forum Rules?",
+        "What is RULES & POLICIES?",
+        "What is General Rules?"
       ]
     },
     {
@@ -300,20 +313,21 @@
       "related_intents": [
         "rules_punishments.rules-and-policies.chat-and-forum-rules.overview",
         "rules_punishments.rules-and-policies.rules-and-policies.overview",
-        "rules_punishments.rules-and-policies.rules-and-policies.rules",
-        "rules_punishments.rules-and-policies.general-rules.overview"
+        "rules_punishments.rules-and-policies.general-rules.overview",
+        "rules_punishments.rules-and-policies.combat-rules.overview"
       ],
       "follow_ups": [
         "Tell me about Chat & Forum Rules",
         "What happens with Chat & Forum Rules?",
-        "Show me the RULES & POLICIES guide"
+        "Show me the RULES & POLICIES guide",
+        "What is RULES & POLICIES?",
+        "What is General Rules?"
       ]
     },
     {
       "id": "rules_punishments.punishments-and-appeals.punishments-and-appeals.overview",
       "domain": "rules_punishments",
       "entities": [
-        "PUNISHMENTS & APPEALS",
         "PUNISHMENTS & APPEALS"
       ],
       "sections": [
@@ -339,19 +353,21 @@
       "related_intents": [
         "rules_punishments.punishments-and-appeals.punishments-and-appeals.rules",
         "rules_punishments.punishments-and-appeals.chat-mutes.overview",
-        "rules_punishments.punishments-and-appeals.chat-mutes.rules"
+        "rules_punishments.punishments-and-appeals.account-bans.overview",
+        "rules_punishments.punishments-and-appeals.appeals-process.overview"
       ],
       "follow_ups": [
         "How do I use PUNISHMENTS & APPEALS?",
         "What are the rules for PUNISHMENTS & APPEALS?",
-        "Where do I find PUNISHMENTS & APPEALS?"
+        "Where do I find PUNISHMENTS & APPEALS?",
+        "What is Chat Mutes?",
+        "What is Account Bans?"
       ]
     },
     {
       "id": "rules_punishments.punishments-and-appeals.punishments-and-appeals.rules",
       "domain": "rules_punishments",
       "entities": [
-        "PUNISHMENTS & APPEALS",
         "PUNISHMENTS & APPEALS"
       ],
       "sections": [
@@ -377,12 +393,14 @@
       "related_intents": [
         "rules_punishments.punishments-and-appeals.punishments-and-appeals.overview",
         "rules_punishments.punishments-and-appeals.chat-mutes.overview",
-        "rules_punishments.punishments-and-appeals.chat-mutes.rules"
+        "rules_punishments.punishments-and-appeals.account-bans.overview"
       ],
       "follow_ups": [
         "Tell me about PUNISHMENTS & APPEALS",
         "What happens with PUNISHMENTS & APPEALS?",
-        "Show me the PUNISHMENTS & APPEALS guide"
+        "Show me the PUNISHMENTS & APPEALS guide",
+        "What is PUNISHMENTS & APPEALS?",
+        "What is Chat Mutes?"
       ]
     },
     {
@@ -415,12 +433,15 @@
       "related_intents": [
         "rules_punishments.punishments-and-appeals.chat-mutes.rules",
         "rules_punishments.punishments-and-appeals.punishments-and-appeals.overview",
-        "rules_punishments.punishments-and-appeals.punishments-and-appeals.rules"
+        "rules_punishments.punishments-and-appeals.account-bans.overview",
+        "rules_punishments.punishments-and-appeals.appeals-process.overview"
       ],
       "follow_ups": [
         "How do I use Chat Mutes?",
         "What are the rules for Chat Mutes?",
-        "Where do I find Chat Mutes?"
+        "Where do I find Chat Mutes?",
+        "What is PUNISHMENTS & APPEALS?",
+        "What is Account Bans?"
       ]
     },
     {
@@ -453,12 +474,14 @@
       "related_intents": [
         "rules_punishments.punishments-and-appeals.chat-mutes.overview",
         "rules_punishments.punishments-and-appeals.punishments-and-appeals.overview",
-        "rules_punishments.punishments-and-appeals.punishments-and-appeals.rules"
+        "rules_punishments.punishments-and-appeals.account-bans.overview"
       ],
       "follow_ups": [
         "Tell me about Chat Mutes",
         "What happens with Chat Mutes?",
-        "Show me the PUNISHMENTS & APPEALS guide"
+        "Show me the PUNISHMENTS & APPEALS guide",
+        "What is PUNISHMENTS & APPEALS?",
+        "What is Chat Mutes?"
       ]
     },
     {
@@ -491,13 +514,15 @@
       "related_intents": [
         "rules_punishments.punishments-and-appeals.account-bans.rules",
         "rules_punishments.punishments-and-appeals.punishments-and-appeals.overview",
-        "rules_punishments.punishments-and-appeals.punishments-and-appeals.rules",
-        "rules_punishments.punishments-and-appeals.chat-mutes.overview"
+        "rules_punishments.punishments-and-appeals.chat-mutes.overview",
+        "rules_punishments.punishments-and-appeals.appeals-process.overview"
       ],
       "follow_ups": [
         "How do I use Account Bans?",
         "What are the rules for Account Bans?",
-        "Where do I find Account Bans?"
+        "Where do I find Account Bans?",
+        "What is PUNISHMENTS & APPEALS?",
+        "What is Chat Mutes?"
       ]
     },
     {
@@ -530,13 +555,14 @@
       "related_intents": [
         "rules_punishments.punishments-and-appeals.account-bans.overview",
         "rules_punishments.punishments-and-appeals.punishments-and-appeals.overview",
-        "rules_punishments.punishments-and-appeals.punishments-and-appeals.rules",
         "rules_punishments.punishments-and-appeals.chat-mutes.overview"
       ],
       "follow_ups": [
         "Tell me about Account Bans",
         "What happens with Account Bans?",
-        "Show me the PUNISHMENTS & APPEALS guide"
+        "Show me the PUNISHMENTS & APPEALS guide",
+        "What is PUNISHMENTS & APPEALS?",
+        "What is Chat Mutes?"
       ]
     },
     {
@@ -569,13 +595,15 @@
       "related_intents": [
         "rules_punishments.punishments-and-appeals.appeals-process.rules",
         "rules_punishments.punishments-and-appeals.punishments-and-appeals.overview",
-        "rules_punishments.punishments-and-appeals.punishments-and-appeals.rules",
-        "rules_punishments.punishments-and-appeals.chat-mutes.overview"
+        "rules_punishments.punishments-and-appeals.chat-mutes.overview",
+        "rules_punishments.punishments-and-appeals.account-bans.overview"
       ],
       "follow_ups": [
         "How do I use Appeals Process?",
         "What are the rules for Appeals Process?",
-        "Where do I find Appeals Process?"
+        "Where do I find Appeals Process?",
+        "What is PUNISHMENTS & APPEALS?",
+        "What is Chat Mutes?"
       ]
     },
     {
@@ -608,20 +636,21 @@
       "related_intents": [
         "rules_punishments.punishments-and-appeals.appeals-process.overview",
         "rules_punishments.punishments-and-appeals.punishments-and-appeals.overview",
-        "rules_punishments.punishments-and-appeals.punishments-and-appeals.rules",
-        "rules_punishments.punishments-and-appeals.chat-mutes.overview"
+        "rules_punishments.punishments-and-appeals.chat-mutes.overview",
+        "rules_punishments.punishments-and-appeals.account-bans.overview"
       ],
       "follow_ups": [
         "Tell me about Appeals Process",
         "What happens with Appeals Process?",
-        "Show me the PUNISHMENTS & APPEALS guide"
+        "Show me the PUNISHMENTS & APPEALS guide",
+        "What is PUNISHMENTS & APPEALS?",
+        "What is Chat Mutes?"
       ]
     },
     {
       "id": "rules_punishments.points-and-purchases.points-and-purchases.overview",
       "domain": "rules_punishments",
       "entities": [
-        "POINTS & PURCHASES",
         "POINTS & PURCHASES"
       ],
       "sections": [
@@ -647,19 +676,21 @@
       "related_intents": [
         "rules_punishments.points-and-purchases.points-and-purchases.rules",
         "rules_punishments.points-and-purchases.buying-points.overview",
-        "rules_punishments.points-and-purchases.buying-points.rules"
+        "rules_punishments.points-and-purchases.what-happens-to-points-when-you-die.overview",
+        "rules_punishments.points-and-purchases.transaction-issues.overview"
       ],
       "follow_ups": [
         "How do I use POINTS & PURCHASES?",
         "What are the rules for POINTS & PURCHASES?",
-        "Where do I find POINTS & PURCHASES?"
+        "Where do I find POINTS & PURCHASES?",
+        "What is Buying Points?",
+        "What Happens to Points When You Die?"
       ]
     },
     {
       "id": "rules_punishments.points-and-purchases.points-and-purchases.rules",
       "domain": "rules_punishments",
       "entities": [
-        "POINTS & PURCHASES",
         "POINTS & PURCHASES"
       ],
       "sections": [
@@ -685,12 +716,14 @@
       "related_intents": [
         "rules_punishments.points-and-purchases.points-and-purchases.overview",
         "rules_punishments.points-and-purchases.buying-points.overview",
-        "rules_punishments.points-and-purchases.buying-points.rules"
+        "rules_punishments.points-and-purchases.what-happens-to-points-when-you-die.overview"
       ],
       "follow_ups": [
         "Tell me about POINTS & PURCHASES",
         "What happens with POINTS & PURCHASES?",
-        "Show me the POINTS & PURCHASES guide"
+        "Show me the POINTS & PURCHASES guide",
+        "What is POINTS & PURCHASES?",
+        "What is Buying Points?"
       ]
     },
     {
@@ -723,12 +756,15 @@
       "related_intents": [
         "rules_punishments.points-and-purchases.buying-points.rules",
         "rules_punishments.points-and-purchases.points-and-purchases.overview",
-        "rules_punishments.points-and-purchases.points-and-purchases.rules"
+        "rules_punishments.points-and-purchases.what-happens-to-points-when-you-die.overview",
+        "rules_punishments.points-and-purchases.transaction-issues.overview"
       ],
       "follow_ups": [
         "How do I use Buying Points?",
         "What are the rules for Buying Points?",
-        "Where do I find Buying Points?"
+        "Where do I find Buying Points?",
+        "What is POINTS & PURCHASES?",
+        "What Happens to Points When You Die?"
       ]
     },
     {
@@ -761,18 +797,21 @@
       "related_intents": [
         "rules_punishments.points-and-purchases.buying-points.overview",
         "rules_punishments.points-and-purchases.points-and-purchases.overview",
-        "rules_punishments.points-and-purchases.points-and-purchases.rules"
+        "rules_punishments.points-and-purchases.what-happens-to-points-when-you-die.overview"
       ],
       "follow_ups": [
         "Tell me about Buying Points",
         "What happens with Buying Points?",
-        "Show me the POINTS & PURCHASES guide"
+        "Show me the POINTS & PURCHASES guide",
+        "What is POINTS & PURCHASES?",
+        "What is Buying Points?"
       ]
     },
     {
       "id": "rules_punishments.points-and-purchases.what-happens-to-points-when-you-die.overview",
       "domain": "rules_punishments",
       "entities": [
+        "To Points When You Die",
         "What Happens to Points When You Die?",
         "POINTS & PURCHASES"
       ],
@@ -788,30 +827,33 @@
       "route_aliases": [],
       "intent_type": "definition",
       "variants": [
-        "What is What Happens to Points When You Die??",
-        "What are What Happens to Points When You Die??",
-        "Tell me about What Happens to Points When You Die?",
-        "Explain What Happens to Points When You Die?",
-        "How does What Happens to Points When You Die? work?",
-        "I need information about What Happens to Points When You Die?",
-        "Give me the guide for What Happens to Points When You Die?"
+        "What Happens to Points When You Die?",
+        "What is To Points When You Die?",
+        "What are To Points When You Die?",
+        "Tell me about To Points When You Die",
+        "Explain To Points When You Die",
+        "How does To Points When You Die work?",
+        "I need information about To Points When You Die"
       ],
       "related_intents": [
         "rules_punishments.points-and-purchases.what-happens-to-points-when-you-die.rules",
         "rules_punishments.points-and-purchases.points-and-purchases.overview",
-        "rules_punishments.points-and-purchases.points-and-purchases.rules",
-        "rules_punishments.points-and-purchases.buying-points.overview"
+        "rules_punishments.points-and-purchases.buying-points.overview",
+        "rules_punishments.points-and-purchases.transaction-issues.overview"
       ],
       "follow_ups": [
-        "How do I use What Happens to Points When You Die??",
-        "What are the rules for What Happens to Points When You Die??",
-        "Where do I find What Happens to Points When You Die??"
+        "Tell me about To Points When You Die",
+        "Where do I find To Points When You Die?",
+        "Show me the POINTS & PURCHASES guide",
+        "What is POINTS & PURCHASES?",
+        "What is Buying Points?"
       ]
     },
     {
       "id": "rules_punishments.points-and-purchases.what-happens-to-points-when-you-die.rules",
       "domain": "rules_punishments",
       "entities": [
+        "To Points When You Die",
         "What Happens to Points When You Die?",
         "POINTS & PURCHASES"
       ],
@@ -827,24 +869,25 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for What Happens to Points When You Die??",
-        "What happens with What Happens to Points When You Die??",
-        "Does the FAQ explain What Happens to Points When You Die??",
-        "Can you clarify What Happens to Points When You Die??",
-        "Which FAQ covers What Happens to Points When You Die??",
-        "I have a question about What Happens to Points When You Die?",
-        "How is What Happens to Points When You Die? supposed to work?"
+        "What are the rules for To Points When You Die?",
+        "What happens with To Points When You Die?",
+        "Does the FAQ explain To Points When You Die?",
+        "Can you clarify To Points When You Die?",
+        "Which FAQ covers To Points When You Die?",
+        "I have a question about To Points When You Die",
+        "How is To Points When You Die supposed to work?"
       ],
       "related_intents": [
         "rules_punishments.points-and-purchases.what-happens-to-points-when-you-die.overview",
         "rules_punishments.points-and-purchases.points-and-purchases.overview",
-        "rules_punishments.points-and-purchases.points-and-purchases.rules",
         "rules_punishments.points-and-purchases.buying-points.overview"
       ],
       "follow_ups": [
-        "Tell me about What Happens to Points When You Die?",
-        "What happens with What Happens to Points When You Die??",
-        "Show me the POINTS & PURCHASES guide"
+        "How does To Points When You Die work?",
+        "Show me the POINTS & PURCHASES guide",
+        "What is POINTS & PURCHASES?",
+        "What is Buying Points?",
+        "What Happens to Points When You Die?"
       ]
     },
     {
@@ -877,13 +920,15 @@
       "related_intents": [
         "rules_punishments.points-and-purchases.transaction-issues.rules",
         "rules_punishments.points-and-purchases.points-and-purchases.overview",
-        "rules_punishments.points-and-purchases.points-and-purchases.rules",
-        "rules_punishments.points-and-purchases.buying-points.overview"
+        "rules_punishments.points-and-purchases.buying-points.overview",
+        "rules_punishments.points-and-purchases.what-happens-to-points-when-you-die.overview"
       ],
       "follow_ups": [
         "How do I use Transaction Issues?",
         "What are the rules for Transaction Issues?",
-        "Where do I find Transaction Issues?"
+        "Where do I find Transaction Issues?",
+        "What is POINTS & PURCHASES?",
+        "What is Buying Points?"
       ]
     },
     {
@@ -916,20 +961,21 @@
       "related_intents": [
         "rules_punishments.points-and-purchases.transaction-issues.overview",
         "rules_punishments.points-and-purchases.points-and-purchases.overview",
-        "rules_punishments.points-and-purchases.points-and-purchases.rules",
-        "rules_punishments.points-and-purchases.buying-points.overview"
+        "rules_punishments.points-and-purchases.buying-points.overview",
+        "rules_punishments.points-and-purchases.what-happens-to-points-when-you-die.overview"
       ],
       "follow_ups": [
         "Tell me about Transaction Issues",
         "What happens with Transaction Issues?",
-        "Show me the POINTS & PURCHASES guide"
+        "Show me the POINTS & PURCHASES guide",
+        "What is POINTS & PURCHASES?",
+        "What is Buying Points?"
       ]
     },
     {
       "id": "rules_punishments.refund-and-chargeback-policy.refund-and-chargeback-policy.overview",
       "domain": "rules_punishments",
       "entities": [
-        "REFUND & CHARGEBACK POLICY",
         "REFUND & CHARGEBACK POLICY"
       ],
       "sections": [
@@ -965,7 +1011,6 @@
       "id": "rules_punishments.refund-and-chargeback-policy.refund-and-chargeback-policy.rules",
       "domain": "rules_punishments",
       "entities": [
-        "REFUND & CHARGEBACK POLICY",
         "REFUND & CHARGEBACK POLICY"
       ],
       "sections": [
@@ -994,14 +1039,14 @@
       "follow_ups": [
         "Tell me about REFUND & CHARGEBACK POLICY",
         "What happens with REFUND & CHARGEBACK POLICY?",
-        "Show me the REFUND & CHARGEBACK POLICY guide"
+        "Show me the REFUND & CHARGEBACK POLICY guide",
+        "What is REFUND & CHARGEBACK POLICY?"
       ]
     },
     {
       "id": "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.overview",
       "domain": "rules_punishments",
       "entities": [
-        "ALL PURCHASES ARE FINAL AND NON-REFUNDABLE",
         "ALL PURCHASES ARE FINAL AND NON-REFUNDABLE"
       ],
       "sections": [
@@ -1027,19 +1072,21 @@
       "related_intents": [
         "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.rules",
         "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.rules"
+        "rules_punishments.all-purchases-are-final-and-non-refundable.chargebacks-read-carefully.overview",
+        "rules_punishments.all-purchases-are-final-and-non-refundable.why-are-chargebacks-so-serious.overview"
       ],
       "follow_ups": [
         "How do I use ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
         "What are the rules for ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
-        "Where do I find ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?"
+        "Where do I find ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
+        "What is No Refunds Policy?",
+        "What is CHARGEBACKS - READ CAREFULLY?"
       ]
     },
     {
       "id": "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.rules",
       "domain": "rules_punishments",
       "entities": [
-        "ALL PURCHASES ARE FINAL AND NON-REFUNDABLE",
         "ALL PURCHASES ARE FINAL AND NON-REFUNDABLE"
       ],
       "sections": [
@@ -1065,12 +1112,14 @@
       "related_intents": [
         "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.overview",
         "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.rules"
+        "rules_punishments.all-purchases-are-final-and-non-refundable.chargebacks-read-carefully.overview"
       ],
       "follow_ups": [
         "Tell me about ALL PURCHASES ARE FINAL AND NON-REFUNDABLE",
         "What happens with ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
-        "Show me the ALL PURCHASES ARE FINAL AND NON-REFUNDABLE guide"
+        "Show me the ALL PURCHASES ARE FINAL AND NON-REFUNDABLE guide",
+        "What is ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
+        "What is No Refunds Policy?"
       ]
     },
     {
@@ -1103,12 +1152,15 @@
       "related_intents": [
         "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.rules",
         "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.overview",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.rules"
+        "rules_punishments.all-purchases-are-final-and-non-refundable.chargebacks-read-carefully.overview",
+        "rules_punishments.all-purchases-are-final-and-non-refundable.why-are-chargebacks-so-serious.overview"
       ],
       "follow_ups": [
         "How do I use No Refunds Policy?",
         "What are the rules for No Refunds Policy?",
-        "Where do I find No Refunds Policy?"
+        "Where do I find No Refunds Policy?",
+        "What is ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
+        "What is CHARGEBACKS - READ CAREFULLY?"
       ]
     },
     {
@@ -1141,12 +1193,14 @@
       "related_intents": [
         "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview",
         "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.overview",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.rules"
+        "rules_punishments.all-purchases-are-final-and-non-refundable.chargebacks-read-carefully.overview"
       ],
       "follow_ups": [
         "Tell me about No Refunds Policy",
         "What happens with No Refunds Policy?",
-        "Show me the ALL PURCHASES ARE FINAL AND NON-REFUNDABLE guide"
+        "Show me the ALL PURCHASES ARE FINAL AND NON-REFUNDABLE guide",
+        "What is ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
+        "What is No Refunds Policy?"
       ]
     },
     {
@@ -1179,13 +1233,15 @@
       "related_intents": [
         "rules_punishments.all-purchases-are-final-and-non-refundable.chargebacks-read-carefully.rules",
         "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.overview",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.rules",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview"
+        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview",
+        "rules_punishments.all-purchases-are-final-and-non-refundable.why-are-chargebacks-so-serious.overview"
       ],
       "follow_ups": [
         "How do I use CHARGEBACKS - READ CAREFULLY?",
         "What are the rules for CHARGEBACKS - READ CAREFULLY?",
-        "Where do I find CHARGEBACKS - READ CAREFULLY?"
+        "Where do I find CHARGEBACKS - READ CAREFULLY?",
+        "What is ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
+        "What is No Refunds Policy?"
       ]
     },
     {
@@ -1218,19 +1274,21 @@
       "related_intents": [
         "rules_punishments.all-purchases-are-final-and-non-refundable.chargebacks-read-carefully.overview",
         "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.overview",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.rules",
         "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview"
       ],
       "follow_ups": [
         "Tell me about CHARGEBACKS - READ CAREFULLY",
         "What happens with CHARGEBACKS - READ CAREFULLY?",
-        "Show me the ALL PURCHASES ARE FINAL AND NON-REFUNDABLE guide"
+        "Show me the ALL PURCHASES ARE FINAL AND NON-REFUNDABLE guide",
+        "What is ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
+        "What is No Refunds Policy?"
       ]
     },
     {
       "id": "rules_punishments.all-purchases-are-final-and-non-refundable.why-are-chargebacks-so-serious.overview",
       "domain": "rules_punishments",
       "entities": [
+        "Chargebacks So Serious",
         "Why Are Chargebacks So Serious?",
         "ALL PURCHASES ARE FINAL AND NON-REFUNDABLE"
       ],
@@ -1246,30 +1304,33 @@
       "route_aliases": [],
       "intent_type": "definition",
       "variants": [
-        "What is Why Are Chargebacks So Serious??",
-        "What are Why Are Chargebacks So Serious??",
-        "Tell me about Why Are Chargebacks So Serious?",
-        "Explain Why Are Chargebacks So Serious?",
-        "How does Why Are Chargebacks So Serious? work?",
-        "I need information about Why Are Chargebacks So Serious?",
-        "Give me the guide for Why Are Chargebacks So Serious?"
+        "Why Are Chargebacks So Serious?",
+        "What is Chargebacks So Serious?",
+        "What are Chargebacks So Serious?",
+        "Tell me about Chargebacks So Serious",
+        "Explain Chargebacks So Serious",
+        "How does Chargebacks So Serious work?",
+        "I need information about Chargebacks So Serious"
       ],
       "related_intents": [
         "rules_punishments.all-purchases-are-final-and-non-refundable.why-are-chargebacks-so-serious.rules",
         "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.overview",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.rules",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview"
+        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview",
+        "rules_punishments.all-purchases-are-final-and-non-refundable.chargebacks-read-carefully.overview"
       ],
       "follow_ups": [
-        "How do I use Why Are Chargebacks So Serious??",
-        "What are the rules for Why Are Chargebacks So Serious??",
-        "Where do I find Why Are Chargebacks So Serious??"
+        "Tell me about Chargebacks So Serious",
+        "Where do I find Chargebacks So Serious?",
+        "Show me the ALL PURCHASES ARE FINAL AND NON-REFUNDABLE guide",
+        "What is ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
+        "What is No Refunds Policy?"
       ]
     },
     {
       "id": "rules_punishments.all-purchases-are-final-and-non-refundable.why-are-chargebacks-so-serious.rules",
       "domain": "rules_punishments",
       "entities": [
+        "Chargebacks So Serious",
         "Why Are Chargebacks So Serious?",
         "ALL PURCHASES ARE FINAL AND NON-REFUNDABLE"
       ],
@@ -1285,24 +1346,26 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for Why Are Chargebacks So Serious??",
-        "What happens with Why Are Chargebacks So Serious??",
-        "Does the FAQ explain Why Are Chargebacks So Serious??",
-        "Can you clarify Why Are Chargebacks So Serious??",
-        "Which FAQ covers Why Are Chargebacks So Serious??",
-        "I have a question about Why Are Chargebacks So Serious?",
-        "How is Why Are Chargebacks So Serious? supposed to work?"
+        "What are the rules for Chargebacks So Serious?",
+        "What happens with Chargebacks So Serious?",
+        "Does the FAQ explain Chargebacks So Serious?",
+        "Can you clarify Chargebacks So Serious?",
+        "Which FAQ covers Chargebacks So Serious?",
+        "I have a question about Chargebacks So Serious",
+        "How is Chargebacks So Serious supposed to work?"
       ],
       "related_intents": [
         "rules_punishments.all-purchases-are-final-and-non-refundable.why-are-chargebacks-so-serious.overview",
         "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.overview",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.rules",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview"
+        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview",
+        "rules_punishments.all-purchases-are-final-and-non-refundable.chargebacks-read-carefully.overview"
       ],
       "follow_ups": [
-        "Tell me about Why Are Chargebacks So Serious?",
-        "What happens with Why Are Chargebacks So Serious??",
-        "Show me the ALL PURCHASES ARE FINAL AND NON-REFUNDABLE guide"
+        "How does Chargebacks So Serious work?",
+        "Show me the ALL PURCHASES ARE FINAL AND NON-REFUNDABLE guide",
+        "What is ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
+        "What is No Refunds Policy?",
+        "What is CHARGEBACKS - READ CAREFULLY?"
       ]
     },
     {
@@ -1335,13 +1398,15 @@
       "related_intents": [
         "rules_punishments.all-purchases-are-final-and-non-refundable.instead-of-chargebacks-contact-us.rules",
         "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.overview",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.rules",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview"
+        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview",
+        "rules_punishments.all-purchases-are-final-and-non-refundable.chargebacks-read-carefully.overview"
       ],
       "follow_ups": [
         "How do I use Instead of Chargebacks - Contact Us!?",
         "What are the rules for Instead of Chargebacks - Contact Us!?",
-        "Where do I find Instead of Chargebacks - Contact Us!?"
+        "Where do I find Instead of Chargebacks - Contact Us!?",
+        "What is ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
+        "What is No Refunds Policy?"
       ]
     },
     {
@@ -1374,13 +1439,15 @@
       "related_intents": [
         "rules_punishments.all-purchases-are-final-and-non-refundable.instead-of-chargebacks-contact-us.overview",
         "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.overview",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.rules",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview"
+        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview",
+        "rules_punishments.all-purchases-are-final-and-non-refundable.chargebacks-read-carefully.overview"
       ],
       "follow_ups": [
         "Tell me about Instead of Chargebacks - Contact Us!",
         "What happens with Instead of Chargebacks - Contact Us!?",
-        "Show me the ALL PURCHASES ARE FINAL AND NON-REFUNDABLE guide"
+        "Show me the ALL PURCHASES ARE FINAL AND NON-REFUNDABLE guide",
+        "What is ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
+        "What is No Refunds Policy?"
       ]
     },
     {
@@ -1413,13 +1480,15 @@
       "related_intents": [
         "rules_punishments.all-purchases-are-final-and-non-refundable.fraudulent-purchases.rules",
         "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.overview",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.rules",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview"
+        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview",
+        "rules_punishments.all-purchases-are-final-and-non-refundable.chargebacks-read-carefully.overview"
       ],
       "follow_ups": [
         "How do I use Fraudulent Purchases?",
         "What are the rules for Fraudulent Purchases?",
-        "Where do I find Fraudulent Purchases?"
+        "Where do I find Fraudulent Purchases?",
+        "What is ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
+        "What is No Refunds Policy?"
       ]
     },
     {
@@ -1452,13 +1521,15 @@
       "related_intents": [
         "rules_punishments.all-purchases-are-final-and-non-refundable.fraudulent-purchases.overview",
         "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.overview",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.rules",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview"
+        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview",
+        "rules_punishments.all-purchases-are-final-and-non-refundable.chargebacks-read-carefully.overview"
       ],
       "follow_ups": [
         "Tell me about Fraudulent Purchases",
         "What happens with Fraudulent Purchases?",
-        "Show me the ALL PURCHASES ARE FINAL AND NON-REFUNDABLE guide"
+        "Show me the ALL PURCHASES ARE FINAL AND NON-REFUNDABLE guide",
+        "What is ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
+        "What is No Refunds Policy?"
       ]
     },
     {
@@ -1491,13 +1562,15 @@
       "related_intents": [
         "rules_punishments.all-purchases-are-final-and-non-refundable.gift-purchases.rules",
         "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.overview",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.rules",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview"
+        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview",
+        "rules_punishments.all-purchases-are-final-and-non-refundable.chargebacks-read-carefully.overview"
       ],
       "follow_ups": [
         "How do I use Gift Purchases?",
         "What are the rules for Gift Purchases?",
-        "Where do I find Gift Purchases?"
+        "Where do I find Gift Purchases?",
+        "What is ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
+        "What is No Refunds Policy?"
       ]
     },
     {
@@ -1530,13 +1603,15 @@
       "related_intents": [
         "rules_punishments.all-purchases-are-final-and-non-refundable.gift-purchases.overview",
         "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.overview",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.all-purchases-are-final-and-non-refundable.rules",
-        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview"
+        "rules_punishments.all-purchases-are-final-and-non-refundable.no-refunds-policy.overview",
+        "rules_punishments.all-purchases-are-final-and-non-refundable.chargebacks-read-carefully.overview"
       ],
       "follow_ups": [
         "Tell me about Gift Purchases",
         "What happens with Gift Purchases?",
-        "Show me the ALL PURCHASES ARE FINAL AND NON-REFUNDABLE guide"
+        "Show me the ALL PURCHASES ARE FINAL AND NON-REFUNDABLE guide",
+        "What is ALL PURCHASES ARE FINAL AND NON-REFUNDABLE?",
+        "What is No Refunds Policy?"
       ]
     }
   ]

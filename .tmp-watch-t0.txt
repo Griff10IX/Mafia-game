@@ -1,0 +1,143 @@
+﻿=== T0 2026-08-14T22:03:26Z ===
+ 23:03:26 up 71 days, 20:44,  0 users,  load average: 0.38, 0.21, 0.18
+=== MEM ===
+               total        used        free      shared  buff/cache   available
+Mem:           7.8Gi       692Mi       2.5Gi        14Mi       4.6Gi       6.8Gi
+Swap:             0B          0B          0B
+=== TOP CPU ===
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root     1764309 28.9  5.3 2086388 435136 ?      Ssl  21:15  31:21 /opt/mafia-app/backend/venv/bin/python3.11 /opt/mafia-app/backend/venv/bin/uvicorn server:app --host 127.0.0.1 --port 8000
+root     1765251  7.0  0.1  17072  9428 ?        Ss   23:03   0:00 /lib/systemd/systemd --user
+root     1765248  3.0  0.1  17448 11668 ?        Ss   23:03   0:00 sshd: root@notty
+root     1699047  0.3  4.3 510164 351360 ?       S<s  Aug12  11:49 /lib/systemd/systemd-journald
+www-data 1764298  0.3  0.2  69080 22588 ?        S    21:14   0:23 nginx: worker process
+syslog   1207154  0.1  0.0 222404  5664 ?        Ssl  Jul24  35:51 /usr/sbin/rsyslogd -n -iNONE
+root           1  0.0  0.1 167728 12708 ?        Ss   Jun04   7:00 /lib/systemd/systemd --system --deserialize 49
+root           2  0.0  0.0      0     0 ?        S    Jun04   0:00 [kthreadd]
+root           3  0.0  0.0      0     0 ?        I<   Jun04   0:00 [rcu_gp]
+root           4  0.0  0.0      0     0 ?        I<   Jun04   0:00 [rcu_par_gp]
+root           5  0.0  0.0      0     0 ?        I<   Jun04   0:00 [slub_flushwq]
+root           6  0.0  0.0      0     0 ?        I<   Jun04   0:00 [netns]
+root           8  0.0  0.0      0     0 ?        I<   Jun04   0:00 [kworker/0:0H-events_highpri]
+root          10  0.0  0.0      0     0 ?        I<   Jun04   0:00 [mm_percpu_wq]
+root          11  0.0  0.0      0     0 ?        S    Jun04   0:00 [rcu_tasks_rude_]
+root          12  0.0  0.0      0     0 ?        S    Jun04   0:00 [rcu_tasks_trace]
+root          13  0.0  0.0      0     0 ?        S    Jun04   1:31 [ksoftirqd/0]
+=== UVICORN / MAFIA ===
+root     1764309 28.9  5.3 2086388 435136 ?      Ssl  21:15  31:21 /opt/mafia-app/backend/venv/bin/python3.11 /opt/mafia-app/backend/venv/bin/uvicorn server:app --host 127.0.0.1 --port 8000
+=== NGINX SAMPLE ===
+172.68.229.204 - - [14/Aug/2026:23:03:26 +0100] "GET /api/auth/me HTTP/1.1" 200 5215 "https://mafiawars.co.uk/casino/videopoker" "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36"
+172.68.229.205 - - [14/Aug/2026:23:03:26 +0100] "GET /api/notifications HTTP/1.1" 200 18313 "https://mafiawars.co.uk/casino/videopoker" "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36"
+172.68.229.204 - - [14/Aug/2026:23:03:26 +0100] "GET /api/families/war HTTP/1.1" 200 11 "https://mafiawars.co.uk/casino/videopoker" "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36"
+=== NGINX LAST 10M TOP PATHS ===
+nginx_requests_10m=22842 parse_skipped=4
+-- status --
+ 17716  200
+  3444  400
+  1475  403
+   171  301
+    18  304
+    14  404
+     3  405
+     1  499
+-- top 40 paths --
+  2918  POST /api/jail/bust
+  1297  GET /api/game-chat/messages
+  1157  GET /api/jail/players
+   880  GET /api/auth/me
+   819  POST /api/crimes/commit-all
+   815  GET /api/gta/options
+   776  GET /api/weed-empire/status
+   722  GET /api/notifications
+   665  POST /api/crimes/prestige_crime_4/commit
+   663  GET /api/user/casino-property
+   633  GET /api/user/rank-progress
+   570  GET /api/bodyguards
+   472  GET /api/booze-run/config
+   471  GET /api/families/war
+   444  GET /api/users/online
+   405  GET /api/leaderboards/top
+   385  GET /api/oc/status
+   368  GET /api/families/my
+   331  GET /api/help-desk/open-count
+   311  GET /api/travel/info
+   305  POST /api/booze-run/sell
+   289  POST /api/jail/snitch
+   285  GET /api/travel/status
+   282  GET /api/crimes
+   272  POST /api/travel
+   267  GET /api/forum/entertainer/find-word/active
+   252  GET /api/gta/playable-count
+   232  POST /api/admin/toast-events/ingest
+   226  GET /api/weed-empire/ready-count
+   215  POST /api/booze-run/buy
+   155  GET /api/sports-betting/events
+   155  POST /api/weed-empire/plant
+   150  GET /api/news/flash
+   146  GET /api/attack/list
+   145  GET /api/profile/censor-profanity
+   144  POST /api/crimes/crime1/commit
+   141  GET /api/jail/status
+   136  GET /api/forum/update-log/status
+   129  GET /api/auth/staff-flags
+   118  GET /api/game-chat/prefs
+-- top 25 errors 4xx/5xx --
+  2224  400 POST /api/jail/bust
+   623  400 POST /api/crimes/prestige_crime_4/commit
+   551  403 POST /api/crimes/commit-all
+   549  403 GET /api/gta/options
+   202  400 POST /api/jail/snitch
+   123  400 POST /api/weed-empire/plant
+    86  400 POST /api/weed-empire/sell
+    69  400 POST /api/illegal-business/distillery/collect
+    55  403 GET /api/oc/status
+    54  403 POST /api/booze-run/sell
+    52  403 GET /api/booze-run/config
+    46  403 POST /api/crimes/crime1/commit
+    41  403 POST /api/crimes/prestige_crime_4/commit
+    32  400 POST /api/travel
+    29  403 POST /api/crimes/crime2/commit
+    23  403 GET /api/crimes
+    20  403 POST /api/gta/attempt
+    15  403 POST /api/crimes/crime3/commit
+    13  403 POST /api/booze-run/buy
+    11  400 POST /api/booze-run/buy
+    10  403 GET /api/gta/playable-count
+     7  400 POST /api/families/rackets/protection/collect
+     7  400 POST /api/families/rackets/gambling/collect
+     7  400 POST /api/families/rackets/loansharking/collect
+     7  400 POST /api/families/rackets/labour/collect
+=== JOURNAL HTTP LAST 10M ===
+journal_http_10m=0 other_lines=0
+-- status --
+-- top 40 logged paths --
+-- top 20 errors --
+-- top 15 error user+path --
+=== JOURNAL ERRORS/TRACE 10M ===
+-- No entries --
+=== JOURNAL WARN KEYWORDS 10M ===
+=== NGINX ERROR TAIL ===
+2026/08/14 21:15:20 [error] 1764298#1764298: *18258310 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.91, server: mafiawars.co.uk, request: "GET /api/weed-empire/ready-count HTTP/1.1", upstream: "http://127.0.0.1:8000/api/weed-empire/ready-count", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/game/users-online"
+2026/08/14 21:15:20 [error] 1764298#1764298: *18258231 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.90, server: mafiawars.co.uk, request: "GET /api/profile/censor-profanity HTTP/1.1", upstream: "http://127.0.0.1:8000/api/profile/censor-profanity", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/game/users-online"
+2026/08/14 21:15:20 [error] 1764298#1764298: *18258313 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.90, server: mafiawars.co.uk, request: "GET /api/game-chat/prefs HTTP/1.1", upstream: "http://127.0.0.1:8000/api/game-chat/prefs", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/game/users-online"
+2026/08/14 21:15:20 [error] 1764299#1764299: *18258311 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.90, server: mafiawars.co.uk, request: "POST /api/crimes/crime1/commit HTTP/1.1", upstream: "http://127.0.0.1:8000/api/crimes/crime1/commit", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/crime/crimes"
+2026/08/14 21:15:20 [error] 1764298#1764298: *18258308 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.90, server: mafiawars.co.uk, request: "POST /api/crimes/prestige_crime_1/commit HTTP/1.1", upstream: "http://127.0.0.1:8000/api/crimes/prestige_crime_1/commit", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/crime/crimes"
+2026/08/14 21:15:20 [error] 1764298#1764298: *18258256 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.229.87, server: mafiawars.co.uk, request: "GET /api/forum/entertainer/find-word/active HTTP/1.1", upstream: "http://127.0.0.1:8000/api/forum/entertainer/find-word/active", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/money/property"
+2026/08/14 21:15:20 [error] 1764298#1764298: *18258310 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.91, server: mafiawars.co.uk, request: "GET /api/bodyguards?_=1786738505840 HTTP/1.1", upstream: "http://127.0.0.1:8000/api/bodyguards?_=1786738505840", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/kill/bodyguards"
+2026/08/14 21:15:20 [error] 1764298#1764298: *18258231 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.90, server: mafiawars.co.uk, request: "GET /api/attack/list HTTP/1.1", upstream: "http://127.0.0.1:8000/api/attack/list", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/kill/attack"
+2026/08/14 21:15:20 [error] 1764298#1764298: *18258313 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.90, server: mafiawars.co.uk, request: "GET /api/bodyguards?_=1786738505875 HTTP/1.1", upstream: "http://127.0.0.1:8000/api/bodyguards?_=1786738505875", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/kill/bodyguards"
+2026/08/14 21:15:21 [error] 1764299#1764299: *18258311 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.90, server: mafiawars.co.uk, request: "GET /api/notifications HTTP/1.1", upstream: "http://127.0.0.1:8000/api/notifications", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/game/users-online"
+2026/08/14 21:15:21 [error] 1764298#1764298: *18258308 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.90, server: mafiawars.co.uk, request: "GET /api/auth/me HTTP/1.1", upstream: "http://127.0.0.1:8000/api/auth/me", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/game/users-online"
+2026/08/14 21:15:21 [error] 1764298#1764298: *18258256 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.229.87, server: mafiawars.co.uk, request: "GET /api/families/war HTTP/1.1", upstream: "http://127.0.0.1:8000/api/families/war", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/money/property"
+2026/08/14 21:15:21 [error] 1764298#1764298: *18258310 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.91, server: mafiawars.co.uk, request: "POST /api/crimes/crime2/commit HTTP/1.1", upstream: "http://127.0.0.1:8000/api/crimes/crime2/commit", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/crime/crimes"
+2026/08/14 21:15:21 [error] 1764298#1764298: *18258231 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.90, server: mafiawars.co.uk, request: "GET /api/missions/map HTTP/1.1", upstream: "http://127.0.0.1:8000/api/missions/map", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/game/users-online"
+2026/08/14 21:15:21 [error] 1764298#1764298: *18258313 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.90, server: mafiawars.co.uk, request: "GET /api/missions HTTP/1.1", upstream: "http://127.0.0.1:8000/api/missions", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/game/users-online"
+2026/08/14 21:15:21 [error] 1764299#1764299: *18258311 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.90, server: mafiawars.co.uk, request: "GET /api/users/online HTTP/1.1", upstream: "http://127.0.0.1:8000/api/users/online", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/game/users-online"
+2026/08/14 21:15:21 [error] 1764298#1764298: *18258280 connect() failed (111: Unknown error) while connecting to upstream, client: 172.71.178.55, server: mafiawars.co.uk, request: "GET /api/jail/players HTTP/1.1", upstream: "http://127.0.0.1:8000/api/jail/players", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/"
+2026/08/14 21:15:21 [error] 1764298#1764298: *18258280 connect() failed (111: Unknown error) while connecting to upstream, client: 172.71.178.55, server: mafiawars.co.uk, request: "GET /api/users/online HTTP/1.1", upstream: "http://127.0.0.1:8000/api/users/online", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/money/property"
+2026/08/14 21:15:21 [error] 1764298#1764298: *18258308 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.90, server: mafiawars.co.uk, request: "GET /api/help-desk/open-count HTTP/1.1", upstream: "http://127.0.0.1:8000/api/help-desk/open-count", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/game/users-online"
+2026/08/14 21:15:21 [error] 1764298#1764298: *18258310 connect() failed (111: Unknown error) while connecting to upstream, client: 172.68.186.91, server: mafiawars.co.uk, request: "POST /api/crimes/crime7/commit HTTP/1.1", upstream: "http://127.0.0.1:8000/api/crimes/crime7/commit", host: "mafiawars.co.uk", referrer: "https://mafiawars.co.uk/crime/crimes"
+=== CRON / ENV FLAGS ===
+AUTO_RANK_USE_CRON=1
+AUTO_RANK_USE_CRON=1
+=== SNAPSHOT_DONE ===

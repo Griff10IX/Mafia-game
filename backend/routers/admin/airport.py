@@ -446,7 +446,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         custom_car = {
             "name": first_custom.get("custom_name") or "Custom Car",
             "travel_time": _effective_car_travel_seconds(TRAVEL_TIMES["custom"], current_user, now_utc, fam_time_red),
-            "image": first_custom.get("custom_image_url") or "",
+            "image": (first_custom.get("custom_image_url") or "").strip() or next((c.get("image") or "" for c in CARS if c.get("id") == "car_custom"), ""),
             "damage_percent": custom_damage,
             "can_travel": custom_damage < 100,
         }

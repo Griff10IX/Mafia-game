@@ -5,7 +5,6 @@
       "id": "travel_states.travel.travel.overview",
       "domain": "travel_states",
       "entities": [
-        "TRAVEL",
         "TRAVEL"
       ],
       "sections": [
@@ -34,19 +33,21 @@
       "related_intents": [
         "travel_states.travel.travel.rules",
         "travel_states.travel.cities.overview",
-        "travel_states.travel.cities.rules"
+        "travel_states.travel.travel-time.overview",
+        "travel_states.travel.travel-limits.overview"
       ],
       "follow_ups": [
         "How do I use TRAVEL?",
         "What are the rules for TRAVEL?",
-        "Where do I find TRAVEL?"
+        "Where do I find TRAVEL?",
+        "What is Cities?",
+        "What is Travel Time?"
       ]
     },
     {
       "id": "travel_states.travel.travel.rules",
       "domain": "travel_states",
       "entities": [
-        "TRAVEL",
         "TRAVEL"
       ],
       "sections": [
@@ -75,12 +76,14 @@
       "related_intents": [
         "travel_states.travel.travel.overview",
         "travel_states.travel.cities.overview",
-        "travel_states.travel.cities.rules"
+        "travel_states.travel.travel-time.overview"
       ],
       "follow_ups": [
         "Tell me about TRAVEL",
         "What happens with TRAVEL?",
-        "Show me the TRAVEL guide"
+        "Show me the TRAVEL guide",
+        "What is TRAVEL in TRAVEL?",
+        "What is Cities?"
       ]
     },
     {
@@ -116,12 +119,15 @@
       "related_intents": [
         "travel_states.travel.cities.rules",
         "travel_states.travel.travel.overview",
-        "travel_states.travel.travel.rules"
+        "travel_states.travel.travel-time.overview",
+        "travel_states.travel.travel-limits.overview"
       ],
       "follow_ups": [
         "How do I use Cities?",
         "What are the rules for Cities?",
-        "Where do I find Cities?"
+        "Where do I find Cities?",
+        "What is TRAVEL in TRAVEL?",
+        "What is Travel Time?"
       ]
     },
     {
@@ -157,12 +163,14 @@
       "related_intents": [
         "travel_states.travel.cities.overview",
         "travel_states.travel.travel.overview",
-        "travel_states.travel.travel.rules"
+        "travel_states.travel.travel-time.overview"
       ],
       "follow_ups": [
         "Tell me about Cities",
         "What happens with Cities?",
-        "Show me the TRAVEL guide"
+        "Show me the TRAVEL guide",
+        "What is TRAVEL in TRAVEL?",
+        "What is Cities?"
       ]
     },
     {
@@ -198,13 +206,15 @@
       "related_intents": [
         "travel_states.travel.travel-time.rules",
         "travel_states.travel.travel.overview",
-        "travel_states.travel.travel.rules",
-        "travel_states.travel.cities.overview"
+        "travel_states.travel.cities.overview",
+        "travel_states.travel.travel-limits.overview"
       ],
       "follow_ups": [
         "How do I use Travel Time?",
         "What are the rules for Travel Time?",
-        "Where do I find Travel Time?"
+        "Where do I find Travel Time?",
+        "What is TRAVEL in TRAVEL?",
+        "What is Cities?"
       ]
     },
     {
@@ -240,13 +250,14 @@
       "related_intents": [
         "travel_states.travel.travel-time.overview",
         "travel_states.travel.travel.overview",
-        "travel_states.travel.travel.rules",
         "travel_states.travel.cities.overview"
       ],
       "follow_ups": [
         "Tell me about Travel Time",
         "What happens with Travel Time?",
-        "Show me the TRAVEL guide"
+        "Show me the TRAVEL guide",
+        "What is TRAVEL in TRAVEL?",
+        "What is Cities?"
       ]
     },
     {
@@ -282,13 +293,15 @@
       "related_intents": [
         "travel_states.travel.travel-limits.rules",
         "travel_states.travel.travel.overview",
-        "travel_states.travel.travel.rules",
-        "travel_states.travel.cities.overview"
+        "travel_states.travel.cities.overview",
+        "travel_states.travel.travel-time.overview"
       ],
       "follow_ups": [
         "How do I use Travel limits?",
         "What are the rules for Travel limits?",
-        "Where do I find Travel limits?"
+        "Where do I find Travel limits?",
+        "What is TRAVEL in TRAVEL?",
+        "What is Cities?"
       ]
     },
     {
@@ -324,21 +337,23 @@
       "related_intents": [
         "travel_states.travel.travel-limits.overview",
         "travel_states.travel.travel.overview",
-        "travel_states.travel.travel.rules",
-        "travel_states.travel.cities.overview"
+        "travel_states.travel.cities.overview",
+        "travel_states.travel.travel-time.overview"
       ],
       "follow_ups": [
         "Tell me about Travel limits",
         "What happens with Travel limits?",
-        "Show me the TRAVEL guide"
+        "Show me the TRAVEL guide",
+        "What is TRAVEL in TRAVEL?",
+        "What is Cities?"
       ]
     },
     {
       "id": "travel_states.travel.why-travel.overview",
       "domain": "travel_states",
       "entities": [
-        "Why Travel?",
-        "TRAVEL"
+        "TRAVEL",
+        "Why Travel?"
       ],
       "sections": [
         {
@@ -355,32 +370,34 @@
       ],
       "intent_type": "definition",
       "variants": [
-        "What is Why Travel??",
-        "What are Why Travel??",
-        "Tell me about Why Travel?",
-        "Explain Why Travel?",
-        "How does Why Travel? work?",
-        "I need information about Why Travel?",
-        "Give me the guide for Why Travel?"
+        "Why Travel?",
+        "What is TRAVEL?",
+        "What are TRAVEL?",
+        "Tell me about TRAVEL",
+        "Explain TRAVEL",
+        "How does TRAVEL work?",
+        "I need information about TRAVEL"
       ],
       "related_intents": [
         "travel_states.travel.why-travel.rules",
         "travel_states.travel.travel.overview",
-        "travel_states.travel.travel.rules",
-        "travel_states.travel.cities.overview"
+        "travel_states.travel.cities.overview",
+        "travel_states.travel.travel-time.overview"
       ],
       "follow_ups": [
-        "How do I use Why Travel??",
-        "What are the rules for Why Travel??",
-        "Where do I find Why Travel??"
+        "Tell me about TRAVEL",
+        "Where do I find TRAVEL?",
+        "Show me the TRAVEL guide",
+        "What is TRAVEL in TRAVEL?",
+        "What is Cities?"
       ]
     },
     {
       "id": "travel_states.travel.why-travel.rules",
       "domain": "travel_states",
       "entities": [
-        "Why Travel?",
-        "TRAVEL"
+        "TRAVEL",
+        "Why Travel?"
       ],
       "sections": [
         {
@@ -397,24 +414,26 @@
       ],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for Why Travel??",
-        "What happens with Why Travel??",
-        "Does the FAQ explain Why Travel??",
-        "Can you clarify Why Travel??",
-        "Which FAQ covers Why Travel??",
-        "I have a question about Why Travel?",
-        "How is Why Travel? supposed to work?"
+        "What are the rules for TRAVEL?",
+        "What happens with TRAVEL?",
+        "Does the FAQ explain TRAVEL?",
+        "Can you clarify TRAVEL?",
+        "Which FAQ covers TRAVEL?",
+        "I have a question about TRAVEL",
+        "How is TRAVEL supposed to work?"
       ],
       "related_intents": [
         "travel_states.travel.why-travel.overview",
         "travel_states.travel.travel.overview",
-        "travel_states.travel.travel.rules",
-        "travel_states.travel.cities.overview"
+        "travel_states.travel.cities.overview",
+        "travel_states.travel.travel-time.overview"
       ],
       "follow_ups": [
-        "Tell me about Why Travel?",
-        "What happens with Why Travel??",
-        "Show me the TRAVEL guide"
+        "How does TRAVEL work?",
+        "Show me the TRAVEL guide",
+        "What is TRAVEL in TRAVEL?",
+        "What is Cities?",
+        "What is Travel Time?"
       ]
     },
     {
@@ -450,13 +469,15 @@
       "related_intents": [
         "travel_states.travel.airport-ownership.rules",
         "travel_states.travel.travel.overview",
-        "travel_states.travel.travel.rules",
-        "travel_states.travel.cities.overview"
+        "travel_states.travel.cities.overview",
+        "travel_states.travel.travel-time.overview"
       ],
       "follow_ups": [
         "How do I use Airport Ownership?",
         "What are the rules for Airport Ownership?",
-        "Where do I find Airport Ownership?"
+        "Where do I find Airport Ownership?",
+        "What is TRAVEL in TRAVEL?",
+        "What is Cities?"
       ]
     },
     {
@@ -492,13 +513,15 @@
       "related_intents": [
         "travel_states.travel.airport-ownership.overview",
         "travel_states.travel.travel.overview",
-        "travel_states.travel.travel.rules",
-        "travel_states.travel.cities.overview"
+        "travel_states.travel.cities.overview",
+        "travel_states.travel.travel-time.overview"
       ],
       "follow_ups": [
         "Tell me about Airport Ownership",
         "What happens with Airport Ownership?",
-        "Show me the TRAVEL guide"
+        "Show me the TRAVEL guide",
+        "What is TRAVEL in TRAVEL?",
+        "What is Cities?"
       ]
     },
     {
@@ -534,13 +557,15 @@
       "related_intents": [
         "travel_states.travel.states-city-overview.rules",
         "travel_states.travel.travel.overview",
-        "travel_states.travel.travel.rules",
-        "travel_states.travel.cities.overview"
+        "travel_states.travel.cities.overview",
+        "travel_states.travel.travel-time.overview"
       ],
       "follow_ups": [
         "How do I use States (city overview)?",
         "What are the rules for States (city overview)?",
-        "Where do I find States (city overview)?"
+        "Where do I find States (city overview)?",
+        "What is TRAVEL in TRAVEL?",
+        "What is Cities?"
       ]
     },
     {
@@ -576,20 +601,21 @@
       "related_intents": [
         "travel_states.travel.states-city-overview.overview",
         "travel_states.travel.travel.overview",
-        "travel_states.travel.travel.rules",
-        "travel_states.travel.cities.overview"
+        "travel_states.travel.cities.overview",
+        "travel_states.travel.travel-time.overview"
       ],
       "follow_ups": [
         "Tell me about States (city overview)",
         "What happens with States (city overview)?",
-        "Show me the TRAVEL guide"
+        "Show me the TRAVEL guide",
+        "What is TRAVEL in TRAVEL?",
+        "What is Cities?"
       ]
     },
     {
       "id": "travel_states.travel-and-states.travel-and-states.overview",
       "domain": "travel_states",
       "entities": [
-        "TRAVEL & STATES",
         "TRAVEL & STATES"
       ],
       "sections": [
@@ -615,19 +641,20 @@
       "related_intents": [
         "travel_states.travel-and-states.travel-and-states.procedure",
         "travel_states.travel-and-states.travel.overview",
-        "travel_states.travel-and-states.travel.procedure"
+        "travel_states.travel-and-states.states.overview"
       ],
       "follow_ups": [
         "How do I use TRAVEL & STATES?",
         "What are the rules for TRAVEL & STATES?",
-        "Where do I find TRAVEL & STATES?"
+        "Where do I find TRAVEL & STATES?",
+        "What is Travel in TRAVEL & STATES?",
+        "What is States?"
       ]
     },
     {
       "id": "travel_states.travel-and-states.travel-and-states.procedure",
       "domain": "travel_states",
       "entities": [
-        "TRAVEL & STATES",
         "TRAVEL & STATES"
       ],
       "sections": [
@@ -653,12 +680,14 @@
       "related_intents": [
         "travel_states.travel-and-states.travel-and-states.overview",
         "travel_states.travel-and-states.travel.overview",
-        "travel_states.travel-and-states.travel.procedure"
+        "travel_states.travel-and-states.states.overview"
       ],
       "follow_ups": [
         "Tell me about TRAVEL & STATES",
         "What happens with TRAVEL & STATES?",
-        "Show me the TRAVEL & STATES guide"
+        "Show me the TRAVEL & STATES guide",
+        "What is TRAVEL & STATES?",
+        "What is Travel in TRAVEL & STATES?"
       ]
     },
     {
@@ -691,12 +720,14 @@
       "related_intents": [
         "travel_states.travel-and-states.travel.procedure",
         "travel_states.travel-and-states.travel-and-states.overview",
-        "travel_states.travel-and-states.travel-and-states.procedure"
+        "travel_states.travel-and-states.states.overview"
       ],
       "follow_ups": [
         "How do I use Travel?",
         "What are the rules for Travel?",
-        "Where do I find Travel?"
+        "Where do I find Travel?",
+        "What is TRAVEL & STATES?",
+        "What is States?"
       ]
     },
     {
@@ -729,12 +760,14 @@
       "related_intents": [
         "travel_states.travel-and-states.travel.overview",
         "travel_states.travel-and-states.travel-and-states.overview",
-        "travel_states.travel-and-states.travel-and-states.procedure"
+        "travel_states.travel-and-states.states.overview"
       ],
       "follow_ups": [
         "Tell me about Travel",
         "What happens with Travel?",
-        "Show me the TRAVEL & STATES guide"
+        "Show me the TRAVEL & STATES guide",
+        "What is TRAVEL & STATES?",
+        "What is Travel in TRAVEL & STATES?"
       ]
     },
     {
@@ -767,13 +800,14 @@
       "related_intents": [
         "travel_states.travel-and-states.states.procedure",
         "travel_states.travel-and-states.travel-and-states.overview",
-        "travel_states.travel-and-states.travel-and-states.procedure",
         "travel_states.travel-and-states.travel.overview"
       ],
       "follow_ups": [
         "How do I use States?",
         "What are the rules for States?",
-        "Where do I find States?"
+        "Where do I find States?",
+        "What is TRAVEL & STATES?",
+        "What is Travel in TRAVEL & STATES?"
       ]
     },
     {
@@ -806,13 +840,14 @@
       "related_intents": [
         "travel_states.travel-and-states.states.overview",
         "travel_states.travel-and-states.travel-and-states.overview",
-        "travel_states.travel-and-states.travel-and-states.procedure",
         "travel_states.travel-and-states.travel.overview"
       ],
       "follow_ups": [
         "Tell me about States",
         "What happens with States?",
-        "Show me the TRAVEL & STATES guide"
+        "Show me the TRAVEL & STATES guide",
+        "What is TRAVEL & STATES?",
+        "What is Travel in TRAVEL & STATES?"
       ]
     }
   ]

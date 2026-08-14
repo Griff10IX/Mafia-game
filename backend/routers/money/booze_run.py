@@ -29,7 +29,7 @@ from server import (
     _is_admin,
     log_activity,
     require_admin,
-    _staff_exclude_user_filter,
+    staff_exclude_users_match,
 )
 from utils.minigame_captcha_gate import require_turnstile_for_game_action
 from utils.point_provenance import log_points_event
@@ -515,7 +515,7 @@ async def _booze_top_profit_leader_ids_cached() -> frozenset[str]:
     match = {
         "is_npc": {"$ne": True},
         "$or": [{"booze_runs_count": {"$gt": 0}}, {"booze_jail_count": {"$gt": 0}}],
-        **_staff_exclude_user_filter(),
+        **(await staff_exclude_users_match()),
     }
     cursor = (
         db.users.find(match, {"_id": 0, "id": 1})

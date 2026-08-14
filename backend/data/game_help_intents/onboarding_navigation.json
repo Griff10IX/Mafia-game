@@ -5,7 +5,6 @@
       "id": "onboarding_navigation.finding-your-way.finding-your-way.overview",
       "domain": "onboarding_navigation",
       "entities": [
-        "FINDING YOUR WAY",
         "FINDING YOUR WAY"
       ],
       "sections": [
@@ -31,19 +30,21 @@
       "related_intents": [
         "onboarding_navigation.finding-your-way.finding-your-way.procedure",
         "onboarding_navigation.finding-your-way.menus.overview",
-        "onboarding_navigation.finding-your-way.menus.procedure"
+        "onboarding_navigation.finding-your-way.cash-vs-bank.overview",
+        "onboarding_navigation.finding-your-way.health.overview"
       ],
       "follow_ups": [
         "How do I use FINDING YOUR WAY?",
         "What are the rules for FINDING YOUR WAY?",
-        "Where do I find FINDING YOUR WAY?"
+        "Where do I find FINDING YOUR WAY?",
+        "What is Menus?",
+        "What is Cash vs bank?"
       ]
     },
     {
       "id": "onboarding_navigation.finding-your-way.finding-your-way.procedure",
       "domain": "onboarding_navigation",
       "entities": [
-        "FINDING YOUR WAY",
         "FINDING YOUR WAY"
       ],
       "sections": [
@@ -69,12 +70,14 @@
       "related_intents": [
         "onboarding_navigation.finding-your-way.finding-your-way.overview",
         "onboarding_navigation.finding-your-way.menus.overview",
-        "onboarding_navigation.finding-your-way.menus.procedure"
+        "onboarding_navigation.finding-your-way.cash-vs-bank.overview"
       ],
       "follow_ups": [
         "Tell me about FINDING YOUR WAY",
         "What happens with FINDING YOUR WAY?",
-        "Show me the FINDING YOUR WAY guide"
+        "Show me the FINDING YOUR WAY guide",
+        "What is FINDING YOUR WAY?",
+        "What is Menus?"
       ]
     },
     {
@@ -107,12 +110,15 @@
       "related_intents": [
         "onboarding_navigation.finding-your-way.menus.procedure",
         "onboarding_navigation.finding-your-way.finding-your-way.overview",
-        "onboarding_navigation.finding-your-way.finding-your-way.procedure"
+        "onboarding_navigation.finding-your-way.cash-vs-bank.overview",
+        "onboarding_navigation.finding-your-way.health.overview"
       ],
       "follow_ups": [
         "How do I use Menus?",
         "What are the rules for Menus?",
-        "Where do I find Menus?"
+        "Where do I find Menus?",
+        "What is FINDING YOUR WAY?",
+        "What is Cash vs bank?"
       ]
     },
     {
@@ -145,12 +151,14 @@
       "related_intents": [
         "onboarding_navigation.finding-your-way.menus.overview",
         "onboarding_navigation.finding-your-way.finding-your-way.overview",
-        "onboarding_navigation.finding-your-way.finding-your-way.procedure"
+        "onboarding_navigation.finding-your-way.cash-vs-bank.overview"
       ],
       "follow_ups": [
         "Tell me about Menus",
         "What happens with Menus?",
-        "Show me the FINDING YOUR WAY guide"
+        "Show me the FINDING YOUR WAY guide",
+        "What is FINDING YOUR WAY?",
+        "What is Menus?"
       ]
     },
     {
@@ -183,13 +191,15 @@
       "related_intents": [
         "onboarding_navigation.finding-your-way.cash-vs-bank.procedure",
         "onboarding_navigation.finding-your-way.finding-your-way.overview",
-        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
-        "onboarding_navigation.finding-your-way.menus.overview"
+        "onboarding_navigation.finding-your-way.menus.overview",
+        "onboarding_navigation.finding-your-way.health.overview"
       ],
       "follow_ups": [
         "How do I use Cash vs bank?",
         "What are the rules for Cash vs bank?",
-        "Where do I find Cash vs bank?"
+        "Where do I find Cash vs bank?",
+        "What is FINDING YOUR WAY?",
+        "What is Menus?"
       ]
     },
     {
@@ -222,13 +232,14 @@
       "related_intents": [
         "onboarding_navigation.finding-your-way.cash-vs-bank.overview",
         "onboarding_navigation.finding-your-way.finding-your-way.overview",
-        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
         "onboarding_navigation.finding-your-way.menus.overview"
       ],
       "follow_ups": [
         "Tell me about Cash vs bank",
         "What happens with Cash vs bank?",
-        "Show me the FINDING YOUR WAY guide"
+        "Show me the FINDING YOUR WAY guide",
+        "What is FINDING YOUR WAY?",
+        "What is Menus?"
       ]
     },
     {
@@ -261,13 +272,15 @@
       "related_intents": [
         "onboarding_navigation.finding-your-way.health.procedure",
         "onboarding_navigation.finding-your-way.finding-your-way.overview",
-        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
-        "onboarding_navigation.finding-your-way.menus.overview"
+        "onboarding_navigation.finding-your-way.menus.overview",
+        "onboarding_navigation.finding-your-way.cash-vs-bank.overview"
       ],
       "follow_ups": [
         "How do I use Health?",
         "What are the rules for Health?",
-        "Where do I find Health?"
+        "Where do I find Health?",
+        "What is FINDING YOUR WAY?",
+        "What is Menus?"
       ]
     },
     {
@@ -300,13 +313,15 @@
       "related_intents": [
         "onboarding_navigation.finding-your-way.health.overview",
         "onboarding_navigation.finding-your-way.finding-your-way.overview",
-        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
-        "onboarding_navigation.finding-your-way.menus.overview"
+        "onboarding_navigation.finding-your-way.menus.overview",
+        "onboarding_navigation.finding-your-way.cash-vs-bank.overview"
       ],
       "follow_ups": [
         "Tell me about Health",
         "What happens with Health?",
-        "Show me the FINDING YOUR WAY guide"
+        "Show me the FINDING YOUR WAY guide",
+        "What is FINDING YOUR WAY?",
+        "What is Menus?"
       ]
     },
     {
@@ -339,13 +354,15 @@
       "related_intents": [
         "onboarding_navigation.finding-your-way.bullets.procedure",
         "onboarding_navigation.finding-your-way.finding-your-way.overview",
-        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
-        "onboarding_navigation.finding-your-way.menus.overview"
+        "onboarding_navigation.finding-your-way.menus.overview",
+        "onboarding_navigation.finding-your-way.cash-vs-bank.overview"
       ],
       "follow_ups": [
         "How do I use Bullets?",
         "What are the rules for Bullets?",
-        "Where do I find Bullets?"
+        "Where do I find Bullets?",
+        "What is FINDING YOUR WAY?",
+        "What is Menus?"
       ]
     },
     {
@@ -378,13 +395,15 @@
       "related_intents": [
         "onboarding_navigation.finding-your-way.bullets.overview",
         "onboarding_navigation.finding-your-way.finding-your-way.overview",
-        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
-        "onboarding_navigation.finding-your-way.menus.overview"
+        "onboarding_navigation.finding-your-way.menus.overview",
+        "onboarding_navigation.finding-your-way.cash-vs-bank.overview"
       ],
       "follow_ups": [
         "Tell me about Bullets",
         "What happens with Bullets?",
-        "Show me the FINDING YOUR WAY guide"
+        "Show me the FINDING YOUR WAY guide",
+        "What is FINDING YOUR WAY?",
+        "What is Menus?"
       ]
     },
     {
@@ -417,13 +436,15 @@
       "related_intents": [
         "onboarding_navigation.finding-your-way.new-accounts.procedure",
         "onboarding_navigation.finding-your-way.finding-your-way.overview",
-        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
-        "onboarding_navigation.finding-your-way.menus.overview"
+        "onboarding_navigation.finding-your-way.menus.overview",
+        "onboarding_navigation.finding-your-way.cash-vs-bank.overview"
       ],
       "follow_ups": [
         "How do I use New accounts?",
         "What are the rules for New accounts?",
-        "Where do I find New accounts?"
+        "Where do I find New accounts?",
+        "What is FINDING YOUR WAY?",
+        "What is Menus?"
       ]
     },
     {
@@ -456,13 +477,15 @@
       "related_intents": [
         "onboarding_navigation.finding-your-way.new-accounts.overview",
         "onboarding_navigation.finding-your-way.finding-your-way.overview",
-        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
-        "onboarding_navigation.finding-your-way.menus.overview"
+        "onboarding_navigation.finding-your-way.menus.overview",
+        "onboarding_navigation.finding-your-way.cash-vs-bank.overview"
       ],
       "follow_ups": [
         "Tell me about New accounts",
         "What happens with New accounts?",
-        "Show me the FINDING YOUR WAY guide"
+        "Show me the FINDING YOUR WAY guide",
+        "What is FINDING YOUR WAY?",
+        "What is Menus?"
       ]
     },
     {
@@ -495,13 +518,15 @@
       "related_intents": [
         "onboarding_navigation.finding-your-way.short-links.procedure",
         "onboarding_navigation.finding-your-way.finding-your-way.overview",
-        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
-        "onboarding_navigation.finding-your-way.menus.overview"
+        "onboarding_navigation.finding-your-way.menus.overview",
+        "onboarding_navigation.finding-your-way.cash-vs-bank.overview"
       ],
       "follow_ups": [
         "How do I use Short links?",
         "What are the rules for Short links?",
-        "Where do I find Short links?"
+        "Where do I find Short links?",
+        "What is FINDING YOUR WAY?",
+        "What is Menus?"
       ]
     },
     {
@@ -534,13 +559,15 @@
       "related_intents": [
         "onboarding_navigation.finding-your-way.short-links.overview",
         "onboarding_navigation.finding-your-way.finding-your-way.overview",
-        "onboarding_navigation.finding-your-way.finding-your-way.procedure",
-        "onboarding_navigation.finding-your-way.menus.overview"
+        "onboarding_navigation.finding-your-way.menus.overview",
+        "onboarding_navigation.finding-your-way.cash-vs-bank.overview"
       ],
       "follow_ups": [
         "Tell me about Short links",
         "What happens with Short links?",
-        "Show me the FINDING YOUR WAY guide"
+        "Show me the FINDING YOUR WAY guide",
+        "What is FINDING YOUR WAY?",
+        "What is Menus?"
       ]
     }
   ]

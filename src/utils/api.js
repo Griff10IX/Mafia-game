@@ -447,10 +447,18 @@ api.interceptors.response.use(
       }
     }
 
-    // ── 403 In jail → redirect to jail page (only for specific blocked pages) ──
+    // ── 403 In jail → mark jailed everywhere (stops crime/GTA/booze retries in other tabs)
+    //     then redirect only if this tab is on a blocked page ──
     if (error.response?.status === 403 && typeof window !== 'undefined') {
       const detail = error.response?.data?.detail;
       if (typeof detail === 'string' && detail.toLowerCase().includes('while in jail')) {
+        try {
+          window.dispatchEvent(
+            new CustomEvent('app:refresh-user', {
+              detail: { in_jail: true },
+            }),
+          );
+        } catch (_) { /* ignore */ }
         const p = window.location.pathname;
         const jailBlocked = [
           '/crime/crimes', '/crimes',
@@ -464,14 +472,6 @@ api.interceptors.response.use(
             p.startsWith('/money/booze-run/') ||
             p === '/booze-run' ||
             p.startsWith('/booze-run/');
-          // Seed auth in_jail so Jail paints the locked card immediately (no Free flash).
-          try {
-            window.dispatchEvent(
-              new CustomEvent('app:refresh-user', {
-                detail: { in_jail: true },
-              }),
-            );
-          } catch (_) { /* ignore */ }
           if (onBooze) {
             _scheduleBoozeRunJailRedirect();
           } else {

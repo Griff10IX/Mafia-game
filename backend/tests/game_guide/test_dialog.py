@@ -69,6 +69,7 @@ def test_all_factual_bodies_are_exact_live_guide_bodies():
         for section in load_sections()
     }
     questions = [case["question"] for case in load_fixture("dialog_cases.json")]
+    questions.extend(case["question"] for case in load_fixture("how_it_works_cases.json"))
     questions.extend(
         [
             "How do rakets work?",
@@ -225,6 +226,7 @@ def test_off_topic_fixture_returns_fixed_unknown_copy():
     [
         ("What is Prestige?", "definition"),
         ("How do I travel?", "procedure"),
+        ("How do properties work?", "definition"),
         ("Can I attack from jail?", "yes_no"),
         ("Why can't I collect?", "troubleshooting"),
         ("Bank versus Swiss Bank", "comparison"),
@@ -275,3 +277,54 @@ def test_wealth_answer_has_computed_result_and_guide_source():
     assert answer["intent"] == "wealth_lookup"
     assert any("wealth" in section["title"].lower() for section in answer["reply_sections"])
     assert all(section["source"] in {"faq", "how_to"} for section in answer["reply_sections"])
+
+
+def test_feature_guides_quote_full_published_sections():
+    distillery = answer_question("How does the Distillery work?")
+    distillery_blob = " ".join(section["body"] for section in distillery["reply_sections"]).lower()
+    assert distillery["intent_id"] == "cross_feature.feature.distillery"
+    assert "hire workers" in distillery_blob
+    assert "maintenance" in distillery_blob
+    assert any(section["title"] == "Distillery" and section["source"] == "faq" for section in distillery["reply_sections"])
+    assert any("quick tour" in section["title"].lower() for section in distillery["reply_sections"])
+
+    weed = answer_question("How does Weed Empire work?")
+    weed_blob = " ".join(section["body"] for section in weed["reply_sections"]).lower()
+    assert weed["intent_id"] == "cross_feature.feature.weed-empire"
+    assert "grower" in weed_blob or "plant" in weed_blob
+    assert "heat" in weed_blob
+    assert any(section["source"] == "faq" and "weed" in section["title"].lower() for section in weed["reply_sections"])
+    assert any(section["source"] == "how_to" for section in weed["reply_sections"])
+
+    hitman = answer_question("What is Hitman for Hire?")
+    hitman_blob = " ".join(section["body"] for section in hitman["reply_sections"]).lower()
+    assert hitman["intent_id"] == "cross_feature.feature.hitman"
+    assert "hitman" in hitman_blob
+    assert any(section["title"] == "Hitman for Hire" and section["source"] == "faq" for section in hitman["reply_sections"])
+
+
+@pytest.mark.parametrize("case", load_fixture("how_it_works_cases.json"))
+def test_how_it_works_cases_quote_canonical_sections(case):
+    answer = answer_question(case["question"])
+    assert answer["refused"] is False
+    assert answer["intent_id"] == case["intent_id"]
+    assert answer["confidence"] in {"high", "medium"}
+    titles = [section["title"] for section in answer["reply_sections"]]
+    blob = " ".join(titles)
+    if case.get("faq_title"):
+        assert case["faq_title"] in titles
+        assert not case["faq_title"].startswith("Q:")
+    if case.get("how_to_title"):
+        assert case["how_to_title"] in titles
+    if case.get("title_contains"):
+        assert case["title_contains"] in blob.lower()
+    assert all(section["source"] in {"faq", "how_to", "system"} for section in answer["reply_sections"])
+    GuideChatResponse.model_validate(answer)
+
+    weed = answer_question("How does Weed Empire work?")
+    weed_blob = " ".join(section["body"] for section in weed["reply_sections"]).lower()
+    assert weed["intent_id"] == "cross_feature.feature.weed-empire"
+    assert "grower" in weed_blob or "plant" in weed_blob
+    assert "heat" in weed_blob
+    assert any(section["source"] == "faq" and "weed" in section["title"].lower() for section in weed["reply_sections"])
+    assert any(section["source"] == "how_to" for section in weed["reply_sections"])

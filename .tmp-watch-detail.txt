@@ -1,0 +1,181 @@
+﻿=== LOG FORMAT ===
+=== ACCESS ONE LINE ===
+172.69.224.59 - - [14/Aug/2026:23:05:41 +0100] "POST /api/jail/bust HTTP/1.1" 400 61 "https://mafiawars.co.uk/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+=== CRON AUTO-RANK ===
+# Edit this file to introduce tasks to be run by cron.
+# Notice that tasks will be started based on the cron's system
+# Output of the crontab jobs (including errors) is sent through
+# email to the user the crontab file belongs to (unless redirected).
+# For more information see the manual pages of crontab(5) and cron(8)
+* * * * * /opt/mafia-app/scripts/cron-curl.sh main
+certbot
+e2scrub_all
+/etc/systemd/system/cron-bust-ticker.service:1:# systemd unit for cron-bust-ticker.py (jail bust every 5s when AUTO_RANK_USE_CRON=1)
+/etc/systemd/system/cron-bust-ticker.service:5:#        cp scripts/cron-bust-ticker.service.example /etc/systemd/system/cron-bust-ticker.service
+/etc/systemd/system/cron-bust-ticker.service:6:#   2. Edit and set the correct path for your project (replace /opt/mafia-app):
+/etc/systemd/system/cron-bust-ticker.service:11:#        sudo systemctl enable cron-bust-ticker
+/etc/systemd/system/cron-bust-ticker.service:12:#        sudo systemctl start cron-bust-ticker
+/etc/systemd/system/cron-bust-ticker.service:13:#   5. Check status: sudo systemctl status cron-bust-ticker
+/etc/systemd/system/cron-bust-ticker.service:15:# Logs: journalctl -u cron-bust-ticker -f
+/etc/systemd/system/cron-bust-ticker.service:23:WorkingDirectory=/opt/mafia-app
+/etc/systemd/system/cron-bust-ticker.service:24:ExecStart=/usr/bin/python3 /opt/mafia-app/scripts/cron-bust-ticker.py
+/etc/systemd/system/cron-cycle-ticker.service:3:# You need BOTH this service AND cron-bust-ticker (both every 5s) for full Auto Rank. Without this, crimes never run.
+/etc/systemd/system/cron-cycle-ticker.service:8:#   2. Edit and set the correct path (replace /opt/mafia-app with your project root):
+/etc/systemd/system/cron-cycle-ticker.service:25:WorkingDirectory=/opt/mafia-app
+/etc/systemd/system/cron-cycle-ticker.service:26:ExecStart=/usr/bin/python3 /opt/mafia-app/scripts/cron-cycle-ticker.py
+/etc/systemd/system/mafia-backend.service:2:Description=Mafia FastAPI backend
+/etc/systemd/system/mafia-backend.service:7:WorkingDirectory=/opt/mafia-app/backend
+/etc/systemd/system/mafia-backend.service:8:Environment="PATH=/opt/mafia-app/backend/venv/bin"
+/etc/systemd/system/mafia-backend.service:9:EnvironmentFile=/opt/mafia-app/backend/.env
+/etc/systemd/system/mafia-backend.service:10:ExecStart=/opt/mafia-app/backend/venv/bin/uvicorn server:app --host 127.0.0.1 --port 8000
+/etc/systemd/system/multi-user.target.wants/cron-bust-ticker.service:1:# systemd unit for cron-bust-ticker.py (jail bust every 5s when AUTO_RANK_USE_CRON=1)
+/etc/systemd/system/multi-user.target.wants/cron-bust-ticker.service:5:#        cp scripts/cron-bust-ticker.service.example /etc/systemd/system/cron-bust-ticker.service
+/etc/systemd/system/multi-user.target.wants/cron-bust-ticker.service:6:#   2. Edit and set the correct path for your project (replace /opt/mafia-app):
+/etc/systemd/system/multi-user.target.wants/cron-bust-ticker.service:11:#        sudo systemctl enable cron-bust-ticker
+/etc/systemd/system/multi-user.target.wants/cron-bust-ticker.service:12:#        sudo systemctl start cron-bust-ticker
+/etc/systemd/system/multi-user.target.wants/cron-bust-ticker.service:13:#   5. Check status: sudo systemctl status cron-bust-ticker
+/etc/systemd/system/multi-user.target.wants/cron-bust-ticker.service:15:# Logs: journalctl -u cron-bust-ticker -f
+/etc/systemd/system/multi-user.target.wants/cron-bust-ticker.service:23:WorkingDirectory=/opt/mafia-app
+/etc/systemd/system/multi-user.target.wants/cron-bust-ticker.service:24:ExecStart=/usr/bin/python3 /opt/mafia-app/scripts/cron-bust-ticker.py
+/etc/systemd/system/multi-user.target.wants/cron-cycle-ticker.service:3:# You need BOTH this service AND cron-bust-ticker (both every 5s) for full Auto Rank. Without this, crimes never run.
+/etc/systemd/system/multi-user.target.wants/cron-cycle-ticker.service:8:#   2. Edit and set the correct path (replace /opt/mafia-app with your project root):
+/etc/systemd/system/multi-user.target.wants/cron-cycle-ticker.service:25:WorkingDirectory=/opt/mafia-app
+/etc/systemd/system/multi-user.target.wants/cron-cycle-ticker.service:26:ExecStart=/usr/bin/python3 /opt/mafia-app/scripts/cron-cycle-ticker.py
+/etc/systemd/system/multi-user.target.wants/mafia-backend.service:2:Description=Mafia FastAPI backend
+/etc/systemd/system/multi-user.target.wants/mafia-backend.service:7:WorkingDirectory=/opt/mafia-app/backend
+/etc/systemd/system/multi-user.target.wants/mafia-backend.service:8:Environment="PATH=/opt/mafia-app/backend/venv/bin"
+/etc/systemd/system/multi-user.target.wants/mafia-backend.service:9:EnvironmentFile=/opt/mafia-app/backend/.env
+/etc/systemd/system/multi-user.target.wants/mafia-backend.service:10:ExecStart=/opt/mafia-app/backend/venv/bin/uvicorn server:app --host 127.0.0.1 --port 8000
+=== SERVICE ===
+# /etc/systemd/system/mafia-backend.service
+[Unit]
+Description=Mafia FastAPI backend
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/opt/mafia-app/backend
+Environment="PATH=/opt/mafia-app/backend/venv/bin"
+EnvironmentFile=/opt/mafia-app/backend/.env
+ExecStart=/opt/mafia-app/backend/venv/bin/uvicorn server:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+=== NGINX UNIQUE + TIMING LAST 10M ===
+parsed=2939
+-- unique CF IPs per hot path (top 5) --
+  404  POST /api/jail/bust  unique_ips=19
+            45  162.158.216.110
+            31  172.69.224.59
+            30  141.101.98.109
+            29  172.70.163.101
+            28  172.69.224.58
+   68  GET /api/game-chat/messages  unique_ips=5
+            19  162.158.216.110
+            19  141.101.98.109
+            15  172.69.224.58
+            10  172.69.224.59
+             5  141.101.98.108
+  166  GET /api/jail/players  unique_ips=18
+            26  172.69.224.59
+            20  162.158.216.110
+            20  172.69.224.58
+            19  172.68.229.205
+            18  172.68.229.204
+  152  GET /api/auth/me  unique_ips=21
+            31  172.68.229.204
+            30  172.69.224.58
+            23  162.158.216.110
+            17  172.69.224.59
+            15  141.101.98.109
+  117  POST /api/crimes/commit-all  unique_ips=18
+            13  172.70.163.101
+            11  172.64.192.44
+            10  172.68.186.90
+             9  172.71.241.156
+             9  141.101.98.109
+  118  GET /api/gta/options  unique_ips=18
+            15  141.101.98.109
+            13  172.69.194.175
+             9  172.68.229.205
+             9  172.70.91.171
+             8  172.71.178.54
+   97  GET /api/weed-empire/status  unique_ips=7
+            34  172.69.224.59
+            18  162.158.216.110
+            17  172.68.229.205
+            15  172.69.224.58
+             6  172.64.192.44
+   94  GET /api/notifications  unique_ips=7
+            27  172.68.229.204
+            16  172.69.224.58
+            15  162.158.216.110
+            15  172.68.229.205
+            11  172.69.224.59
+   69  GET /api/user/casino-property  unique_ips=12
+            25  172.69.224.58
+            21  172.69.224.59
+             4  172.64.192.44
+             4  172.68.229.204
+             4  141.101.98.109
+   96  GET /api/user/rank-progress  unique_ips=20
+            19  172.68.229.205
+            19  172.68.229.204
+            13  172.69.224.59
+            11  162.158.216.110
+            10  172.69.224.58
+   83  GET /api/bodyguards  unique_ips=7
+            26  172.69.224.59
+            21  172.69.224.58
+            11  162.158.216.110
+            10  172.68.229.205
+             7  172.68.229.204
+   48  GET /api/booze-run/config  unique_ips=6
+            16  172.69.224.58
+            14  172.69.224.59
+             9  162.158.216.110
+             5  172.68.229.205
+             3  172.68.229.204
+   57  GET /api/families/war  unique_ips=7
+            20  172.68.229.204
+            11  172.68.229.205
+            10  162.158.216.110
+             6  172.69.224.58
+             6  141.101.98.109
+   52  GET /api/leaderboards/top  unique_ips=17
+            12  172.69.224.59
+            10  172.69.224.58
+             4  162.158.216.110
+             4  172.69.194.25
+             4  141.101.98.109
+   37  POST /api/jail/snitch  unique_ips=7
+            16  172.69.224.59
+             7  172.69.224.58
+             5  172.68.229.205
+             4  172.68.229.204
+             2  172.64.192.44
+   12  POST /api/weed-empire/plant  unique_ips=6
+             3  162.158.216.110
+             3  172.69.224.59
+             2  172.69.224.58
+             2  172.68.229.205
+             1  172.64.192.44
+-- 400/403 unique IPs --
+  303  400 POST /api/jail/bust  unique_ips=19
+            28  162.158.216.110
+            24  141.101.98.109
+            24  172.69.194.175
+   71  403 POST /api/crimes/commit-all  unique_ips=18
+             9  172.70.163.101
+             8  172.64.192.44
+             7  172.71.241.156
+   71  403 GET /api/gta/options  unique_ips=17
+            10  141.101.98.109
+             8  172.69.194.175
+             6  162.158.216.110
+-- slowest avg (if request_time present) --
+=== MONGO SLOW ===
+{"totalLinesWritten":44696607,"log":["{\"t\":{\"$date\":\"2026-08-14T22:04:28.19
+=== DETAIL_DONE ===

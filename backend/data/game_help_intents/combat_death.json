@@ -5,7 +5,6 @@
       "id": "combat_death.combat.combat.overview",
       "domain": "combat_death",
       "entities": [
-        "COMBAT",
         "COMBAT"
       ],
       "sections": [
@@ -36,19 +35,21 @@
       "related_intents": [
         "combat_death.combat.combat.rules",
         "combat_death.combat.how-attacking-works.overview",
-        "combat_death.combat.how-attacking-works.rules"
+        "combat_death.combat.weapons.overview",
+        "combat_death.combat.armour.overview"
       ],
       "follow_ups": [
         "How do I use COMBAT?",
         "What are the rules for COMBAT?",
-        "Where do I find COMBAT?"
+        "Where do I find COMBAT?",
+        "How Attacking Works?",
+        "What is Weapons?"
       ]
     },
     {
       "id": "combat_death.combat.combat.rules",
       "domain": "combat_death",
       "entities": [
-        "COMBAT",
         "COMBAT"
       ],
       "sections": [
@@ -79,20 +80,22 @@
       "related_intents": [
         "combat_death.combat.combat.overview",
         "combat_death.combat.how-attacking-works.overview",
-        "combat_death.combat.how-attacking-works.rules"
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "Tell me about COMBAT",
         "What happens with COMBAT?",
-        "Show me the COMBAT guide"
+        "Show me the COMBAT guide",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
       "id": "combat_death.combat.how-attacking-works.overview",
       "domain": "combat_death",
       "entities": [
-        "How Attacking Works",
-        "COMBAT"
+        "COMBAT",
+        "How Attacking Works"
       ],
       "sections": [
         {
@@ -111,31 +114,34 @@
       ],
       "intent_type": "definition",
       "variants": [
-        "What is How Attacking Works?",
-        "What are How Attacking Works?",
-        "Tell me about How Attacking Works",
-        "Explain How Attacking Works",
-        "How does How Attacking Works work?",
-        "I need information about How Attacking Works",
-        "Give me the guide for How Attacking Works"
+        "How Attacking Works?",
+        "What is COMBAT?",
+        "What are COMBAT?",
+        "Tell me about COMBAT",
+        "Explain COMBAT",
+        "How does COMBAT work?",
+        "I need information about COMBAT"
       ],
       "related_intents": [
         "combat_death.combat.how-attacking-works.rules",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules"
+        "combat_death.combat.weapons.overview",
+        "combat_death.combat.armour.overview"
       ],
       "follow_ups": [
-        "How do I use How Attacking Works?",
-        "What are the rules for How Attacking Works?",
-        "Where do I find How Attacking Works?"
+        "Tell me about COMBAT",
+        "Where do I find COMBAT?",
+        "Show me the COMBAT guide",
+        "What is COMBAT?",
+        "What is Weapons?"
       ]
     },
     {
       "id": "combat_death.combat.how-attacking-works.rules",
       "domain": "combat_death",
       "entities": [
-        "How Attacking Works",
-        "COMBAT"
+        "COMBAT",
+        "How Attacking Works"
       ],
       "sections": [
         {
@@ -154,23 +160,25 @@
       ],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for How Attacking Works?",
-        "What happens with How Attacking Works?",
-        "Does the FAQ explain How Attacking Works?",
-        "Can you clarify How Attacking Works?",
-        "Which FAQ covers How Attacking Works?",
-        "I have a question about How Attacking Works",
-        "How is How Attacking Works supposed to work?"
+        "What are the rules for COMBAT?",
+        "What happens with COMBAT?",
+        "Does the FAQ explain COMBAT?",
+        "Can you clarify COMBAT?",
+        "Which FAQ covers COMBAT?",
+        "I have a question about COMBAT",
+        "How is COMBAT supposed to work?"
       ],
       "related_intents": [
         "combat_death.combat.how-attacking-works.overview",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules"
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
-        "Tell me about How Attacking Works",
-        "What happens with How Attacking Works?",
-        "Show me the COMBAT guide"
+        "How does COMBAT work?",
+        "Show me the COMBAT guide",
+        "What is COMBAT?",
+        "How Attacking Works?",
+        "What is Weapons?"
       ]
     },
     {
@@ -208,13 +216,15 @@
       "related_intents": [
         "combat_death.combat.weapons.rules",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.armour.overview"
       ],
       "follow_ups": [
         "How do I use Weapons?",
         "What are the rules for Weapons?",
-        "Where do I find Weapons?"
+        "Where do I find Weapons?",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -252,13 +262,14 @@
       "related_intents": [
         "combat_death.combat.weapons.overview",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
         "combat_death.combat.how-attacking-works.overview"
       ],
       "follow_ups": [
         "Tell me about Weapons",
         "What happens with Weapons?",
-        "Show me the COMBAT guide"
+        "Show me the COMBAT guide",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -296,13 +307,15 @@
       "related_intents": [
         "combat_death.combat.armour.rules",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "How do I use Armour?",
         "What are the rules for Armour?",
-        "Where do I find Armour?"
+        "Where do I find Armour?",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -340,13 +353,15 @@
       "related_intents": [
         "combat_death.combat.armour.overview",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "Tell me about Armour",
         "What happens with Armour?",
-        "Show me the COMBAT guide"
+        "Show me the COMBAT guide",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -384,13 +399,15 @@
       "related_intents": [
         "combat_death.combat.hitlist-bounties.rules",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "How do I use Hitlist (Bounties)?",
         "What are the rules for Hitlist (Bounties)?",
-        "Where do I find Hitlist (Bounties)?"
+        "Where do I find Hitlist (Bounties)?",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -428,13 +445,15 @@
       "related_intents": [
         "combat_death.combat.hitlist-bounties.overview",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "Tell me about Hitlist (Bounties)",
         "What happens with Hitlist (Bounties)?",
-        "Show me the COMBAT guide"
+        "Show me the COMBAT guide",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -472,13 +491,15 @@
       "related_intents": [
         "combat_death.combat.bodyguards.rules",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "How do I use Bodyguards?",
         "What are the rules for Bodyguards?",
-        "Where do I find Bodyguards?"
+        "Where do I find Bodyguards?",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -516,13 +537,15 @@
       "related_intents": [
         "combat_death.combat.bodyguards.overview",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "Tell me about Bodyguards",
         "What happens with Bodyguards?",
-        "Show me the COMBAT guide"
+        "Show me the COMBAT guide",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -560,13 +583,15 @@
       "related_intents": [
         "combat_death.combat.new-account-protection.rules",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "How do I use New-account protection?",
         "What are the rules for New-account protection?",
-        "Where do I find New-account protection?"
+        "Where do I find New-account protection?",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -604,13 +629,15 @@
       "related_intents": [
         "combat_death.combat.new-account-protection.overview",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "Tell me about New-account protection",
         "What happens with New-account protection?",
-        "Show me the COMBAT guide"
+        "Show me the COMBAT guide",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -648,13 +675,15 @@
       "related_intents": [
         "combat_death.combat.hitman-for-hire.rules",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "How do I use Hitman for Hire?",
         "What are the rules for Hitman for Hire?",
-        "Where do I find Hitman for Hire?"
+        "Where do I find Hitman for Hire?",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -692,13 +721,15 @@
       "related_intents": [
         "combat_death.combat.hitman-for-hire.overview",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "Tell me about Hitman for Hire",
         "What happens with Hitman for Hire?",
-        "Show me the COMBAT guide"
+        "Show me the COMBAT guide",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -736,13 +767,15 @@
       "related_intents": [
         "combat_death.combat.molotovs.rules",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "How do I use Molotovs?",
         "What are the rules for Molotovs?",
-        "Where do I find Molotovs?"
+        "Where do I find Molotovs?",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -780,13 +813,15 @@
       "related_intents": [
         "combat_death.combat.molotovs.overview",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "Tell me about Molotovs",
         "What happens with Molotovs?",
-        "Show me the COMBAT guide"
+        "Show me the COMBAT guide",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -824,13 +859,15 @@
       "related_intents": [
         "combat_death.combat.health-system.rules",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "How do I use Health System?",
         "What are the rules for Health System?",
-        "Where do I find Health System?"
+        "Where do I find Health System?",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -868,13 +905,15 @@
       "related_intents": [
         "combat_death.combat.health-system.overview",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "Tell me about Health System",
         "What happens with Health System?",
-        "Show me the COMBAT guide"
+        "Show me the COMBAT guide",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -912,13 +951,15 @@
       "related_intents": [
         "combat_death.combat.witness-statements.rules",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "How do I use Witness Statements?",
         "What are the rules for Witness Statements?",
-        "Where do I find Witness Statements?"
+        "Where do I find Witness Statements?",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -956,13 +997,15 @@
       "related_intents": [
         "combat_death.combat.witness-statements.overview",
         "combat_death.combat.combat.overview",
-        "combat_death.combat.combat.rules",
-        "combat_death.combat.how-attacking-works.overview"
+        "combat_death.combat.how-attacking-works.overview",
+        "combat_death.combat.weapons.overview"
       ],
       "follow_ups": [
         "Tell me about Witness Statements",
         "What happens with Witness Statements?",
-        "Show me the COMBAT guide"
+        "Show me the COMBAT guide",
+        "What is COMBAT?",
+        "How Attacking Works?"
       ]
     },
     {
@@ -1044,13 +1087,15 @@
       "follow_ups": [
         "Tell me about Armoury & bullet factory (per city)",
         "What happens with Armoury & bullet factory (per city)?",
-        "Show me the MONEY MAKING guide"
+        "Show me the MONEY MAKING guide",
+        "What is Armoury & bullet factory (per city)?"
       ]
     },
     {
       "id": "combat_death.faq.what-is-hitman-for-hire.overview",
       "domain": "combat_death",
       "entities": [
+        "Hitman for Hire",
         "What is Hitman for Hire?",
         "FAQ"
       ],
@@ -1067,28 +1112,32 @@
       "intent_type": "definition",
       "variants": [
         "What is Hitman for Hire?",
-        "What is What is Hitman for Hire??",
-        "What are What is Hitman for Hire??",
-        "Tell me about What is Hitman for Hire?",
-        "Explain What is Hitman for Hire?",
-        "How does What is Hitman for Hire? work?",
-        "I need information about What is Hitman for Hire?"
+        "What are Hitman for Hire?",
+        "Tell me about Hitman for Hire",
+        "Explain Hitman for Hire",
+        "How does Hitman for Hire work?",
+        "I need information about Hitman for Hire",
+        "Give me the guide for Hitman for Hire"
       ],
       "related_intents": [
         "combat_death.faq.what-is-hitman-for-hire.rules",
         "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.overview",
-        "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.rules"
+        "combat_death.faq.what-is-a-loot-weapon.overview",
+        "combat_death.faq.what-is-weapon-mastery.overview"
       ],
       "follow_ups": [
-        "How do I use What is Hitman for Hire??",
-        "What are the rules for What is Hitman for Hire??",
-        "Where do I find What is Hitman for Hire??"
+        "Tell me about Hitman for Hire",
+        "Where do I find Hitman for Hire?",
+        "Show me the FAQ guide",
+        "Why can’t I attack / hire a Hitman on a new player?",
+        "What is a Loot Weapon?"
       ]
     },
     {
       "id": "combat_death.faq.what-is-hitman-for-hire.rules",
       "domain": "combat_death",
       "entities": [
+        "Hitman for Hire",
         "What is Hitman for Hire?",
         "FAQ"
       ],
@@ -1104,29 +1153,32 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for What is Hitman for Hire??",
-        "What happens with What is Hitman for Hire??",
-        "Does the FAQ explain What is Hitman for Hire??",
-        "Can you clarify What is Hitman for Hire??",
-        "Which FAQ covers What is Hitman for Hire??",
-        "I have a question about What is Hitman for Hire?",
-        "How is What is Hitman for Hire? supposed to work?"
+        "What are the rules for Hitman for Hire?",
+        "What happens with Hitman for Hire?",
+        "Does the FAQ explain Hitman for Hire?",
+        "Can you clarify Hitman for Hire?",
+        "Which FAQ covers Hitman for Hire?",
+        "I have a question about Hitman for Hire",
+        "How is Hitman for Hire supposed to work?"
       ],
       "related_intents": [
         "combat_death.faq.what-is-hitman-for-hire.overview",
         "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.overview",
-        "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.rules"
+        "combat_death.faq.what-is-a-loot-weapon.overview"
       ],
       "follow_ups": [
-        "Tell me about What is Hitman for Hire?",
-        "What happens with What is Hitman for Hire??",
-        "Show me the FAQ guide"
+        "How does Hitman for Hire work?",
+        "Show me the FAQ guide",
+        "What is Hitman for Hire?",
+        "Why can’t I attack / hire a Hitman on a new player?",
+        "What is a Loot Weapon?"
       ]
     },
     {
       "id": "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.overview",
       "domain": "combat_death",
       "entities": [
+        "Hire a Hitman on a new player",
         "Why can’t I attack / hire a Hitman on a new player?",
         "FAQ"
       ],
@@ -1143,28 +1195,32 @@
       "intent_type": "definition",
       "variants": [
         "Why can’t I attack / hire a Hitman on a new player?",
-        "What is Why can’t I attack / hire a Hitman on a new player??",
-        "What are Why can’t I attack / hire a Hitman on a new player??",
-        "Tell me about Why can’t I attack / hire a Hitman on a new player?",
-        "Explain Why can’t I attack / hire a Hitman on a new player?",
-        "How does Why can’t I attack / hire a Hitman on a new player? work?",
-        "I need information about Why can’t I attack / hire a Hitman on a new player?"
+        "What is Hire a Hitman on a new player?",
+        "What are Hire a Hitman on a new player?",
+        "Tell me about Hire a Hitman on a new player",
+        "Explain Hire a Hitman on a new player",
+        "How does Hire a Hitman on a new player work?",
+        "I need information about Hire a Hitman on a new player"
       ],
       "related_intents": [
         "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.rules",
         "combat_death.faq.what-is-hitman-for-hire.overview",
-        "combat_death.faq.what-is-hitman-for-hire.rules"
+        "combat_death.faq.what-is-a-loot-weapon.overview",
+        "combat_death.faq.what-is-weapon-mastery.overview"
       ],
       "follow_ups": [
-        "How do I use Why can’t I attack / hire a Hitman on a new player??",
-        "What are the rules for Why can’t I attack / hire a Hitman on a new player??",
-        "Where do I find Why can’t I attack / hire a Hitman on a new player??"
+        "Tell me about Hire a Hitman on a new player",
+        "Where do I find Hire a Hitman on a new player?",
+        "Show me the FAQ guide",
+        "What is Hitman for Hire?",
+        "What is a Loot Weapon?"
       ]
     },
     {
       "id": "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.rules",
       "domain": "combat_death",
       "entities": [
+        "Hire a Hitman on a new player",
         "Why can’t I attack / hire a Hitman on a new player?",
         "FAQ"
       ],
@@ -1180,29 +1236,32 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for Why can’t I attack / hire a Hitman on a new player??",
-        "What happens with Why can’t I attack / hire a Hitman on a new player??",
-        "Does the FAQ explain Why can’t I attack / hire a Hitman on a new player??",
-        "Can you clarify Why can’t I attack / hire a Hitman on a new player??",
-        "Which FAQ covers Why can’t I attack / hire a Hitman on a new player??",
-        "I have a question about Why can’t I attack / hire a Hitman on a new player?",
-        "How is Why can’t I attack / hire a Hitman on a new player? supposed to work?"
+        "What are the rules for Hire a Hitman on a new player?",
+        "What happens with Hire a Hitman on a new player?",
+        "Does the FAQ explain Hire a Hitman on a new player?",
+        "Can you clarify Hire a Hitman on a new player?",
+        "Which FAQ covers Hire a Hitman on a new player?",
+        "I have a question about Hire a Hitman on a new player",
+        "How is Hire a Hitman on a new player supposed to work?"
       ],
       "related_intents": [
         "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.overview",
         "combat_death.faq.what-is-hitman-for-hire.overview",
-        "combat_death.faq.what-is-hitman-for-hire.rules"
+        "combat_death.faq.what-is-a-loot-weapon.overview"
       ],
       "follow_ups": [
-        "Tell me about Why can’t I attack / hire a Hitman on a new player?",
-        "What happens with Why can’t I attack / hire a Hitman on a new player??",
-        "Show me the FAQ guide"
+        "How does Hire a Hitman on a new player work?",
+        "Show me the FAQ guide",
+        "What is Hitman for Hire?",
+        "Why can’t I attack / hire a Hitman on a new player?",
+        "What is a Loot Weapon?"
       ]
     },
     {
       "id": "combat_death.faq.what-is-a-loot-weapon.overview",
       "domain": "combat_death",
       "entities": [
+        "Loot Weapon",
         "What is a Loot Weapon?",
         "FAQ"
       ],
@@ -1219,29 +1278,32 @@
       "intent_type": "definition",
       "variants": [
         "What is a Loot Weapon?",
-        "What is What is a Loot Weapon??",
-        "What are What is a Loot Weapon??",
-        "Tell me about What is a Loot Weapon?",
-        "Explain What is a Loot Weapon?",
-        "How does What is a Loot Weapon? work?",
-        "I need information about What is a Loot Weapon?"
+        "What is Loot Weapon?",
+        "What are Loot Weapon?",
+        "Tell me about Loot Weapon",
+        "Explain Loot Weapon",
+        "How does Loot Weapon work?",
+        "I need information about Loot Weapon"
       ],
       "related_intents": [
         "combat_death.faq.what-is-a-loot-weapon.rules",
         "combat_death.faq.what-is-hitman-for-hire.overview",
-        "combat_death.faq.what-is-hitman-for-hire.rules",
-        "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.overview"
+        "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.overview",
+        "combat_death.faq.what-is-weapon-mastery.overview"
       ],
       "follow_ups": [
-        "How do I use What is a Loot Weapon??",
-        "What are the rules for What is a Loot Weapon??",
-        "Where do I find What is a Loot Weapon??"
+        "Tell me about Loot Weapon",
+        "Where do I find Loot Weapon?",
+        "Show me the FAQ guide",
+        "What is Hitman for Hire?",
+        "Why can’t I attack / hire a Hitman on a new player?"
       ]
     },
     {
       "id": "combat_death.faq.what-is-a-loot-weapon.rules",
       "domain": "combat_death",
       "entities": [
+        "Loot Weapon",
         "What is a Loot Weapon?",
         "FAQ"
       ],
@@ -1257,30 +1319,32 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for What is a Loot Weapon??",
-        "What happens with What is a Loot Weapon??",
-        "Does the FAQ explain What is a Loot Weapon??",
-        "Can you clarify What is a Loot Weapon??",
-        "Which FAQ covers What is a Loot Weapon??",
-        "I have a question about What is a Loot Weapon?",
-        "How is What is a Loot Weapon? supposed to work?"
+        "What are the rules for Loot Weapon?",
+        "What happens with Loot Weapon?",
+        "Does the FAQ explain Loot Weapon?",
+        "Can you clarify Loot Weapon?",
+        "Which FAQ covers Loot Weapon?",
+        "I have a question about Loot Weapon",
+        "How is Loot Weapon supposed to work?"
       ],
       "related_intents": [
         "combat_death.faq.what-is-a-loot-weapon.overview",
         "combat_death.faq.what-is-hitman-for-hire.overview",
-        "combat_death.faq.what-is-hitman-for-hire.rules",
         "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.overview"
       ],
       "follow_ups": [
-        "Tell me about What is a Loot Weapon?",
-        "What happens with What is a Loot Weapon??",
-        "Show me the FAQ guide"
+        "How does Loot Weapon work?",
+        "Show me the FAQ guide",
+        "What is Hitman for Hire?",
+        "Why can’t I attack / hire a Hitman on a new player?",
+        "What is a Loot Weapon?"
       ]
     },
     {
       "id": "combat_death.faq.what-is-weapon-mastery.overview",
       "domain": "combat_death",
       "entities": [
+        "Weapon mastery",
         "What is weapon mastery?",
         "FAQ"
       ],
@@ -1297,29 +1361,32 @@
       "intent_type": "definition",
       "variants": [
         "What is weapon mastery?",
-        "What is What is weapon mastery??",
-        "What are What is weapon mastery??",
-        "Tell me about What is weapon mastery?",
-        "Explain What is weapon mastery?",
-        "How does What is weapon mastery? work?",
-        "I need information about What is weapon mastery?"
+        "What are Weapon mastery?",
+        "Tell me about Weapon mastery",
+        "Explain Weapon mastery",
+        "How does Weapon mastery work?",
+        "I need information about Weapon mastery",
+        "Give me the guide for Weapon mastery"
       ],
       "related_intents": [
         "combat_death.faq.what-is-weapon-mastery.rules",
         "combat_death.faq.what-is-hitman-for-hire.overview",
-        "combat_death.faq.what-is-hitman-for-hire.rules",
-        "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.overview"
+        "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.overview",
+        "combat_death.faq.what-is-a-loot-weapon.overview"
       ],
       "follow_ups": [
-        "How do I use What is weapon mastery??",
-        "What are the rules for What is weapon mastery??",
-        "Where do I find What is weapon mastery??"
+        "Tell me about Weapon mastery",
+        "Where do I find Weapon mastery?",
+        "Show me the FAQ guide",
+        "What is Hitman for Hire?",
+        "Why can’t I attack / hire a Hitman on a new player?"
       ]
     },
     {
       "id": "combat_death.faq.what-is-weapon-mastery.rules",
       "domain": "combat_death",
       "entities": [
+        "Weapon mastery",
         "What is weapon mastery?",
         "FAQ"
       ],
@@ -1335,30 +1402,33 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for What is weapon mastery??",
-        "What happens with What is weapon mastery??",
-        "Does the FAQ explain What is weapon mastery??",
-        "Can you clarify What is weapon mastery??",
-        "Which FAQ covers What is weapon mastery??",
-        "I have a question about What is weapon mastery?",
-        "How is What is weapon mastery? supposed to work?"
+        "What are the rules for Weapon mastery?",
+        "What happens with Weapon mastery?",
+        "Does the FAQ explain Weapon mastery?",
+        "Can you clarify Weapon mastery?",
+        "Which FAQ covers Weapon mastery?",
+        "I have a question about Weapon mastery",
+        "How is Weapon mastery supposed to work?"
       ],
       "related_intents": [
         "combat_death.faq.what-is-weapon-mastery.overview",
         "combat_death.faq.what-is-hitman-for-hire.overview",
-        "combat_death.faq.what-is-hitman-for-hire.rules",
-        "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.overview"
+        "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.overview",
+        "combat_death.faq.what-is-a-loot-weapon.overview"
       ],
       "follow_ups": [
-        "Tell me about What is weapon mastery?",
-        "What happens with What is weapon mastery??",
-        "Show me the FAQ guide"
+        "How does Weapon mastery work?",
+        "Show me the FAQ guide",
+        "What is Hitman for Hire?",
+        "Why can’t I attack / hire a Hitman on a new player?",
+        "What is a Loot Weapon?"
       ]
     },
     {
       "id": "combat_death.faq.what-is-dead-to-alive.overview",
       "domain": "combat_death",
       "entities": [
+        "Dead to Alive",
         "What is Dead to Alive?",
         "FAQ"
       ],
@@ -1375,29 +1445,32 @@
       "intent_type": "definition",
       "variants": [
         "What is Dead to Alive?",
-        "What is What is Dead to Alive??",
-        "What are What is Dead to Alive??",
-        "Tell me about What is Dead to Alive?",
-        "Explain What is Dead to Alive?",
-        "How does What is Dead to Alive? work?",
-        "I need information about What is Dead to Alive?"
+        "What are Dead to Alive?",
+        "Tell me about Dead to Alive",
+        "Explain Dead to Alive",
+        "How does Dead to Alive work?",
+        "I need information about Dead to Alive",
+        "Give me the guide for Dead to Alive"
       ],
       "related_intents": [
         "combat_death.faq.what-is-dead-to-alive.rules",
         "combat_death.faq.what-is-hitman-for-hire.overview",
-        "combat_death.faq.what-is-hitman-for-hire.rules",
-        "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.overview"
+        "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.overview",
+        "combat_death.faq.what-is-a-loot-weapon.overview"
       ],
       "follow_ups": [
-        "How do I use What is Dead to Alive??",
-        "What are the rules for What is Dead to Alive??",
-        "Where do I find What is Dead to Alive??"
+        "Tell me about Dead to Alive",
+        "Where do I find Dead to Alive?",
+        "Show me the FAQ guide",
+        "What is Hitman for Hire?",
+        "Why can’t I attack / hire a Hitman on a new player?"
       ]
     },
     {
       "id": "combat_death.faq.what-is-dead-to-alive.rules",
       "domain": "combat_death",
       "entities": [
+        "Dead to Alive",
         "What is Dead to Alive?",
         "FAQ"
       ],
@@ -1413,31 +1486,32 @@
       "route_aliases": [],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for What is Dead to Alive??",
-        "What happens with What is Dead to Alive??",
-        "Does the FAQ explain What is Dead to Alive??",
-        "Can you clarify What is Dead to Alive??",
-        "Which FAQ covers What is Dead to Alive??",
-        "I have a question about What is Dead to Alive?",
-        "How is What is Dead to Alive? supposed to work?"
+        "What are the rules for Dead to Alive?",
+        "What happens with Dead to Alive?",
+        "Does the FAQ explain Dead to Alive?",
+        "Can you clarify Dead to Alive?",
+        "Which FAQ covers Dead to Alive?",
+        "I have a question about Dead to Alive",
+        "How is Dead to Alive supposed to work?"
       ],
       "related_intents": [
         "combat_death.faq.what-is-dead-to-alive.overview",
         "combat_death.faq.what-is-hitman-for-hire.overview",
-        "combat_death.faq.what-is-hitman-for-hire.rules",
-        "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.overview"
+        "combat_death.faq.why-can-t-i-attack-hire-a-hitman-on-a-new-player.overview",
+        "combat_death.faq.what-is-a-loot-weapon.overview"
       ],
       "follow_ups": [
-        "Tell me about What is Dead to Alive?",
-        "What happens with What is Dead to Alive??",
-        "Show me the FAQ guide"
+        "How does Dead to Alive work?",
+        "Show me the FAQ guide",
+        "What is Hitman for Hire?",
+        "Why can’t I attack / hire a Hitman on a new player?",
+        "What is a Loot Weapon?"
       ]
     },
     {
       "id": "combat_death.combat-and-loadout.combat-and-loadout.overview",
       "domain": "combat_death",
       "entities": [
-        "COMBAT & LOADOUT",
         "COMBAT & LOADOUT"
       ],
       "sections": [
@@ -1463,19 +1537,21 @@
       "related_intents": [
         "combat_death.combat-and-loadout.combat-and-loadout.procedure",
         "combat_death.combat-and-loadout.attacking.overview",
-        "combat_death.combat-and-loadout.attacking.procedure"
+        "combat_death.combat-and-loadout.weapons-and-armour.overview",
+        "combat_death.combat-and-loadout.hitlist.overview"
       ],
       "follow_ups": [
         "How do I use COMBAT & LOADOUT?",
         "What are the rules for COMBAT & LOADOUT?",
-        "Where do I find COMBAT & LOADOUT?"
+        "Where do I find COMBAT & LOADOUT?",
+        "What is Attacking?",
+        "What is Weapons & armour?"
       ]
     },
     {
       "id": "combat_death.combat-and-loadout.combat-and-loadout.procedure",
       "domain": "combat_death",
       "entities": [
-        "COMBAT & LOADOUT",
         "COMBAT & LOADOUT"
       ],
       "sections": [
@@ -1501,12 +1577,14 @@
       "related_intents": [
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
         "combat_death.combat-and-loadout.attacking.overview",
-        "combat_death.combat-and-loadout.attacking.procedure"
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "Tell me about COMBAT & LOADOUT",
         "What happens with COMBAT & LOADOUT?",
-        "Show me the COMBAT & LOADOUT guide"
+        "Show me the COMBAT & LOADOUT guide",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -1539,12 +1617,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.attacking.procedure",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure"
+        "combat_death.combat-and-loadout.weapons-and-armour.overview",
+        "combat_death.combat-and-loadout.hitlist.overview"
       ],
       "follow_ups": [
         "How do I use Attacking?",
         "What are the rules for Attacking?",
-        "Where do I find Attacking?"
+        "Where do I find Attacking?",
+        "What is COMBAT & LOADOUT?",
+        "What is Weapons & armour?"
       ]
     },
     {
@@ -1577,12 +1658,14 @@
       "related_intents": [
         "combat_death.combat-and-loadout.attacking.overview",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure"
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "Tell me about Attacking",
         "What happens with Attacking?",
-        "Show me the COMBAT & LOADOUT guide"
+        "Show me the COMBAT & LOADOUT guide",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -1615,13 +1698,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.weapons-and-armour.procedure",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
-        "combat_death.combat-and-loadout.attacking.overview"
+        "combat_death.combat-and-loadout.attacking.overview",
+        "combat_death.combat-and-loadout.hitlist.overview"
       ],
       "follow_ups": [
         "How do I use Weapons & armour?",
         "What are the rules for Weapons & armour?",
-        "Where do I find Weapons & armour?"
+        "Where do I find Weapons & armour?",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -1654,13 +1739,14 @@
       "related_intents": [
         "combat_death.combat-and-loadout.weapons-and-armour.overview",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
         "combat_death.combat-and-loadout.attacking.overview"
       ],
       "follow_ups": [
         "Tell me about Weapons & armour",
         "What happens with Weapons & armour?",
-        "Show me the COMBAT & LOADOUT guide"
+        "Show me the COMBAT & LOADOUT guide",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -1693,13 +1779,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.hitlist.procedure",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
-        "combat_death.combat-and-loadout.attacking.overview"
+        "combat_death.combat-and-loadout.attacking.overview",
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "How do I use Hitlist?",
         "What are the rules for Hitlist?",
-        "Where do I find Hitlist?"
+        "Where do I find Hitlist?",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -1732,13 +1820,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.hitlist.overview",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
-        "combat_death.combat-and-loadout.attacking.overview"
+        "combat_death.combat-and-loadout.attacking.overview",
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "Tell me about Hitlist",
         "What happens with Hitlist?",
-        "Show me the COMBAT & LOADOUT guide"
+        "Show me the COMBAT & LOADOUT guide",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -1771,13 +1861,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.bodyguards.procedure",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
-        "combat_death.combat-and-loadout.attacking.overview"
+        "combat_death.combat-and-loadout.attacking.overview",
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "How do I use Bodyguards?",
         "What are the rules for Bodyguards?",
-        "Where do I find Bodyguards?"
+        "Where do I find Bodyguards?",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -1810,13 +1902,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.bodyguards.overview",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
-        "combat_death.combat-and-loadout.attacking.overview"
+        "combat_death.combat-and-loadout.attacking.overview",
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "Tell me about Bodyguards",
         "What happens with Bodyguards?",
-        "Show me the COMBAT & LOADOUT guide"
+        "Show me the COMBAT & LOADOUT guide",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -1849,13 +1943,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.hitman-for-hire.procedure",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
-        "combat_death.combat-and-loadout.attacking.overview"
+        "combat_death.combat-and-loadout.attacking.overview",
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "How do I use Hitman for Hire?",
         "What are the rules for Hitman for Hire?",
-        "Where do I find Hitman for Hire?"
+        "Where do I find Hitman for Hire?",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -1888,13 +1984,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.hitman-for-hire.overview",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
-        "combat_death.combat-and-loadout.attacking.overview"
+        "combat_death.combat-and-loadout.attacking.overview",
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "Tell me about Hitman for Hire",
         "What happens with Hitman for Hire?",
-        "Show me the COMBAT & LOADOUT guide"
+        "Show me the COMBAT & LOADOUT guide",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -1927,13 +2025,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.attempt-log.procedure",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
-        "combat_death.combat-and-loadout.attacking.overview"
+        "combat_death.combat-and-loadout.attacking.overview",
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "How do I use Attempt log?",
         "What are the rules for Attempt log?",
-        "Where do I find Attempt log?"
+        "Where do I find Attempt log?",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -1966,13 +2066,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.attempt-log.overview",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
-        "combat_death.combat-and-loadout.attacking.overview"
+        "combat_death.combat-and-loadout.attacking.overview",
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "Tell me about Attempt log",
         "What happens with Attempt log?",
-        "Show me the COMBAT & LOADOUT guide"
+        "Show me the COMBAT & LOADOUT guide",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -2005,13 +2107,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.molotovs.procedure",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
-        "combat_death.combat-and-loadout.attacking.overview"
+        "combat_death.combat-and-loadout.attacking.overview",
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "How do I use Molotovs?",
         "What are the rules for Molotovs?",
-        "Where do I find Molotovs?"
+        "Where do I find Molotovs?",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -2044,13 +2148,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.molotovs.overview",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
-        "combat_death.combat-and-loadout.attacking.overview"
+        "combat_death.combat-and-loadout.attacking.overview",
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "Tell me about Molotovs",
         "What happens with Molotovs?",
-        "Show me the COMBAT & LOADOUT guide"
+        "Show me the COMBAT & LOADOUT guide",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -2083,13 +2189,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.shooting-range-mastery.procedure",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
-        "combat_death.combat-and-loadout.attacking.overview"
+        "combat_death.combat-and-loadout.attacking.overview",
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "How do I use Shooting range (mastery)?",
         "What are the rules for Shooting range (mastery)?",
-        "Where do I find Shooting range (mastery)?"
+        "Where do I find Shooting range (mastery)?",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -2122,13 +2230,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.shooting-range-mastery.overview",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
-        "combat_death.combat-and-loadout.attacking.overview"
+        "combat_death.combat-and-loadout.attacking.overview",
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "Tell me about Shooting range (mastery)",
         "What happens with Shooting range (mastery)?",
-        "Show me the COMBAT & LOADOUT guide"
+        "Show me the COMBAT & LOADOUT guide",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -2161,13 +2271,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.after-death-dead-alive-and-revive.procedure",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
-        "combat_death.combat-and-loadout.attacking.overview"
+        "combat_death.combat-and-loadout.attacking.overview",
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "How do I use After death: Dead > Alive & revive?",
         "What are the rules for After death: Dead > Alive & revive?",
-        "Where do I find After death: Dead > Alive & revive?"
+        "Where do I find After death: Dead > Alive & revive?",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     },
     {
@@ -2200,13 +2312,15 @@
       "related_intents": [
         "combat_death.combat-and-loadout.after-death-dead-alive-and-revive.overview",
         "combat_death.combat-and-loadout.combat-and-loadout.overview",
-        "combat_death.combat-and-loadout.combat-and-loadout.procedure",
-        "combat_death.combat-and-loadout.attacking.overview"
+        "combat_death.combat-and-loadout.attacking.overview",
+        "combat_death.combat-and-loadout.weapons-and-armour.overview"
       ],
       "follow_ups": [
         "Tell me about After death: Dead > Alive & revive",
         "What happens with After death: Dead > Alive & revive?",
-        "Show me the COMBAT & LOADOUT guide"
+        "Show me the COMBAT & LOADOUT guide",
+        "What is COMBAT & LOADOUT?",
+        "What is Attacking?"
       ]
     }
   ]

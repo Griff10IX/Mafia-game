@@ -1090,7 +1090,7 @@ export default function Layout({ children }) {
         const arrivesMs = Date.parse(detail.travel_arrives_at);
         if (dest && Number.isFinite(arrivesMs)) {
           const secs = Math.max(1, Math.ceil((arrivesMs - Date.now()) / 1000));
-          setTravelStatus({ traveling: true, destination: dest, seconds_remaining: secs });
+          setTravelStatus({ traveling: true, destination: dest, seconds_remaining: secs, arrives_at: arrivesMs });
         }
       }
       if (refreshUserDebounceRef.current) clearTimeout(refreshUserDebounceRef.current);
@@ -1203,7 +1203,7 @@ export default function Layout({ children }) {
       if (!cancelled) warmLeaderboardCaches(api);
     };
     const t0 = setTimeout(run, 12_000);
-    const interval = setInterval(run, 60_000);
+    const interval = setInterval(run, 300_000);
     return () => {
       cancelled = true;
       clearTimeout(t0);
@@ -1224,7 +1224,7 @@ export default function Layout({ children }) {
   const showCasinoProfitLive = hasCasinoOrProperty && (location.pathname === '/my-properties' || (mobileStatsDisplay === 'right_sidebar' && (!isMobileViewport || rightSidebarOpen)));
   useEffect(() => {
     if (!showCasinoProfitLive || !userId) return;
-    const intervalId = setInterval(fetchCasinoProperty, 10000);
+    const intervalId = setInterval(fetchCasinoProperty, 30000);
     return () => clearInterval(intervalId);
   }, [showCasinoProfitLive, userId]); // eslint-disable-line
   // On pathname change: only refresh ranking counts (debounced); do not refetch user/rank (handled by mount, 60s interval, app:refresh-user)
@@ -1727,19 +1727,41 @@ export default function Layout({ children }) {
       const res = await apiRequestWith429Retry(() => api.get('/travel/status'));
       const data = res.data || {};
       if (data.traveling && data.seconds_remaining > 0) {
-        setTravelStatus({ traveling: true, destination: data.destination || data.current_state || '?', seconds_remaining: data.seconds_remaining });
+        const secs = Number(data.seconds_remaining) || 0;
+        setTravelStatus({
+          traveling: true,
+          destination: data.destination || data.current_state || '?',
+          seconds_remaining: secs,
+          arrives_at: Date.now() + secs * 1000,
+        });
       } else { setTravelStatus(null); }
     } catch { setTravelStatus(null); }
   }, []);
 
   useEffect(() => {
-    const isTravelPage = location.pathname === '/travel' || location.pathname === '/game/travel';
-    const isTraveling = travelStatus?.traveling === true;
-    if (!isTravelPage && !isTraveling) { fetchTravelStatus(); return () => {}; }
     fetchTravelStatus();
-    const intervalId = setInterval(fetchTravelStatus, 3000);
-    return () => clearInterval(intervalId);
-  }, [location.pathname, travelStatus?.traveling, fetchTravelStatus]);
+  }, [location.pathname, fetchTravelStatus]);
+
+  useEffect(() => {
+    if (!travelStatus?.traveling) return undefined;
+    const id = setInterval(() => {
+      let arrived = false;
+      setTravelStatus((prev) => {
+        if (!prev?.traveling) return prev;
+        const left = prev.arrives_at
+          ? Math.max(0, Math.ceil((prev.arrives_at - Date.now()) / 1000))
+          : Math.max(0, (Number(prev.seconds_remaining) || 0) - 1);
+        if (left <= 0) {
+          arrived = true;
+          return null;
+        }
+        if (left === prev.seconds_remaining) return prev;
+        return { ...prev, seconds_remaining: left };
+      });
+      if (arrived) fetchTravelStatus();
+    }, 1000);
+    return () => clearInterval(id);
+  }, [travelStatus?.traveling, fetchTravelStatus]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');

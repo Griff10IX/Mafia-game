@@ -11822,7 +11822,7 @@ def register(router):
         player_match = {
             "is_npc": {"$ne": True},
             "is_bodyguard": {"$ne": True},
-            **_staff_exclude_user_filter(),
+            **(await srv.staff_exclude_users_match()),
         }
         st = (status or "all").strip().lower()
         if st == "alive":
@@ -21375,7 +21375,7 @@ def register(router):
         """Economy snapshot: total money, points, average wealth, top 5 richest."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        base_match = srv.alive_real_player_wallet_match()
+        base_match = {"is_npc": {"$ne": True}, "is_dead": {"$ne": True}, **(await srv.staff_exclude_users_match())}
         pipeline = [
             {"$match": base_match},
             {"$group": {
@@ -21443,7 +21443,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
         if sort not in ("money_desc", "money_asc", "username_asc"):
             raise HTTPException(status_code=400, detail="sort must be money_desc, money_asc, or username_asc")
-        base_match: dict = srv.alive_real_player_wallet_match()
+        base_match: dict = {"is_npc": {"$ne": True}, "is_dead": {"$ne": True}, **(await srv.staff_exclude_users_match())}
         q = (search or "").strip()
         if q:
             base_match["username"] = {"$regex": re.escape(q), "$options": "i"}
@@ -21504,7 +21504,7 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         now = datetime.now(timezone.utc)
-        staff_filter = _staff_exclude_user_filter()
+        staff_filter = await srv.staff_exclude_users_match()
         staff_ids = await srv._get_staff_user_ids()
         real_user_match = {"is_npc": {"$ne": True}, **staff_filter}
         alive_real_match = {"is_npc": {"$ne": True}, "is_dead": {"$ne": True}, **staff_filter}

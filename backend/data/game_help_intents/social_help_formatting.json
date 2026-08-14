@@ -5,7 +5,6 @@
       "id": "social_help_formatting.social-features.social-features.overview",
       "domain": "social_help_formatting",
       "entities": [
-        "SOCIAL FEATURES",
         "SOCIAL FEATURES"
       ],
       "sections": [
@@ -35,19 +34,21 @@
       "related_intents": [
         "social_help_formatting.social-features.social-features.rules",
         "social_help_formatting.social-features.forum.overview",
-        "social_help_formatting.social-features.forum.rules"
+        "social_help_formatting.social-features.image-host.overview",
+        "social_help_formatting.social-features.users-online.overview"
       ],
       "follow_ups": [
         "How do I use SOCIAL FEATURES?",
         "What are the rules for SOCIAL FEATURES?",
-        "Where do I find SOCIAL FEATURES?"
+        "Where do I find SOCIAL FEATURES?",
+        "What is Forum?",
+        "What is Image Host?"
       ]
     },
     {
       "id": "social_help_formatting.social-features.social-features.rules",
       "domain": "social_help_formatting",
       "entities": [
-        "SOCIAL FEATURES",
         "SOCIAL FEATURES"
       ],
       "sections": [
@@ -77,12 +78,14 @@
       "related_intents": [
         "social_help_formatting.social-features.social-features.overview",
         "social_help_formatting.social-features.forum.overview",
-        "social_help_formatting.social-features.forum.rules"
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "Tell me about SOCIAL FEATURES",
         "What happens with SOCIAL FEATURES?",
-        "Show me the SOCIAL FEATURES guide"
+        "Show me the SOCIAL FEATURES guide",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -119,12 +122,15 @@
       "related_intents": [
         "social_help_formatting.social-features.forum.rules",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules"
+        "social_help_formatting.social-features.image-host.overview",
+        "social_help_formatting.social-features.users-online.overview"
       ],
       "follow_ups": [
         "How do I use Forum?",
         "What are the rules for Forum?",
-        "Where do I find Forum?"
+        "Where do I find Forum?",
+        "What is SOCIAL FEATURES?",
+        "What is Image Host?"
       ]
     },
     {
@@ -161,12 +167,14 @@
       "related_intents": [
         "social_help_formatting.social-features.forum.overview",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules"
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "Tell me about Forum",
         "What happens with Forum?",
-        "Show me the SOCIAL FEATURES guide"
+        "Show me the SOCIAL FEATURES guide",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -203,13 +211,15 @@
       "related_intents": [
         "social_help_formatting.social-features.image-host.rules",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
-        "social_help_formatting.social-features.forum.overview"
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.users-online.overview"
       ],
       "follow_ups": [
         "How do I use Image Host?",
         "What are the rules for Image Host?",
-        "Where do I find Image Host?"
+        "Where do I find Image Host?",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -246,13 +256,14 @@
       "related_intents": [
         "social_help_formatting.social-features.image-host.overview",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
         "social_help_formatting.social-features.forum.overview"
       ],
       "follow_ups": [
         "Tell me about Image Host",
         "What happens with Image Host?",
-        "Show me the SOCIAL FEATURES guide"
+        "Show me the SOCIAL FEATURES guide",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -289,13 +300,15 @@
       "related_intents": [
         "social_help_formatting.social-features.users-online.rules",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
-        "social_help_formatting.social-features.forum.overview"
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "How do I use Users online?",
         "What are the rules for Users online?",
-        "Where do I find Users online?"
+        "Where do I find Users online?",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -332,13 +345,15 @@
       "related_intents": [
         "social_help_formatting.social-features.users-online.overview",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
-        "social_help_formatting.social-features.forum.overview"
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "Tell me about Users online",
         "What happens with Users online?",
-        "Show me the SOCIAL FEATURES guide"
+        "Show me the SOCIAL FEATURES guide",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -375,13 +390,15 @@
       "related_intents": [
         "social_help_formatting.social-features.referrals.rules",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
-        "social_help_formatting.social-features.forum.overview"
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "How do I use Referrals?",
         "What are the rules for Referrals?",
-        "Where do I find Referrals?"
+        "Where do I find Referrals?",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -418,13 +435,15 @@
       "related_intents": [
         "social_help_formatting.social-features.referrals.overview",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
-        "social_help_formatting.social-features.forum.overview"
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "Tell me about Referrals",
         "What happens with Referrals?",
-        "Show me the SOCIAL FEATURES guide"
+        "Show me the SOCIAL FEATURES guide",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -461,13 +480,15 @@
       "related_intents": [
         "social_help_formatting.social-features.pre-launch-registration-founding-member.rules",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
-        "social_help_formatting.social-features.forum.overview"
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "How do I use Pre-launch registration (Founding Member)?",
         "What are the rules for Pre-launch registration (Founding Member)?",
-        "Where do I find Pre-launch registration (Founding Member)?"
+        "Where do I find Pre-launch registration (Founding Member)?",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -504,13 +525,15 @@
       "related_intents": [
         "social_help_formatting.social-features.pre-launch-registration-founding-member.overview",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
-        "social_help_formatting.social-features.forum.overview"
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "Tell me about Pre-launch registration (Founding Member)",
         "What happens with Pre-launch registration (Founding Member)?",
-        "Show me the SOCIAL FEATURES guide"
+        "Show me the SOCIAL FEATURES guide",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -547,13 +570,15 @@
       "related_intents": [
         "social_help_formatting.social-features.inbox-and-notifications.rules",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
-        "social_help_formatting.social-features.forum.overview"
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "How do I use Inbox & notifications?",
         "What are the rules for Inbox & notifications?",
-        "Where do I find Inbox & notifications?"
+        "Where do I find Inbox & notifications?",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -590,13 +615,15 @@
       "related_intents": [
         "social_help_formatting.social-features.inbox-and-notifications.overview",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
-        "social_help_formatting.social-features.forum.overview"
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "Tell me about Inbox & notifications",
         "What happens with Inbox & notifications?",
-        "Show me the SOCIAL FEATURES guide"
+        "Show me the SOCIAL FEATURES guide",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -633,13 +660,15 @@
       "related_intents": [
         "social_help_formatting.social-features.direct-messages.rules",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
-        "social_help_formatting.social-features.forum.overview"
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "How do I use Direct Messages?",
         "What are the rules for Direct Messages?",
-        "Where do I find Direct Messages?"
+        "Where do I find Direct Messages?",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -676,13 +705,15 @@
       "related_intents": [
         "social_help_formatting.social-features.direct-messages.overview",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
-        "social_help_formatting.social-features.forum.overview"
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "Tell me about Direct Messages",
         "What happens with Direct Messages?",
-        "Show me the SOCIAL FEATURES guide"
+        "Show me the SOCIAL FEATURES guide",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -719,13 +750,15 @@
       "related_intents": [
         "social_help_formatting.social-features.game-chat.rules",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
-        "social_help_formatting.social-features.forum.overview"
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "How do I use Game Chat?",
         "What are the rules for Game Chat?",
-        "Where do I find Game Chat?"
+        "Where do I find Game Chat?",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -762,13 +795,15 @@
       "related_intents": [
         "social_help_formatting.social-features.game-chat.overview",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
-        "social_help_formatting.social-features.forum.overview"
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "Tell me about Game Chat",
         "What happens with Game Chat?",
-        "Show me the SOCIAL FEATURES guide"
+        "Show me the SOCIAL FEATURES guide",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -805,13 +840,15 @@
       "related_intents": [
         "social_help_formatting.social-features.profile-customization.rules",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
-        "social_help_formatting.social-features.forum.overview"
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "How do I use Profile Customization?",
         "What are the rules for Profile Customization?",
-        "Where do I find Profile Customization?"
+        "Where do I find Profile Customization?",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
@@ -848,20 +885,21 @@
       "related_intents": [
         "social_help_formatting.social-features.profile-customization.overview",
         "social_help_formatting.social-features.social-features.overview",
-        "social_help_formatting.social-features.social-features.rules",
-        "social_help_formatting.social-features.forum.overview"
+        "social_help_formatting.social-features.forum.overview",
+        "social_help_formatting.social-features.image-host.overview"
       ],
       "follow_ups": [
         "Tell me about Profile Customization",
         "What happens with Profile Customization?",
-        "Show me the SOCIAL FEATURES guide"
+        "Show me the SOCIAL FEATURES guide",
+        "What is SOCIAL FEATURES?",
+        "What is Forum?"
       ]
     },
     {
       "id": "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
       "domain": "social_help_formatting",
       "entities": [
-        "SMILEYS & FORMATTING",
         "SMILEYS & FORMATTING"
       ],
       "sections": [
@@ -887,19 +925,21 @@
       "related_intents": [
         "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
         "social_help_formatting.smileys-and-formatting.classic-smileys.overview",
-        "social_help_formatting.smileys-and-formatting.classic-smileys.rules"
+        "social_help_formatting.smileys-and-formatting.meme-smileys.overview",
+        "social_help_formatting.smileys-and-formatting.unicode-smileys-and-text-faces.overview"
       ],
       "follow_ups": [
         "How do I use SMILEYS & FORMATTING?",
         "What are the rules for SMILEYS & FORMATTING?",
-        "Where do I find SMILEYS & FORMATTING?"
+        "Where do I find SMILEYS & FORMATTING?",
+        "What is Classic Smileys?",
+        "What is Meme Smileys?"
       ]
     },
     {
       "id": "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
       "domain": "social_help_formatting",
       "entities": [
-        "SMILEYS & FORMATTING",
         "SMILEYS & FORMATTING"
       ],
       "sections": [
@@ -925,12 +965,14 @@
       "related_intents": [
         "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
         "social_help_formatting.smileys-and-formatting.classic-smileys.overview",
-        "social_help_formatting.smileys-and-formatting.classic-smileys.rules"
+        "social_help_formatting.smileys-and-formatting.meme-smileys.overview"
       ],
       "follow_ups": [
         "Tell me about SMILEYS & FORMATTING",
         "What happens with SMILEYS & FORMATTING?",
-        "Show me the SMILEYS & FORMATTING guide"
+        "Show me the SMILEYS & FORMATTING guide",
+        "What is SMILEYS & FORMATTING?",
+        "What is Classic Smileys?"
       ]
     },
     {
@@ -963,12 +1005,15 @@
       "related_intents": [
         "social_help_formatting.smileys-and-formatting.classic-smileys.rules",
         "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
-        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules"
+        "social_help_formatting.smileys-and-formatting.meme-smileys.overview",
+        "social_help_formatting.smileys-and-formatting.unicode-smileys-and-text-faces.overview"
       ],
       "follow_ups": [
         "How do I use Classic Smileys?",
         "What are the rules for Classic Smileys?",
-        "Where do I find Classic Smileys?"
+        "Where do I find Classic Smileys?",
+        "What is SMILEYS & FORMATTING?",
+        "What is Meme Smileys?"
       ]
     },
     {
@@ -1001,12 +1046,14 @@
       "related_intents": [
         "social_help_formatting.smileys-and-formatting.classic-smileys.overview",
         "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
-        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules"
+        "social_help_formatting.smileys-and-formatting.meme-smileys.overview"
       ],
       "follow_ups": [
         "Tell me about Classic Smileys",
         "What happens with Classic Smileys?",
-        "Show me the SMILEYS & FORMATTING guide"
+        "Show me the SMILEYS & FORMATTING guide",
+        "What is SMILEYS & FORMATTING?",
+        "What is Classic Smileys?"
       ]
     },
     {
@@ -1039,13 +1086,15 @@
       "related_intents": [
         "social_help_formatting.smileys-and-formatting.meme-smileys.rules",
         "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
-        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
-        "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview",
+        "social_help_formatting.smileys-and-formatting.unicode-smileys-and-text-faces.overview"
       ],
       "follow_ups": [
         "How do I use Meme Smileys?",
         "What are the rules for Meme Smileys?",
-        "Where do I find Meme Smileys?"
+        "Where do I find Meme Smileys?",
+        "What is SMILEYS & FORMATTING?",
+        "What is Classic Smileys?"
       ]
     },
     {
@@ -1078,13 +1127,14 @@
       "related_intents": [
         "social_help_formatting.smileys-and-formatting.meme-smileys.overview",
         "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
-        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
         "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
       ],
       "follow_ups": [
         "Tell me about Meme Smileys",
         "What happens with Meme Smileys?",
-        "Show me the SMILEYS & FORMATTING guide"
+        "Show me the SMILEYS & FORMATTING guide",
+        "What is SMILEYS & FORMATTING?",
+        "What is Classic Smileys?"
       ]
     },
     {
@@ -1117,13 +1167,15 @@
       "related_intents": [
         "social_help_formatting.smileys-and-formatting.unicode-smileys-and-text-faces.rules",
         "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
-        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
-        "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview",
+        "social_help_formatting.smileys-and-formatting.meme-smileys.overview"
       ],
       "follow_ups": [
         "How do I use Unicode smileys & text faces?",
         "What are the rules for Unicode smileys & text faces?",
-        "Where do I find Unicode smileys & text faces?"
+        "Where do I find Unicode smileys & text faces?",
+        "What is SMILEYS & FORMATTING?",
+        "What is Classic Smileys?"
       ]
     },
     {
@@ -1156,13 +1208,15 @@
       "related_intents": [
         "social_help_formatting.smileys-and-formatting.unicode-smileys-and-text-faces.overview",
         "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
-        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
-        "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview",
+        "social_help_formatting.smileys-and-formatting.meme-smileys.overview"
       ],
       "follow_ups": [
         "Tell me about Unicode smileys & text faces",
         "What happens with Unicode smileys & text faces?",
-        "Show me the SMILEYS & FORMATTING guide"
+        "Show me the SMILEYS & FORMATTING guide",
+        "What is SMILEYS & FORMATTING?",
+        "What is Classic Smileys?"
       ]
     },
     {
@@ -1195,13 +1249,15 @@
       "related_intents": [
         "social_help_formatting.smileys-and-formatting.direct-messages.rules",
         "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
-        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
-        "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview",
+        "social_help_formatting.smileys-and-formatting.meme-smileys.overview"
       ],
       "follow_ups": [
         "How do I use Direct messages?",
         "What are the rules for Direct messages?",
-        "Where do I find Direct messages?"
+        "Where do I find Direct messages?",
+        "What is SMILEYS & FORMATTING?",
+        "What is Classic Smileys?"
       ]
     },
     {
@@ -1234,13 +1290,15 @@
       "related_intents": [
         "social_help_formatting.smileys-and-formatting.direct-messages.overview",
         "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
-        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
-        "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview",
+        "social_help_formatting.smileys-and-formatting.meme-smileys.overview"
       ],
       "follow_ups": [
         "Tell me about Direct messages",
         "What happens with Direct messages?",
-        "Show me the SMILEYS & FORMATTING guide"
+        "Show me the SMILEYS & FORMATTING guide",
+        "What is SMILEYS & FORMATTING?",
+        "What is Classic Smileys?"
       ]
     },
     {
@@ -1273,13 +1331,15 @@
       "related_intents": [
         "social_help_formatting.smileys-and-formatting.bbcode-formatting.rules",
         "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
-        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
-        "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview",
+        "social_help_formatting.smileys-and-formatting.meme-smileys.overview"
       ],
       "follow_ups": [
         "How do I use BBCode Formatting?",
         "What are the rules for BBCode Formatting?",
-        "Where do I find BBCode Formatting?"
+        "Where do I find BBCode Formatting?",
+        "What is SMILEYS & FORMATTING?",
+        "What is Classic Smileys?"
       ]
     },
     {
@@ -1312,20 +1372,21 @@
       "related_intents": [
         "social_help_formatting.smileys-and-formatting.bbcode-formatting.overview",
         "social_help_formatting.smileys-and-formatting.smileys-and-formatting.overview",
-        "social_help_formatting.smileys-and-formatting.smileys-and-formatting.rules",
-        "social_help_formatting.smileys-and-formatting.classic-smileys.overview"
+        "social_help_formatting.smileys-and-formatting.classic-smileys.overview",
+        "social_help_formatting.smileys-and-formatting.meme-smileys.overview"
       ],
       "follow_ups": [
         "Tell me about BBCode Formatting",
         "What happens with BBCode Formatting?",
-        "Show me the SMILEYS & FORMATTING guide"
+        "Show me the SMILEYS & FORMATTING guide",
+        "What is SMILEYS & FORMATTING?",
+        "What is Classic Smileys?"
       ]
     },
     {
       "id": "social_help_formatting.profile-and-account.profile-and-account.overview",
       "domain": "social_help_formatting",
       "entities": [
-        "PROFILE & ACCOUNT",
         "PROFILE & ACCOUNT"
       ],
       "sections": [
@@ -1351,19 +1412,21 @@
       "related_intents": [
         "social_help_formatting.profile-and-account.profile-and-account.procedure",
         "social_help_formatting.profile-and-account.edit-profile.overview",
-        "social_help_formatting.profile-and-account.edit-profile.procedure"
+        "social_help_formatting.profile-and-account.referral-and-redeem.overview",
+        "social_help_formatting.profile-and-account.ip-and-devices.overview"
       ],
       "follow_ups": [
         "How do I use PROFILE & ACCOUNT?",
         "What are the rules for PROFILE & ACCOUNT?",
-        "Where do I find PROFILE & ACCOUNT?"
+        "Where do I find PROFILE & ACCOUNT?",
+        "What is Edit profile?",
+        "What is Referral & redeem?"
       ]
     },
     {
       "id": "social_help_formatting.profile-and-account.profile-and-account.procedure",
       "domain": "social_help_formatting",
       "entities": [
-        "PROFILE & ACCOUNT",
         "PROFILE & ACCOUNT"
       ],
       "sections": [
@@ -1389,12 +1452,14 @@
       "related_intents": [
         "social_help_formatting.profile-and-account.profile-and-account.overview",
         "social_help_formatting.profile-and-account.edit-profile.overview",
-        "social_help_formatting.profile-and-account.edit-profile.procedure"
+        "social_help_formatting.profile-and-account.referral-and-redeem.overview"
       ],
       "follow_ups": [
         "Tell me about PROFILE & ACCOUNT",
         "What happens with PROFILE & ACCOUNT?",
-        "Show me the PROFILE & ACCOUNT guide"
+        "Show me the PROFILE & ACCOUNT guide",
+        "What is PROFILE & ACCOUNT?",
+        "What is Edit profile?"
       ]
     },
     {
@@ -1427,12 +1492,15 @@
       "related_intents": [
         "social_help_formatting.profile-and-account.edit-profile.procedure",
         "social_help_formatting.profile-and-account.profile-and-account.overview",
-        "social_help_formatting.profile-and-account.profile-and-account.procedure"
+        "social_help_formatting.profile-and-account.referral-and-redeem.overview",
+        "social_help_formatting.profile-and-account.ip-and-devices.overview"
       ],
       "follow_ups": [
         "How do I use Edit profile?",
         "What are the rules for Edit profile?",
-        "Where do I find Edit profile?"
+        "Where do I find Edit profile?",
+        "What is PROFILE & ACCOUNT?",
+        "What is Referral & redeem?"
       ]
     },
     {
@@ -1465,12 +1533,14 @@
       "related_intents": [
         "social_help_formatting.profile-and-account.edit-profile.overview",
         "social_help_formatting.profile-and-account.profile-and-account.overview",
-        "social_help_formatting.profile-and-account.profile-and-account.procedure"
+        "social_help_formatting.profile-and-account.referral-and-redeem.overview"
       ],
       "follow_ups": [
         "Tell me about Edit profile",
         "What happens with Edit profile?",
-        "Show me the PROFILE & ACCOUNT guide"
+        "Show me the PROFILE & ACCOUNT guide",
+        "What is PROFILE & ACCOUNT?",
+        "What is Edit profile?"
       ]
     },
     {
@@ -1503,13 +1573,15 @@
       "related_intents": [
         "social_help_formatting.profile-and-account.referral-and-redeem.procedure",
         "social_help_formatting.profile-and-account.profile-and-account.overview",
-        "social_help_formatting.profile-and-account.profile-and-account.procedure",
-        "social_help_formatting.profile-and-account.edit-profile.overview"
+        "social_help_formatting.profile-and-account.edit-profile.overview",
+        "social_help_formatting.profile-and-account.ip-and-devices.overview"
       ],
       "follow_ups": [
         "How do I use Referral & redeem?",
         "What are the rules for Referral & redeem?",
-        "Where do I find Referral & redeem?"
+        "Where do I find Referral & redeem?",
+        "What is PROFILE & ACCOUNT?",
+        "What is Edit profile?"
       ]
     },
     {
@@ -1542,13 +1614,14 @@
       "related_intents": [
         "social_help_formatting.profile-and-account.referral-and-redeem.overview",
         "social_help_formatting.profile-and-account.profile-and-account.overview",
-        "social_help_formatting.profile-and-account.profile-and-account.procedure",
         "social_help_formatting.profile-and-account.edit-profile.overview"
       ],
       "follow_ups": [
         "Tell me about Referral & redeem",
         "What happens with Referral & redeem?",
-        "Show me the PROFILE & ACCOUNT guide"
+        "Show me the PROFILE & ACCOUNT guide",
+        "What is PROFILE & ACCOUNT?",
+        "What is Edit profile?"
       ]
     },
     {
@@ -1581,13 +1654,15 @@
       "related_intents": [
         "social_help_formatting.profile-and-account.ip-and-devices.procedure",
         "social_help_formatting.profile-and-account.profile-and-account.overview",
-        "social_help_formatting.profile-and-account.profile-and-account.procedure",
-        "social_help_formatting.profile-and-account.edit-profile.overview"
+        "social_help_formatting.profile-and-account.edit-profile.overview",
+        "social_help_formatting.profile-and-account.referral-and-redeem.overview"
       ],
       "follow_ups": [
         "How do I use IP & devices?",
         "What are the rules for IP & devices?",
-        "Where do I find IP & devices?"
+        "Where do I find IP & devices?",
+        "What is PROFILE & ACCOUNT?",
+        "What is Edit profile?"
       ]
     },
     {
@@ -1620,13 +1695,15 @@
       "related_intents": [
         "social_help_formatting.profile-and-account.ip-and-devices.overview",
         "social_help_formatting.profile-and-account.profile-and-account.overview",
-        "social_help_formatting.profile-and-account.profile-and-account.procedure",
-        "social_help_formatting.profile-and-account.edit-profile.overview"
+        "social_help_formatting.profile-and-account.edit-profile.overview",
+        "social_help_formatting.profile-and-account.referral-and-redeem.overview"
       ],
       "follow_ups": [
         "Tell me about IP & devices",
         "What happens with IP & devices?",
-        "Show me the PROFILE & ACCOUNT guide"
+        "Show me the PROFILE & ACCOUNT guide",
+        "What is PROFILE & ACCOUNT?",
+        "What is Edit profile?"
       ]
     },
     {
@@ -1659,13 +1736,15 @@
       "related_intents": [
         "social_help_formatting.profile-and-account.viewing-other-players.procedure",
         "social_help_formatting.profile-and-account.profile-and-account.overview",
-        "social_help_formatting.profile-and-account.profile-and-account.procedure",
-        "social_help_formatting.profile-and-account.edit-profile.overview"
+        "social_help_formatting.profile-and-account.edit-profile.overview",
+        "social_help_formatting.profile-and-account.referral-and-redeem.overview"
       ],
       "follow_ups": [
         "How do I use Viewing other players?",
         "What are the rules for Viewing other players?",
-        "Where do I find Viewing other players?"
+        "Where do I find Viewing other players?",
+        "What is PROFILE & ACCOUNT?",
+        "What is Edit profile?"
       ]
     },
     {
@@ -1698,20 +1777,21 @@
       "related_intents": [
         "social_help_formatting.profile-and-account.viewing-other-players.overview",
         "social_help_formatting.profile-and-account.profile-and-account.overview",
-        "social_help_formatting.profile-and-account.profile-and-account.procedure",
-        "social_help_formatting.profile-and-account.edit-profile.overview"
+        "social_help_formatting.profile-and-account.edit-profile.overview",
+        "social_help_formatting.profile-and-account.referral-and-redeem.overview"
       ],
       "follow_ups": [
         "Tell me about Viewing other players",
         "What happens with Viewing other players?",
-        "Show me the PROFILE & ACCOUNT guide"
+        "Show me the PROFILE & ACCOUNT guide",
+        "What is PROFILE & ACCOUNT?",
+        "What is Edit profile?"
       ]
     },
     {
       "id": "social_help_formatting.social-and-help.social-and-help.overview",
       "domain": "social_help_formatting",
       "entities": [
-        "SOCIAL & HELP",
         "SOCIAL & HELP"
       ],
       "sections": [
@@ -1747,7 +1827,6 @@
       "id": "social_help_formatting.social-and-help.social-and-help.procedure",
       "domain": "social_help_formatting",
       "entities": [
-        "SOCIAL & HELP",
         "SOCIAL & HELP"
       ],
       "sections": [
@@ -1776,7 +1855,8 @@
       "follow_ups": [
         "Tell me about SOCIAL & HELP",
         "What happens with SOCIAL & HELP?",
-        "Show me the SOCIAL & HELP guide"
+        "Show me the SOCIAL & HELP guide",
+        "What is SOCIAL & HELP?"
       ]
     }
   ]

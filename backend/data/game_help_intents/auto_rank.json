@@ -5,8 +5,8 @@
       "id": "auto_rank.auto-rank.what-it-is.overview",
       "domain": "auto_rank",
       "entities": [
-        "What it is",
-        "AUTO RANK"
+        "AUTO RANK",
+        "What it is"
       ],
       "sections": [
         {
@@ -22,29 +22,29 @@
       ],
       "intent_type": "definition",
       "variants": [
-        "What is What it is?",
-        "What are What it is?",
-        "Tell me about What it is",
-        "Explain What it is",
-        "How does What it is work?",
-        "I need information about What it is",
-        "Give me the guide for What it is"
+        "What it is?",
+        "What is AUTO RANK?",
+        "What are AUTO RANK?",
+        "Tell me about AUTO RANK",
+        "Explain AUTO RANK",
+        "How does AUTO RANK work?",
+        "I need information about AUTO RANK"
       ],
       "related_intents": [
         "auto_rank.auto-rank.what-it-is.rules"
       ],
       "follow_ups": [
-        "How do I use What it is?",
-        "What are the rules for What it is?",
-        "Where do I find What it is?"
+        "Tell me about AUTO RANK",
+        "Where do I find AUTO RANK?",
+        "Show me the AUTO RANK guide"
       ]
     },
     {
       "id": "auto_rank.auto-rank.what-it-is.rules",
       "domain": "auto_rank",
       "entities": [
-        "What it is",
-        "AUTO RANK"
+        "AUTO RANK",
+        "What it is"
       ],
       "sections": [
         {
@@ -60,21 +60,21 @@
       ],
       "intent_type": "rules",
       "variants": [
-        "What are the rules for What it is?",
-        "What happens with What it is?",
-        "Does the FAQ explain What it is?",
-        "Can you clarify What it is?",
-        "Which FAQ covers What it is?",
-        "I have a question about What it is",
-        "How is What it is supposed to work?"
+        "What are the rules for AUTO RANK?",
+        "What happens with AUTO RANK?",
+        "Does the FAQ explain AUTO RANK?",
+        "Can you clarify AUTO RANK?",
+        "Which FAQ covers AUTO RANK?",
+        "I have a question about AUTO RANK",
+        "How is AUTO RANK supposed to work?"
       ],
       "related_intents": [
         "auto_rank.auto-rank.what-it-is.overview"
       ],
       "follow_ups": [
-        "Tell me about What it is",
-        "What happens with What it is?",
-        "Show me the AUTO RANK guide"
+        "How does AUTO RANK work?",
+        "Show me the AUTO RANK guide",
+        "What it is?"
       ]
     }
   ]
