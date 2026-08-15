@@ -1,11 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Smile } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
-import GifPicker from '../../components/GifPicker';
 import { parseForumContent, FORUM_INLINE_SMILEY_PX } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
+import {
+  INBOX_STYLES,
+  IB_ACTION_GO,
+  InboxHairline,
+  InboxArtLine,
+  InboxBar,
+} from './inboxChrome';
+import MessageComposer from './MessageComposer';
 
 function formatTime(dateString) {
   const d = new Date(dateString);
@@ -15,62 +21,6 @@ function formatTime(dateString) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-// Classic forum smileys (text codes that render as images)
-const CLASSIC_SMILEYS = [
-  { code: ':wink:', img: 'wink' },
-  { code: ':twisted:', img: 'twisted' },
-  { code: ':tup:', img: 'tup' },
-  { code: ':tdown:', img: 'tdown' },
-  { code: ':tongue:', img: 'tongue' },
-  { code: ':surprised:', img: 'surprised' },
-  { code: ':happy:', img: 'smirk' },
-  { code: ':sad:', img: 'sad' },
-  { code: ':rolleyes:', img: 'rolleyes' },
-  { code: ':redface:', img: 'redface' },
-  { code: ':?:', img: 'question' },
-  { code: ':mad:', img: 'mad' },
-  { code: ':lol:', img: 'lol' },
-  { code: ':idea:', img: 'idea' },
-  { code: ':!:', img: 'exclamation' },
-  { code: ':evil:', img: 'evil' },
-  { code: ':eek:', img: 'eek' },
-  { code: ':cool:', img: 'cool' },
-  { code: ':confused:', img: 'confused' },
-  { code: ':grin:', img: 'grin' },
-  { code: ':arrow:', img: 'arrow' },
-  { code: ':feelsbadman:', img: 'feelsbadman' },
-  { code: ':ez:', img: 'ez' },
-  { code: ':crazy:', img: 'crazy' },
-  { code: ':feelsrainman:', img: 'feelsrainman' },
-  { code: ':fu:', img: 'fu' },
-  { code: ':sadge:', img: 'sadge' },
-  { code: ':howdie:', img: 'howdie' },
-  { code: ':uzi:', img: 'uzi' },
-  { code: ':kekl:', img: 'kekl' },
-  { code: ':kekwait:', img: 'kekwait' },
-  { code: ':kekleo:', img: 'kekleo' },
-  { code: ':kekw:', img: 'kekw' },
-  { code: ':hmmnice:', img: 'hmmnice' },
-  { code: ':hypers:', img: 'hypers' },
-  { code: ':poggers:', img: 'poggers' },
-  { code: ':hackermans:', img: 'hackermans' },
-  { code: ':prayge:', img: 'prayge' },
-];
-
-const SMILEY_IMG_BASE = `${process.env.PUBLIC_URL || ''}/images/smileys`;
-
-const CHAT_EMOJIS = [
-  '😀', '😃', '😄', '😁', '😊', '🙂', '😉', '😎', '🤩', '😍', 
-  '😂', '🤣', '😅', '😢', '😭', '😤', '😡', '🤬', '😱', '😰',
-  '🤔', '😐', '😑', '🙄', '😏', '😒', '🥱', '😴', '🤢', '🤮',
-  '👍', '👎', '👋', '🤝', '🙏', '💪', '✊', '👊', '🤙', '✌️',
-  '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '💔', '❣️', '💕',
-  '🔥', '⭐', '✨', '💥', '💯', '🎉', '🎊', '🏆', '👑', '💎',
-  '💰', '💵', '💸', '🔫', '💀', '☠️', '⚔️', '🔪', '🎲', '🃏',
-  '🎩', '🚬', '🥃', '🍷', '👔', '💼', '🕴️', '🎭', '🚗', '🏠',
-  '❓', '❗', '⚠️', '✅', '❌', '🚫', '➕', '➖', '➡️', '⬅️'
-];
-
 export default function InboxChat() {
   const { userId } = useParams();
   const navigate = useNavigate();
@@ -78,38 +28,16 @@ export default function InboxChat() {
   const [otherUsername, setOtherUsername] = useState('');
   const [hasLoaded, setHasLoaded] = useState(false);
   const [replyText, setReplyText] = useState('');
+  const [gifUrl, setGifUrl] = useState('');
   const [sending, setSending] = useState(false);
-  const [showGifPicker, setShowGifPicker] = useState(false);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [censorProfanity, setCensorProfanity] = useState(false);
   const messagesEndRef = useRef(null);
-  const scrollContainerRef = useRef(null);
 
   useEffect(() => {
     api.get('/profile/censor-profanity').then((res) => {
       setCensorProfanity(res.data?.censor_profanity === true);
     }).catch(() => {});
   }, []);
-
-  const insertEmoji = (emoji) => setReplyText((t) => t + emoji);
-
-  const handleSendGif = async (gifUrl) => {
-    if (!gifUrl || sending) return;
-    setSending(true);
-    setShowGifPicker(false);
-    try {
-      await api.post('/notifications/send', {
-        target_username: otherUsername,
-        message: '(GIF)',
-        gif_url: gifUrl,
-      });
-      await fetchThread();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to send GIF');
-    } finally {
-      setSending(false);
-    }
-  };
 
   const fetchThread = async () => {
     if (!userId) return;
@@ -121,8 +49,10 @@ export default function InboxChat() {
       toast.error(e.response?.status === 404 ? 'User not found' : 'Failed to load chat');
       setThread([]);
       setOtherUsername('');
-      navigate('/inbox');
-    } finally { setHasLoaded(true); }
+      navigate('/social/inbox');
+    } finally {
+      setHasLoaded(true);
+    }
   };
 
   useEffect(() => {
@@ -136,15 +66,17 @@ export default function InboxChat() {
   const handleSend = async (e) => {
     e.preventDefault();
     const msg = (replyText || '').trim();
-    if (!msg || sending) return;
+    const gif = (gifUrl || '').trim();
+    if ((!msg && !gif) || sending || !otherUsername) return;
     setSending(true);
     try {
       await api.post('/notifications/send', {
         target_username: otherUsername,
-        message: msg,
-        gif_url: null,
+        message: msg || '(GIF)',
+        gif_url: gif || null,
       });
       setReplyText('');
+      setGifUrl('');
       await fetchThread();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to send');
@@ -154,7 +86,11 @@ export default function InboxChat() {
   };
 
   return (
-    <div data-chat-surface="inbox" className={`${styles.pageContent} flex flex-col h-[calc(100dvh-8rem)] sm:h-[calc(100vh-10rem)] max-h-[700px] min-h-[320px] mobile-page-root`}>
+    <div
+      data-chat-surface="inbox"
+      className={`${styles.pageContent} ${styles.panel} border border-primary/20 rounded-md overflow-hidden flex flex-col h-[calc(100dvh-8rem)] sm:h-[calc(100vh-10rem)] max-h-[700px] min-h-[320px] mobile-page-root mobile-panel`}
+    >
+      <style>{INBOX_STYLES}</style>
       <style>{`
         [data-chat-surface="inbox"] [data-chat-part="message-text"] .inline-smiley {
           width: ${FORUM_INLINE_SMILEY_PX}px !important;
@@ -165,32 +101,34 @@ export default function InboxChat() {
           vertical-align: middle;
         }
       `}</style>
-      {/* Header */}
-      <div data-chat-part="header" className="flex items-center gap-3 py-3 border-b border-primary/20 shrink-0">
+      <InboxHairline />
+      <InboxBar className="flex items-center gap-2 shrink-0">
         <button
           type="button"
-          onClick={() => navigate('/inbox')}
-          className="p-2 rounded-md text-mutedForeground hover:text-primary hover:bg-primary/10 transition-colors"
+          onClick={() => navigate('/social/inbox')}
+          className={`${IB_ACTION_GO} inline-flex items-center gap-1`}
           aria-label="Back to inbox"
         >
-          <ArrowLeft size={22} />
+          Back
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-heading font-bold text-foreground truncate">
-            {otherUsername}
+          <h1 className="text-[11px] font-heading font-bold text-foreground truncate">
+            {hasLoaded ? (otherUsername || 'User') : '…'}
           </h1>
-          <p className="text-xs text-mutedForeground font-heading">Direct message</p>
+          <p className="text-[9px] text-mutedForeground font-heading uppercase tracking-[0.12em]">Direct message</p>
         </div>
-      </div>
+      </InboxBar>
 
-      {/* Messages (Telegram-style bubbles) */}
       <div
-        ref={scrollContainerRef}
         data-chat-part="messages"
-        className="flex-1 overflow-y-auto p-4 space-y-3 bg-background/50"
+        className="flex-1 overflow-y-auto p-2.5 space-y-2 bg-secondary/20"
       >
-        {thread.length === 0 ? (
-          <p className="text-sm text-mutedForeground font-heading text-center py-8">
+        {!hasLoaded ? (
+          <p className="text-[10px] text-mutedForeground font-heading text-center py-8">
+            Loading…
+          </p>
+        ) : thread.length === 0 ? (
+          <p className="text-[10px] text-mutedForeground font-heading text-center py-8">
             No messages yet. Say something below.
           </p>
         ) : (
@@ -202,16 +140,16 @@ export default function InboxChat() {
               className={`flex ${msg.from_me ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 ${
+                className={`max-w-[85%] sm:max-w-[75%] rounded-md px-2.5 py-1.5 ${
                   msg.from_me
-                    ? 'bg-primary/20 text-primary border border-primary/40 rounded-br-md'
-                    : `${styles.panel} border border-primary/20 text-foreground rounded-bl-md`
+                    ? 'bg-primary/20 text-primary border border-primary/40'
+                    : `${styles.panel} border border-primary/20 text-foreground`
                 }`}
               >
                 {msg.message && !(msg.message === '(GIF)' && msg.gif_url) ? (
                   <div
                     data-chat-part="message-text"
-                    className="text-sm font-heading forum-content break-words"
+                    className="text-[11px] sm:text-sm font-heading forum-content break-words"
                     dangerouslySetInnerHTML={{
                       __html: parseForumContent(msg.message, {
                         censorProfanity,
@@ -224,14 +162,12 @@ export default function InboxChat() {
                   <img
                     src={msg.gif_url}
                     alt="GIF"
-                    className="mt-2 rounded-lg max-w-full max-h-40 object-cover"
+                    className="mt-1.5 rounded max-w-full max-h-40 object-cover border border-primary/20"
                   />
                 )}
                 <p
                   data-chat-part="timestamp"
-                  className={`text-[10px] mt-1 ${
-                    msg.from_me ? 'text-primaryForeground/80' : 'text-mutedForeground'
-                  }`}
+                  className="text-[9px] mt-1 text-mutedForeground"
                 >
                   {formatTime(msg.created_at)}
                 </p>
@@ -242,94 +178,20 @@ export default function InboxChat() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Reply box (Telegram-style input at bottom) + GIPHY + gangster emojis below */}
-      <form
-        onSubmit={handleSend}
-        data-chat-part="composer"
-        className={`p-2.5 sm:p-3 border-t border-primary/20 ${styles.panel} shrink-0`}
-      >
-        {showGifPicker && (
-          <div className="mb-2">
-            <GifPicker
-              onSelect={handleSendGif}
-              onClose={() => setShowGifPicker(false)}
-            />
-          </div>
-        )}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            data-chat-part="aux-btn"
-            onClick={() => setShowGifPicker((v) => !v)}
-            className="shrink-0 w-11 h-11 sm:w-10 sm:h-10 rounded-full border border-primary/30 text-primary flex items-center justify-center hover:bg-primary/10 transition-colors touch-manipulation"
-            title="Search GIFs"
-            aria-label="GIF"
-          >
-            GIF
-          </button>
-          <input
-            type="text"
-            data-chat-part="input"
-            value={replyText}
-            onChange={(e) => setReplyText(e.target.value)}
-            placeholder="Message… [b]bold[/b], [i]italic[/i], [url]https://…[/url], [img]https://…[/img]"
-            className={`min-w-0 flex-1 h-11 sm:h-10 ${styles.input} rounded-2xl px-3 sm:px-4 py-2.5 text-sm font-heading border border-primary/30 focus:border-primary/60 focus:outline-none`}
-            disabled={sending}
-          />
-          <button
-            type="submit"
-            data-chat-part="send"
-            disabled={sending || !replyText.trim()}
-            className="shrink-0 w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-primary/20 text-primary border border-primary/40 flex items-center justify-center hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity font-heading touch-manipulation"
-            aria-label="Send"
-          >
-            <Send size={18} />
-          </button>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowEmojiPicker((visible) => !visible)}
-          className="mt-2 min-h-11 sm:min-h-8 px-2.5 flex items-center gap-1.5 rounded-md text-xs font-heading text-mutedForeground hover:text-primary hover:bg-primary/10 touch-manipulation"
-          aria-expanded={showEmojiPicker}
-          aria-controls="inbox-chat-emoji-picker"
-        >
-          <Smile size={18} />
-          {showEmojiPicker ? 'Hide emojis' : 'Add emoji'}
-        </button>
-        {showEmojiPicker && (
-          <div
-            id="inbox-chat-emoji-picker"
-            className="flex flex-wrap items-center content-start gap-1 max-h-40 overflow-y-auto overscroll-contain border-t border-primary/10 pt-2"
-          >
-            {/* Classic forum smileys first */}
-            {CLASSIC_SMILEYS.map(({ code, img }) => (
-              <button
-                key={code}
-                type="button"
-                onClick={() => insertEmoji(code)}
-                className="leading-none p-2 min-w-10 min-h-10 rounded hover:bg-primary/20 transition-all focus:outline-none focus:ring-1 focus:ring-primary/50 hover:scale-110 touch-manipulation"
-                title={code}
-                aria-label={code}
-              >
-                <img src={`${SMILEY_IMG_BASE}/${img}.png`} alt={code} className="object-contain shrink-0" style={{ width: FORUM_INLINE_SMILEY_PX, height: FORUM_INLINE_SMILEY_PX }} />
-              </button>
-            ))}
-            {/* Modern emojis */}
-            {CHAT_EMOJIS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => insertEmoji(emoji)}
-                className="text-lg leading-none p-2 min-w-10 min-h-10 rounded hover:bg-primary/20 transition-all focus:outline-none focus:ring-1 focus:ring-primary/50 touch-manipulation"
-                title="Insert emoji"
-                aria-label="Insert emoji"
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-        )}
-      </form>
+      <div data-chat-part="composer" className="border-t border-primary/20 p-2 shrink-0">
+        <MessageComposer
+          value={replyText}
+          onChange={setReplyText}
+          gifUrl={gifUrl}
+          onGifUrlChange={setGifUrl}
+          onSubmit={handleSend}
+          sending={sending}
+          disabled={!otherUsername}
+          minHeightClass="min-h-16"
+          placeholder="Message… [b]bold[/b], [url]https://…[/url], [img]https://…[/img]"
+        />
+      </div>
+      <InboxArtLine />
     </div>
   );
 }

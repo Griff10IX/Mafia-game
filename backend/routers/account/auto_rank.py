@@ -3961,10 +3961,16 @@ def register(router):
         target = await db.users.find_one({"username": username_ci}, {"_id": 0, "id": 1, "username": 1})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
-        from middleware.security import is_valid_telegram_bot_token
+        from middleware.security import is_valid_telegram_bot_token, is_valid_telegram_chat_id
         updates = {}
         if body.telegram_chat_id is not None:
-            updates["telegram_chat_id"] = (body.telegram_chat_id or "").strip() or None
+            val = (body.telegram_chat_id or "").strip() or None
+            if val and not is_valid_telegram_chat_id(val):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Enter a numeric Chat ID from @userinfobot (not a @username).",
+                )
+            updates["telegram_chat_id"] = val
         if body.telegram_bot_token is not None:
             val = (body.telegram_bot_token or "").strip() or None
             if val and not is_valid_telegram_bot_token(val):

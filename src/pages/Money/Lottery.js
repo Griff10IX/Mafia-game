@@ -526,7 +526,7 @@ function Lottery() {
             </div>
             {startingPot > 0 && (
               <div className="text-[9px] text-emerald-400/90 font-heading">
-                Includes {formatMoney(startingPot)} starting jackpot (every new round after a payout).
+                Includes {formatMoney(startingPot)} starting jackpot ($1B minimum).
               </div>
             )}
             {rolloverIn > 0 && (
@@ -781,7 +781,7 @@ function Lottery() {
         <div className="p-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             { step: '1', title: 'Buy Tickets', desc: `Each ticket costs ${formatMoney(state?.ticket_price)}. Buy up to 500 per transaction.` },
-            { step: '2', title: 'Wait for the Draw', desc: 'Draws happen Wednesday & Sunday at 00:00 UTC. Each round starts with a $500M house seed; the pot grows with every ticket sold.' },
+            { step: '2', title: 'Wait for the Draw', desc: 'Draws happen Wednesday & Sunday at 00:00 UTC. Each round starts with at least a $1B house seed; the pot grows with every ticket sold.' },
             { step: '3', title: 'Win the Jackpot', desc: `Six numbers are drawn at random. Tickets that match all six split ${100 - taxPct}% of the gross pot (seed, rollover, and ticket sales). If nobody matches, there is a 50% chance one eligible player ticket is picked at random (displayed numbers match that ticket); otherwise the net pot rolls to the next draw. ${taxPct}% is removed as tax.` },
           ].map(({ step, title, desc }) => (
             <div key={step} className="flex gap-2.5">

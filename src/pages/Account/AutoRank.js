@@ -8,6 +8,7 @@ import {
   AUTO_RANK_STRIPE_PACKAGE_ID,
   AUTO_RANK_STRIPE_PRICE_GBP,
 } from '../../constants/autoRankStripePricing';
+import { isValidTelegramChatId } from '../../utils/telegramChatId';
 
 const MIN_INTERVAL = 5;
 const MIN_BUST_INTERVAL = 1;
@@ -382,7 +383,7 @@ const SetupCard = ({
               <Link to="/account/profile" className="underline font-bold text-primary hover:text-primary/80">
                 Profile → Settings
               </Link>{' '}
-              (get ID from <span className="font-mono text-primary">@userinfobot</span>)
+              (numeric Chat ID from <span className="font-mono text-primary">@userinfobot</span> — not your @username)
             </p>
           </div>
         </div>
@@ -2415,9 +2416,14 @@ export default function AutoRank() {
   };
 
   const handleSaveUserChatId = async (username, newChatId) => {
+    const chatId = String(newChatId || '').trim();
+    if (chatId && !isValidTelegramChatId(chatId)) {
+      toast.error('Enter a numeric Chat ID from @userinfobot (not a @username).');
+      return;
+    }
     setSavingUser(username);
     try {
-      await api.patch(`/admin/auto-rank/users/${encodeURIComponent(username)}`, { telegram_chat_id: newChatId || null });
+      await api.patch(`/admin/auto-rank/users/${encodeURIComponent(username)}`, { telegram_chat_id: chatId || null });
       toast.success('Chat ID updated');
       setEditingChatId((p) => ({ ...p, [username]: false }));
       fetchAdminUsers();

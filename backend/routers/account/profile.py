@@ -1742,10 +1742,16 @@ def register(router):
         telegram_bot_token: Optional[str] = Body(None, embed=True),
     ):
         """Set or clear Telegram chat ID and/or bot token. Chat ID from @userinfobot. Bot token from @BotFather (optional; if set, your bot is used for Auto Rank notifications)."""
-        from middleware.security import is_valid_telegram_bot_token
+        from middleware.security import is_valid_telegram_bot_token, is_valid_telegram_chat_id
         updates = {}
         if telegram_chat_id is not None:
-            updates["telegram_chat_id"] = (telegram_chat_id or "").strip() or None
+            val = (telegram_chat_id or "").strip() or None
+            if val and not is_valid_telegram_chat_id(val):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Enter your numeric Chat ID from @userinfobot (not your @username).",
+                )
+            updates["telegram_chat_id"] = val
         if telegram_bot_token is not None:
             val = (telegram_bot_token or "").strip() or None
             if val and not is_valid_telegram_bot_token(val):

@@ -1,19 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2, MessageCircle, Send, X, ChevronRight, Bot, Smile } from 'lucide-react';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, MessageCircle, Send, X, ChevronRight, Bot } from 'lucide-react';
 import api, { apiGetWithResumeRetries } from '../../utils/api';
 import { toast } from 'sonner';
-import GifPicker from '../../components/GifPicker';
-import { parseForumContent, FORUM_INLINE_SMILEY_PX } from '../../utils/forumContent';
+import { parseForumContent } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
 import { NotificationMessage } from '../../components/NotificationMessage';
-
-const INBOX_STYLES = `
-  @keyframes ib-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-  .ib-fade-in { animation: ib-fade-in 0.4s ease-out both; }
-  .ib-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
-  .ib-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
-`;
+import {
+  INBOX_STYLES,
+  IB_ACTION_GO,
+  IB_ACTION_DANGER,
+  InboxHairline,
+  InboxArtLine,
+  InboxBar,
+} from './inboxChrome';
+import MessageComposer from './MessageComposer';
+import UserToField from './UserToField';
 
 const NOTIFICATION_ICONS = {
   rank_up: Trophy,
@@ -27,61 +29,6 @@ const NOTIFICATION_ICONS = {
 
 const VALID_FILTERS = ['all', 'unread', 'sent', 'rank_up', 'reward', 'bodyguard', 'attack', 'system', 'user_message', 'staff_bot_client'];
 
-// Classic forum smileys (text codes that render as images)
-const CLASSIC_SMILEYS = [
-  { code: ':wink:', img: 'wink' },
-  { code: ':twisted:', img: 'twisted' },
-  { code: ':tup:', img: 'tup' },
-  { code: ':tdown:', img: 'tdown' },
-  { code: ':tongue:', img: 'tongue' },
-  { code: ':surprised:', img: 'surprised' },
-  { code: ':happy:', img: 'smirk' },
-  { code: ':sad:', img: 'sad' },
-  { code: ':rolleyes:', img: 'rolleyes' },
-  { code: ':redface:', img: 'redface' },
-  { code: ':?:', img: 'question' },
-  { code: ':mad:', img: 'mad' },
-  { code: ':lol:', img: 'lol' },
-  { code: ':idea:', img: 'idea' },
-  { code: ':!:', img: 'exclamation' },
-  { code: ':evil:', img: 'evil' },
-  { code: ':eek:', img: 'eek' },
-  { code: ':cool:', img: 'cool' },
-  { code: ':confused:', img: 'confused' },
-  { code: ':grin:', img: 'grin' },
-  { code: ':arrow:', img: 'arrow' },
-  { code: ':feelsbadman:', img: 'feelsbadman' },
-  { code: ':ez:', img: 'ez' },
-  { code: ':crazy:', img: 'crazy' },
-  { code: ':feelsrainman:', img: 'feelsrainman' },
-  { code: ':fu:', img: 'fu' },
-  { code: ':sadge:', img: 'sadge' },
-  { code: ':howdie:', img: 'howdie' },
-  { code: ':uzi:', img: 'uzi' },
-  { code: ':kekl:', img: 'kekl' },
-  { code: ':kekwait:', img: 'kekwait' },
-  { code: ':kekleo:', img: 'kekleo' },
-  { code: ':kekw:', img: 'kekw' },
-  { code: ':hmmnice:', img: 'hmmnice' },
-  { code: ':hypers:', img: 'hypers' },
-  { code: ':poggers:', img: 'poggers' },
-  { code: ':hackermans:', img: 'hackermans' },
-  { code: ':prayge:', img: 'prayge' },
-];
-
-const EMOJI_ROWS = [
-  ['😀', '😃', '😄', '😁', '😊', '🙂', '😉', '😎', '🤩', '😍'],
-  ['😂', '🤣', '😅', '😢', '😭', '😤', '😡', '🤬', '😱', '😰'],
-  ['🤔', '😐', '😑', '🙄', '😏', '😒', '🥱', '😴', '🤢', '🤮'],
-  ['👍', '👎', '👋', '🤝', '🙏', '💪', '✊', '👊', '🤙', '✌️'],
-  ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '💔', '❣️', '💕'],
-  ['🔥', '⭐', '✨', '💥', '💯', '🎉', '🎊', '🏆', '👑', '💎'],
-  ['💰', '💵', '💸', '🔫', '💀', '☠️', '⚔️', '🔪', '🎲', '🃏'],
-  ['❓', '❗', '⚠️', '✅', '❌', '🚫', '➕', '➖', '➡️', '⬅️'],
-  ['👔', '💼', '🥃', '🍷', '🎭', '👑', '🏆', '✨', '🙏', '💪'],
-];
-
-// Utility function
 function getTimeAgo(dateString) {
   const date = new Date(dateString);
   const now = new Date();
@@ -94,195 +41,70 @@ function getTimeAgo(dateString) {
 }
 
 function ocInviteActionError(detail, action) {
-  const msg = String(detail || "").toLowerCase();
-  if (msg.includes("expired")) return "This OC invite expired.";
-  if (msg.includes("already accepted")) return "This OC invite was already accepted.";
-  if (msg.includes("already cancelled")) return "This OC invite was cancelled by the creator.";
-  if (msg.includes("already declined")) return "This OC invite was already declined.";
-  if (msg.includes("already")) return "This OC invite was already updated.";
-  return action === "accept" ? "Failed to accept invite" : "Failed to decline invite";
+  const msg = String(detail || '').toLowerCase();
+  if (msg.includes('expired')) return 'This OC invite expired.';
+  if (msg.includes('already accepted')) return 'This OC invite was already accepted.';
+  if (msg.includes('already cancelled')) return 'This OC invite was cancelled by the creator.';
+  if (msg.includes('already declined')) return 'This OC invite was already declined.';
+  if (msg.includes('already')) return 'This OC invite was already updated.';
+  return action === 'accept' ? 'Failed to accept invite' : 'Failed to decline invite';
 }
 
-// Subcomponents
-const ComposeModal = ({ 
-  isOpen,
+function sentRecipient(notification) {
+  return notification.recipient_username || notification.to_username || notification.target_username || null;
+}
+
+function ComposePanel({
   onClose,
-  sendTo, 
-  onSendToChange, 
-  sendMessage, 
-  onSendMessageChange, 
-  sendGifUrl, 
+  sendTo,
+  onSendToChange,
+  sendMessage,
+  onSendMessageChange,
+  sendGifUrl,
   onSendGifUrlChange,
   onSendMessage,
   sending,
-  onInsertEmoji,
-  onOpenGifPicker,
-  showGifPicker,
-  gifPickerOnSelect,
-  gifPickerOnClose,
-}) => {
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-
-  useEffect(() => {
-    if (!isOpen) setShowEmojiPicker(false);
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
+}) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 bg-black/80 backdrop-blur-sm">
-      <div className={`${styles.panel} rounded-md border-2 border-primary/30 shadow-2xl w-full max-w-2xl max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] overflow-hidden flex flex-col`}>
-        {/* Header */}
-        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-          <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
-            <Send size={14} />
-            New Message
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-0.5 hover:bg-secondary rounded transition-colors"
-          >
-            <X size={14} className="text-mutedForeground" />
-          </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={onSendMessage} className="p-2 space-y-2 overflow-y-auto overscroll-contain">
-          <div>
-            <label className="block text-[10px] font-heading text-mutedForeground mb-1">
-              To
-            </label>
-            <input
-              type="text"
-              value={sendTo}
-              onChange={(e) => onSendToChange(e.target.value)}
-              placeholder="Enter username..."
-              className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
-              autoFocus
-            />
-          </div>
-          
-          <div>
-            <label className="block text-[10px] font-heading text-mutedForeground mb-1">
-              Message
-            </label>
-            <textarea
-              value={sendMessage}
-              onChange={(e) => onSendMessageChange(e.target.value)}
-              placeholder="Type your message… [b]bold[/b], [url]https://…[/url], [img]https://…[/img]"
-              rows={5}
-              className="w-full min-h-32 bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y transition-colors"
-            />
-            <button
-              type="button"
-              onClick={() => setShowEmojiPicker((visible) => !visible)}
-              className="mt-1 min-h-11 sm:min-h-8 px-2 flex items-center gap-1.5 rounded text-[10px] font-heading text-mutedForeground hover:text-primary hover:bg-primary/10 touch-manipulation"
-              aria-expanded={showEmojiPicker}
-              aria-controls="compose-message-emoji-picker"
-            >
-              <Smile size={16} />
-              {showEmojiPicker ? 'Hide emojis' : 'Add emoji'}
-            </button>
-            {showEmojiPicker && (
-              <div
-                id="compose-message-emoji-picker"
-                className="mt-1 flex flex-wrap content-start gap-0.5 max-h-36 overflow-y-auto overscroll-contain border-t border-primary/10 pt-1"
-              >
-                {/* Classic forum smileys first */}
-                {CLASSIC_SMILEYS.map(({ code, img }) => (
-                  <button
-                    key={code}
-                    type="button"
-                    onClick={() => onInsertEmoji(code)}
-                    className="p-2 min-w-10 min-h-10 rounded hover:bg-primary/20 active:scale-95 transition-all hover:scale-110 touch-manipulation"
-                    title={code}
-                    aria-label={code}
-                  >
-                    <img src={`/images/smileys/${img}.png`} alt={code} className="object-contain shrink-0" style={{ width: FORUM_INLINE_SMILEY_PX, height: FORUM_INLINE_SMILEY_PX }} />
-                  </button>
-                ))}
-                {/* Modern emojis */}
-                {EMOJI_ROWS.flat().map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => onInsertEmoji(emoji)}
-                    className="text-lg p-2 min-w-10 min-h-10 rounded hover:bg-primary/20 active:scale-95 transition-all touch-manipulation"
-                    aria-label={`Insert ${emoji}`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-[10px] font-heading text-mutedForeground">
-                GIF (Optional)
-              </label>
-              {onOpenGifPicker && (
-                <button
-                  type="button"
-                  onClick={onOpenGifPicker}
-                  className="text-[9px] font-heading font-bold text-primary hover:text-primary/80 uppercase"
-                >
-                  Search GIPHY →
-                </button>
-              )}
-            </div>
-            {showGifPicker && (
-              <GifPicker
-                onSelect={gifPickerOnSelect}
-                onClose={gifPickerOnClose}
-                className="mb-1"
-              />
-            )}
-            <input
-              type="url"
-              value={sendGifUrl}
-              onChange={(e) => onSendGifUrlChange(e.target.value)}
-              placeholder="Paste GIF URL..."
-              className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
-            />
-          </div>
-          
-          <div className="flex gap-1.5 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 bg-secondary text-foreground border border-border hover:bg-secondary/80 rounded-md px-2.5 py-1.5 font-heading font-bold uppercase tracking-wide text-[10px] transition-all active:scale-95"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={sending}
-              className="flex-1 bg-primary/20 text-primary rounded-md px-2.5 py-1.5 font-heading font-bold uppercase tracking-wide text-[10px] border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
-            >
-              {sending ? 'Sending...' : 'Send'}
-            </button>
-          </div>
-        </form>
+    <div className="flex flex-col h-full min-h-[280px]">
+      <InboxBar className="flex items-center justify-between shrink-0">
+        <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
+          <Send size={12} />
+          New Message
+        </h2>
+        <button
+          type="button"
+          onClick={onClose}
+          className="min-h-9 min-w-9 inline-flex items-center justify-center hover:bg-secondary rounded transition-colors touch-manipulation"
+          aria-label="Close compose"
+        >
+          <X size={16} className="text-mutedForeground" />
+        </button>
+      </InboxBar>
+      <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
+        <UserToField value={sendTo} onChange={onSendToChange} autoFocus />
+        <MessageComposer
+          value={sendMessage}
+          onChange={onSendMessageChange}
+          gifUrl={sendGifUrl}
+          onGifUrlChange={onSendGifUrlChange}
+          onSubmit={onSendMessage}
+          sending={sending}
+          minHeightClass="min-h-32"
+          showCancel
+          onCancel={onClose}
+        />
       </div>
     </div>
   );
-};
+}
 
-const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, onOcAccept, onOcDecline, isSent }) => {
-  const [showPreview, setShowPreview] = useState(false);
+const MessageRow = ({ notification, isSelected, onClick, onMarkRead, isSent }) => {
   const Icon = NOTIFICATION_ICONS[notification.notification_type] || Bell;
   const timeAgo = getTimeAgo(notification.created_at);
-  const isOcInvite = !!notification.oc_invite_id;
-  const isUserMessage = notification.notification_type === 'user_message';
-  
-  // Get recipient for sent messages
-  const recipient = isSent ? (notification.recipient_username || notification.to_username || notification.target_username) : null;
+  const recipient = isSent ? sentRecipient(notification) : null;
 
   const handleMouseEnter = () => {
-    setShowPreview(true);
     if (!isSent && !notification.read && onMarkRead) {
       onMarkRead(notification.id);
     }
@@ -290,20 +112,26 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       onMouseEnter={handleMouseEnter}
-      onMouseLeave={() => setShowPreview(false)}
-      className={`group relative flex items-center gap-2 px-2 py-1.5 border-b border-border cursor-pointer transition-all ib-row ${
-        isSelected 
-          ? 'bg-primary/10 border-l-4 border-l-primary' 
+      className={`ib-row group relative flex w-full items-center gap-2 px-2.5 py-1.5 min-h-11 text-left border-b border-border/60 cursor-pointer transition-all touch-manipulation ${
+        isSelected
+          ? 'bg-primary/12 border-l-2 border-l-primary'
           : isSent
-          ? 'bg-secondary/20 hover:bg-secondary/40 border-l-4 border-l-transparent'
-          : notification.read 
-          ? 'bg-secondary/30 hover:bg-secondary/50' 
-          : `${styles.panel} hover:bg-secondary/30 border-l-4 border-l-primary/50`
+          ? 'bg-transparent hover:bg-secondary/40 border-l-2 border-l-transparent'
+          : notification.read
+          ? 'bg-transparent hover:bg-secondary/40 border-l-2 border-l-transparent'
+          : 'bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary/50'
       }`}
     >
-      {/* Icon */}
       <div className={`p-1 rounded shrink-0 ${
         isSent ? 'bg-primary/20' : notification.read ? 'bg-secondary' : 'bg-primary/20'
       }`}>
@@ -314,19 +142,16 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
         )}
       </div>
 
-      {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-1 mb-0.5">
-          <h3 className={`text-[11px] font-heading truncate ${
-            isSent ? 'text-foreground' : notification.read ? 'text-foreground' : 'text-foreground font-bold'
-          }`}>
+          <h3 className="text-xs font-heading font-bold text-foreground truncate">
             {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
           </h3>
           <span className="text-[9px] text-mutedForeground whitespace-nowrap">
             {timeAgo}
           </span>
         </div>
-        <p className="text-[9px] text-mutedForeground truncate">
+        <p className="text-[10px] text-mutedForeground truncate">
           <NotificationMessage
             message={notification.message}
             actorUsername={notification.actor_username}
@@ -340,7 +165,6 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
         </p>
       </div>
 
-      {/* Unread indicator or Sent badge */}
       {isSent ? (
         <div className="px-1 py-0.5 rounded bg-primary/20 text-primary text-[9px] font-bold shrink-0">
           SENT
@@ -349,76 +173,7 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
         <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
       ) : null}
 
-      {/* Arrow */}
-      <ChevronRight size={10} className="text-mutedForeground shrink-0" />
-      
-      {/* Hover Preview Tooltip - Fixed positioning */}
-      {showPreview && (
-        <div 
-          className="fixed z-[100] pointer-events-none hidden lg:block"
-          style={{
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)'
-          }}
-        >
-          <div className="bg-zinc-900 border-2 border-primary/40 rounded-md p-2 shadow-2xl shadow-black/50 w-80 animate-in fade-in duration-150">
-            {/* Preview Header */}
-            <div className="flex items-start gap-2 mb-2 pb-2 border-b border-primary/20">
-              <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
-                {isSent ? (
-                  <Send size={12} className="text-primary" />
-                ) : (
-                  <Icon size={12} className="text-primary" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="text-[11px] font-heading font-bold text-primary mb-0.5">
-                  {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
-                </h4>
-                <p className="text-[9px] text-mutedForeground">
-                  {timeAgo}
-                </p>
-              </div>
-              {!isSent && !notification.read && (
-                <div className="px-1 py-0.5 rounded bg-primary/20 text-primary text-[9px] font-bold">
-                  NEW
-                </div>
-              )}
-            </div>
-            
-            {/* Preview Body */}
-            <p className="text-[10px] text-foreground leading-snug max-h-32 overflow-y-auto whitespace-pre-wrap">
-              <NotificationMessage
-                message={notification.message}
-                actorUsername={notification.actor_username}
-                topicId={notification.topic_id}
-                topicTitle={notification.topic_title}
-                commentId={notification.comment_id}
-                messageLinkTo={notification.message_link_to}
-                messageLinkLabel={notification.message_link_label}
-                className="text-inherit"
-              />
-            </p>
-            
-            {/* GIF Preview */}
-            {notification.gif_url && (
-              <div className="mt-2 pt-2 border-t border-primary/20">
-                <img 
-                  src={notification.gif_url} 
-                  alt="GIF preview" 
-                  className="max-w-full max-h-24 rounded border border-primary/20 mx-auto" 
-                />
-              </div>
-            )}
-            
-            {/* Click hint */}
-            <div className="mt-2 pt-2 border-t border-primary/20 text-center">
-              <span className="text-[9px] text-mutedForeground">Click to view full message</span>
-            </div>
-          </div>
-        </div>
-      )}
+      <ChevronRight size={14} className="text-mutedForeground shrink-0" />
     </div>
   );
 };
@@ -426,7 +181,7 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
 const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDecline, onOpenChat, isSent, censorProfanity }) => {
   if (!notification) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-secondary/20">
+      <div className="flex-1 flex items-center justify-center bg-secondary/20 min-h-[200px]">
         <div className="text-center">
           <MailOpen size={36} className="mx-auto text-primary/30 mb-2" />
           <p className="text-[10px] text-mutedForeground font-heading">
@@ -443,13 +198,10 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
   const isBbDirectMessage =
     notification.notification_type === 'user_message' ||
     notification.notification_type === 'user_message_sent';
-  
-  // Get recipient for sent messages
-  const recipient = isSent ? (notification.recipient_username || notification.to_username || notification.target_username) : null;
+  const recipient = isSent ? sentRecipient(notification) : null;
 
   return (
     <div className={`flex-1 flex flex-col ${styles.panel}`}>
-      {/* Message Header */}
       <div className="px-2.5 py-2 border-b border-primary/20 bg-primary/8">
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex items-start gap-2">
@@ -457,7 +209,7 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
               <Icon size={16} className="text-primary" />
             </div>
             <div>
-              <h2 className="text-sm font-heading font-bold text-foreground mb-0.5">
+              <h2 className="text-xs font-heading font-bold text-foreground mb-0.5">
                 {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
               </h2>
               <p className="text-[10px] text-mutedForeground">
@@ -468,41 +220,42 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1.5">
           {!isSent && !notification.read && (
             <button
+              type="button"
               onClick={() => onMarkRead(notification.id)}
-              className="px-2 py-0.5 rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 text-[9px] font-heading font-bold uppercase transition-all"
+              className={IB_ACTION_GO}
             >
-              ✓ Mark Read
+              Mark Read
             </button>
           )}
           {!isSent && isUserMessage && (
             <button
+              type="button"
               onClick={() => onOpenChat(notification)}
-              className="px-2 py-0.5 rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 text-[9px] font-heading font-bold uppercase transition-all"
+              className={IB_ACTION_GO}
             >
-              💬 Reply
+              Reply
             </button>
           )}
           <button
+            type="button"
             onClick={() => onDelete(notification.id)}
-            className="px-2 py-0.5 rounded bg-secondary text-mutedForeground border border-border hover:text-red-400 hover:border-red-400/50 text-[9px] font-heading font-bold uppercase transition-all"
+            className={IB_ACTION_DANGER}
           >
-            🗑️ Delete
+            Delete
           </button>
         </div>
       </div>
 
-      {/* Message Body */}
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto p-2.5">
         <div className="prose prose-invert max-w-none">
           {isBbDirectMessage &&
           notification.message &&
           !(notification.message === '(GIF)' && notification.gif_url) ? (
             <div
-              className="text-[11px] text-foreground forum-content leading-snug break-words"
+              className="text-[11px] sm:text-sm text-foreground forum-content leading-snug break-words"
               dangerouslySetInnerHTML={{
                 __html: parseForumContent(notification.message, {
                   censorProfanity: !!censorProfanity,
@@ -511,7 +264,7 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
               }}
             />
           ) : (
-            <p className="text-[11px] text-foreground leading-snug whitespace-pre-wrap">
+            <p className="text-[11px] sm:text-sm text-foreground leading-snug whitespace-pre-wrap">
               <NotificationMessage
                 message={notification.message}
                 actorUsername={notification.actor_username}
@@ -527,10 +280,10 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
 
           {notification.gif_url && (
             <div className="mt-2">
-              <img 
-                src={notification.gif_url} 
-                alt="GIF" 
-                className="max-w-full max-h-[280px] rounded border border-primary/20 shadow-lg" 
+              <img
+                src={notification.gif_url}
+                alt="GIF"
+                className="max-w-full max-h-[280px] rounded border border-primary/20 shadow-lg"
               />
             </div>
           )}
@@ -540,18 +293,20 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
               <p className="text-[10px] text-foreground font-heading font-bold mb-2">
                 Organised Crime Invitation
               </p>
-              <div className="flex gap-1">
+              <div className="flex gap-1.5">
                 <button
+                  type="button"
                   onClick={() => onOcAccept(notification.oc_invite_id)}
-                  className="bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 rounded px-2 py-1 text-[10px] font-heading font-bold uppercase transition-all active:scale-95"
+                  className={IB_ACTION_GO}
                 >
-                  ✓ Accept
+                  Accept
                 </button>
                 <button
+                  type="button"
                   onClick={() => onOcDecline(notification.oc_invite_id)}
-                  className="bg-secondary text-foreground border border-border hover:border-primary/30 rounded px-2 py-1 text-[10px] font-heading font-bold uppercase transition-all active:scale-95"
+                  className={IB_ACTION_DANGER}
                 >
-                  ✗ Decline
+                  Decline
                 </button>
               </div>
             </div>
@@ -562,13 +317,13 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
   );
 };
 
-// Main component
 export default function Inbox() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const filterParam = searchParams.get('filter');
   const initialFilter = VALID_FILTERS.includes(filterParam) ? filterParam : 'all';
-  
+
   const [notifications, setNotifications] = useState([]);
   const [sentMessages, setSentMessages] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -582,7 +337,6 @@ export default function Inbox() {
   const [sendMessage, setSendMessage] = useState('');
   const [sendGifUrl, setSendGifUrl] = useState('');
   const [sending, setSending] = useState(false);
-  const [showGifPicker, setShowGifPicker] = useState(false);
   const [censorProfanity, setCensorProfanity] = useState(false);
 
   useEffect(() => {
@@ -597,11 +351,16 @@ export default function Inbox() {
       const response = await apiGetWithResumeRetries('/notifications');
       setNotifications(response.data?.notifications ?? []);
       setUnreadCount(response.data?.unread_count ?? 0);
+      if (response.data?.read_retention_days != null) {
+        setReadRetentionDays(response.data.read_retention_days);
+      }
+      if (response.data?.unread_retention_days != null) {
+        setUnreadRetentionDays(response.data.unread_retention_days);
+      }
     } catch (error) {
       if (!silent) {
         toast.error("Messages didn't load. Check your connection — try again or reopen this tab.");
       }
-      // Do not clear inbox on failure — a later refetch can succeed after wake-from-background.
     } finally {
       setHasLoaded(true);
     }
@@ -610,9 +369,12 @@ export default function Inbox() {
   const fetchSentMessages = useCallback(async () => {
     try {
       const response = await apiGetWithResumeRetries('/notifications/sent');
-      setSentMessages(response.data?.sent_messages ?? []);
+      const sent = response.data?.sent_messages ?? [];
+      setSentMessages(sent);
+      return sent;
     } catch (error) {
       setSentMessages([]);
+      return [];
     }
   }, []);
 
@@ -621,7 +383,6 @@ export default function Inbox() {
     fetchSentMessages();
   }, [fetchNotifications, fetchSentMessages]);
 
-  // iPhone / Safari: first fetch after returning from background often fails; refetch when tab is visible again (no error toast).
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return;
@@ -644,7 +405,37 @@ export default function Inbox() {
 
   useEffect(() => {
     if (VALID_FILTERS.includes(filterParam)) setFilter(filterParam);
+    else if (!filterParam) setFilter('all');
   }, [filterParam]);
+
+  useEffect(() => {
+    const fromQuery = (searchParams.get('compose') || '').trim();
+    const fromState = String(location.state?.composeTo || '').trim();
+    const name = fromState || fromQuery;
+    if (!name) return;
+    setSendTo(name);
+    setShowCompose(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('compose');
+    const qs = next.toString();
+    navigate(`${location.pathname}${qs ? `?${qs}` : ''}`, { replace: true, state: {} });
+  }, [searchParams, location.state, location.pathname, navigate]);
+
+  const applyFilter = (value) => {
+    setFilter(value);
+    setSelectedNotification(null);
+    const next = new URLSearchParams(searchParams);
+    if (value === 'all') next.delete('filter');
+    else next.set('filter', value);
+    setSearchParams(next, { replace: true });
+  };
+
+  const closeCompose = () => {
+    setShowCompose(false);
+    setSendTo('');
+    setSendMessage('');
+    setSendGifUrl('');
+  };
 
   const markAsRead = async (notificationId) => {
     try {
@@ -700,7 +491,7 @@ export default function Inbox() {
       toast.success(res.data?.message || 'Accepted');
       fetchNotifications();
     } catch (error) {
-      toast.error(ocInviteActionError(error.response?.data?.detail, "accept"));
+      toast.error(ocInviteActionError(error.response?.data?.detail, 'accept'));
     }
   };
 
@@ -710,7 +501,7 @@ export default function Inbox() {
       toast.success(res.data?.message || 'Declined');
       fetchNotifications();
     } catch (error) {
-      toast.error(ocInviteActionError(error.response?.data?.detail, "decline"));
+      toast.error(ocInviteActionError(error.response?.data?.detail, 'decline'));
     }
   };
 
@@ -719,31 +510,34 @@ export default function Inbox() {
     const to = (sendTo || '').trim();
     const msg = (sendMessage || '').trim();
     const gif = (sendGifUrl || '').trim();
-    
+
     if (!to) {
       toast.error('Enter a username');
       return;
     }
     if (!msg && !gif) {
-      toast.error('Enter a message or GIF URL');
+      toast.error('Enter a message or GIF');
       return;
     }
-    
+
     setSending(true);
     try {
-      const res = await api.post('/notifications/send', { 
-        target_username: to, 
-        message: msg || '(GIF)', 
-        gif_url: gif || null 
+      const res = await api.post('/notifications/send', {
+        target_username: to,
+        message: msg || '(GIF)',
+        gif_url: gif || null,
       });
       toast.success(res.data?.message || 'Message sent');
-      setSendTo('');
-      setSendMessage('');
-      setSendGifUrl('');
-      setShowGifPicker(false);
-      setShowCompose(false);
+      closeCompose();
       fetchNotifications();
-      fetchSentMessages();
+      const sent = await fetchSentMessages();
+      const match = sent.find((m) => {
+        const name = sentRecipient(m);
+        return name && name.toLowerCase() === to.toLowerCase() && m.recipient_id;
+      });
+      if (match?.recipient_id) {
+        navigate(`/social/chat/${match.recipient_id}`);
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to send message');
     } finally {
@@ -751,15 +545,17 @@ export default function Inbox() {
     }
   };
 
-  const insertEmoji = (emoji) => setSendMessage(m => m + emoji);
+  const openChat = (n) => {
+    if (n?.sender_id) navigate(`/social/chat/${n.sender_id}`);
+  };
 
   const filteredNotifications = filter === 'sent'
     ? sentMessages
-    : filter === 'all' 
-    ? notifications 
+    : filter === 'all'
+    ? notifications
     : filter === 'unread'
-      ? notifications.filter(n => !n.read)
-      : notifications.filter(n => n.notification_type === filter);
+      ? notifications.filter((n) => !n.read)
+      : notifications.filter((n) => n.notification_type === filter);
 
   const filterButtons = [
     { value: 'all', label: 'All', icon: Mail },
@@ -771,6 +567,19 @@ export default function Inbox() {
     { value: 'system', label: 'System', icon: Bell },
     { value: 'staff_bot_client', label: 'Bot alerts', icon: Bot },
   ];
+
+  const listHiddenOnMobile = !!(selectedNotification || showCompose);
+  const composeProps = {
+    onClose: closeCompose,
+    sendTo,
+    onSendToChange: setSendTo,
+    sendMessage,
+    onSendMessageChange: setSendMessage,
+    sendGifUrl,
+    onSendGifUrlChange: setSendGifUrl,
+    onSendMessage: handleSendMessage,
+    sending,
+  };
 
   return (
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="inbox-page">
@@ -786,156 +595,141 @@ export default function Inbox() {
         </p>
       </div>
 
-      <ComposeModal
-        isOpen={showCompose}
-        onClose={() => setShowCompose(false)}
-        sendTo={sendTo}
-        onSendToChange={setSendTo}
-        sendMessage={sendMessage}
-        onSendMessageChange={setSendMessage}
-        sendGifUrl={sendGifUrl}
-        onSendGifUrlChange={setSendGifUrl}
-        onSendMessage={handleSendMessage}
-        sending={sending}
-        onInsertEmoji={insertEmoji}
-        onOpenGifPicker={() => setShowGifPicker(true)}
-        showGifPicker={showGifPicker}
-        gifPickerOnSelect={(url) => { setSendGifUrl(url); setShowGifPicker(false); }}
-        gifPickerOnClose={() => setShowGifPicker(false)}
-      />
-
-      {/* Inbox Layout */}
-      <div className={`relative ${styles.panel} border border-primary/20 rounded-md overflow-hidden ib-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
-        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        {/* Toolbar */}
-        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-          {/* Top row: Filters + Compose */}
-          <div className="flex items-center justify-between gap-2 mb-1.5">
-            <div className="flex items-center gap-1 overflow-x-auto pb-0.5 flex-1">
-              {filterButtons.map(btn => {
+      <div className={`relative ${styles.panel} border border-primary/20 rounded-md overflow-hidden ib-fade-in mobile-panel`}>
+        <InboxHairline />
+        <InboxBar className={`space-y-1.5 ${listHiddenOnMobile ? 'hidden lg:block' : ''}`}>
+          <div className="flex items-center gap-1.5">
+            <div className="ib-filters flex items-center gap-1 overflow-x-auto flex-1 min-w-0">
+              {filterButtons.map((btn) => {
                 const Icon = btn.icon;
+                const short = btn.value === 'staff_bot_client' ? 'Bots' : btn.label;
                 return (
                   <button
                     key={btn.value}
-                    onClick={() => setFilter(btn.value)}
-                    className={`flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-heading font-bold whitespace-nowrap transition-all border ${
+                    type="button"
+                    onClick={() => applyFilter(btn.value)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 min-h-9 rounded text-[9px] font-heading font-bold whitespace-nowrap transition-all border touch-manipulation ${
                       filter === btn.value
                         ? 'bg-primary/20 text-primary border-primary/50'
                         : 'bg-secondary/50 text-mutedForeground border-border hover:text-foreground'
                     }`}
                   >
-                    <Icon size={10} />
-                    {btn.label}
+                    <Icon size={12} />
+                    <span className="sm:hidden">{short}</span>
+                    <span className="hidden sm:inline">{btn.label}</span>
                   </button>
                 );
               })}
             </div>
-            
-            {/* Compose button - integrated with toolbar */}
             <button
+              type="button"
               onClick={() => setShowCompose(true)}
-              className="bg-primary/20 text-primary rounded px-2 py-0.5 font-heading font-bold uppercase tracking-wide text-[10px] border border-primary/40 hover:bg-primary/30 transition-all active:scale-95 touch-manipulation flex items-center gap-0.5 shrink-0"
+              className={`${IB_ACTION_GO} shrink-0 inline-flex items-center gap-1`}
             >
-              <Send size={10} />
+              <Send size={12} />
               <span className="hidden sm:inline">Compose</span>
             </button>
           </div>
-          
-          {/* Bottom row: Actions */}
-          <div className="flex items-center justify-end gap-1">
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllAsRead}
-                className="px-2 py-0.5 rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 text-[9px] font-heading font-bold uppercase whitespace-nowrap transition-all"
-              >
-                ✓ Mark All Read
-              </button>
-            )}
-            {notifications.length > 0 && (
-              <button
-                onClick={deleteAllMessages}
-                className="px-2 py-0.5 rounded bg-secondary text-mutedForeground border border-border hover:text-red-400 hover:border-red-400/50 text-[9px] font-heading font-bold uppercase whitespace-nowrap transition-all"
-              >
-                🗑️ Delete All
-              </button>
-            )}
-          </div>
-        </div>
+          {(unreadCount > 0 || notifications.length > 0) && (
+            <div className="flex items-center justify-end gap-1.5">
+              {unreadCount > 0 && (
+                <button type="button" onClick={markAllAsRead} className={IB_ACTION_GO}>
+                  Mark All Read
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <button type="button" onClick={deleteAllMessages} className={IB_ACTION_DANGER}>
+                  Delete All
+                </button>
+              )}
+            </div>
+          )}
+        </InboxBar>
 
-        {/* Inbox Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-5">
-          {/* Message List */}
-          <div className={`lg:col-span-2 border-r border-primary/20 bg-secondary/20 overflow-y-auto ${selectedNotification ? 'max-h-[40vh] lg:max-h-[480px]' : 'max-h-[480px]'}`}>
+          <div className={`lg:col-span-2 lg:border-r border-primary/20 bg-secondary/20 overflow-y-auto max-h-[70vh] lg:max-h-[480px] ${listHiddenOnMobile ? 'hidden lg:block' : ''}`}>
             {filter === 'bodyguard' && filteredNotifications.length > 0 && (
               <div className="px-2 py-1.5 border-b border-primary/20 bg-amber-500/5 text-[9px] text-mutedForeground font-heading italic">
                 Past hires shown here. Max 4 bodyguards at once. Slots free up when a guard is lost in combat.
               </div>
             )}
-            {filteredNotifications.length === 0 ? (
+            {!hasLoaded ? (
               <div className="p-4 text-center">
-                <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+                <p className="text-[10px] text-mutedForeground font-heading">Loading…</p>
+              </div>
+            ) : filteredNotifications.length === 0 ? (
+              <div className="p-4 text-center">
                 <MailOpen size={28} className="mx-auto text-primary/30 mb-2" />
                 <p className="text-[10px] text-mutedForeground font-heading">
                   No messages
                 </p>
               </div>
             ) : (
-              filteredNotifications.map(notification => (
+              filteredNotifications.map((notification) => (
                 <MessageRow
                   key={notification.id}
                   notification={notification}
                   isSelected={selectedNotification?.id === notification.id}
-                  onClick={() => setSelectedNotification(notification)}
+                  onClick={() => {
+                    setShowCompose(false);
+                    setSelectedNotification(notification);
+                  }}
                   onMarkRead={markAsRead}
-                  onDelete={deleteMessage}
-                  onOcAccept={handleOcInviteAccept}
-                  onOcDecline={handleOcInviteDecline}
                   isSent={filter === 'sent'}
                 />
               ))
             )}
           </div>
 
-          {/* Message Detail: desktop side panel; mobile inline below list */}
-          <div className="lg:col-span-3 hidden lg:block">
-            <MessageDetail
-              notification={selectedNotification}
-              onMarkRead={markAsRead}
-              onDelete={deleteMessage}
-              onOcAccept={handleOcInviteAccept}
-              onOcDecline={handleOcInviteDecline}
-              onOpenChat={(n) => n.sender_id && navigate(`/inbox/chat/${n.sender_id}`)}
-              isSent={filter === 'sent'}
-              censorProfanity={censorProfanity}
-            />
+          <div className="lg:col-span-3 hidden lg:block min-h-[280px]">
+            {showCompose ? (
+              <ComposePanel {...composeProps} />
+            ) : (
+              <MessageDetail
+                notification={selectedNotification}
+                onMarkRead={markAsRead}
+                onDelete={deleteMessage}
+                onOcAccept={handleOcInviteAccept}
+                onOcDecline={handleOcInviteDecline}
+                onOpenChat={openChat}
+                isSent={filter === 'sent'}
+                censorProfanity={censorProfanity}
+              />
+            )}
           </div>
         </div>
 
-        {/* Mobile: selected message inline below list (no fullscreen) */}
-        {selectedNotification && (
-          <div className="lg:hidden border-t border-primary/20 bg-secondary/30 overflow-y-auto max-h-[55vh] rounded-b-md">
-            <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-              <h2 className="text-[11px] font-heading font-bold text-primary uppercase">Message</h2>
+        {showCompose && (
+          <div className="lg:hidden bg-secondary/20 min-h-[70vh]">
+            <ComposePanel {...composeProps} />
+          </div>
+        )}
+
+        {!showCompose && selectedNotification && (
+          <div className="lg:hidden bg-secondary/20 overflow-y-auto max-h-[75vh]">
+            <InboxBar className="flex items-center justify-between">
               <button
+                type="button"
                 onClick={() => setSelectedNotification(null)}
-                className="p-1 hover:bg-secondary rounded transition-colors"
-                aria-label="Close message"
+                className={`${IB_ACTION_GO} inline-flex items-center gap-1`}
               >
-                <X size={16} className="text-foreground" />
+                Back
               </button>
-            </div>
+              <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Message</span>
+            </InboxBar>
             <MessageDetail
               notification={selectedNotification}
               onMarkRead={markAsRead}
               onDelete={deleteMessage}
               onOcAccept={handleOcInviteAccept}
               onOcDecline={handleOcInviteDecline}
-              onOpenChat={(n) => n.sender_id && navigate(`/inbox/chat/${n.sender_id}`)}
+              onOpenChat={openChat}
               isSent={filter === 'sent'}
               censorProfanity={censorProfanity}
             />
           </div>
         )}
+        <InboxArtLine />
       </div>
     </div>
   );

@@ -11,6 +11,15 @@ import asyncio
 
 # Telegram bot token format: 8-10 digits, colon, ~35 alphanumeric chars. Reject BotFather message paste.
 _TELEGRAM_TOKEN_RE = re.compile(r"^[0-9]{8,10}:[a-zA-Z0-9_-]{30,40}$")
+# Numeric chat id only (user or group). Rejects @username / t.me handles.
+_TELEGRAM_CHAT_ID_RE = re.compile(r"^-?[1-9]\d{0,19}$")
+
+
+def is_valid_telegram_chat_id(chat_id: str) -> bool:
+    """Return True if value is a Telegram numeric chat id (optional leading minus). Rejects @username."""
+    if not chat_id or not isinstance(chat_id, str):
+        return False
+    return bool(_TELEGRAM_CHAT_ID_RE.fullmatch(chat_id.strip()))
 
 
 def is_valid_telegram_bot_token(token: str) -> bool:
@@ -241,7 +250,7 @@ async def flush_telegram_alerts():
 async def send_telegram_to_chat(chat_id: str, message: str, bot_token: Optional[str] = None, username: Optional[str] = None) -> bool:
     """Send a message to a specific Telegram chat (e.g. for Auto Rank results). Uses user's bot_token if provided, else global TELEGRAM_BOT_TOKEN. username is optional, for logging when send fails."""
     chat_id = (chat_id or "").strip()
-    if not chat_id:
+    if not chat_id or not is_valid_telegram_chat_id(chat_id):
         return False
     token = (bot_token or "").strip() or TELEGRAM_BOT_TOKEN
     if not token or not is_valid_telegram_bot_token(token):

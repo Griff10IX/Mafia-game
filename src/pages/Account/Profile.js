@@ -36,6 +36,7 @@ import { robotBodyguardAvatarUrl } from '../../utils/robotBodyguardAvatar';
 import { defaultPlayerAvatarUrl } from '../../utils/defaultPlayerAvatar';
 import { PROFILE_GLOW_BORDER_CSS, customGlowBorderStyle, PROFILE_GLOW_PRESETS } from '../../constants/profileGlowPresets';
 import GlowPresetPicker from '../../components/GlowPresetPicker';
+import { isValidTelegramChatId } from '../../utils/telegramChatId';
 
 const PROFILE_EDIT_TAB_IDS = new Set(['look', 'text', 'alerts', 'privacy', 'account', 'staff']);
 const PROFILE_EDIT_TAB_KEY = 'profile_edit_tab';
@@ -2125,10 +2126,15 @@ export default function Profile() {
   };
 
   const saveTelegram = async () => {
+    const chatId = telegramChatId.trim();
+    if (chatId && !isValidTelegramChatId(chatId)) {
+      toast.error('Enter your numeric Chat ID from @userinfobot (not your @username).');
+      return;
+    }
     setSavingTelegram(true);
     try {
       const res = await api.patch('/profile/telegram', {
-        telegram_chat_id: telegramChatId.trim() || null,
+        telegram_chat_id: chatId || null,
         telegram_bot_token: telegramBotToken.trim() || null,
       });
       toast.success(res.data?.message ?? 'Telegram settings saved');
@@ -3196,8 +3202,8 @@ export default function Profile() {
               <div className="p-3 space-y-4">
                 <div>
                   <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Telegram (Auto Rank)</h3>
-                  <p className="text-xs text-mutedForeground mb-2">Chat ID from @userinfobot. Optional: bot token from @BotFather.</p>
-                  <input type="text" placeholder="Telegram chat ID" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-2" />
+                  <p className="text-xs text-mutedForeground mb-2">Numbers only (e.g. 123456789 or -100…). Get it from @userinfobot — not your @username. Optional: bot token from @BotFather.</p>
+                  <input type="text" inputMode="numeric" placeholder="Chat ID (numbers only)" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-2" />
                   <input type="password" placeholder="Bot token (optional)" value={telegramBotToken} onChange={(e) => setTelegramBotToken(e.target.value)} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-2" />
                   <button type="button" onClick={saveTelegram} disabled={savingTelegram} className="px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingTelegram ? 'Saving...' : 'Save'}</button>
                 </div>

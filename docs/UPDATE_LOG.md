@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-15[/color][/b] — [b]Inbox overhaul, Lottery $1B, Telegram Chat ID[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Inbox:[/b] Messages, compose, and DMs are one app now — cleaner list, full-screen read/compose on phone, username search in [b]To[/b], and the same send box (text / emoji / GIF) in chat. Reply opens the thread; system / attack / OC mail stays in the inbox.[/color]
+[*][color=#888888][b]Lottery:[/b] City Lottery now starts at [b]$1,000,000,000[/b] minimum (was $500M). If a rollover is under $1B, the house tops it up so the next draw still starts at $1B.[/color]
+[*][color=#888888][b]Telegram (Auto Rank):[/b] Chat ID must be the [b]number[/b] from [b]@userinfobot[/b] (e.g. 123456789 or -100…). Your [b]@username[/b] is rejected so it cannot be saved.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-15[/color][/b] — [b]Speakeasy: bigger daily collect[/b][/size]
 [quote]
 [list]

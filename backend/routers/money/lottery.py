@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 TICKET_PRICE = 500_000
 POT_TAX_PERCENT = 10
-STARTING_POT = 500_000_000
+STARTING_POT = 1_000_000_000
 LOTTERY_RANDOM_FALLBACK_CHANCE = 0.5  # cron: if no exact match, chance to pick random ticket vs rollover
 _DRAW_WEEKDAYS = (2, 6)  # Wed, Sun — 00:00 UTC
 _LOTTERY_PICK_COUNT = 6
@@ -34,6 +34,14 @@ def _lottery_random_fallback_disabled() -> bool:
     """When True, cron never picks a random ticket when nobody matches (always rollover)."""
     v = (os.environ.get("LOTTERY_NO_RANDOM_FALLBACK") or "").strip().lower()
     return v in ("1", "true", "yes")
+
+
+def _starting_pot_to_meet_minimum(rollover_in: int) -> int:
+    """House seed so rollover + seed is at least STARTING_POT."""
+    ro = max(0, int(rollover_in or 0))
+    if ro >= STARTING_POT:
+        return 0
+    return STARTING_POT - ro
 
 
 def _round_carry_in(rd: dict) -> int:
@@ -186,12 +194,13 @@ async def _ensure_open_round() -> dict[str, Any]:
         # Tie-break on earliest close time so buys still target the next due draw.
         future_rounds.sort(key=lambda x: (-x[0], x[1]))
         primary = future_rounds[0][2]
-        if _round_carry_in(primary) == 0:
+        if _round_carry_in(primary) < STARTING_POT:
+            seed = _starting_pot_to_meet_minimum(int(primary.get("rollover_in") or 0))
             await db.lottery_rounds.update_one(
                 {"_id": primary["_id"], "status": "open"},
-                {"$set": {"starting_pot": STARTING_POT}},
+                {"$set": {"starting_pot": seed}},
             )
-            primary["starting_pot"] = STARTING_POT
+            primary["starting_pot"] = seed
         return primary
     closes = _next_draw_utc(now)
     doc = {
@@ -753,7 +762,7 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
     now2 = datetime.now(timezone.utc)
     nxt = _next_draw_utc(now2)
     next_rollover = rollover_next if rollover_next > 0 else 0
-    next_starting_pot = 0 if rollover_next > 0 else STARTING_POT
+    next_starting_pot = _starting_pot_to_meet_minimum(next_rollover)
     await db.lottery_rounds.insert_one(
         {
             "closes_at": nxt.isoformat(),

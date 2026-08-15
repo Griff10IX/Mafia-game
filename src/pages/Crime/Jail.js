@@ -20,6 +20,9 @@ const JAIL_STYLES = `
   .j-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
   .j-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 
+  .j-row-reward { width: 4.75rem; text-align: right; }
+  .j-row-time { width: 2.25rem; text-align: center; }
+
   @media (max-width: 767px) {
     .j-row {
       display: grid !important;
@@ -28,21 +31,26 @@ const JAIL_STYLES = `
         "name action"
         "meta action";
       column-gap: 8px;
-      row-gap: 3px;
+      row-gap: 2px;
       align-items: center;
       padding: 7px 8px !important;
     }
     .j-row-name { grid-area: name; min-width: 0; }
-    .j-row-meta { grid-area: meta; display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .j-row-meta {
+      grid-area: meta;
+      display: flex !important;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      width: 100%;
+    }
     .j-row-action { grid-area: action; align-self: center; width: auto !important; justify-content: flex-end; }
     .j-row-name .j-name-text {
-      white-space: normal;
-      overflow: visible;
-      text-overflow: clip;
-      line-height: 1.25;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: block;
     }
     .j-row-action .j-action-btn {
       min-width: 4.25rem;
@@ -334,24 +342,21 @@ const JailedPlayerRow = ({
               </span>
             ) : null}
           </div>
-          <div className="text-[9px] text-mutedForeground truncate hidden sm:block mt-0.5">
-            {player.rank_name}
-          </div>
+          {player.rank_name ? (
+            <div className="text-[9px] text-mutedForeground truncate mt-0.5">
+              {player.rank_name}
+            </div>
+          ) : null}
         </div>
       </div>
 
       <div className="j-row-meta flex items-center gap-2 shrink-0">
-        {player.rank_name ? (
-          <span className="j-rank-mobile text-[9px] text-mutedForeground truncate sm:hidden max-w-[7rem]">
-            {player.rank_name}
-          </span>
-        ) : null}
-        <div className="shrink-0 w-16 text-right">
+        <div className="j-row-reward shrink-0">
           <span className="text-[10px] font-heading font-bold tabular-nums text-primary">
             {rewardCash > 0 ? `$${rewardCash.toLocaleString()}` : '—'}
           </span>
         </div>
-        <div className="shrink-0 w-10 text-center">
+        <div className="j-row-time shrink-0">
           {jailSecs > 0 ? (
             <span className="text-[10px] text-red-400 font-heading tabular-nums" title={`${jailSecs}s left in jail`}>
               {jailSecs}s
@@ -993,8 +998,8 @@ export default function Jail() {
         <div className="j-col-head hidden md:flex items-center gap-3 px-2 pt-1.5 pb-0.5">
           <span className="flex-1 min-w-0 text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Player</span>
           <div className="flex items-center gap-2 shrink-0">
-            <span className="w-16 text-right text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Reward</span>
-            <span className="w-10 text-center text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Time</span>
+            <span className="j-row-reward text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Reward</span>
+            <span className="j-row-time text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Time</span>
           </div>
           <span className="w-[60px] shrink-0" aria-hidden />
         </div>
