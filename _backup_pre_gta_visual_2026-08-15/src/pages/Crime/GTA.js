@@ -71,9 +71,6 @@ const GTA_STYLES = `
       min-width: 4.25rem;
       justify-content: center;
     }
-    .gta-col-head { display: none !important; }
-    .gta-progress { flex: 1 1 auto; min-width: 64px; }
-    .gta-progress-track { width: auto !important; flex: 1; min-width: 64px; height: 8px !important; }
   }
 `;
 
@@ -129,18 +126,11 @@ const useCooldownTicker = (options, onCooldownExpired) => {
 const AutoRankIcon = () => (
   <span
     title="Auto Rank — GTA is running automatically. Manual play disabled."
-    className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-sm border border-amber-500/40 bg-amber-500/10 align-middle"
+    className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-amber-500/40 bg-amber-500/10 gta-fade-in"
   >
-    <Bot size={10} className="text-amber-400" />
+    <Bot size={14} className="text-amber-400" />
   </span>
 );
-
-const GTA_ACTION_IDLE =
-  'gta-action-btn bg-zinc-700/50 text-mutedForeground rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed font-heading';
-const GTA_ACTION_STEAL =
-  'gta-action-btn tap-feedback bg-primary/20 text-primary rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 active:scale-[0.97] transition-all touch-manipulation disabled:opacity-60 font-heading';
-const GTA_ACTION_SKIP =
-  'gta-action-btn tap-feedback bg-amber-500/15 text-amber-300 rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-amber-500/45 hover:bg-amber-500/25 active:scale-[0.97] transition-all touch-manipulation font-heading disabled:opacity-50';
 
 const RARITY_ORDER = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary'];
 
@@ -276,7 +266,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
   const rankLocked = !unlocked && option.min_rank_name;
   return (
     <div
-      className={`gta-row flex justify-between gap-3 px-2 py-1.5 rounded-md transition-all min-w-0 ${
+      className={`gta-row flex justify-between gap-2 px-2 py-1 rounded-md transition-all min-w-0 ${
         rankLocked ? 'items-start sm:items-center' : 'items-center'
       } ${
         unlocked && !onCooldown
@@ -295,7 +285,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
         <div className="min-w-0 flex-1">
           <div className="flex flex-col gap-1 min-w-0 sm:flex-row sm:items-center sm:flex-wrap sm:gap-x-1 sm:gap-y-0.5">
             <span className="inline-flex items-center gap-1 min-w-0">
-              <span className="gta-name-text text-xs font-heading font-bold text-foreground truncate min-w-0" title={option.name}>
+              <span className="gta-name-text text-[11px] font-heading font-bold text-foreground truncate min-w-0" title={option.name}>
                 {option.name}
               </span>
               <PossibleCarsInfo optionName={option.name} cars={option.possible_cars} />
@@ -321,9 +311,20 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
       </div>
 
       <div className="gta-row-meta flex items-center gap-2 shrink-0">
+        {/* Progress bar + % inline on mobile (matches Crimes layout) */}
         {unlocked && (
-          <GTAProgressBar progress={option.progress} successChance={successRateDisplay} />
+          <div className="flex items-center gap-1 shrink-0">
+            <GTAProgressBar progress={option.progress} successChance={successRateDisplay} />
+            <span className="text-[9px] text-primary font-heading w-6 sm:hidden">{successRateDisplay}%</span>
+          </div>
         )}
+
+        {/* Success rate — desktop only */}
+        <div className="shrink-0 w-8 text-center hidden sm:block">
+          <span className={`text-[10px] font-bold tabular-nums ${unlocked ? 'text-primary' : 'text-mutedForeground'}`}>
+            {successRateDisplay}%
+          </span>
+        </div>
 
         {/* Jail time (like Crimes "risk" column) */}
         <div className="shrink-0 w-8 text-center">
@@ -348,7 +349,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
           <button
             type="button"
             disabled
-            className={GTA_ACTION_IDLE}
+            className="gta-action-btn bg-zinc-700/50 text-mutedForeground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
           >
             Locked
           </button>
@@ -357,7 +358,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
             type="button"
             onClick={() => onAttempt(option.id)}
             disabled={attemptingOptionId !== null}
-            className={GTA_ACTION_STEAL}
+            className="gta-action-btn tap-feedback bg-primary/20 text-primary rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 active:scale-[0.97] transition-all touch-manipulation disabled:opacity-60 font-heading"
             data-testid={`attempt-gta-${option.id}`}
           >
             {attemptingOptionId === option.id ? '...' : 'Steal'}
@@ -368,7 +369,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
             disabled={skipBusy || attemptingOptionId !== null}
             onClick={() => onSkip(option.id)}
             title="Use a GTA cooldown skip token to attempt now (max 1,000 GTA skips/day)"
-            className={GTA_ACTION_SKIP}
+            className="gta-action-btn tap-feedback bg-amber-500/15 text-amber-300 rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-amber-500/45 hover:bg-amber-500/25 active:scale-[0.97] transition-all touch-manipulation font-heading disabled:opacity-50"
             data-testid={`skip-gta-${option.id}`}
           >
             {skipBusy ? '...' : 'Skip'}
@@ -377,7 +378,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
           <button
             type="button"
             disabled
-            className={GTA_ACTION_IDLE}
+            className="gta-action-btn bg-zinc-700/50 text-mutedForeground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
           >
             Wait
           </button>
@@ -479,42 +480,42 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
   );
 };
 
-// GTA progress bar: fill matches the displayed steal chance.
+// GTA progress bar: skill meter 25–92% (maps to steal chance up to 55%/65%).
 const GTAProgressBar = ({ progress, successChance }) => {
-  const skill = Math.min(92, Math.max(10, Number(progress) ?? 10));
+  const pct = Math.min(92, Math.max(10, Number(progress) ?? 10));
+  const barPct = ((pct - 10) / 82) * 100;
   const chanceLabel = Number.isFinite(Number(successChance))
     ? Math.round(Number(successChance))
-    : Math.min(55, Math.round(25 + ((skill - 25) / 67) * 30));
-  const fill = Math.min(100, Math.max(0, chanceLabel));
+    : Math.min(55, Math.round(25 + ((pct - 25) / 67) * 30));
   return (
     <div
-      className="gta-progress flex items-center gap-1.5 min-w-0 shrink-0"
+      className="flex items-center gap-1 shrink-0"
       title={`Steal chance: ${chanceLabel}% (max 55% without boosts, 65% with events/climate). Progress +4–6% on success, −1–2% on fail; after peaking at 92% skill floor is 80%.`}
     >
       <div
-        className="gta-progress-track rounded-full overflow-hidden"
         style={{
-          width: 72,
-          height: 8,
+          width: 36,
+          height: 4,
           backgroundColor: '#333333',
+          borderRadius: 9999,
+          overflow: 'hidden',
         }}
       >
         <div
           style={{
             height: '100%',
-            width: `${fill}%`,
-            minWidth: fill > 0 ? 4 : 0,
-            background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))',
+            width: `${barPct}%`,
+            minWidth: barPct > 0 ? 3 : 0,
+            background: 'linear-gradient(to right, var(--noir-primary), #ca8a04)',
             borderRadius: 9999,
             transition: 'width 0.3s ease',
           }}
           role="progressbar"
-          aria-valuenow={chanceLabel}
-          aria-valuemin={0}
-          aria-valuemax={65}
+          aria-valuenow={pct}
+          aria-valuemin={10}
+          aria-valuemax={92}
         />
       </div>
-      <span className="text-[9px] sm:text-[10px] text-primary font-heading w-7 tabular-nums shrink-0">{chanceLabel}%</span>
     </div>
   );
 };
@@ -812,10 +813,10 @@ export default function GTA() {
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="gta-page">
       <style>{GTA_STYLES}</style>
 
-      <p className="relative gta-fade-in text-[9px] text-zinc-500 font-heading italic inline-flex items-center gap-1.5 flex-wrap leading-none">
-        <span>Steal cars. Unlock by rank. One attempt puts all on cooldown.</span>
+      <div className="relative gta-fade-in flex items-center gap-2 flex-wrap">
+        <p className="text-[9px] text-zinc-500 font-heading italic">Steal cars. Unlock by rank. One attempt puts all on cooldown.</p>
         {autoRankGtaDisabled && <AutoRankIcon />}
-      </p>
+      </div>
 
       {/* GTA options list */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
@@ -826,17 +827,7 @@ export default function GTA() {
           </span>
         </div>
 
-        <div className="gta-col-head hidden md:flex items-center gap-3 px-2 pt-1.5 pb-0.5">
-          <span className="flex-1 min-w-0 text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Vehicle</span>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="w-[104px] text-center text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Rate</span>
-            <span className="w-8 text-center text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Jail</span>
-            <span className="w-10 text-center text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Wait</span>
-          </div>
-          <span className="w-[60px] shrink-0" aria-hidden />
-        </div>
-
-        <div className="p-1.5 space-y-0.5 sm:space-y-1">
+        <div className="p-1.5 space-y-0.5">
           {options.map((option) => (
             <GTARow
               key={option.id}

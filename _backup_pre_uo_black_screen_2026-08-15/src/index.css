@@ -1121,7 +1121,6 @@ html[data-mobile-compositor-safe="on"] .ref-fade-in,
 html[data-mobile-compositor-safe="on"] .cs-fade-in,
 html[data-mobile-compositor-safe="on"] .gr-fade-in,
 html[data-mobile-compositor-safe="on"] .coinflip-fade-in,
-html[data-mobile-compositor-safe="on"] .uo-fade-in,
 html[data-mobile-compositor-safe="on"] .vc-enter,
 html[data-mobile-compositor-safe="on"] .token-badge-pulse,
 html[data-mobile-compositor-safe="on"] .game-chat-notification-dot-mention {
@@ -1130,8 +1129,7 @@ html[data-mobile-compositor-safe="on"] .game-chat-notification-dot-mention {
   opacity: 1 !important;
 }
 
-/* Phones: page entrance fades start at opacity 0 and flash black when a menu closes.
-   Also apply for compositor-safe (iPhone landscape is >767px; Low Power Mode freezes fades). */
+/* Phones: page entrance fades start at opacity 0 and flash black when a menu closes. */
 @media (max-width: 767px) {
   [class*="-fade-in"],
   [class*="-scale-in"],
@@ -1140,13 +1138,6 @@ html[data-mobile-compositor-safe="on"] .game-chat-notification-dot-mention {
     transform: none !important;
     opacity: 1 !important;
   }
-}
-html[data-mobile-compositor-safe="on"] [class*="-fade-in"],
-html[data-mobile-compositor-safe="on"] [class*="-scale-in"],
-html[data-mobile-compositor-safe="on"] .vc-enter {
-  animation: none !important;
-  transform: none !important;
-  opacity: 1 !important;
 }
 
 /* Prefer opaque paints for floating launchers over the scroll plane. */

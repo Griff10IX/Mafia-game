@@ -169,24 +169,24 @@ const useCooldownTicker = (crimes, onCooldownExpired) => {
 const StatusIcons = ({ inJail, autoRankActive }) => {
   if (!inJail && !autoRankActive) return null;
   return (
-    <span className="inline-flex items-center gap-1 align-middle">
+    <div className="flex items-center gap-2 cr-fade-in">
       {inJail && (
         <span
           title="Incarcerated — Can't commit crimes while in jail"
-          className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-sm border border-amber-500/40 bg-amber-500/10"
+          className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-amber-500/40 bg-amber-500/10"
         >
-          <AlertCircle size={10} className="text-amber-400" />
+          <AlertCircle size={14} className="text-amber-400" />
         </span>
       )}
       {autoRankActive && (
         <span
           title="Auto Rank — Crimes are running automatically. Manual play disabled."
-          className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-sm border border-amber-500/40 bg-amber-500/10"
+          className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-amber-500/40 bg-amber-500/10"
         >
-          <Bot size={10} className="text-amber-400" />
+          <Bot size={14} className="text-amber-400" />
         </span>
       )}
-    </span>
+    </div>
   );
 };
 
@@ -775,10 +775,10 @@ export default function Crimes() {
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="crimes-page">
       <style>{CRIMES_STYLES}</style>
 
-      <p className="relative cr-fade-in text-[9px] text-zinc-500 font-heading italic inline-flex items-center gap-1.5 flex-wrap leading-none">
-        <span>Commit crimes for cash and rank. Fail and you risk jail.</span>
+      <div className="relative cr-fade-in flex items-center gap-2 flex-wrap">
+        <p className="text-[9px] text-zinc-500 font-heading italic">Commit crimes for cash and rank. Fail and you risk jail.</p>
         <StatusIcons inJail={!!authUser?.in_jail} autoRankActive={autoRankCrimesDisabled === true} />
-      </p>
+      </div>
 
       {/* Crimes list */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 cr-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>

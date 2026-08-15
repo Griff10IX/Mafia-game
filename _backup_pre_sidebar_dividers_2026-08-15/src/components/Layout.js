@@ -2001,10 +2001,10 @@ export default function Layout({ children }) {
   /* Classic blue underlined category labels (img-1 Main Menu sections) */
   const osSectionBtnStyle = isOldSchool
     ? { padding: '3px 6px 2px', marginTop: 4, background: 'transparent', borderRadius: 0, borderBottom: '1px solid rgba(91,155,213,0.55)' }
-    : { padding: '6px 8px', marginTop: 0 };
+    : { padding: '5px 8px 3px 10px', marginTop: 3 };
   const osSectionLineStyle = isOldSchool
     ? { display: 'none' }
-    : { flex: 1, height: 1, alignSelf: 'center', background: 'var(--noir-accent-line)', opacity: 0.45 };
+    : { flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' };
   const osSectionLabelStyle = (active) => ({
     fontFamily: 'var(--font-heading, "Cinzel", serif)',
     fontSize: 8,
@@ -2032,8 +2032,8 @@ export default function Layout({ children }) {
             {rankingCounts.crimes + rankingCounts.gta}
           </span>
         )}
-        <div style={osSectionLineStyle} />
         {rankingOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
+        <div style={osSectionLineStyle} />
       </button>
       {rankingOpen && (
         <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
@@ -2097,8 +2097,8 @@ export default function Layout({ children }) {
         style={osSectionBtnStyle}>
         <div style={osSectionLineStyle} />
         <span style={osSectionLabelStyle(isCombatPath(location.pathname))}>Combat</span>
-        <div style={osSectionLineStyle} />
         {combatOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
+        <div style={osSectionLineStyle} />
       </button>
       {combatOpen && (
         <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
@@ -2193,8 +2193,8 @@ export default function Layout({ children }) {
               {(unreadCount + updateLogUnread) > 9 ? '9+' : (unreadCount + updateLogUnread)}
             </span>
           )}
-          <div style={osSectionLineStyle} />
           {messagingMenuOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
+          <div style={osSectionLineStyle} />
         </button>
         {messagingMenuOpen && (
           <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
@@ -2254,8 +2254,8 @@ export default function Layout({ children }) {
         style={osSectionBtnStyle}>
         <div style={osSectionLineStyle} />
         <span style={osSectionLabelStyle(isCasinoPath(location.pathname))}>Casino</span>
-        <div style={osSectionLineStyle} />
         {casinoOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
+        <div style={osSectionLineStyle} />
       </button>
       {casinoOpen && (
         <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
@@ -2310,8 +2310,8 @@ export default function Layout({ children }) {
         style={osSectionBtnStyle}>
         <div style={osSectionLineStyle} />
         <span style={osSectionLabelStyle(isMiniGamesPath(location.pathname))}>Mini games</span>
-        <div style={osSectionLineStyle} />
         {miniGamesOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
+        <div style={osSectionLineStyle} />
       </button>
       {miniGamesOpen && (
         <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
@@ -2610,7 +2610,7 @@ export default function Layout({ children }) {
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div
-            className="h-12 flex items-center px-2.5 shrink-0"
+            className={`h-12 flex items-center px-2.5 border-b ${styles.borderGoldLight} shrink-0`}
             style={isOldSchool ? {
               background: 'linear-gradient(180deg, #5e5e5e 0%, #3a3a3a 55%, #2e2e2e 100%)',
               borderColor: '#c8c8c8',
@@ -2660,11 +2660,11 @@ export default function Layout({ children }) {
                     return (
                       <Fragment key={cat.id}>
                         {isBlockCategory ? null : (
-                          <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent opacity-90 hover:opacity-100" style={cat.id === 'information' ? osSectionBtnStyle : { ...osSectionBtnStyle, marginTop: 8 }} aria-expanded={open}>
+                          <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent opacity-90 hover:opacity-100" style={osSectionBtnStyle} aria-expanded={open}>
                             <div style={osSectionLineStyle} />
                             <span style={osSectionLabelStyle(false)}>{cat.label}</span>
-                            <div style={osSectionLineStyle} />
                             {open ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
+                            <div style={osSectionLineStyle} />
                           </button>
                         )}
                         {open && (
@@ -3124,7 +3124,7 @@ export default function Layout({ children }) {
 
             {/* IMPROVEMENT 4: username + rank in header; page + user for logs */}
             <div
-              className={`h-12 flex flex-col justify-center px-2.5 border-b ${styles.borderGoldLight} shrink-0 gap-0.5`}
+              className={`flex flex-col px-2.5 py-1.5 border-b ${styles.borderGoldLight} shrink-0 gap-0.5`}
               style={isOldSchool ? {
                 background: 'linear-gradient(180deg, #5e5e5e 0%, #3a3a3a 55%, #2e2e2e 100%)',
                 borderColor: '#c8c8c8',

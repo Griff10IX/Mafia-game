@@ -17,20 +17,6 @@ import {
 const UO_STYLES = `
   @keyframes uo-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .uo-fade-in { animation: uo-fade-in 0.35s ease-out both; }
-  /* iOS Low Power Mode / reduced-motion can freeze fill-mode:both at opacity 0 (black page). */
-  @media (prefers-reduced-motion: reduce) {
-    .uo-preview-enter, .uo-preview-shimmer, .uo-hitlist, .uo-fade-in {
-      animation: none !important;
-      transform: none !important;
-      opacity: 1 !important;
-    }
-  }
-  html[data-mobile-compositor-safe="on"] .uo-fade-in,
-  html[data-mobile-compositor-safe="on"] .uo-preview-enter {
-    animation: none !important;
-    transform: none !important;
-    opacity: 1 !important;
-  }
   .uo-card { transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; }
   .uo-row { -webkit-tap-highlight-color: transparent; }
   @media (hover: hover) and (pointer: fine) {
@@ -67,6 +53,9 @@ const UO_STYLES = `
     font-size: 12px;
   }
   .uo-info details[open] summary::after { content: '−'; }
+  @media (prefers-reduced-motion: reduce) {
+    .uo-preview-enter, .uo-preview-shimmer, .uo-hitlist, .uo-fade-in { animation: none !important; }
+  }
 `;
 
 const UO_PREVIEW_CACHE_MAX_MS = 180_000;
@@ -411,7 +400,7 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
             <HoverCardContent
               align="start"
               sideOffset={8}
-              className={`z-[9999] w-[20.5rem] max-w-[92vw] ${styles.panel} border-2 ${previewCosmeticHex ? '' : 'border-primary/40'} rounded-lg shadow-2xl p-0 overflow-hidden`}
+              className={`z-[9999] w-[20.5rem] max-w-[92vw] ${styles.panel} border-2 ${previewCosmeticHex ? '' : 'border-primary/40'} rounded-lg shadow-2xl p-0 overflow-hidden backdrop-blur-sm`}
               style={previewCosmeticHex ? {
                 borderColor: `${previewCosmeticHex}b3`,
                 boxShadow: `0 0 18px ${previewCosmeticHex}55, 0 25px 50px -12px rgba(0,0,0,0.65)`,
@@ -454,7 +443,7 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
 };
 
 const InfoCard = ({ profileHoverEnabled = true }) => (
-  <div className={`uo-info relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in mobile-panel`}>
+  <div className={`uo-info relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in mobile-panel`} style={{ animationDelay: '0.08s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <details className="group">
       <summary className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2 min-h-10">
@@ -721,7 +710,7 @@ export default function UsersOnline() {
       />
 
       {!hasLoaded && users.length === 0 ? (
-        <div className={`relative ${styles.panel} rounded-md border border-primary/20 py-8 text-center uo-fade-in mobile-panel`} data-testid="users-online-loading">
+        <div className={`relative ${styles.panel} rounded-md border border-primary/20 py-8 text-center uo-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }} data-testid="users-online-loading">
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <Users size={36} className="mx-auto text-primary/30 mb-2 animate-pulse" />
           <p className="text-[12px] text-foreground font-heading font-bold mb-0.5">
@@ -732,7 +721,7 @@ export default function UsersOnline() {
           </p>
         </div>
       ) : users.length === 0 ? (
-        <div className={`relative ${styles.panel} rounded-md border border-primary/20 py-8 text-center uo-fade-in mobile-panel`} data-testid="no-users">
+        <div className={`relative ${styles.panel} rounded-md border border-primary/20 py-8 text-center uo-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }} data-testid="no-users">
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <Users size={36} className="mx-auto text-primary/30 mb-2" />
           <p className="text-[12px] text-foreground font-heading font-bold mb-0.5">
@@ -743,7 +732,7 @@ export default function UsersOnline() {
           </p>
         </div>
       ) : (
-        <div className={`relative z-10 ${styles.panel} rounded-md border border-primary/20 uo-fade-in mobile-panel overflow-hidden`}>
+        <div className={`relative z-10 ${styles.panel} rounded-md border border-primary/20 uo-fade-in mobile-panel overflow-hidden`} style={{ animationDelay: '0.03s' }}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
             <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">

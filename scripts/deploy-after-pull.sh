@@ -4,7 +4,7 @@
 # for the whole compile. Only after a successful build do we rotate build/ → build.prev → new.
 #
 # Usage:
-#   bash scripts/deploy-after-pull.sh              # reload nginx only
+#   bash scripts/deploy-after-pull.sh              # reload nginx only (no API downtime)
 #   bash scripts/deploy-after-pull.sh --restart-backend
 
 set -euo pipefail
@@ -44,7 +44,49 @@ rm -rf build.prev
 
 sudo systemctl reload nginx
 
-if [ "$restart_backend" -eq 1 ]; then
-  sudo systemctl restart mafia-backend
-  # If the API fails to start, nginx may still return 5xx — check: journalctl -u mafia-backend -e
+if [ "$restart_backend" -ne 1 ]; then
+  echo "deploy-after-pull.sh: frontend swapped; backend left running"
+  exit 0
 fi
+
+# Show the maintenance page as the SPA shell while uvicorn is down, then put index.html back.
+index_bak=/tmp/mafia-index.html.bak
+live_index=/opt/mafia-app/build/index.html
+maint=/opt/mafia-app/maintenance.html
+if [ ! -f "$maint" ]; then
+  maint=/var/www/html/maintenance.html
+fi
+
+restore_index() {
+  if [ -f "$index_bak" ] && [ -d /opt/mafia-app/build ]; then
+    cp -f "$index_bak" "$live_index"
+    rm -f "$index_bak"
+  fi
+}
+trap restore_index EXIT
+
+if [ -f "$live_index" ] && [ -f "$maint" ]; then
+  cp -f "$live_index" "$index_bak"
+  cp -f "$maint" "$live_index"
+  sudo systemctl reload nginx || true
+  echo "deploy-after-pull.sh: maintenance page up while API restarts"
+fi
+
+sudo systemctl restart mafia-backend
+
+up=0
+for _ in $(seq 1 90); do
+  if curl -sS -o /dev/null --max-time 2 http://127.0.0.1:8000/openapi.json; then
+    up=1
+    break
+  fi
+  sleep 1
+done
+if [ "$up" -ne 1 ]; then
+  echo "deploy-after-pull.sh: backend did not answer on :8000 within 90s; restoring site anyway" >&2
+fi
+
+restore_index
+trap - EXIT
+sudo systemctl reload nginx || true
+echo "deploy-after-pull.sh: API restart finished; site restored"
