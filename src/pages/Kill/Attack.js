@@ -1458,6 +1458,10 @@ export default function Attack() {
   const attackListLastFetchAtRef = useRef(0);
   /** Last good /attack/list result. Used so a transient refresh failure does not look like "no target". */
   const attacksRef = useRef(attacks);
+  /** Bumped on kill so an in-flight GET /attack/list cannot put the dead row back. */
+  const attackListGenRef = useRef(0);
+  const recentlyKilledIdsRef = useRef(new Set());
+  const recentlyKilledNamesRef = useRef(new Set());
   /** Rotating hidden search code from GET /attack/list (anti-bot for Start Search). */
   const searchCodeRef = useRef(null);
   /** Abort in-flight kill-form bullet calc while typing. */
@@ -1466,6 +1470,25 @@ export default function Attack() {
   useEffect(() => {
     attacksRef.current = Array.isArray(attacks) ? attacks : [];
   }, [attacks]);
+
+  const dropKilledAttackFromList = (attackId, targetUsername = '') => {
+    const row = (attacksRef.current || []).find((a) => a.attack_id === attackId);
+    const uname = String(targetUsername || row?.target_username || '').trim().toLowerCase();
+    attackListGenRef.current += 1;
+    if (attackId) recentlyKilledIdsRef.current.add(attackId);
+    if (uname) recentlyKilledNamesRef.current.add(uname);
+    setAttacks((prev) => {
+      const next = (Array.isArray(prev) ? prev : []).filter((a) => {
+        if (a.attack_id === attackId) return false;
+        if (uname && String(a.target_username || '').trim().toLowerCase() === uname) return false;
+        return true;
+      });
+      attacksRef.current = next;
+      writeCachedAttacks(next);
+      return next;
+    });
+    setSelectedAttackIds((prev) => prev.filter((id) => id !== attackId));
+  };
 
   const showKillResult = (text, type, options = {}) => {
     const { description, action } = options;
@@ -1546,10 +1569,29 @@ export default function Attack() {
 
     const ac = new AbortController();
     attackListAbortRef.current = ac;
+    const startedGen = attackListGenRef.current;
     const run = (async () => {
       try {
         const response = await api.get('/attack/list', { signal: ac.signal });
-        const list = response.data?.attacks || [];
+        if (startedGen !== attackListGenRef.current) {
+          return Array.isArray(attacksRef.current) ? attacksRef.current : [];
+        }
+        let list = response.data?.attacks || [];
+        const deadIds = recentlyKilledIdsRef.current;
+        const deadNames = recentlyKilledNamesRef.current;
+        if (deadIds.size || deadNames.size) {
+          const filtered = list.filter((a) => {
+            if (deadIds.has(a.attack_id)) return false;
+            const n = String(a.target_username || '').trim().toLowerCase();
+            if (n && deadNames.has(n)) return false;
+            return true;
+          });
+          if (filtered.length === list.length) {
+            deadIds.clear();
+            deadNames.clear();
+          }
+          list = filtered;
+        }
         setAttacks(list);
         attacksRef.current = list;
         writeCachedAttacks(list);
@@ -2056,7 +2098,9 @@ export default function Attack() {
           const execRes = await postAttackExecute(securedExecBody);
           refreshUser();
           fetchBullets();
-          // Background refresh — the result toast/feedback below doesn't need the latest list.
+          if (execRes.data?.success) {
+            dropKilledAttackFromList(best.attack_id, best.target_username || payload.killUsername);
+          }
           refreshAttacks({ force: true });
           if (execRes.data?.success) {
             const rewardMoney = execRes.data.rewards?.money;
@@ -2245,6 +2289,7 @@ export default function Attack() {
         showKillResult(response.data.message, 'success', {
           description: rewardMoney != null ? `Rewards: $${Number(rewardMoney).toLocaleString()}` : undefined,
         });
+        dropKilledAttackFromList(attackId);
       } else if (response.data.first_bodyguard) {
         showBodyguardBlockResult(response.data, 'Target has a bodyguard.');
       } else {

@@ -2559,6 +2559,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         raise HTTPException(status_code=403, detail=CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL)
     if target.get("is_dead"):
         await db.attacks.delete_one({"id": attack["id"], "attacker_id": current_user["id"]})
+        _attack_list_cache_invalidate(current_user["id"])
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Target is already dead", req), label="log_target_already_dead")
         raise HTTPException(
             status_code=400,
@@ -2921,6 +2922,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 except Exception:
                     logger.exception("release_redeem_slots_for_deceased_user (npc victim)")
                 await db.attacks.delete_many({"target_id": victim_id})
+                _attack_list_cache_invalidate(killer_id)
                 try:
                     from routers.money.quicktrade import cancel_offers_on_death
                     await cancel_offers_on_death(victim_id)
@@ -3861,6 +3863,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             except Exception:
                 pass
         await db.attacks.delete_many({"target_id": victim_id})
+        _attack_list_cache_invalidate(killer_id)
 
         # ----------------------------------------------------------------
         # Tail of the PvP kill path is pure logging / notifications / stats /

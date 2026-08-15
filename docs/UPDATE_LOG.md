@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-15[/color][/b] — [b]Attack list, Completed it respect[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Attack:[/b] After a kill, that target now drops off [b]My Searches[/b] straight away (no waiting for a refresh, and no leftover row until the next kill).[/color]
+[*][color=#888888][b]Objectives:[/b] [b]Completed it[/b] — Earn 80,000 respect now counts lifetime earned and no longer goes down.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-15[/color][/b] — [b]Crack the Safe: prize pool[/b][/size]
 [quote]
 [list]
