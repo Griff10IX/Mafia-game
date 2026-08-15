@@ -339,13 +339,18 @@ async def _get_lifetime_progress(user_id: str, user: dict) -> dict:
     progress["booze_runs_count"] = int(user.get("booze_runs_count") or 0)
     progress["hitlist_npc_kills"] = int(user.get("hitlist_npc_kills") or 0)
     
-    # Aggregate lifetime respect earned from respect_events (positive amounts only; store spends log negative)
+    # Monotonic user counter — respect_events is 14d TTL and must not drive this objective
+    stored = int(user.get("lifetime_respect_earned") or 0)
     pipeline = [
         {"$match": {"user_id": user_id, "amount": {"$gt": 0}}},
         {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
     ]
     result = await db.respect_events.aggregate(pipeline).to_list(1)
-    progress["lifetime_respect_earned"] = int(result[0]["total"]) if result else 0
+    event_total = int(result[0]["total"]) if result else 0
+    lifetime = max(stored, event_total)
+    if lifetime > stored:
+        await db.users.update_one({"id": user_id}, {"$max": {"lifetime_respect_earned": lifetime}})
+    progress["lifetime_respect_earned"] = lifetime
     
     return progress
 
@@ -452,7 +457,7 @@ async def get_objectives(current_user: dict = Depends(get_current_user)):
          "objectives_monthly_progress": 1, "objectives_monthly_claimed": 1, "objectives_monthly_claim_notified": 1,
          "objectives_lifetime_claimed": 1, "current_state": 1,
          "total_crimes": 1, "total_gta": 1, "total_oc_heists": 1, "jail_busts": 1, "bullets_melted": 1,
-         "crime_profit": 1, "booze_runs_count": 1, "hitlist_npc_kills": 1}
+         "crime_profit": 1, "booze_runs_count": 1, "hitlist_npc_kills": 1, "lifetime_respect_earned": 1}
     )
     user = user or {}
 
@@ -618,7 +623,8 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
          "objectives_monthly_start": 1, "objectives_monthly_progress": 1, "objectives_monthly_claimed": 1,
          "objectives_lifetime_claimed": 1, "current_state": 1,
          "total_crimes": 1, "total_gta": 1, "total_oc_heists": 1, "jail_busts": 1, "bullets_melted": 1,
-         "crime_profit": 1, "booze_runs_count": 1, "hitlist_npc_kills": 1, "rank_points": 1, "username": 1}
+         "crime_profit": 1, "booze_runs_count": 1, "hitlist_npc_kills": 1, "lifetime_respect_earned": 1,
+         "rank_points": 1, "username": 1}
     )
     user = user or {}
 

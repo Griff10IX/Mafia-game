@@ -930,6 +930,7 @@ class UserResponse(BaseModel):
     can_submit_comment: bool = False  # true when locked and no comment submitted yet
     email_verified: bool = True  # false until user clicks verification link
     respect_points: int = 0  # second currency; earn from activities, spend in store at 5x; not sendable/tradeable
+    lifetime_respect_earned: int = 0  # monotonic earn total for Completed it / all-time board (not TTL'd)
     loot_box_pieces: int = 0
     profile_autoplay_video: bool = True  # when viewing someone's profile, autoplay their YouTube video (can turn off in profile settings)
     admin_online_color: Optional[str] = None  # global setting for styling "Admin" rank (so profile API can omit it when viewing others)
@@ -1741,20 +1742,26 @@ async def notify_casino_seizure(
         await send_notification(wid, "Casino seized — you now own it", winner_body, "system")
 
 
+async def _persist_respect_event(user_id: str, amount: int, source: str = "") -> None:
+    """Write respect_events (weekly board, 14d TTL) and bump lifetime_respect_earned on positive amounts."""
+    now = datetime.now(timezone.utc)
+    await db.respect_events.insert_one({"user_id": user_id, "amount": amount, "at": now, "source": source or "misc"})
+    if amount > 0:
+        await db.users.update_one({"id": user_id}, {"$inc": {"lifetime_respect_earned": int(amount)}})
+
+
 async def log_respect_earned(user_id: str, amount: int, source: str = ""):
     """Log respect points earned for weekly leaderboard aggregation. Call after awarding respect_points (positive amount only)."""
     if not amount or amount <= 0:
         return
-    now = datetime.now(timezone.utc)
-    await db.respect_events.insert_one({"user_id": user_id, "amount": amount, "at": now, "source": source or "misc"})
+    await _persist_respect_event(user_id, int(amount), source)
 
 
 async def log_respect_delta(user_id: str, delta: int, source: str = ""):
     """Log any non-zero respect change for weekly leaderboard and lifetime objectives (positive earn or negative correction)."""
     if not delta:
         return
-    now = datetime.now(timezone.utc)
-    await db.respect_events.insert_one({"user_id": user_id, "amount": delta, "at": now, "source": source or "misc"})
+    await _persist_respect_event(user_id, int(delta), source)
 
 
 async def log_melt_event(user_id: str, bullets: int):

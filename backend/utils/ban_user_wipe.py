@@ -178,6 +178,7 @@ async def wipe_user_for_account_ban(db, user_id: str, *, preserve_dead: bool = F
         "money": 0,
         "points": 0,
         "respect_points": 0,
+        "lifetime_respect_earned": 0,
         "rank": 1,
         "rank_points": 0,
         "prestige_level": 0,

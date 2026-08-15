@@ -23047,16 +23047,16 @@ def register(router):
             elif key == "hitlist_npc_kills":
                 update_set["hitlist_npc_kills"] = target
 
-        # For lifetime_respect_earned (aggregate) - insert respect events
-        # Delete existing and insert new to reach target
+        # For lifetime_respect_earned — set the persistent counter (events are 14d TTL)
         respect_target = 15000
+        update_set["lifetime_respect_earned"] = respect_target
         await db.respect_events.delete_many({"user_id": user_id})
         await db.respect_events.insert_one({
             "id": str(uuid.uuid4()),
             "user_id": user_id,
             "amount": respect_target,
-            "reason": "Admin test - lifetime objectives",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "at": datetime.now(timezone.utc),
+            "source": "admin_test_lifetime",
         })
 
         # For minigame_plays (aggregate) - insert minigame play records
