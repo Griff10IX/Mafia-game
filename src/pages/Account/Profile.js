@@ -631,9 +631,23 @@ const ProfileInfoCard = ({
                 )}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
-              <span className="text-[13px] sm:text-sm md:text-base font-heading font-bold text-foreground leading-tight break-words min-w-0" style={nameGlowStyle}>
-                {profile.username}
+            <div className="flex flex-wrap items-center gap-1 md:gap-1.5">
+              <span className="inline-flex items-center gap-1 min-w-0 max-w-full">
+                <span className="text-[13px] sm:text-sm md:text-base font-heading font-bold text-foreground leading-tight break-words min-w-0" style={nameGlowStyle}>
+                  {profile.username}
+                </span>
+                {isFoundingMember && (
+                  <span
+                    className="inline-flex items-center justify-center h-4 w-4 sm:h-[18px] sm:w-auto sm:gap-0.5 sm:px-1.5 rounded-sm border border-amber-500/45 bg-amber-500/15 shrink-0"
+                    title="Founder"
+                    aria-label="Founder"
+                  >
+                    <Crown size={10} className="text-amber-300 shrink-0" aria-hidden />
+                    <span className="hidden sm:inline text-[8px] font-heading font-bold uppercase tracking-wide text-amber-200 leading-none">
+                      Founder
+                    </span>
+                  </span>
+                )}
               </span>
               {profile.profile_country_code ? (
                 <span
@@ -660,12 +674,6 @@ const ProfileInfoCard = ({
                     Custom
                   </span>
                 )
-              )}
-              {isFoundingMember && (
-                <span className="inline-flex items-center h-6 md:h-7 gap-1 px-2 rounded-md border border-amber-500/40 bg-amber-500/15 text-[9px] md:text-[10px] font-heading font-bold uppercase tracking-wide text-amber-200 shrink-0">
-                  <Crown size={12} className="text-amber-300 shrink-0" aria-hidden />
-                  Founder
-                </span>
               )}
               {isModkilled && (
                 <span
