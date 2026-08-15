@@ -976,6 +976,7 @@ def _activity_log_extract_spike_amounts(action: str, details: Any) -> Tuple[Opti
         take_cash("cash")
     elif a == "speakeasy_collect":
         take_cash("cash")
+        take_pts("points")
     elif a == "racket_extort":
         take_cash("cash", "amount")
     elif a == "lottery_buy":

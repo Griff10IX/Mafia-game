@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-15[/color][/b] — [b]Speakeasy: bigger daily collect[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Speakeasy:[/b] Daily collect is now [b]$50,000,000[/b], [b]1,000 bullets[/b], [b]10 loot pieces[/b], and [b]25 points[/b] (once per 24 hours).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-14[/color][/b] — [b]Mobile: no black flash when opening pages[/b][/size]
 [quote]
 [list]

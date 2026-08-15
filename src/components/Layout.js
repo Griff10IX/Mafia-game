@@ -2001,13 +2001,11 @@ export default function Layout({ children }) {
   /* Classic blue underlined category labels (img-1 Main Menu sections) */
   const osSectionBtnStyle = isOldSchool
     ? { padding: '3px 6px 2px', marginTop: 4, background: 'transparent', borderRadius: 0, borderBottom: '1px solid rgba(91,155,213,0.55)' }
-    : { padding: '6px 8px', marginTop: 0 };
-  const osSectionLineStyle = isOldSchool
-    ? { display: 'none' }
-    : { flex: 1, height: 1, alignSelf: 'center', background: 'var(--noir-accent-line)', opacity: 0.45 };
+    : { padding: '6px 8px', marginTop: 0, flexWrap: 'nowrap' };
   const osSectionLabelStyle = (active) => ({
     fontFamily: 'var(--font-heading, "Cinzel", serif)',
     fontSize: 8,
+    lineHeight: 1,
     letterSpacing: '0.14em',
     textTransform: 'uppercase',
     color: isOldSchool ? '#5b9bd5' : (active ? 'var(--noir-primary)' : 'var(--noir-muted)'),
@@ -2015,24 +2013,22 @@ export default function Layout({ children }) {
     ...(isOldSchool ? { flex: 1, textAlign: 'left', textDecoration: 'underline', textUnderlineOffset: '2px' } : {}),
   });
   const osSectionChevronStyle = isOldSchool
-    ? { color: '#5b9bd5', opacity: 0.85 }
-    : { color: 'var(--noir-primary)', opacity: 0.5 };
+    ? { color: '#5b9bd5', opacity: 0.85, display: 'block' }
+    : { color: 'var(--noir-primary)', opacity: 0.5, display: 'block' };
   const navDividerEl = (key) => showSidebarDividers ? <div key={key} className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" /> : null;
 
   const isRankingPath = (p) => p === '/game/ranking' || (p && (p.startsWith('/game/ranking/') || p.startsWith('/crime/') || p === '/organised-crime' || p === '/account/prestige'));
   const rankingNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-ranking-group" onClick={() => setRankingOpen((v) => { const next = !v; setNavSectionOpen('ranking', next); return next; })}
-        className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isRankingPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+        className={`sidebar-inline-rule${isOldSchool ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isRankingPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={osSectionBtnStyle}>
-        <div style={osSectionLineStyle} />
         <span style={osSectionLabelStyle(isRankingPath(location.pathname))}>Ranking</span>
         {!rankingOpen && (rankingCounts.crimes > 0 || rankingCounts.gta > 0) && (
           <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30 shrink-0">
             {rankingCounts.crimes + rankingCounts.gta}
           </span>
         )}
-        <div style={osSectionLineStyle} />
         {rankingOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
       </button>
       {rankingOpen && (
@@ -2093,11 +2089,9 @@ export default function Layout({ children }) {
   const combatNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-combat-group" onClick={() => setCombatOpen((v) => { const next = !v; setNavSectionOpen('combat', next); return next; })}
-        className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCombatPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+        className={`sidebar-inline-rule${isOldSchool ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCombatPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={osSectionBtnStyle}>
-        <div style={osSectionLineStyle} />
         <span style={osSectionLabelStyle(isCombatPath(location.pathname))}>Combat</span>
-        <div style={osSectionLineStyle} />
         {combatOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
       </button>
       {combatOpen && (
@@ -2174,10 +2168,9 @@ export default function Layout({ children }) {
           type="button"
           data-testid="nav-messaging-menu-group"
           onClick={() => setMessagingMenuOpen((v) => { const next = !v; setNavSectionOpen('messaging-menu', next); return next; })}
-          className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isMessagingPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+          className={`sidebar-inline-rule${isOldSchool ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isMessagingPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
           style={osSectionBtnStyle}
         >
-          <div style={osSectionLineStyle} />
           <span style={osSectionLabelStyle(isMessagingPath(location.pathname))}>
             Forum & inbox
           </span>
@@ -2193,7 +2186,6 @@ export default function Layout({ children }) {
               {(unreadCount + updateLogUnread) > 9 ? '9+' : (unreadCount + updateLogUnread)}
             </span>
           )}
-          <div style={osSectionLineStyle} />
           {messagingMenuOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
         </button>
         {messagingMenuOpen && (
@@ -2250,11 +2242,9 @@ export default function Layout({ children }) {
   const casinoNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-casino-group" onClick={() => setCasinoOpen((v) => { const next = !v; setNavSectionOpen('casino', next); return next; })}
-        className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCasinoPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+        className={`sidebar-inline-rule${isOldSchool ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCasinoPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={osSectionBtnStyle}>
-        <div style={osSectionLineStyle} />
         <span style={osSectionLabelStyle(isCasinoPath(location.pathname))}>Casino</span>
-        <div style={osSectionLineStyle} />
         {casinoOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
       </button>
       {casinoOpen && (
@@ -2306,11 +2296,9 @@ export default function Layout({ children }) {
   const miniGamesNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-minigames-group" onClick={() => setMiniGamesOpen((v) => { const next = !v; setNavSectionOpen('minigames', next); return next; })}
-        className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isMiniGamesPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+        className={`sidebar-inline-rule${isOldSchool ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isMiniGamesPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={osSectionBtnStyle}>
-        <div style={osSectionLineStyle} />
         <span style={osSectionLabelStyle(isMiniGamesPath(location.pathname))}>Mini games</span>
-        <div style={osSectionLineStyle} />
         {miniGamesOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
       </button>
       {miniGamesOpen && (
@@ -2600,6 +2588,32 @@ export default function Layout({ children }) {
         @media (min-width: 768px) {
           .flash-marquee { animation: none; }
         }
+        .sidebar-inline-rule {
+          display: flex;
+          align-items: center;
+          flex-wrap: nowrap;
+          width: 100%;
+          min-width: 0;
+          gap: 0.375rem;
+        }
+        .sidebar-inline-rule::before,
+        .sidebar-inline-rule::after {
+          content: "";
+          flex: 1 1 0;
+          min-width: 6px;
+          height: 0;
+          border-top: 1px solid var(--noir-accent-line);
+          opacity: 0.45;
+          align-self: center;
+        }
+        .sidebar-inline-rule--logo::before {
+          flex: 0 0 12px;
+          min-width: 12px;
+        }
+        .sidebar-inline-rule--plain::before,
+        .sidebar-inline-rule--plain::after {
+          content: none;
+        }
       `}</style>
       {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
       <div
@@ -2617,15 +2631,14 @@ export default function Layout({ children }) {
               boxShadow: 'inset 1px 1px 0 #ebebeb',
             } : undefined}
           >
-            <div className="flex items-center gap-1.5 w-full">
-              <div className="w-4 h-px shrink-0" style={{ backgroundColor: isOldSchool ? '#c8c8c8' : 'var(--noir-accent-line)', opacity: 0.5 }} />
-              <h1 className={`text-base font-heading font-bold tracking-widest truncate ${styles.sidebarHeaderTitle}`} data-testid="app-logo" style={isOldSchool ? { color: '#f2f2f2', fontSize: 11, letterSpacing: '0.12em' } : undefined}>{isOldSchool ? 'MAIN MENU' : 'MAFIA WARS'}</h1>
+            <div className={`sidebar-inline-rule sidebar-inline-rule--logo${isOldSchool ? ' sidebar-inline-rule--plain' : ''}`}>
+              <h1 className={`text-base font-heading font-bold tracking-widest leading-none truncate min-w-0 ${styles.sidebarHeaderTitle}`} data-testid="app-logo" style={isOldSchool ? { color: '#f2f2f2', fontSize: 11, letterSpacing: '0.12em' } : undefined}>{isOldSchool ? 'MAIN MENU' : 'MAFIA WARS'}</h1>
               {autoRankPrefs.auto_rank_enabled && (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className="shrink-0 flex items-center justify-center" style={{ color: 'var(--noir-primary)' }} aria-label="Auto Rank on">
-                        <Bot size={16} />
+                      <span className="shrink-0 flex items-center justify-center leading-none" style={{ color: 'var(--noir-primary)' }} aria-label="Auto Rank on">
+                        <Bot size={14} />
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="max-w-[200px]">
@@ -2634,7 +2647,6 @@ export default function Layout({ children }) {
                   </Tooltip>
                 </TooltipProvider>
               )}
-              <div className="flex-1 min-w-0 h-px" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
             </div>
           </div>
 
@@ -2660,10 +2672,8 @@ export default function Layout({ children }) {
                     return (
                       <Fragment key={cat.id}>
                         {isBlockCategory ? null : (
-                          <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent opacity-90 hover:opacity-100" style={cat.id === 'information' ? osSectionBtnStyle : { ...osSectionBtnStyle, marginTop: 8 }} aria-expanded={open}>
-                            <div style={osSectionLineStyle} />
+                          <button type="button" onClick={() => setOpen((o) => !o)} className={`sidebar-inline-rule${isOldSchool ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent opacity-90 hover:opacity-100`} style={cat.id === 'information' ? osSectionBtnStyle : { ...osSectionBtnStyle, marginTop: 8 }} aria-expanded={open}>
                             <span style={osSectionLabelStyle(false)}>{cat.label}</span>
-                            <div style={osSectionLineStyle} />
                             {open ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
                           </button>
                         )}

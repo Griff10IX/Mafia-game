@@ -43,6 +43,8 @@ from utils.civilian_protection import raise_if_civilian_protected_asset_recipien
 from utils.speakeasy_rewards import (
     SPEAKEASY_DAILY_BULLETS,
     SPEAKEASY_DAILY_CASH,
+    SPEAKEASY_DAILY_LOOT_PIECES,
+    SPEAKEASY_DAILY_POINTS,
     SPEAKEASY_COOLDOWN_HOURS,
 )
 from utils.claim_costs import load_claim_costs
@@ -3256,6 +3258,8 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
         speakeasy_info = {
             "daily_cash": SPEAKEASY_DAILY_CASH,
             "daily_bullets": SPEAKEASY_DAILY_BULLETS,
+            "daily_loot_pieces": SPEAKEASY_DAILY_LOOT_PIECES,
+            "daily_points": SPEAKEASY_DAILY_POINTS,
             "cooldown_hours": SPEAKEASY_COOLDOWN_HOURS,
             "can_collect": can_collect,
             "next_collect_at": next_collect_at,

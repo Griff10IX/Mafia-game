@@ -1237,6 +1237,18 @@ export default function MyInventory() {
                         {speakeasyInfo.daily_bullets != null ? speakeasyInfo.daily_bullets : '—'}
                       </div>
                     </div>
+                    <div className="rounded-md border border-amber-500/25 bg-amber-950/20 px-2.5 py-2">
+                      <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground mb-0.5">Daily loot pieces</div>
+                      <div className="text-lg font-heading font-bold text-amber-300 leading-tight">
+                        {speakeasyInfo.daily_loot_pieces != null ? speakeasyInfo.daily_loot_pieces : '—'}
+                      </div>
+                    </div>
+                    <div className="rounded-md border border-violet-500/25 bg-violet-950/20 px-2.5 py-2">
+                      <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground mb-0.5">Daily points</div>
+                      <div className="text-lg font-heading font-bold text-violet-300 leading-tight">
+                        {speakeasyInfo.daily_points != null ? speakeasyInfo.daily_points : '—'}
+                      </div>
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {speakeasyInfo.can_collect ? (

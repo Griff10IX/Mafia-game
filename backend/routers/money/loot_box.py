@@ -32,6 +32,8 @@ from utils.civilian_protection import maybe_revoke_civilian_protection, require_
 from utils.speakeasy_rewards import (
     SPEAKEASY_DAILY_BULLETS,
     SPEAKEASY_DAILY_CASH,
+    SPEAKEASY_DAILY_LOOT_PIECES,
+    SPEAKEASY_DAILY_POINTS,
     SPEAKEASY_COOLDOWN_HOURS,
 )
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
@@ -1477,13 +1479,35 @@ async def collect_speakeasy(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Speakeasy daily collection is on cooldown (once per 24 hours)")
     await db.users.update_one(
         {"id": user_id},
-        {"$inc": {"money": SPEAKEASY_DAILY_CASH, "bullets": SPEAKEASY_DAILY_BULLETS}},
+        {"$inc": {
+            "money": SPEAKEASY_DAILY_CASH,
+            "bullets": SPEAKEASY_DAILY_BULLETS,
+            "loot_box_pieces": SPEAKEASY_DAILY_LOOT_PIECES,
+            "points": SPEAKEASY_DAILY_POINTS,
+        }},
     )
-    await log_activity(user_id, current_user.get("username", "?"), "speakeasy_collect", {"cash": SPEAKEASY_DAILY_CASH, "bullets": SPEAKEASY_DAILY_BULLETS})
-    return {
-        "message": f"Collected ${SPEAKEASY_DAILY_CASH:,} and {SPEAKEASY_DAILY_BULLETS} bullets from your Speakeasy.",
+    await log_points_event(
+        db,
+        user_id=user_id,
+        points=SPEAKEASY_DAILY_POINTS,
+        event_type="speakeasy_collect",
+        meta={"source": "speakeasy"},
+    )
+    await log_activity(user_id, current_user.get("username", "?"), "speakeasy_collect", {
         "cash": SPEAKEASY_DAILY_CASH,
         "bullets": SPEAKEASY_DAILY_BULLETS,
+        "loot_pieces": SPEAKEASY_DAILY_LOOT_PIECES,
+        "points": SPEAKEASY_DAILY_POINTS,
+    })
+    return {
+        "message": (
+            f"Collected ${SPEAKEASY_DAILY_CASH:,}, {SPEAKEASY_DAILY_BULLETS} bullets, "
+            f"{SPEAKEASY_DAILY_LOOT_PIECES} loot pieces, and {SPEAKEASY_DAILY_POINTS} points from your Speakeasy."
+        ),
+        "cash": SPEAKEASY_DAILY_CASH,
+        "bullets": SPEAKEASY_DAILY_BULLETS,
+        "loot_pieces": SPEAKEASY_DAILY_LOOT_PIECES,
+        "points": SPEAKEASY_DAILY_POINTS,
     }
 
 
