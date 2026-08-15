@@ -567,6 +567,27 @@ def register(router):
                 },
             )
 
+    async def _advance_after_hand_done(game_id: str, players: list, deck: list, turn_idx: int):
+        """Current seat finished (stood/bust). Move to the next playing seat or settle."""
+        turn_idx += 1
+        while turn_idx < len(players) and (
+            players[turn_idx].get("status") != "playing" or players[turn_idx].get("eliminated")
+        ):
+            turn_idx += 1
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if turn_idx >= len(players):
+            await db.mp_blackjack_games.update_one(
+                {"id": game_id},
+                {"$set": {"players": players, "deck": deck, "current_turn_index": -1, "phase": "dealer"}},
+            )
+            await _run_settle(game_id)
+        else:
+            await db.mp_blackjack_games.update_one(
+                {"id": game_id},
+                {"$set": {"players": players, "deck": deck, "current_turn_index": turn_idx, "turn_started_at": now_iso}},
+            )
+        return await db.mp_blackjack_games.find_one({"id": game_id})
+
     async def _maybe_auto_stand(game_id: str):
         """If current turn exceeded MP_BJ_TURN_SECONDS, auto-stand and advance."""
         game = await db.mp_blackjack_games.find_one({"id": game_id})
@@ -588,23 +609,7 @@ def register(router):
             return None
         players[turn_idx]["status"] = "stood"
         deck = list(game.get("deck") or [])
-        turn_idx += 1
-        active_statuses = ("playing",)
-        while turn_idx < len(players) and (players[turn_idx].get("status") not in active_statuses or players[turn_idx].get("eliminated")):
-            turn_idx += 1
-        now_iso = datetime.now(timezone.utc).isoformat()
-        if turn_idx >= len(players):
-            await db.mp_blackjack_games.update_one(
-                {"id": game_id},
-                {"$set": {"players": players, "deck": deck, "current_turn_index": -1, "phase": "dealer"}},
-            )
-            await _run_settle(game_id)
-        else:
-            await db.mp_blackjack_games.update_one(
-                {"id": game_id},
-                {"$set": {"players": players, "deck": deck, "current_turn_index": turn_idx, "turn_started_at": now_iso}},
-            )
-        return await db.mp_blackjack_games.find_one({"id": game_id})
+        return await _advance_after_hand_done(game_id, players, deck, turn_idx)
 
     async def _maybe_start_from_ready(game_id: str):
         """
@@ -1139,22 +1144,17 @@ def register(router):
         players[turn_idx]["hand"] = hand
         if total > 21:
             players[turn_idx]["status"] = "bust"
-        turn_idx += 1
-        while turn_idx < len(players) and (players[turn_idx].get("status") != "playing" or players[turn_idx].get("eliminated")):
-            turn_idx += 1
-        now_iso = datetime.now(timezone.utc).isoformat()
-        if turn_idx >= len(players):
-            await db.mp_blackjack_games.update_one(
-                {"id": game_id},
-                {"$set": {"players": players, "deck": deck, "current_turn_index": -1, "phase": "dealer"}},
-            )
-            await _run_settle(game_id)
-        else:
+        elif card_limit is not None and len(hand) >= card_limit:
+            players[turn_idx]["status"] = "stood"
+        if players[turn_idx].get("status") == "playing":
+            now_iso = datetime.now(timezone.utc).isoformat()
             await db.mp_blackjack_games.update_one(
                 {"id": game_id},
                 {"$set": {"players": players, "deck": deck, "current_turn_index": turn_idx, "turn_started_at": now_iso}},
             )
-        updated = await db.mp_blackjack_games.find_one({"id": game_id})
+            updated = await db.mp_blackjack_games.find_one({"id": game_id})
+        else:
+            updated = await _advance_after_hand_done(game_id, players, deck, turn_idx)
         return {"game": _serialize_game(updated, uid)}
 
     @router.post("/casino/mp-blackjack/games/{game_id}/stand")
@@ -1178,22 +1178,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="Not your turn")
         players[turn_idx]["status"] = "stood"
         deck = list(game.get("deck") or [])
-        turn_idx += 1
-        while turn_idx < len(players) and (players[turn_idx].get("status") != "playing" or players[turn_idx].get("eliminated")):
-            turn_idx += 1
-        now_iso = datetime.now(timezone.utc).isoformat()
-        if turn_idx >= len(players):
-            await db.mp_blackjack_games.update_one(
-                {"id": game_id},
-                {"$set": {"players": players, "deck": deck, "current_turn_index": -1, "phase": "dealer"}},
-            )
-            await _run_settle(game_id)
-        else:
-            await db.mp_blackjack_games.update_one(
-                {"id": game_id},
-                {"$set": {"players": players, "deck": deck, "current_turn_index": turn_idx, "turn_started_at": now_iso}},
-            )
-        updated = await db.mp_blackjack_games.find_one({"id": game_id})
+        updated = await _advance_after_hand_done(game_id, players, deck, turn_idx)
         return {"game": _serialize_game(updated, uid)}
 
     class MPChatRequest(BaseModel):
