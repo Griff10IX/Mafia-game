@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-15[/color][/b] — [b]Hitlist: better practice NPC rewards[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Hitlist:[/b] Practice NPCs now pay more on kill — [b]$5,000,000–$15,000,000[/b] cash, [b]500–1,000[/b] rank points, and [b]10–50[/b] random booze. There is also a [b]50%[/b] chance of [b]2–4[/b] Store tokens. Tap [b]Kill rewards[/b] under Add NPC to see the ranges. NPCs already on The Board keep their old payout until you kill or they expire.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-15[/color][/b] — [b]Attack list, Completed it respect[/b][/size]
 [quote]
 [list]
