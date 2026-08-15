@@ -44,11 +44,11 @@ if defined SERVER_SHA set "SERVER_SHA=%SERVER_SHA:~0,40%"
 
 if "%NEED_RESTART%"=="0" if defined SERVER_SHA (
     git diff --name-only "%SERVER_SHA%" HEAD -- backend > "%TEMP%\mafia-push-files.txt" 2>nul
-    findstr /i /e ".py" "%TEMP%\mafia-push-files.txt" >nul 2>nul && set "NEED_RESTART=1"
+    findstr /i /c:".py" "%TEMP%\mafia-push-files.txt" >nul 2>nul && set "NEED_RESTART=1"
 )
 if "%NEED_RESTART%"=="0" (
     git diff --name-only origin/MAfiaGame2 HEAD -- backend > "%TEMP%\mafia-push-files.txt" 2>nul
-    findstr /i /e ".py" "%TEMP%\mafia-push-files.txt" >nul 2>nul && set "NEED_RESTART=1"
+    findstr /i /c:".py" "%TEMP%\mafia-push-files.txt" >nul 2>nul && set "NEED_RESTART=1"
 )
 
 if "%NEED_RESTART%"=="1" (

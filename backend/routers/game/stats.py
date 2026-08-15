@@ -13,7 +13,7 @@ _STATS_OVERVIEW_TTL_SEC = 55.0
 # My Stats is heavy (many collections); short TTL makes revisits feel instant.
 _STATS_ME_TTL_SEC = 20.0
 # Bump when overview aggregation match rules change so stale cache cannot keep inflated totals.
-_STATS_OVERVIEW_CACHE_VER = "v4-user-counts-include-staff"
+_STATS_OVERVIEW_CACHE_VER = "v5-exclude-staff-kills"
 _STATS_RECENT_KILLS_SCAN_LIMIT = 800
 _STATS_ME_GAMBLING_LOG_LIMIT = 5000
 
@@ -56,6 +56,15 @@ def _build_recent_kills_for_viewer(
             continue
         if users_only_kills and killer_is_npc:
             continue
+        # Admin/mod kills (incl. staff Hitman tests) stay off the public Last 15
+        if killer:
+            try:
+                from server import _user_excluded_from_stat_leaderboards
+
+                if _user_excluded_from_stat_leaderboards(killer):
+                    continue
+            except Exception:
+                pass
 
         victim_rank_name = None
         tr_id = a.get("target_rank_id")
@@ -70,14 +79,6 @@ def _build_recent_kills_for_viewer(
 
         is_hitman = attempt_is_hitman_kill(a)
         if is_hitman:
-            # Staff Hitman testing must not appear on the public Last 15 feed
-            try:
-                from server import _user_excluded_from_stat_leaderboards
-
-                if killer and _user_excluded_from_stat_leaderboards(killer):
-                    continue
-            except Exception:
-                pass
             is_public = False
             killer_username = None
         else:
