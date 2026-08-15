@@ -86,12 +86,12 @@ fi
 sudo systemctl restart mafia-backend
 
 up=0
-for _ in $(seq 1 90); do
-  if curl -sS -o /dev/null --max-time 2 http://127.0.0.1:8000/openapi.json; then
+for _ in $(seq 1 30); do
+  if curl -s -o /dev/null --max-time 2 http://127.0.0.1:8000/openapi.json 2>/dev/null; then
     up=1
     break
   fi
-  sleep 1
+  sleep 3
 done
 if [ "$up" -ne 1 ]; then
   echo "deploy-after-pull.sh: backend did not answer on :8000 within 90s; restoring site anyway" >&2

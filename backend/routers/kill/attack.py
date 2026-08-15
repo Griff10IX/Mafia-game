@@ -1454,6 +1454,7 @@ async def _build_active_attacks_list(
     still_bg_tids, bg_owner_by_guard_uid = await _resolve_still_bg_and_owners(bg_target_ids)
 
     delete_ids: List[str] = []
+    dead_favorite_usernames: List[str] = []
     bulk_ops: List[UpdateOne] = []
     # Status-flip ops that ALSO mint a fresh execute_token must be awaited (fire-and-forget would race with /attack/execute).
     urgent_bulk_ops: List[UpdateOne] = []
@@ -1472,6 +1473,9 @@ async def _build_active_attacks_list(
             if target_user:
                 if target_user.get("is_dead"):
                     delete_ids.append(attack["id"])
+                    un = (attack.get("target_username") or "").strip()
+                    if un:
+                        dead_favorite_usernames.append(un)
                     continue
                 if (
                     target_user.get("is_bodyguard")
@@ -1479,6 +1483,9 @@ async def _build_active_attacks_list(
                     and target_user.get("is_npc")
                 ):
                     delete_ids.append(attack["id"])
+                    un = (attack.get("target_username") or "").strip()
+                    if un:
+                        dead_favorite_usernames.append(un)
                     continue
         if not attack.get("expires_at"):
             started_iso = attack.get("search_started") or attack.get("found_at")
@@ -1618,6 +1625,8 @@ async def _build_active_attacks_list(
     # so we don't need to await Mongo before returning. Saves 1-2 round-trips on every /attack/list.
     if delete_ids:
         asyncio.create_task(_attack_list_writeback_delete(attacker_id, delete_ids))
+    if dead_favorite_usernames:
+        asyncio.create_task(clear_kill_favorites_for_usernames(dead_favorite_usernames))
     if bulk_ops:
         asyncio.create_task(_attack_list_writeback_bulk(bulk_ops))
     return items
@@ -2061,11 +2070,19 @@ async def get_attack_status(
         if target_user:
             if target_user.get("is_dead"):
                 await db.attacks.delete_one({"id": attack["id"], "attacker_id": current_user["id"]})
+                _fire_and_forget(
+                    clear_kill_favorites_for_usernames([attack.get("target_username") or ""]),
+                    label="clear_kill_favs_status_dead",
+                )
                 raise HTTPException(status_code=404, detail="No active attack")
             if target_user.get("is_bodyguard"):
                 still_bg = await db.bodyguards.find_one({"bodyguard_user_id": attack["target_id"]}, {"_id": 1})
                 if not still_bg:
                     await db.attacks.delete_one({"id": attack["id"], "attacker_id": current_user["id"]})
+                    _fire_and_forget(
+                        clear_kill_favorites_for_usernames([attack.get("target_username") or ""]),
+                        label="clear_kill_favs_status_bg",
+                    )
                     raise HTTPException(status_code=404, detail="No active attack")
     now = datetime.now(timezone.utc)
     found_time = _parse_iso_datetime(attack.get("found_at"))
@@ -2560,6 +2577,10 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if target.get("is_dead"):
         await db.attacks.delete_one({"id": attack["id"], "attacker_id": current_user["id"]})
         _attack_list_cache_invalidate(current_user["id"])
+        _fire_and_forget(
+            clear_kill_favorites_for_usernames([target.get("username") or attack.get("target_username") or ""]),
+            label="clear_kill_favs_already_dead",
+        )
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Target is already dead", req), label="log_target_already_dead")
         raise HTTPException(
             status_code=400,
@@ -2936,6 +2957,10 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     logger.exception("release_redeem_slots_for_deceased_user (npc victim)")
                 await db.attacks.delete_many({"target_id": victim_id})
                 _attack_list_cache_invalidate(killer_id)
+                _fire_and_forget(
+                    clear_kill_favorites_for_usernames([target_name]),
+                    label="clear_kill_favs_npc",
+                )
                 try:
                     from routers.money.quicktrade import cancel_offers_on_death
                     await cancel_offers_on_death(victim_id)
@@ -3878,6 +3903,10 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 pass
         await db.attacks.delete_many({"target_id": victim_id})
         _attack_list_cache_invalidate(killer_id)
+        _fire_and_forget(
+            clear_kill_favorites_for_usernames([target_name]),
+            label="clear_kill_favs_pvp",
+        )
 
         # ----------------------------------------------------------------
         # Tail of the PvP kill path is pure logging / notifications / stats /
@@ -4385,12 +4414,74 @@ def _sanitize_kill_favorite_list(raw: Any) -> List[str]:
     return out
 
 
+async def clear_kill_favorites_for_usernames(usernames: List[str]) -> None:
+    """Drop dead/expired names from every player's Kill favorites list."""
+    names: List[str] = []
+    seen: Set[str] = set()
+    for raw in usernames or []:
+        n = _normalize_kill_favorite_username(raw)
+        if n and n not in seen:
+            seen.add(n)
+            names.append(n)
+    if not names:
+        return
+    try:
+        await db.users.update_many(
+            {"kill_favorite_targets": {"$in": names}},
+            {"$pull": {"kill_favorite_targets": {"$in": names}}},
+        )
+    except Exception:
+        logger.exception("clear_kill_favorites_for_usernames failed")
+
+
+async def _prune_dead_kill_favorites(user_id: str, targets: List[str]) -> List[str]:
+    if not targets:
+        return []
+    rx = re.compile("^(?:" + "|".join(re.escape(t) for t in targets) + ")$", re.IGNORECASE)
+    found: List[dict] = []
+    async for u in db.users.find(
+        {"username": rx},
+        {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "is_npc": 1, "is_bodyguard": 1},
+    ):
+        found.append(u)
+    npc_bg_ids = [
+        u.get("id")
+        for u in found
+        if u.get("id") and u.get("is_npc") and u.get("is_bodyguard") and not u.get("is_dead")
+    ]
+    still_bg_ids: Set[str] = set()
+    if npc_bg_ids:
+        async for b in db.bodyguards.find(
+            {"bodyguard_user_id": {"$in": npc_bg_ids}},
+            {"_id": 0, "bodyguard_user_id": 1},
+        ):
+            gid = b.get("bodyguard_user_id")
+            if gid:
+                still_bg_ids.add(str(gid))
+    alive: Set[str] = set()
+    for u in found:
+        if u.get("is_dead"):
+            continue
+        uid = str(u.get("id") or "")
+        if u.get("is_npc") and u.get("is_bodyguard") and uid not in still_bg_ids:
+            continue
+        n = _normalize_kill_favorite_username(u.get("username"))
+        if n:
+            alive.add(n)
+    kept = [t for t in targets if t in alive]
+    if kept != targets:
+        await db.users.update_one({"id": user_id}, {"$set": {"kill_favorite_targets": kept}})
+    return kept
+
+
 async def _load_kill_favorite_targets(user_id: str) -> List[str]:
     u = await db.users.find_one({"id": user_id}, {"_id": 0, "kill_favorite_targets": 1})
     raw = (u or {}).get("kill_favorite_targets")
     targets = _sanitize_kill_favorite_list(raw)
     if raw is not None and not isinstance(raw, list):
         await db.users.update_one({"id": user_id}, {"$set": {"kill_favorite_targets": targets}})
+    if targets:
+        targets = await _prune_dead_kill_favorites(user_id, targets)
     return targets
 
 

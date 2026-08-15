@@ -1476,7 +1476,16 @@ export default function Attack() {
     const uname = String(targetUsername || row?.target_username || '').trim().toLowerCase();
     attackListGenRef.current += 1;
     if (attackId) recentlyKilledIdsRef.current.add(attackId);
-    if (uname) recentlyKilledNamesRef.current.add(uname);
+    if (uname) {
+      recentlyKilledNamesRef.current.add(uname);
+      setFavoriteTargets((prev) => {
+        if (!prev.has(uname)) return prev;
+        const next = new Set(prev);
+        next.delete(uname);
+        writeKillFavoriteMirror(next);
+        return next;
+      });
+    }
     setAttacks((prev) => {
       const next = (Array.isArray(prev) ? prev : []).filter((a) => {
         if (a.attack_id === attackId) return false;

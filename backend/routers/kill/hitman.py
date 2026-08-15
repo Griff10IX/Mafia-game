@@ -252,10 +252,24 @@ async def _remove_robot_bodyguard_slot(owner_id: str, bg: dict, hirer_id: str) -
 
     if guard_uid:
         try:
+            guard = await db.users.find_one({"id": guard_uid}, {"_id": 0, "username": 1})
+            fav_names = [
+                (bg.get("robot_name") or "").strip(),
+                ((guard or {}).get("username") or "").strip(),
+            ]
             await db.users.update_one(
                 {"id": guard_uid, "is_npc": True},
                 {"$set": {"is_dead": True, "is_bodyguard": False}, "$unset": {"bodyguard_owner_id": ""}},
             )
+            try:
+                await db.attacks.delete_many({"target_id": guard_uid})
+            except Exception:
+                logger.exception("hitman: delete searches for robot %s", guard_uid)
+            try:
+                from routers.kill.attack import clear_kill_favorites_for_usernames
+                await clear_kill_favorites_for_usernames(fav_names)
+            except Exception:
+                logger.exception("hitman: clear kill favorites for robot %s", guard_uid)
         except Exception:
             logger.exception("hitman: mark robot dead %s", guard_uid)
 

@@ -243,15 +243,13 @@ export const AUTH_ERROR_KEY = 'auth_profile_error';
 export const SERVER_UNAVAILABLE_EVENT = 'app:server-unavailable';
 
 let _lastServerUnavailableDispatch = 0;
-const _SERVER_UNAVAILABLE_THROTTLE_MS = 30_000; // Only dispatch once per 30s to avoid overlay + toast spam
-const _SERVER_UNAVAILABLE_STRIKE_WINDOW_MS = 20_000; // Require repeated failures in a short window
-const _SERVER_UNAVAILABLE_MIN_STRIKES = 3; // Need multiple failures before full-screen overlay
-const _SERVER_UNAVAILABLE_RESUME_GRACE_MS = 45_000; // Suppress overlay briefly after returning from idle/background
-const _SERVER_UNAVAILABLE_INTERACTION_WINDOW_MS = 30_000; // Only show full-screen overlay after recent user interaction
+const _SERVER_UNAVAILABLE_THROTTLE_MS = 15_000;
+const _SERVER_UNAVAILABLE_STRIKE_WINDOW_MS = 90_000;
+const _SERVER_UNAVAILABLE_MIN_STRIKES = 2;
+const _SERVER_UNAVAILABLE_RESUME_GRACE_MS = 45_000;
 let _serverUnavailableStrikeCount = 0;
 let _serverUnavailableFirstStrikeAt = 0;
 let _lastForegroundAt = Date.now();
-let _lastUserInteractionAt = Date.now();
 
 function _resetServerUnavailableStrikes() {
   _serverUnavailableStrikeCount = 0;
@@ -272,7 +270,6 @@ function _shouldSuppressServerUnavailableOverlay() {
   if (typeof document !== 'undefined' && document.hidden) return true;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
   if (_lastForegroundAt > 0 && (Date.now() - _lastForegroundAt) < _SERVER_UNAVAILABLE_RESUME_GRACE_MS) return true;
-  if (_lastUserInteractionAt > 0 && (Date.now() - _lastUserInteractionAt) > _SERVER_UNAVAILABLE_INTERACTION_WINDOW_MS) return true;
   return false;
 }
 
@@ -297,11 +294,7 @@ if (typeof window !== 'undefined') {
   };
   const markForeground = () => {
     _lastForegroundAt = Date.now();
-    _lastUserInteractionAt = Date.now();
     _resetServerUnavailableStrikes();
-  };
-  const markUserInteraction = () => {
-    _lastUserInteractionAt = Date.now();
   };
   // pagehide only — beforeunload blocks iOS Safari bfcache and forces cold reloads
   // (blank page until chunks download again after AFK).
@@ -313,9 +306,6 @@ if (typeof window !== 'undefined') {
   });
   window.addEventListener('focus', markForeground);
   window.addEventListener('online', markForeground);
-  window.addEventListener('pointerdown', markUserInteraction, { passive: true });
-  window.addEventListener('keydown', markUserInteraction, { passive: true });
-  window.addEventListener('touchstart', markUserInteraction, { passive: true });
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
@@ -553,9 +543,9 @@ api.interceptors.response.use(
       // No response: network error, timeout, or server unreachable (often after server restart)
       error.response = { status: 0, data: { detail: NETWORK_ERROR_MSG } };
     }
-    // Full-screen overlay only for real gateway outages — not transient mobile/network blips (status 0).
+    // Gateway errors plus unreachable API (uvicorn down) — not canceled/unload (handled above).
     const status = error.response?.status;
-    const shouldCountAsServerDownSignal = isServerUnavailable(status);
+    const shouldCountAsServerDownSignal = isServerUnavailable(status) || status === 0;
     if (
       shouldCountAsServerDownSignal &&
       typeof window !== 'undefined' &&

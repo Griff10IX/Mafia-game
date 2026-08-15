@@ -144,25 +144,47 @@ const NPC_REWARD_LABELS = {
   points: (v) => `${Number(v).toLocaleString()}p`,
 };
 
-function formatNpcRewardText(npcRewards) {
+const NPC_TOKEN_LABELS = {
+  xp_crimes: 'Crimes XP',
+  xp_gta: 'GTA XP',
+  melt: 'Melt',
+  oc_reduced: 'OC',
+  booze: 'Booze token',
+  racket: 'Racket',
+  properties: 'Properties',
+  travel: 'Travel',
+  jailbust_bonus: 'Jailbust',
+  auto_rank_2h: 'Auto Rank 2h',
+  crew_oc_auto_3h: 'Crew OC auto',
+  auto_collect_12h: 'Auto-collect 12h',
+  auto_collect_24h: 'Auto-collect 24h',
+  jail_bailout: 'Jail bailout',
+  cooldown_skip_crime: 'Crime skip',
+  cooldown_skip_gta: 'GTA skip',
+  cooldown_skip_booze: 'Booze skip',
+  cooldown_skip_properties: 'Props skip',
+};
+
+function npcRewardLines(npcRewards) {
   const rewards = npcRewards && typeof npcRewards === 'object' ? npcRewards : {};
-  const parts = [];
+  const lines = [];
   for (const [k, v] of Object.entries(rewards)) {
     if (!v || k === 'booze' || k === 'bullets' || k === 'car_id' || k === 'tokens') continue;
     const fmt = NPC_REWARD_LABELS[k];
-    parts.push(fmt ? fmt(v) : `${Number(v).toLocaleString()} ${k.replace(/_/g, ' ')}`);
+    lines.push(fmt ? fmt(v) : `${Number(v).toLocaleString()} ${k.replace(/_/g, ' ')}`);
   }
   if (rewards.booze && typeof rewards.booze === 'object') {
     const qty = Object.values(rewards.booze).reduce((s, v) => s + Number(v || 0), 0);
-    if (qty > 0) parts.push(`${qty.toLocaleString()} booze`);
+    if (qty > 0) lines.push(`${qty.toLocaleString()} booze`);
   }
   if (rewards.tokens && typeof rewards.tokens === 'object') {
-    const tokenBits = Object.entries(rewards.tokens)
-      .filter(([, amt]) => Number(amt) > 0)
-      .map(([tt, amt]) => `${Number(amt)} ${String(tt).replace(/_/g, ' ')}`);
-    if (tokenBits.length) parts.push(tokenBits.join(', '));
+    for (const [tt, amt] of Object.entries(rewards.tokens)) {
+      if (Number(amt) > 0) {
+        lines.push(`${Number(amt)} ${NPC_TOKEN_LABELS[tt] || String(tt).replace(/_/g, ' ')}`);
+      }
+    }
   }
-  return parts.length ? parts.join(' · ') : 'Practice rewards';
+  return lines;
 }
 
 const NPC_KILL_REWARD_FALLBACK = {
@@ -215,10 +237,28 @@ function NpcKillRewardsDropdown({ preview }) {
 
 function HitlistRewardCell({ item }) {
   if (item?.target_type === 'npc') {
+    const lines = npcRewardLines(item.npc_rewards);
+    if (!lines.length) {
+      return <span className="text-primary font-bold text-xs">Practice rewards</span>;
+    }
+    const extra = Math.max(0, lines.length - 1);
     return (
-      <span className="text-primary font-bold text-xs leading-snug">
-        {formatNpcRewardText(item.npc_rewards)}
-      </span>
+      <details className="group w-full min-w-0 text-left">
+        <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center gap-1 min-w-0">
+          <span className="group-open:rotate-90 transition-transform inline-block text-[8px] text-primary shrink-0">▶</span>
+          <span className="text-primary font-bold text-xs truncate min-w-0">{lines[0]}</span>
+          {extra > 0 ? (
+            <span className="text-[8px] text-zinc-400 font-heading shrink-0 whitespace-nowrap">+{extra}</span>
+          ) : null}
+        </summary>
+        {extra > 0 ? (
+          <ul className="mt-1 space-y-0.5 text-[9px] sm:text-[10px] font-heading text-primary/90 leading-snug pl-3.5">
+            {lines.slice(1).map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        ) : null}
+      </details>
     );
   }
   if (item?.reward_type === 'cash') {
@@ -621,11 +661,12 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                   const afford = cost && canAffordBuyOff(cost.cash, cost.points);
                   return (
                     <tr key={item.id ?? `hitlist-${index}`} className="hover:bg-zinc-800/30 transition-colors">
-                      <td className="py-2 px-3">
-                        <div className="flex items-center gap-1.5">
+                      <td className="py-2 px-3 max-w-[14rem]">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           <Link
                             to={`/profile/${encodeURIComponent(item.target_username ?? '')}`}
-                            className={`font-bold text-xs ${item.target_type === 'npc' ? 'text-foreground hover:text-primary' : 'text-primary hover:underline'}`}
+                            title={item.target_username ?? ''}
+                            className={`font-bold text-xs truncate min-w-0 ${item.target_type === 'npc' ? 'text-foreground hover:text-primary' : 'text-primary hover:underline'}`}
                           >
                             {item.target_username ?? ''}
                           </Link>
@@ -655,8 +696,8 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                           )}
                         </div>
                       </td>
-                      <td className="py-2 px-3">
-                        <div className="flex items-center gap-1 text-primary font-bold text-xs">
+                      <td className="py-2 px-3 align-top max-w-[12rem]">
+                        <div className={`text-primary font-bold text-xs ${item.target_type === 'npc' ? '' : 'flex items-center gap-1'}`}>
                           <HitlistRewardCell item={item} />
                         </div>
                       </td>
@@ -693,33 +734,34 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                 : null;
               const buying = buyingOffTarget === item.target_username;
               const afford = cost && canAffordBuyOff(cost.cash, cost.points);
+              const isNpc = item.target_type === 'npc';
               return (
                 <div key={item.id ?? `hitlist-m-${index}`} className="p-2.5 space-y-2 hover:bg-zinc-800/20 transition-colors">
-                  {/* Wanted poster style */}
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2 min-w-0">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <Link
                           to={`/profile/${encodeURIComponent(item.target_username ?? '')}`}
-                          className={`font-heading font-bold text-xs ${item.target_type === 'npc' ? 'text-foreground hover:text-primary' : 'text-primary hover:underline'}`}
+                          title={item.target_username ?? ''}
+                          className={`font-heading font-bold text-xs truncate min-w-0 flex-1 ${isNpc ? 'text-foreground hover:text-primary' : 'text-primary hover:underline'}`}
                         >
                           {item.target_username ?? ''}
                         </Link>
                         <Link
-                          to={`/kill/attack?target=${encodeURIComponent(item.target_username ?? '')}${item.target_type === 'npc' ? '&hitlist_npc=1' : ''}`}
+                          to={`/kill/attack?target=${encodeURIComponent(item.target_username ?? '')}${isNpc ? '&hitlist_npc=1' : ''}`}
                           className="shrink-0 p-1 rounded hover:bg-primary/20 text-primary transition-colors"
                           title="Attack"
                         >
                           <Crosshair size={10} />
                         </Link>
                       </div>
-                      <div className="flex items-center gap-1 text-[9px] text-zinc-400 font-heading">
+                      <div className="flex items-center gap-1 text-[9px] text-zinc-400 font-heading mt-0.5">
                         {item.target_type === 'bodyguards' ? (
                           <>
                             <Users size={9} />
                             Bodyguards
                           </>
-                        ) : item.target_type === 'npc' ? (
+                        ) : isNpc ? (
                           <>NPC</>
                         ) : (
                           <>
@@ -727,18 +769,23 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                             User
                           </>
                         )}
+                        <span className="text-zinc-600">·</span>
+                        <span className="truncate">by {item.placer_username ?? 'Hidden'}</span>
                       </div>
                     </div>
-                    
-                    <div className="text-right">
-                      <div className="flex items-center justify-end gap-1 text-primary font-heading font-bold text-xs mb-0.5">
-                        <HitlistRewardCell item={item} />
+                    {!isNpc ? (
+                      <div className="shrink-0 text-right">
+                        <div className="flex items-center justify-end gap-1 text-primary font-heading font-bold text-xs">
+                          <HitlistRewardCell item={item} />
+                        </div>
                       </div>
-                      <div className="text-[8px] text-zinc-500 font-heading">
-                        by {item.placer_username ?? 'Hidden'}
-                      </div>
-                    </div>
+                    ) : null}
                   </div>
+                  {isNpc ? (
+                    <div className="rounded border border-zinc-700/40 bg-zinc-800/30 px-2 py-1.5">
+                      <HitlistRewardCell item={item} />
+                    </div>
+                  ) : null}
                   
                   {showBuyOff && costLabel && (
                     <button

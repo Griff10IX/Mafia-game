@@ -196,7 +196,7 @@ async def _expire_stale_hitlist_npcs(*, placer_id: Optional[str] = None) -> int:
         query["placer_id"] = placer_id
     cutoff = datetime.now(timezone.utc) - HITLIST_NPC_MAX_AGE
     expired = []
-    async for doc in db.hitlist.find(query, {"_id": 0, "id": 1, "target_id": 1, "created_at": 1}):
+    async for doc in db.hitlist.find(query, {"_id": 0, "id": 1, "target_id": 1, "target_username": 1, "created_at": 1}):
         created = _parse_iso_datetime(doc.get("created_at"))
         if created is None or created <= cutoff:
             expired.append(doc)
@@ -204,6 +204,7 @@ async def _expire_stale_hitlist_npcs(*, placer_id: Optional[str] = None) -> int:
         return 0
     now_iso = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     removed = 0
+    expired_usernames = []
     for doc in expired:
         hitlist_id = (doc.get("id") or "").strip()
         target_id = (doc.get("target_id") or "").strip()
@@ -226,6 +227,15 @@ async def _expire_stale_hitlist_npcs(*, placer_id: Optional[str] = None) -> int:
                 )
             except Exception:
                 logger.exception("expire hitlist npc: mark dead failed target_id=%s", target_id)
+        un = (doc.get("target_username") or "").strip()
+        if un:
+            expired_usernames.append(un)
+    if expired_usernames:
+        try:
+            from routers.kill.attack import clear_kill_favorites_for_usernames
+            await clear_kill_favorites_for_usernames(expired_usernames)
+        except Exception:
+            logger.exception("expire hitlist npc: clear kill favorites failed")
     return removed
 
 
