@@ -13,7 +13,7 @@ import api, {
   APP_NAVIGATE_EVENT,
 } from '../utils/api';
 import { setToastMutedPages } from '../utils/toastPageMutes';
-import { clearStaffPortalSession, isStaffPortalTokenValid } from '../utils/staffPortalSession';
+import { clearStaffPortalSession, isStaffPortalTokenValid, setStaffPortalToken, getOrCreateStaffPortalDeviceId } from '../utils/staffPortalSession';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readDashboardSessionCache, writeDashboardSessionUserProgress } from '../utils/dashboardSessionCache';
 import { SLOTS_FEATURE_ENABLED } from '../config/gameFeatures';
@@ -523,6 +523,11 @@ export default function Layout({ children }) {
   /** When true (env STAFF_PORTAL_PASSWORD), Layout hides staff tool links until portal JWT is valid. */
   const [staffPortalEnabled, setStaffPortalEnabled] = useState(false);
   const [portalNavTick, setPortalNavTick] = useState(0);
+  const [portalUnlockOpen, setPortalUnlockOpen] = useState(false);
+  const [portalUnlockPwd, setPortalUnlockPwd] = useState('');
+  const [portalUnlockBusy, setPortalUnlockBusy] = useState(false);
+  const [portalUnlockErr, setPortalUnlockErr] = useState('');
+  const portalUnlockWrapRef = useRef(null);
   const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
   const [sportsBettingEventCount, setSportsBettingEventCount] = useState(0);
   const [weedEmpireReadyCount, setWeedEmpireReadyCount] = useState(0);
@@ -721,6 +726,10 @@ export default function Layout({ children }) {
     if (!(isAdmin || isModerator) || !staffLoginSession) return false;
     if (!staffPortalEnabled) return true;
     return isStaffPortalTokenValid();
+  }, [isAdmin, isModerator, staffLoginSession, staffPortalEnabled, portalNavTick]);
+  const portalNeedsUnlock = useMemo(() => {
+    void portalNavTick;
+    return (isAdmin || isModerator) && staffLoginSession && staffPortalEnabled && !isStaffPortalTokenValid();
   }, [isAdmin, isModerator, staffLoginSession, staffPortalEnabled, portalNavTick]);
   const hitmanForHireVisible = !!hitmanForHireLive;
   const weedEmpireNavVisible = !!weedEmpireVisible || !!(isAdmin || isModerator || hasAdminEmail);
@@ -1232,6 +1241,53 @@ export default function Layout({ children }) {
     const id = setInterval(() => setPortalNavTick((t) => t + 1), 15000);
     return () => clearInterval(id);
   }, [staffPortalEnabled, staffLoginSession, isAdmin, isModerator]);
+
+  useEffect(() => {
+    if (!portalUnlockOpen) return undefined;
+    const onDoc = (e) => {
+      if (portalUnlockWrapRef.current && !portalUnlockWrapRef.current.contains(e.target)) {
+        setPortalUnlockOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('touchstart', onDoc);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('touchstart', onDoc);
+    };
+  }, [portalUnlockOpen]);
+
+  const submitSidebarStaffPortalUnlock = async (e) => {
+    e.preventDefault();
+    setPortalUnlockErr('');
+    const pwd = (portalUnlockPwd || '').trim();
+    if (!pwd) {
+      setPortalUnlockErr('Enter the staff portal password.');
+      return;
+    }
+    setPortalUnlockBusy(true);
+    try {
+      const res = await api.post('/auth/staff-portal-unlock', {
+        password: portalUnlockPwd,
+        client_device_id: getOrCreateStaffPortalDeviceId(),
+      });
+      const tok = res.data?.staff_portal_token;
+      if (!tok) {
+        setPortalUnlockErr('Unexpected response.');
+        return;
+      }
+      setStaffPortalToken(tok);
+      setPortalUnlockPwd('');
+      setPortalUnlockOpen(false);
+      setPortalNavTick((n) => n + 1);
+      toast.success('Staff portal unlocked.');
+    } catch (err) {
+      const d = err?.response?.data?.detail;
+      setPortalUnlockErr(typeof d === 'string' ? d : 'Unlock failed.');
+    } finally {
+      setPortalUnlockBusy(false);
+    }
+  };
 
   const fetchAutoRankPrefs = async () => {
     if (!user) return;
@@ -3147,15 +3203,61 @@ export default function Layout({ children }) {
               } : undefined}
             >
               <div className="flex items-center justify-between gap-2 min-h-[28px]">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <User size={13} style={{ color: isOldSchool ? '#f2f2f2' : 'var(--noir-primary)', flexShrink: 0 }} />
-                  <span className="text-[11px] font-heading font-bold truncate" style={{ color: isOldSchool ? '#f2f2f2' : 'var(--noir-primary)' }}>
+                <div className="inline-flex items-center gap-1.5 min-w-0">
+                  <User size={13} className="shrink-0 block" style={{ color: isOldSchool ? '#f2f2f2' : 'var(--noir-primary)' }} />
+                  <span className="text-[11px] font-heading font-bold truncate leading-none" style={{ color: isOldSchool ? '#f2f2f2' : 'var(--noir-primary)' }}>
                     {isOldSchool ? 'PLAYERSTATS' : (user.username || 'Profile')}
                   </span>
+                  {portalNeedsUnlock ? (
+                    <div ref={portalUnlockWrapRef} className="relative shrink-0 inline-flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPortalUnlockErr('');
+                          setPortalUnlockOpen((v) => !v);
+                        }}
+                        className="h-5 w-5 inline-flex items-center justify-center rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 touch-manipulation"
+                        title="Unlock staff portal"
+                        aria-label="Unlock staff portal"
+                        aria-expanded={portalUnlockOpen}
+                      >
+                        <Lock size={11} />
+                      </button>
+                      {portalUnlockOpen && (
+                        <form
+                          onSubmit={submitSidebarStaffPortalUnlock}
+                          className="absolute left-0 top-full mt-1 z-50 w-52 rounded-md border border-primary/30 bg-zinc-950 p-2 shadow-xl"
+                        >
+                          <input
+                            type="password"
+                            value={portalUnlockPwd}
+                            onChange={(ev) => setPortalUnlockPwd(ev.target.value)}
+                            placeholder="Portal password"
+                            autoComplete="current-password"
+                            autoFocus
+                            className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-[16px] lg:text-[11px] text-foreground min-h-9"
+                            disabled={portalUnlockBusy}
+                            aria-label="Staff portal password"
+                          />
+                          <button
+                            type="submit"
+                            disabled={portalUnlockBusy}
+                            className="mt-1.5 w-full min-h-9 rounded border border-primary/50 bg-primary/20 text-primary text-[9px] font-heading font-bold uppercase tracking-wider hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
+                          >
+                            {portalUnlockBusy ? '…' : 'Unlock'}
+                          </button>
+                          {portalUnlockErr ? (
+                            <p className="text-[10px] text-red-400 mt-1 font-heading" role="alert">{portalUnlockErr}</p>
+                          ) : null}
+                        </form>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-[9px] font-heading uppercase tracking-wider shrink-0 leading-none" style={{ color: isOldSchool ? '#c8c8c8' : 'var(--noir-muted)' }}>
+                      {isOldSchool ? (user.username || 'Profile') : (user.rank_name || rankProgress?.current_rank_name || '')}
+                    </span>
+                  )}
                 </div>
-                <span className="text-[9px] font-heading uppercase tracking-wider shrink-0" style={{ color: isOldSchool ? '#c8c8c8' : 'var(--noir-muted)' }}>
-                  {isOldSchool ? (user.username || 'Profile') : (user.rank_name || rankProgress?.current_rank_name || '')}
-                </span>
                 {isMobileViewport && (
                   <button type="button" onClick={closeRightSidebar}
                     onPointerUp={(e) => { e.preventDefault(); closeRightSidebar(); }}

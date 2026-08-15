@@ -8,9 +8,7 @@ import {
   isCivilianProtectionConfirmCancelled,
 } from '../../utils/civilianProtectionConfirm';
 import {
-  getOrCreateStaffPortalDeviceId,
   isStaffPortalTokenValid,
-  setStaffPortalToken,
 } from '../../utils/staffPortalSession';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
@@ -37,6 +35,7 @@ import { defaultPlayerAvatarUrl } from '../../utils/defaultPlayerAvatar';
 import { PROFILE_GLOW_BORDER_CSS, customGlowBorderStyle, PROFILE_GLOW_PRESETS } from '../../constants/profileGlowPresets';
 import GlowPresetPicker from '../../components/GlowPresetPicker';
 import { isValidTelegramChatId } from '../../utils/telegramChatId';
+import ProfileMessagePopup from '../Social/ProfileMessagePopup';
 
 const PROFILE_EDIT_TAB_IDS = new Set(['look', 'text', 'alerts', 'privacy', 'account', 'staff']);
 const PROFILE_EDIT_TAB_KEY = 'profile_edit_tab';
@@ -385,7 +384,6 @@ const ProfileInfoCard = ({
   hasAdminEmail = false,
   staffLoginSession = false,
   staffPortalEnabled = false,
-  staffPortalSessionMin = 30,
   onStaffActionDone,
   staffDetailsOpen = false,
   setStaffDetailsOpen,
@@ -405,9 +403,6 @@ const ProfileInfoCard = ({
   const [killDebugOpen, setKillDebugOpen] = useState(false);
   const [killDebugLoading, setKillDebugLoading] = useState(false);
   const [killDebugError, setKillDebugError] = useState(null);
-  const [staffPortalUnlockBusy, setStaffPortalUnlockBusy] = useState(false);
-  const [staffPortalUnlockPwd, setStaffPortalUnlockPwd] = useState('');
-  const [staffPortalUnlockErr, setStaffPortalUnlockErr] = useState('');
   const [staffPortalClientTick, setStaffPortalClientTick] = useState(0);
 
   const staffViewerCaps = isAdmin || isModerator || hasAdminEmail;
@@ -418,36 +413,15 @@ const ProfileInfoCard = ({
   }, [staffPortalEnabled, staffPortalClientTick]);
   const staffCanUseAdminApi = staffShellGateOk && portalUnlocked;
 
-  const submitProfileStaffPortalUnlock = async (e) => {
-    e.preventDefault();
-    setStaffPortalUnlockErr('');
-    const pwd = (staffPortalUnlockPwd || '').trim();
-    if (!pwd) {
-      setStaffPortalUnlockErr('Enter the staff portal password.');
-      return;
-    }
-    setStaffPortalUnlockBusy(true);
-    try {
-      const res = await api.post('/auth/staff-portal-unlock', {
-        password: staffPortalUnlockPwd,
-        client_device_id: getOrCreateStaffPortalDeviceId(),
-      });
-      const tok = res.data?.staff_portal_token;
-      if (!tok) {
-        setStaffPortalUnlockErr('Unexpected response.');
-        return;
-      }
-      setStaffPortalToken(tok);
-      setStaffPortalUnlockPwd('');
-      setStaffPortalClientTick((n) => n + 1);
-      toast.success('Staff portal unlocked — profile tools are active.');
-    } catch (err) {
-      const d = err?.response?.data?.detail;
-      setStaffPortalUnlockErr(typeof d === 'string' ? d : 'Unlock failed.');
-    } finally {
-      setStaffPortalUnlockBusy(false);
-    }
-  };
+  useEffect(() => {
+    const bump = () => setStaffPortalClientTick((n) => n + 1);
+    window.addEventListener('staff-portal-session-changed', bump);
+    window.addEventListener('staff-portal-expired', bump);
+    return () => {
+      window.removeEventListener('staff-portal-session-changed', bump);
+      window.removeEventListener('staff-portal-expired', bump);
+    };
+  }, []);
 
   const fetchKillDebug = async () => {
     if (!staffCanUseAdminApi) {
@@ -731,47 +705,9 @@ const ProfileInfoCard = ({
               <span className="text-amber-100/70 hidden sm:inline"> (same session as Admin)</span>
             </div>
           ) : staffPortalEnabled && !portalUnlocked ? (
-            <form
-              onSubmit={submitProfileStaffPortalUnlock}
-              className="prof-staff-unlock px-2.5 py-1.5 md:px-3 md:py-2 bg-zinc-950/85 border-b border-primary/30"
-            >
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider">
-                  Staff portal
-                </span>
-                <span className="text-[8px] text-mutedForeground font-heading tabular-nums">
-                  ~{staffPortalSessionMin}m session
-                </span>
-              </div>
-              <div className="prof-staff-unlock-row flex flex-col sm:flex-row sm:items-stretch gap-1.5 sm:gap-2">
-                <input
-                  type="password"
-                  value={staffPortalUnlockPwd}
-                  onChange={(ev) => setStaffPortalUnlockPwd(ev.target.value)}
-                  placeholder="Portal password"
-                  autoComplete="current-password"
-                  className="w-full sm:max-w-xs rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-foreground min-h-9"
-                  disabled={staffPortalUnlockBusy}
-                  aria-label="Staff portal password"
-                />
-                <button
-                  type="submit"
-                  disabled={staffPortalUnlockBusy}
-                  className="px-3 py-1.5 min-h-9 rounded border border-primary/50 bg-primary/20 text-primary text-[9px] font-heading font-bold uppercase tracking-wider hover:bg-primary/30 disabled:opacity-50 shrink-0 touch-manipulation"
-                >
-                  {staffPortalUnlockBusy ? '…' : 'Unlock'}
-                </button>
-              </div>
-              {staffPortalUnlockErr ? (
-                <p className="text-[10px] text-red-400 mt-1 font-heading" role="alert">
-                  {staffPortalUnlockErr}
-                </p>
-              ) : (
-                <p className="text-[8px] text-mutedForeground mt-1 hidden sm:block">
-                  Same second factor as Admin. Required for profile admin API calls.
-                </p>
-              )}
-            </form>
+            <div className="px-2.5 py-1.5 md:px-3 bg-zinc-950/70 border-b border-primary/20 text-[9px] font-heading text-mutedForeground leading-snug">
+              Unlock staff tools with the lock icon next to your name on the stats panel.
+            </div>
           ) : (
             <>
           <StaffProfileActions
@@ -1553,7 +1489,6 @@ export default function Profile() {
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
   const [staffLoginSession, setStaffLoginSession] = useState(false);
   const [staffPortalEnabled, setStaffPortalEnabled] = useState(false);
-  const [staffPortalSessionMin, setStaffPortalSessionMin] = useState(30);
   const [prefs, setPrefs] = useState(DEFAULT_NOTIFICATION_PREFERENCES);
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [toastMutedPages, setToastMutedPagesState] = useState(() => getToastMutedPages());
@@ -1597,6 +1532,7 @@ export default function Profile() {
   const [savingCustomBadge, setSavingCustomBadge] = useState(false);
   const [savingGlow, setSavingGlow] = useState(false);
   const [avatarLightbox, setAvatarLightbox] = useState(null);
+  const [messagePopupOpen, setMessagePopupOpen] = useState(false);
   const spotifyPlayerRef = React.useRef(null);
   const profileRequestIdRef = useRef(0);
 
@@ -1839,7 +1775,6 @@ export default function Profile() {
         setHasAdminEmail(!!adminRes.data?.has_admin_email);
         setStaffLoginSession(!!adminRes.data?.staff_login_session);
         setStaffPortalEnabled(!!adminRes.data?.staff_portal_enabled);
-        setStaffPortalSessionMin(Number(adminRes.data?.staff_portal_session_minutes) || 30);
       } catch (e) {
         if (!cancelled && !shouldSuppressResumeNetworkToast(e)) {
           toast.error(getApiErrorMessage(e) || 'Failed to load your account');
@@ -2378,7 +2313,6 @@ export default function Profile() {
       setHasAdminEmail(!!r.data?.has_admin_email);
       setStaffLoginSession(!!r.data?.staff_login_session);
       setStaffPortalEnabled(!!r.data?.staff_portal_enabled);
-      setStaffPortalSessionMin(Number(r.data?.staff_portal_session_minutes) || 30);
       window.dispatchEvent(new CustomEvent('app:admin-changed'));
     } catch (_) {}
   };
@@ -3492,7 +3426,7 @@ export default function Profile() {
               profile={profile} 
               isMe={isMe}
               onAddToSearch={addToAttackSearches}
-              onSendMessage={profile.id ? () => navigate(`/inbox/chat/${profile.id}`) : undefined}
+              onSendMessage={profile.id ? () => setMessagePopupOpen(true) : undefined}
               onSendMoney={() => navigate('/bank', { state: { transferTo: profile.username } })}
               onOpenSettings={undefined}
               adminOnlineColor={me?.admin_online_color}
@@ -3518,7 +3452,6 @@ export default function Profile() {
               hasAdminEmail={hasAdminEmail}
               staffLoginSession={staffLoginSession}
               staffPortalEnabled={staffPortalEnabled}
-              staffPortalSessionMin={staffPortalSessionMin}
               onStaffActionDone={async () => {
                 await refetchProfile({ silent: true, usernameOverride: username || profile?.username });
               }}
@@ -3537,6 +3470,14 @@ export default function Profile() {
         )}
       </div>
 
+      {messagePopupOpen && profile?.id ? (
+        <ProfileMessagePopup
+          userId={profile.id}
+          username={profile.username}
+          onClose={() => setMessagePopupOpen(false)}
+          censorProfanity={!!(censorProfanity || me?.censor_profanity)}
+        />
+      ) : null}
       {avatarLightbox ? (
         <div
           className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/85"

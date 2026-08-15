@@ -68,9 +68,9 @@ export default function UserToField({ value, onChange, autoFocus = false, id = '
           if (results.length > 0) setOpen(true);
         }}
         placeholder="Search username…"
-        autoFocus={autoFocus}
+        autoFocus={autoFocus && typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches}
         autoComplete="off"
-        className="w-full min-h-9 bg-input border border-border rounded px-2.5 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+        className="w-full min-h-9 bg-input border border-border rounded px-2.5 py-1.5 text-[16px] lg:text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
       />
       {open && q.length > 0 && (
         <div className="absolute z-20 left-0 right-0 mt-0.5 max-h-48 overflow-y-auto border border-primary/20 bg-secondary rounded-md shadow-lg">

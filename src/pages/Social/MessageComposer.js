@@ -63,10 +63,10 @@ export default function MessageComposer({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        autoFocus={autoFocus}
+        autoFocus={autoFocus && typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches}
         disabled={sending || disabled}
         rows={3}
-        className={`w-full ${minHeightClass} bg-input border border-border rounded px-2.5 py-2 text-[11px] sm:text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y transition-colors`}
+        className={`w-full ${minHeightClass} bg-input border border-border rounded px-2.5 py-2 text-[16px] lg:text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y transition-colors`}
       />
 
       <div className="flex items-center gap-1.5">
@@ -129,7 +129,7 @@ export default function MessageComposer({
               value={gifUrl}
               onChange={(e) => onGifUrlChange(e.target.value)}
               placeholder="Paste GIF URL…"
-              className="w-full min-h-9 bg-input border border-border rounded px-2.5 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
+              className="w-full min-h-9 bg-input border border-border rounded px-2.5 py-1.5 text-[16px] lg:text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
             />
           )}
         </div>
