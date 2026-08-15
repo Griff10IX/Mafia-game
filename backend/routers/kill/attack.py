@@ -2877,6 +2877,19 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                         if bid in booze_ids and amt and int(amt) > 0:
                             inc[f"booze_carrying.{bid}"] = int(int(amt) * hitlist_mult)
                             inc[f"booze_carrying_cost.{bid}"] = 0
+                tokens = rewards.get("tokens")
+                token_parts = []
+                if isinstance(tokens, dict) and tokens:
+                    from routers.kill.hitlist import hitlist_npc_token_count_field
+                    for tt, amt in tokens.items():
+                        n = int(amt or 0)
+                        if n <= 0:
+                            continue
+                        field = hitlist_npc_token_count_field(str(tt))
+                        if not field:
+                            continue
+                        inc[field] = int(inc.get(field) or 0) + n
+                        token_parts.append(f"{n} {str(tt).replace('_', ' ')}")
                 # Prestige bonus: boost NPC hitlist kill cash rewards
                 from server import get_prestige_bonus as _get_prestige_bonus
                 _npc_mult = _get_prestige_bonus(current_user)["npc_mult"]
@@ -2935,6 +2948,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 if inc.get("respect_points"): reward_parts.append(f"{inc['respect_points']} respect")
                 if car_id: reward_parts.append("a car")
                 if isinstance(booze, dict) and booze: reward_parts.append("booze")
+                if token_parts: reward_parts.extend(token_parts)
                 success_message = f"You killed {target_name}! (NPC) You got: " + ", ".join(reward_parts) + "."
                 try:
                     _fire_and_forget(

@@ -80,19 +80,98 @@ HITLIST_NPC_NAMES = [
     "Frankie the Fist", "Lefty Louie", "Joey Bananas", "Paulie Walnuts",
 ]
 
-# 75% reduction for beta; points replaced with respect_points
+# Rank/difficulty only — kill payouts are rolled in _roll_hitlist_npc_rewards.
 HITLIST_NPC_TEMPLATES = [
-    {"id": "npc_1", "rank": 2, "rewards": {"cash": 100_000, "booze": {"bathtub_gin": 15}, "respect_points": 25}},
-    {"id": "npc_2", "rank": 4, "rewards": {"cash": 200_000, "respect_points": 50}},
-    {"id": "npc_3", "rank": 5, "rewards": {"rank_points": 120, "respect_points": 30}},
-    {"id": "npc_4", "rank": 3, "rewards": {"cash": 150_000, "booze": {"moonshine": 25}, "respect_points": 20}},
-    {"id": "npc_5", "rank": 6, "rewards": {"respect_points": 75, "rank_points": 90}},
-    {"id": "npc_6", "rank": 6, "rewards": {"cash": 250_000, "booze": {"rum_runners": 20}, "respect_points": 40}},
-    {"id": "npc_7", "rank": 5, "rewards": {"cash": 500_000, "respect_points": 60}},
-    {"id": "npc_8", "rank": 8, "rewards": {"rank_points": 225, "respect_points": 100}},
-    {"id": "npc_9", "rank": 3, "rewards": {"cash": 400_000, "booze": {"speakeasy_whiskey": 10, "needle_beer": 10}, "respect_points": 15}},
-    {"id": "npc_10", "rank": 7, "rewards": {"cash": 500_000, "booze": {"jamaica_ginger": 30}, "respect_points": 50}},
+    {"id": "npc_1", "rank": 2},
+    {"id": "npc_2", "rank": 4},
+    {"id": "npc_3", "rank": 5},
+    {"id": "npc_4", "rank": 3},
+    {"id": "npc_5", "rank": 6},
+    {"id": "npc_6", "rank": 6},
+    {"id": "npc_7", "rank": 5},
+    {"id": "npc_8", "rank": 8},
+    {"id": "npc_9", "rank": 3},
+    {"id": "npc_10", "rank": 7},
 ]
+
+HITLIST_NPC_CASH_MIN = 5_000_000
+HITLIST_NPC_CASH_MAX = 15_000_000
+HITLIST_NPC_RP_MIN = 500
+HITLIST_NPC_RP_MAX = 1000
+HITLIST_NPC_BOOZE_MIN = 10
+HITLIST_NPC_BOOZE_MAX = 50
+HITLIST_NPC_TOKEN_CHANCE = 0.5
+HITLIST_NPC_TOKEN_MIN = 2
+HITLIST_NPC_TOKEN_MAX = 4
+# Same types as Store → Tokens (not Game Pass).
+HITLIST_NPC_TOKEN_TYPES = (
+    "xp_crimes",
+    "xp_gta",
+    "melt",
+    "oc_reduced",
+    "booze",
+    "racket",
+    "properties",
+    "travel",
+    "jailbust_bonus",
+    "auto_rank_2h",
+    "crew_oc_auto_3h",
+    "auto_collect_12h",
+    "auto_collect_24h",
+    "jail_bailout",
+    "cooldown_skip_crime",
+    "cooldown_skip_gta",
+    "cooldown_skip_booze",
+    "cooldown_skip_properties",
+)
+
+
+def hitlist_npc_token_count_field(token_type: str) -> Optional[str]:
+    """User-doc field for a Store token type (Armoury config + jail bailout)."""
+    tt = (token_type or "").strip()
+    if not tt:
+        return None
+    from routers.kill.armoury import TOKEN_CONFIG
+    field = ((TOKEN_CONFIG.get(tt) or {}).get("count_field") or "").strip()
+    if field:
+        return field
+    if tt == "jail_bailout":
+        return "jail_bailout_tokens"
+    return None
+
+
+def _roll_hitlist_npc_rewards() -> dict:
+    """Cash, rank points, random booze, and a 50% store-token drop."""
+    from routers.money.booze_run import BOOZE_TYPES
+
+    booze_ids = [b["id"] for b in BOOZE_TYPES if b.get("id")]
+    booze_id = random.choice(booze_ids) if booze_ids else "bathtub_gin"
+    rewards = {
+        "cash": random.randint(HITLIST_NPC_CASH_MIN, HITLIST_NPC_CASH_MAX),
+        "rank_points": random.randint(HITLIST_NPC_RP_MIN, HITLIST_NPC_RP_MAX),
+        "booze": {booze_id: random.randint(HITLIST_NPC_BOOZE_MIN, HITLIST_NPC_BOOZE_MAX)},
+    }
+    if random.random() < HITLIST_NPC_TOKEN_CHANCE and HITLIST_NPC_TOKEN_TYPES:
+        tokens = {}
+        for _ in range(random.randint(HITLIST_NPC_TOKEN_MIN, HITLIST_NPC_TOKEN_MAX)):
+            tt = random.choice(HITLIST_NPC_TOKEN_TYPES)
+            tokens[tt] = int(tokens.get(tt) or 0) + 1
+        rewards["tokens"] = tokens
+    return rewards
+
+
+def _hitlist_npc_kill_reward_preview() -> dict:
+    """Min–max kill payouts shown on the Add NPC dropdown."""
+    return {
+        "cash": {"min": HITLIST_NPC_CASH_MIN, "max": HITLIST_NPC_CASH_MAX},
+        "rank_points": {"min": HITLIST_NPC_RP_MIN, "max": HITLIST_NPC_RP_MAX},
+        "booze": {"min": HITLIST_NPC_BOOZE_MIN, "max": HITLIST_NPC_BOOZE_MAX},
+        "tokens": {
+            "chance": HITLIST_NPC_TOKEN_CHANCE,
+            "min": HITLIST_NPC_TOKEN_MIN,
+            "max": HITLIST_NPC_TOKEN_MAX,
+        },
+    }
 
 
 async def _hitlist_npc_max_per_window_for_user(user: dict) -> int:
@@ -330,6 +409,7 @@ async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
         "seconds_until_next_slot": None,
         "window_next_frees_at": None,
         "seconds_until_window_frees": None,
+        "kill_rewards": _hitlist_npc_kill_reward_preview(),
     }
 
 
@@ -352,7 +432,7 @@ async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
     template = random.choice(HITLIST_NPC_TEMPLATES)
     hitlist_id = str(uuid.uuid4())
     npc_user_id = str(uuid.uuid4())
-    rewards = {k: v for k, v in (template.get("rewards") or {}).items() if k != "bullets"}
+    rewards = _roll_hitlist_npc_rewards()
     rank_id = max(1, min(template.get("rank", 1), len(RANKS)))
     rank_points = RANKS[rank_id - 1]["required_points"]
     rank_name = RANKS[rank_id - 1]["name"]

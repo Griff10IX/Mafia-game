@@ -148,14 +148,69 @@ function formatNpcRewardText(npcRewards) {
   const rewards = npcRewards && typeof npcRewards === 'object' ? npcRewards : {};
   const parts = [];
   for (const [k, v] of Object.entries(rewards)) {
-    if (!v || k === 'booze' || k === 'bullets' || k === 'car_id') continue;
+    if (!v || k === 'booze' || k === 'bullets' || k === 'car_id' || k === 'tokens') continue;
     const fmt = NPC_REWARD_LABELS[k];
     parts.push(fmt ? fmt(v) : `${Number(v).toLocaleString()} ${k.replace(/_/g, ' ')}`);
   }
-  if (rewards.booze && typeof rewards.booze === 'object' && Object.keys(rewards.booze).length > 0) {
-    parts.push('Booze');
+  if (rewards.booze && typeof rewards.booze === 'object') {
+    const qty = Object.values(rewards.booze).reduce((s, v) => s + Number(v || 0), 0);
+    if (qty > 0) parts.push(`${qty.toLocaleString()} booze`);
+  }
+  if (rewards.tokens && typeof rewards.tokens === 'object') {
+    const tokenBits = Object.entries(rewards.tokens)
+      .filter(([, amt]) => Number(amt) > 0)
+      .map(([tt, amt]) => `${Number(amt)} ${String(tt).replace(/_/g, ' ')}`);
+    if (tokenBits.length) parts.push(tokenBits.join(', '));
   }
   return parts.length ? parts.join(' · ') : 'Practice rewards';
+}
+
+const NPC_KILL_REWARD_FALLBACK = {
+  cash: { min: 5000000, max: 15000000 },
+  rank_points: { min: 500, max: 1000 },
+  booze: { min: 10, max: 50 },
+  tokens: { chance: 0.5, min: 2, max: 4 },
+};
+
+function npcKillRewardLines(preview) {
+  const src = preview && typeof preview === 'object' && preview.cash ? preview : NPC_KILL_REWARD_FALLBACK;
+  const lines = [];
+  const cash = src.cash;
+  if (cash && cash.min != null && cash.max != null) {
+    lines.push(`$${Number(cash.min).toLocaleString()}–$${Number(cash.max).toLocaleString()}`);
+  }
+  const xp = src.rank_points;
+  if (xp && xp.min != null && xp.max != null) {
+    lines.push(`${Number(xp.min).toLocaleString()}–${Number(xp.max).toLocaleString()} rank points`);
+  }
+  const booze = src.booze;
+  if (booze && booze.min != null && booze.max != null) {
+    lines.push(`${Number(booze.min).toLocaleString()}–${Number(booze.max).toLocaleString()} random booze`);
+  }
+  const tok = src.tokens;
+  if (tok && tok.min != null && tok.max != null) {
+    const pct = Math.round(Number(tok.chance != null ? tok.chance : 0.5) * 100);
+    lines.push(`${pct}% chance: ${Number(tok.min)}–${Number(tok.max)} store tokens`);
+  }
+  return lines;
+}
+
+function NpcKillRewardsDropdown({ preview }) {
+  const lines = npcKillRewardLines(preview);
+  if (!lines.length) return null;
+  return (
+    <details className="group rounded border border-zinc-700/40 bg-zinc-800/40 px-2 py-1.5">
+      <summary className="cursor-pointer list-none text-[9px] sm:text-[10px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1 hover:text-primary/80 transition-colors [&::-webkit-details-marker]:hidden">
+        <span className="group-open:rotate-90 transition-transform inline-block text-[8px]">▶</span>
+        Kill rewards
+      </summary>
+      <ul className="mt-1.5 space-y-0.5 text-[9px] sm:text-[10px] font-heading text-emerald-400/90 leading-snug">
+        {lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 function HitlistRewardCell({ item }) {
@@ -307,6 +362,8 @@ const YourStatusCard = ({ me, user, revealed, who, submitting, onBuyOff, onRevea
             )
           )}
         </div>
+
+        {npcStatus ? <NpcKillRewardsDropdown preview={npcStatus.kill_rewards} /> : null}
 
         {npcStatus && npcOnBoard > 0 && (
           <div className="rounded-lg bg-zinc-900/70 border border-primary/25 px-2.5 py-2 space-y-1">
