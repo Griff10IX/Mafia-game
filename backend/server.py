@@ -929,6 +929,7 @@ class UserResponse(BaseModel):
     account_locked_comment: Optional[str] = None  # user's one-time comment
     can_submit_comment: bool = False  # true when locked and no comment submitted yet
     email_verified: bool = True  # false until user clicks verification link
+    require_email_verification: bool = True  # admin play lock; off = unverified users can play
     respect_points: int = 0  # second currency; earn from activities, spend in store at 5x; not sendable/tradeable
     lifetime_respect_earned: int = 0  # monotonic earn total for Completed it / all-time board (not TTL'd)
     loot_box_pieces: int = 0
@@ -1634,11 +1635,15 @@ async def get_current_user(
 
 
 async def get_current_user_verified(current_user: dict = Depends(get_current_user)):
-    """Same as get_current_user but requires email_verified. Use for crimes, GTA, OC, attack, etc."""
+    """Same as get_current_user but requires email_verified when the admin play lock is on."""
     if current_user.get("email_verified") is False:
         # Staff accounts should not be blocked by email verification
         # (admins can handle user issues manually from in-game tools).
         if _is_admin(current_user) or _is_moderator(current_user):
+            return current_user
+        from utils.email_verification_setting import require_email_verification_enabled
+
+        if not await require_email_verification_enabled(db):
             return current_user
         raise HTTPException(
             status_code=403,

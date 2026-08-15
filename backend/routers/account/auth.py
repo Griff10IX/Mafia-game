@@ -27,6 +27,7 @@ from utils.game_pass_season import get_game_pass_season_public
 from utils.redeem_code_lifecycle import apply_redeem_code, RedeemCodeError
 from utils.username_rules import validate_username
 from utils.default_player_avatar import default_player_avatar_url
+from utils.email_verification_setting import require_email_verification_enabled
 
 
 class UserRegister(BaseModel):
@@ -502,11 +503,9 @@ def register(router):
         return "Desktop"
 
     async def _require_email_verification():
-        doc = await db.game_settings.find_one({"key": "require_email_verification"}, {"_id": 0, "value": 1})
-        # Default True when missing: email verification required unless explicitly disabled in admin
-        if doc is None:
-            return True
-        return bool(doc.get("value"))
+        from utils.email_verification_setting import require_email_verification_enabled
+
+        return await require_email_verification_enabled(db)
 
     async def _notify_admins_vpn_blocked(ip: str, context: str, details: str):
         """Send inbox notification to all admins when VPN/proxy block occurs, with provider info."""
@@ -2456,6 +2455,7 @@ def register(router):
                 account_locked_comment=u.get("account_locked_comment"),
                 can_submit_comment=bool(u.get("account_locked", False)) and not u.get("account_locked_comment"),
                 email_verified=bool(u.get("email_verified", True)),
+                require_email_verification=await require_email_verification_enabled(db),
                 respect_points=_safe_int(u.get("respect_points"), 0),
                 loot_box_pieces=_safe_int(u.get("loot_box_pieces"), 0),
                 profile_autoplay_video=bool(u.get("profile_autoplay_video", True)),

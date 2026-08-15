@@ -10060,6 +10060,9 @@ def register(router):
                 {"$set": {"value": body.require_email_verification}},
                 upsert=True,
             )
+            from utils.email_verification_setting import invalidate_require_email_verification_cache
+
+            invalidate_require_email_verification_cache()
         if body.block_proxy_vpn_login is not None:
             await db.game_settings.update_one(
                 {"_id": "main"},

@@ -15943,7 +15943,7 @@ export default function Admin() {
                 <span className="text-[10px] text-mutedForeground font-heading">Mod default (fallback if mod has not set a colour in Mod display)</span>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
+            <div className="flex flex-col gap-1 pt-2 border-t border-primary/10">
               <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
                 <input
                   type="checkbox"
@@ -15951,8 +15951,11 @@ export default function Admin() {
                   onChange={(e) => setRequireEmailVerification(e.target.checked)}
                   className="rounded border-input"
                 />
-                <span>Require email verification for new signups</span>
+                <span>Require email verification to play (and for new signups)</span>
               </label>
+              <p className="text-[10px] text-mutedForeground font-heading pl-6">
+                Off: everyone can play without verifying. On: unverified accounts are locked out of crimes, GTA, casinos, and other play actions; new signups must verify.
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
               <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">

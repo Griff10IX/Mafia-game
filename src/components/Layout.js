@@ -1895,7 +1895,7 @@ export default function Layout({ children }) {
   };
 
   // Staff accounts bypass the email verification requirement.
-  const needsEmailVerification = user && user.email_verified === false && !isAdmin && !isModerator;
+  const needsEmailVerification = user && user.email_verified === false && user.require_email_verification !== false && !isAdmin && !isModerator;
 
   // Keep the top "Verify email" banner honest: poll while showing, and sync when
   // another tab finishes /auth/verify-email (localStorage signal).
