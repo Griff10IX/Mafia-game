@@ -584,6 +584,18 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user), inc
                     unbustable_secs = left
             except Exception:
                 pass
+        row_until = None
+        raw_until = player.get("jail_until")
+        if raw_until:
+            try:
+                row_until = datetime.fromisoformat(str(raw_until).replace("Z", "+00:00"))
+                if row_until.tzinfo is None:
+                    row_until = row_until.replace(tzinfo=timezone.utc)
+                else:
+                    row_until = row_until.astimezone(timezone.utc)
+            except Exception:
+                row_until = None
+        jail_left = max(1, int((row_until - now).total_seconds())) if row_until else 0
         players_data.append(
             {
                 "username": username,
@@ -591,6 +603,8 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user), inc
                 "is_self": player["id"] == user_id,
                 "is_jail_list_npc": False,
                 "bust_reward_cash": reward_cash,
+                "jail_until": row_until.isoformat() if row_until else None,
+                "seconds_remaining": jail_left,
                 "unbustable": unbustable,
                 "unbustable_seconds": unbustable_secs,
                 **styling,

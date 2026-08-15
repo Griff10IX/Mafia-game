@@ -63,6 +63,17 @@ const JAIL_BACKGROUND_IMAGE =
   process.env.REACT_APP_JAIL_BACKGROUND_IMAGE ||
   `${(process.env.PUBLIC_URL || '')}/jail-background.png`;
 
+function jailTimeLeftSeconds(player, nowMs) {
+  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
+  if (player?.jail_until) {
+    const until = new Date(player.jail_until).getTime();
+    if (Number.isFinite(until)) {
+      return Math.max(0, Math.ceil((until - now) / 1000));
+    }
+  }
+  return Math.max(0, Number(player?.seconds_remaining) || 0);
+}
+
 /** Keep in sync with `JAIL_BUST_MIN_INTERVAL_SEC` in backend `routers/crime/jail.py`. */
 const JAIL_BUST_MIN_INTERVAL_SEC = 3;
 
@@ -266,6 +277,7 @@ const JailedPlayerRow = ({
   bustCooldownActive,
   adminOnlineColor,
   modDefaultOnlineColor,
+  nowTick,
 }) => {
   const legacyNpcRp = [16, 25].includes(Number(player?.rp_reward));
   const isNpc =
@@ -279,7 +291,7 @@ const JailedPlayerRow = ({
     (player.online_color ||
       (player.is_admin ? adminColor : player.is_moderator ? modColor : undefined));
 
-  const waitSecs = player.unbustable ? Math.max(1, Number(player.unbustable_seconds || 0)) : 0;
+  const jailSecs = jailTimeLeftSeconds(player, nowTick);
   const rewardCash = Number(player.bust_reward_cash ?? 0);
 
   return (
@@ -340,12 +352,12 @@ const JailedPlayerRow = ({
           </span>
         </div>
         <div className="shrink-0 w-10 text-center">
-          {waitSecs > 0 ? (
-            <span className="text-[10px] text-amber-300/90 font-heading tabular-nums" title={`Unbustable for ${waitSecs}s`}>
-              {waitSecs}s
+          {jailSecs > 0 ? (
+            <span className="text-[10px] text-red-400 font-heading tabular-nums" title={`${jailSecs}s left in jail`}>
+              {jailSecs}s
             </span>
           ) : (
-            <span className="text-[9px] text-mutedForeground">—</span>
+            <span className="text-[9px] text-mutedForeground" title={isNpc ? 'NPCs stay until busted' : undefined}>—</span>
           )}
         </div>
       </div>
@@ -453,6 +465,7 @@ export default function Jail() {
   const [privateCellLoading, setPrivateCellLoading] = useState(false);
   const [privateCellCooldownRemaining, setPrivateCellCooldownRemaining] = useState(0);
   const [bustCooldownRemaining, setBustCooldownRemaining] = useState(0);
+  const [listNowMs, setListNowMs] = useState(() => Date.now());
   const [user, setUser] = useState(cachedBoot?.me || null);
   const [staffListColors, setStaffListColors] = useState({
     admin_online_color: cachedPlayers.admin_online_color || '#a78bfa',
@@ -572,6 +585,13 @@ export default function Jail() {
   useEffect(() => {
     setPrivateCellCooldownRemaining(Math.max(0, Number(privateCell.cooldown_seconds) || 0));
   }, [privateCell.cooldown_seconds]);
+
+  const hasTimedInmate = jailedPlayers.some((p) => p?.jail_until || Number(p?.seconds_remaining) > 0);
+  useEffect(() => {
+    if (!hasTimedInmate) return undefined;
+    const id = window.setInterval(() => setListNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [hasTimedInmate]);
 
   useEffect(() => {
     if (privateCellCooldownRemaining <= 0) return undefined;
@@ -974,7 +994,7 @@ export default function Jail() {
           <span className="flex-1 min-w-0 text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Player</span>
           <div className="flex items-center gap-2 shrink-0">
             <span className="w-16 text-right text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Reward</span>
-            <span className="w-10 text-center text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Wait</span>
+            <span className="w-10 text-center text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Time</span>
           </div>
           <span className="w-[60px] shrink-0" aria-hidden />
         </div>
@@ -991,6 +1011,7 @@ export default function Jail() {
                 bustCooldownActive={bustCooldownRemaining > 0}
                 adminOnlineColor={staffListColors.admin_online_color}
                 modDefaultOnlineColor={staffListColors.mod_default_online_color}
+                nowTick={listNowMs}
               />
             ))}
           </div>
