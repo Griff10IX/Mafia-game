@@ -74,7 +74,9 @@ def register(router):
 
     async def _flag_enabled() -> bool:
         main = await db.game_settings.find_one({"_id": "main"}, {"_id": 0, "game_help_chat_enabled": 1})
-        return bool((main or {}).get("game_help_chat_enabled"))
+        if not main or "game_help_chat_enabled" not in main:
+            return True
+        return bool(main.get("game_help_chat_enabled"))
 
     async def _allowed(user: dict) -> bool:
         if _is_admin(user):

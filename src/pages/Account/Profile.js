@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown, Star, Eraser } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown, Star, Eraser, Eye } from 'lucide-react';
 import api, { apiGetWithResumeRetries, getApiErrorMessage, isTransientResumeLoadError, shouldSuppressResumeNetworkToast } from '../../utils/api';
 import {
   apiPostWithCivilianProtectionConfirm,
@@ -36,6 +36,17 @@ import { PROFILE_GLOW_BORDER_CSS, customGlowBorderStyle, PROFILE_GLOW_PRESETS } 
 import GlowPresetPicker from '../../components/GlowPresetPicker';
 import { isValidTelegramChatId } from '../../utils/telegramChatId';
 import ProfileMessagePopup from '../Social/ProfileMessagePopup';
+
+function formatProfileViewCount(n) {
+  const v = Math.max(0, Math.floor(Number(n) || 0));
+  if (v < 10000) return v.toLocaleString();
+  if (v < 1000000) {
+    const k = v / 1000;
+    return `${k >= 100 ? k.toFixed(0) : k.toFixed(1).replace(/\.0$/, '')}k`;
+  }
+  const m = v / 1000000;
+  return `${m >= 10 ? m.toFixed(0) : m.toFixed(1).replace(/\.0$/, '')}M`;
+}
 
 const PROFILE_EDIT_TAB_IDS = new Set(['look', 'text', 'alerts', 'privacy', 'account', 'staff']);
 const PROFILE_EDIT_TAB_KEY = 'profile_edit_tab';
@@ -587,21 +598,38 @@ const ProfileInfoCard = ({
             )}
           </div>
           <div className="min-w-0 flex-1 flex flex-col gap-1">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2 min-w-0">
               <span className="text-[8px] md:text-[9px] font-heading font-bold text-primary uppercase tracking-[0.16em]">
                 Dossier
               </span>
-              {isMe && onOpenSettings && (
-                <button
-                  type="button"
-                  onClick={onOpenSettings}
-                  className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95 touch-manipulation"
-                  title="Profile settings"
-                  aria-label="Profile settings"
-                >
-                  <Settings size={12} className="md:w-3.5 md:h-3.5" />
-                </button>
-              )}
+              <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                {profile.show_profile_view_count === true && profile.profile_view_count != null && (
+                  <span
+                    className="inline-flex items-center gap-0.5 sm:gap-1 h-6 md:h-7 px-1.5 sm:px-2 rounded-md border border-primary/25 bg-black/25 text-primary/90"
+                    title={`${Number(profile.profile_view_count).toLocaleString()} profile views`}
+                    aria-label={`${Number(profile.profile_view_count).toLocaleString()} profile views`}
+                  >
+                    <Eye size={11} className="shrink-0 opacity-80" aria-hidden />
+                    <span className="text-[9px] md:text-[10px] font-heading font-bold tabular-nums leading-none">
+                      {formatProfileViewCount(profile.profile_view_count)}
+                    </span>
+                    <span className="hidden sm:inline text-[8px] font-heading font-bold uppercase tracking-wider text-primary/70 leading-none">
+                      views
+                    </span>
+                  </span>
+                )}
+                {isMe && onOpenSettings && (
+                  <button
+                    type="button"
+                    onClick={onOpenSettings}
+                    className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95 touch-manipulation"
+                    title="Profile settings"
+                    aria-label="Profile settings"
+                  >
+                    <Settings size={12} className="md:w-3.5 md:h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
               <span className="text-[13px] sm:text-sm md:text-base font-heading font-bold text-foreground leading-tight break-words min-w-0" style={nameGlowStyle}>
@@ -1511,6 +1539,7 @@ export default function Profile() {
   const [hideJailbustsOnProfile, setHideJailbustsOnProfile] = useState(false);
   const [hideLeaderboardUsername, setHideLeaderboardUsername] = useState(false);
   const [showCountryFlagOnProfile, setShowCountryFlagOnProfile] = useState(false);
+  const [showProfileViewCount, setShowProfileViewCount] = useState(false);
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [savingAutoplay, setSavingAutoplay] = useState(false);
   const [censorProfanity, setCensorProfanity] = useState(false);
@@ -1560,7 +1589,7 @@ export default function Profile() {
     try {
       const profileRes = await apiGetWithResumeRetries(
         `/users/${encodeURIComponent(targetUsername)}/profile`,
-        { params: { include_honours: false } },
+        { params: { include_honours: false, count_view: true } },
       );
       if (reqId !== profileRequestIdRef.current) return null;
       const base = {
@@ -1926,12 +1955,14 @@ export default function Profile() {
         setHideJailbustsOnProfile(warm.hide_jailbusts_on_profile === true);
         setHideLeaderboardUsername(warm.hide_leaderboard_username === true);
         setShowCountryFlagOnProfile(warm.show_country_flag_on_profile === true);
+        setShowProfileViewCount(warm.show_profile_view_count === true);
       } else {
         setProfileAutoplayVideo(me?.profile_autoplay_video !== false);
         setHideKillsOnProfile(profile?.hide_kills_on_profile === true);
         setHideJailbustsOnProfile(profile?.hide_jailbusts_on_profile === true);
         setHideLeaderboardUsername(profile?.hide_leaderboard_username === true);
         setShowCountryFlagOnProfile(profile?.show_country_flag_on_profile === true);
+        setShowProfileViewCount(profile?.show_profile_view_count === true);
       }
       fetchPrefs();
       fetchToastPagePrefs();
@@ -1948,7 +1979,7 @@ export default function Profile() {
         clearTimeout(tCensor);
       };
     }
-  }, [isMe, viewPublic, profile, profile?.hide_kills_on_profile, profile?.hide_jailbusts_on_profile, profile?.hide_leaderboard_username, profile?.show_country_flag_on_profile, me?.profile_autoplay_video, me?.id]);
+  }, [isMe, viewPublic, profile, profile?.hide_kills_on_profile, profile?.hide_jailbusts_on_profile, profile?.hide_leaderboard_username, profile?.show_country_flag_on_profile, profile?.show_profile_view_count, me?.profile_autoplay_video, me?.id]);
 
   useEffect(() => {
     if (!isMe || viewPublic || !spotifyStatus?.spotify_connected || !spotifyStatus?.feature_enabled) {
@@ -2158,6 +2189,7 @@ export default function Profile() {
         hide_jailbusts_on_profile: hideJailbustsOnProfile,
         show_country_flag_on_profile: showCountryFlagOnProfile,
         hide_leaderboard_username: hideLeaderboardUsername,
+        show_profile_view_count: showProfileViewCount,
       });
       toast.success('Profile visibility saved');
       await refetchProfile({ silent: true, usernameOverride: me?.username });
@@ -3095,6 +3127,15 @@ export default function Profile() {
                   ) : (
                     <p className="text-[10px] text-mutedForeground">No region detected yet — browse the site and try again after your next request.</p>
                   )}
+                  <div className="flex items-center justify-between gap-3 py-1">
+                    <div className="min-w-0 pr-2">
+                      <span className="text-sm text-foreground block">Show profile views</span>
+                      <span className="text-[10px] text-mutedForeground">Off by default. When on, a view count appears in the top right of your dossier. Your own visits are not counted.</span>
+                    </div>
+                    <button type="button" role="switch" aria-checked={showProfileViewCount} disabled={savingVisibility} onClick={() => setShowProfileViewCount((v) => !v)} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${showProfileViewCount ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingVisibility ? 'opacity-60' : ''}`}>
+                      <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${showProfileViewCount ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
                   <button type="button" onClick={saveVisibility} disabled={savingVisibility} className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingVisibility ? 'Saving…' : 'Save'}</button>
                 </div>
                 <p className="text-[10px] text-mutedForeground">To show a car on your profile, open it from your <Link to="/cars/garage" className="text-primary hover:underline">Garage</Link> and use the <strong>Profile</strong> section on that page.</p>

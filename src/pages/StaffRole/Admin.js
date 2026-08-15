@@ -1591,7 +1591,7 @@ export default function Admin() {
   const [captchaFailUserDraft, setCaptchaFailUserDraft] = useState('');
   const [captchaFailUserQuery, setCaptchaFailUserQuery] = useState('');
   const [spotifyFeatureEnabled, setSpotifyFeatureEnabled] = useState(false);
-  const [gameHelpChatEnabled, setGameHelpChatEnabled] = useState(false);
+  const [gameHelpChatEnabled, setGameHelpChatEnabled] = useState(true);
   const [landingBannerEnabled, setLandingBannerEnabled] = useState(false);
   const [landingBannerMessage, setLandingBannerMessage] = useState('');
   const [stockMarketMaxPoints, setStockMarketMaxPoints] = useState(3000);

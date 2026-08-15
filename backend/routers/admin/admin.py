@@ -9927,7 +9927,7 @@ def register(router):
             user_request_pace_limit = 15
         user_request_pace_limit = max(5, min(100, user_request_pace_limit))
         spotify_feature_enabled = bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
-        game_help_chat_enabled = bool(main_doc.get("game_help_chat_enabled", False)) if main_doc else False
+        game_help_chat_enabled = bool(main_doc.get("game_help_chat_enabled", True)) if main_doc else True
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
         if store_points_auto_credit is None:
@@ -10650,7 +10650,7 @@ def register(router):
             user_request_pace_limit = 15
         user_request_pace_limit = max(5, min(100, user_request_pace_limit))
         spotify_feature_enabled = bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
-        game_help_chat_enabled = bool(main_doc.get("game_help_chat_enabled", False)) if main_doc else False
+        game_help_chat_enabled = bool(main_doc.get("game_help_chat_enabled", True)) if main_doc else True
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
         if store_points_auto_credit is None:

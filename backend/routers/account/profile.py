@@ -9,6 +9,9 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode, urlparse
 
+from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
+
 from routers.casinos.slots import SLOTS_FEATURE_ENABLED
 
 _VALID_TOAST_POSITIONS = frozenset(
@@ -116,6 +119,11 @@ async def ensure_profile_indexes(db):
         # notifications: count by user_id + type (profile inbox/sent aggregation)
         await db.notifications.create_index("user_id")
         await db.notifications.create_index([("user_id", 1), ("notification_type", 1)])
+        await db.profile_view_dedup.create_index([("owner_id", 1), ("viewer_id", 1)], unique=True)
+        try:
+            await db.profile_view_dedup.create_index("last_at", expireAfterSeconds=12 * 3600)
+        except Exception as e:
+            logger.warning("profile_view_dedup TTL: %s", e)
         logger.info("Profile indexes ensured.")
     except Exception as e:
         logger.warning("ensure_profile_indexes: %s", e)
@@ -160,6 +168,32 @@ def register(router):
     ChangePasswordRequest = srv.ChangePasswordRequest
     DashboardPreferencesRequest = srv.DashboardPreferencesRequest
     CARS = srv.CARS
+
+    async def _record_profile_view(owner_id: str, viewer_id: str) -> bool:
+        """Count one dossier open per viewer per owner within the TTL window. Returns True if incremented."""
+        if not owner_id or not viewer_id or owner_id == viewer_id:
+            return False
+        now = datetime.now(timezone.utc)
+        try:
+            prev = await db.profile_view_dedup.find_one_and_update(
+                {"owner_id": owner_id, "viewer_id": viewer_id},
+                {"$set": {"last_at": now}, "$setOnInsert": {"owner_id": owner_id, "viewer_id": viewer_id}},
+                upsert=True,
+                return_document=ReturnDocument.BEFORE,
+            )
+        except DuplicateKeyError:
+            return False
+        except Exception:
+            logger.warning("profile view dedup failed", exc_info=True)
+            return False
+        if prev is not None:
+            return False
+        try:
+            await db.users.update_one({"id": owner_id}, {"$inc": {"profile_view_count": 1}})
+        except Exception:
+            logger.warning("profile view increment failed", exc_info=True)
+            return False
+        return True
 
     class SpotifyEmbedUpdateBody(BaseModel):
         spotify_url: Optional[str] = None
@@ -734,12 +768,22 @@ def register(router):
     async def get_user_profile(
         username: str,
         include_honours: bool = Query(True),
+        count_view: bool = Query(False),
         current_user: dict = Depends(get_current_user),
     ):
         """View a user's profile (requires auth). Pass include_honours=0 with GET .../profile/honours for faster parallel loads."""
         user = await _find_user_by_profile_username(username, {"_id": 0, "password_hash": 0})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
+
+        view_task = None
+        if (
+            count_view
+            and not user.get("is_npc")
+            and current_user.get("id")
+            and current_user.get("id") != user.get("id")
+        ):
+            view_task = asyncio.create_task(_record_profile_view(user.get("id"), current_user.get("id")))
 
         _prestige_mult = float(user.get("prestige_rank_multiplier") or 1.0)
         rank_id, rank_name = get_rank_info(user.get("rank_points", 0), _prestige_mult)
@@ -1068,6 +1112,22 @@ def register(router):
         if is_own_profile:
             out["show_country_flag_on_profile"] = _show_country_flag
             out["last_seen_country"] = _profile_cc
+            out["show_profile_view_count"] = bool(user.get("show_profile_view_count", False))
+
+        counted_view = False
+        if view_task is not None:
+            try:
+                counted_view = bool(await view_task)
+            except Exception:
+                counted_view = False
+        show_views = bool(user.get("show_profile_view_count", False))
+        if show_views:
+            view_n = int(user.get("profile_view_count") or 0)
+            if counted_view:
+                view_n += 1
+            out["show_profile_view_count"] = True
+            out["profile_view_count"] = max(0, view_n)
+
         if not is_own_profile:
             for key in (
                 "last_seen",
@@ -2119,6 +2179,7 @@ def register(router):
         hide_jailbusts_on_profile: Optional[bool] = Body(None, embed=True),
         show_country_flag_on_profile: Optional[bool] = Body(None, embed=True),
         hide_leaderboard_username: Optional[bool] = Body(None, embed=True),
+        show_profile_view_count: Optional[bool] = Body(None, embed=True),
     ):
         """Hide kills/jailbusts on profile; optionally hide username on leaderboards (and profile honours)."""
         updates = {}
@@ -2130,6 +2191,8 @@ def register(router):
             updates["show_country_flag_on_profile"] = show_country_flag_on_profile
         if hide_leaderboard_username is not None:
             updates["hide_leaderboard_username"] = bool(hide_leaderboard_username)
+        if show_profile_view_count is not None:
+            updates["show_profile_view_count"] = bool(show_profile_view_count)
         if not updates:
             return {
                 "message": "No visibility changes",
@@ -2137,6 +2200,7 @@ def register(router):
                 "hide_jailbusts_on_profile": bool(current_user.get("hide_jailbusts_on_profile", False)),
                 "show_country_flag_on_profile": bool(current_user.get("show_country_flag_on_profile", False)),
                 "hide_leaderboard_username": bool(current_user.get("hide_leaderboard_username", False)),
+                "show_profile_view_count": bool(current_user.get("show_profile_view_count", False)),
             }
         await db.users.update_one({"id": current_user["id"]}, {"$set": updates})
         if "hide_leaderboard_username" in updates:
@@ -2154,6 +2218,7 @@ def register(router):
                 "hide_jailbusts_on_profile": 1,
                 "show_country_flag_on_profile": 1,
                 "hide_leaderboard_username": 1,
+                "show_profile_view_count": 1,
             },
         )
         return {
@@ -2162,6 +2227,7 @@ def register(router):
             "hide_jailbusts_on_profile": bool(doc.get("hide_jailbusts_on_profile", False)),
             "show_country_flag_on_profile": bool(doc.get("show_country_flag_on_profile", False)),
             "hide_leaderboard_username": bool(doc.get("hide_leaderboard_username", False)),
+            "show_profile_view_count": bool(doc.get("show_profile_view_count", False)),
         }
 
     @router.get("/profile/censor-profanity")
