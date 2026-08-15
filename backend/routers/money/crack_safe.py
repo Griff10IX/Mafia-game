@@ -56,7 +56,7 @@ SAFE_LOOT_PIECES_OPTIONS = (10, 15)
 
 SAFE_ENTRY_COST = 15_000_000
 SAFE_JACKPOT_SEED = 500_000_000
-SAFE_JACKPOT_PER_ATTEMPT = 250_000  # Each wrong guess adds this to the jackpot (entry fee stays separate)
+SAFE_JACKPOT_PER_ATTEMPT = SAFE_ENTRY_COST  # Each attempt's $15M entry goes into the jackpot
 SAFE_DIGITS = 5
 SAFE_MIN = 1
 SAFE_MAX = 9

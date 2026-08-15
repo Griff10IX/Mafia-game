@@ -595,7 +595,7 @@ export default function CrackSafe() {
       {/* Page header */}
       <div className="cs-fade-in">
         <p className="text-[9px] text-zinc-500 font-heading italic">
-          Enter 5 numbers between 1 and 9 to crack the safe. Each attempt costs {formatMoney(info?.entry_cost ?? 15_000_000)}.
+          Enter 5 numbers between 1 and 9 to crack the safe. Each attempt costs {formatMoney(info?.entry_cost ?? 15_000_000)} and that cash goes into the jackpot.
           After you crack it, wait 24h to play again or pay {formatMoney(info?.replay_cost ?? 15_000_000)} (max {info?.replay_max_per_day ?? 3} per UTC day).
         </p>
       </div>
@@ -737,7 +737,7 @@ export default function CrackSafe() {
             </div>
             <div className="p-2.5 space-y-1 text-xs font-heading" style={{ lineHeight: 1.6 }}>
               <p className="text-zinc-400">Enter 5 numbers between 1 and 9 to crack the safe!</p>
-              <p className="text-zinc-400">Each attempt costs <span className="text-primary font-semibold">{formatMoney(info?.entry_cost ?? 15_000_000)}</span>. As many attempts as you can afford until you win.</p>
+              <p className="text-zinc-400">Each attempt costs <span className="text-primary font-semibold">{formatMoney(info?.entry_cost ?? 15_000_000)}</span> and that cash goes into the jackpot. As many attempts as you can afford until you win.</p>
               <p className="text-zinc-400">After a jackpot win: <span className="text-amber-400 font-semibold">24h cooldown</span>, or pay <span className="text-amber-400 font-semibold">{formatMoney(info?.replay_cost ?? 15_000_000)}</span> to skip (max <span className="text-amber-400 font-semibold">{info?.replay_max_per_day ?? 3}</span> paid skips per UTC day). Entry fee still applies each guess. <span className="text-amber-500/90">Use the amber <span className="font-semibold text-amber-300">Pay to skip</span> panel directly under the jackpot.</span></p>
               <p className="text-zinc-400">Current Jackpot: <span className="text-yellow-400 font-bold">{formatMoney(info?.jackpot ?? 0)}</span></p>
               <p className="text-zinc-400">Total attempts: <span className="text-primary font-semibold">{(info?.total_attempts ?? 0).toLocaleString()}</span></p>
