@@ -44,6 +44,17 @@ rm -rf build.prev
 
 sudo systemctl reload nginx
 
+# After git reset --hard, ORIG_HEAD is the commit the server was on.
+# Restart even if the Windows bat missed it (local remotes already up to date).
+if [ "$restart_backend" -ne 1 ]; then
+  if git rev-parse --verify --quiet ORIG_HEAD >/dev/null; then
+    if git diff --name-only ORIG_HEAD HEAD -- backend | grep -qE '\.py$'; then
+      restart_backend=1
+      echo "deploy-after-pull.sh: backend Python changed vs previous live commit; restarting API"
+    fi
+  fi
+fi
+
 if [ "$restart_backend" -ne 1 ]; then
   echo "deploy-after-pull.sh: frontend swapped; backend left running"
   exit 0

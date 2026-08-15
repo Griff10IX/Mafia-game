@@ -1132,7 +1132,7 @@ html[data-mobile-compositor-safe="on"] .game-chat-notification-dot-mention {
 
 /* Phones: page entrance fades start at opacity 0 and flash black when a menu closes.
    Also apply for compositor-safe (iPhone landscape is >767px; Low Power Mode freezes fades). */
-@media (max-width: 767px) {
+@media (max-width: 767px), (prefers-reduced-motion: reduce) {
   [class*="-fade-in"],
   [class*="-scale-in"],
   .vc-enter {

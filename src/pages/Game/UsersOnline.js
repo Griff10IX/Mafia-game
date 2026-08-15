@@ -16,7 +16,10 @@ import {
 
 const UO_STYLES = `
   @keyframes uo-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-  .uo-fade-in { animation: uo-fade-in 0.35s ease-out both; }
+  .uo-fade-in { opacity: 1; }
+  @media (prefers-reduced-motion: no-preference) {
+    html:not([data-mobile-compositor-safe="on"]) .uo-fade-in { animation: uo-fade-in 0.35s ease-out both; }
+  }
   /* iOS Low Power Mode / reduced-motion can freeze fill-mode:both at opacity 0 (black page). */
   @media (prefers-reduced-motion: reduce) {
     .uo-preview-enter, .uo-preview-shimmer, .uo-hitlist, .uo-fade-in {

@@ -142,32 +142,6 @@ export const BADGE_STYLES = `
   .badge-anim-void     { animation: badge-void     2.5s ease-in-out infinite; }
 `;
 
-const BADGES_PAGE_STYLES = `
-  @keyframes rb-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-  .rb-fade-in { animation: rb-fade-in 0.4s ease-out both; }
-  .rb-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
-  .rb-progress-track { height: 8px; background: #333333; border-radius: 9999px; overflow: hidden; }
-
-  @media (max-width: 767px) {
-    .rb-cat-head {
-      display: grid !important;
-      grid-template-columns: auto minmax(0, 1fr) auto auto;
-      grid-template-areas:
-        "chev name count mini"
-        "bar bar bar bar";
-      column-gap: 8px;
-      row-gap: 4px;
-      align-items: center;
-      padding: 7px 8px !important;
-    }
-    .rb-cat-chev { grid-area: chev; }
-    .rb-cat-name { grid-area: name; min-width: 0; }
-    .rb-cat-count { grid-area: count; }
-    .rb-cat-bar { grid-area: bar; min-width: 0; }
-    .rb-cat-mini { grid-area: mini; }
-  }
-`;
-
 // ─── Crown components ─────────────────────────────────────────────────────────
 function CrownSingle({ color }) {
   return (
@@ -489,10 +463,10 @@ export default function RankingBadges() {
   const toggle = id => setOpen(prev => ({ ...prev, [id]: !prev[id] }));
 
   if (loading && !data) return (
-    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="ranking-badges-page">
+    <div className={`space-y-8 ${styles.pageContent} mobile-page-root`} data-testid="ranking-badges-page">
       <div className="flex flex-col items-center justify-center min-h-[30vh] gap-2">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-        <span className="text-mutedForeground text-[9px] font-heading uppercase tracking-wider">Loading badges...</span>
+        <span className="text-mutedForeground text-xs font-heading uppercase tracking-wider">Loading badges...</span>
       </div>
     </div>
   );
@@ -503,37 +477,30 @@ export default function RankingBadges() {
   const bonusByCategory = (data?.bonuses ?? []).reduce((acc, b) => { acc[b.id] = b; return acc; }, {});
 
   return (
-    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="ranking-badges-page">
-      <style>{BADGE_STYLES + BADGES_PAGE_STYLES}</style>
-      <p className="relative rb-fade-in text-[9px] text-zinc-500 font-heading italic inline-flex items-center gap-1.5 flex-wrap leading-none">
-        <span>Unlock milestone badges as you play. Higher tiers give bigger bonuses.</span>
-      </p>
+    <div className={`space-y-6 ${styles.pageContent} mobile-page-root`} data-testid="ranking-badges-page">
+      <style>{BADGE_STYLES}</style>
       <AutoRefreshNote seconds={60} />
 
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 rb-fade-in mobile-panel`}>
-        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
-            <Award size={10} />
-            Badge Tiers
-          </span>
-          <span className="text-[10px] text-primary font-heading font-bold tabular-nums">
-            {totalUnlocked}/{totalTiers}
+      {/* Tier legend */}
+      <div className={`${styles.panel} rounded-md p-4 border border-primary/20 mobile-panel`}>
+        <div className="flex items-center gap-2 mb-3">
+          <Award size={16} className="text-primary" />
+          <span className="font-heading text-sm font-bold text-foreground tracking-wider uppercase">
+            {totalUnlocked} / {totalTiers} unlocked
           </span>
         </div>
-        <div className="p-2 flex flex-wrap gap-3 items-end">
+        <div className="flex flex-wrap gap-3 items-end">
           {TIER_ORDER.map(tid => <LegendBadge key={tid} tierId={tid} />)}
         </div>
-        <div className="rb-art-line text-primary mx-2.5" />
       </div>
 
-      <div className="space-y-0.5 sm:space-y-1">
+      {/* Category accordions */}
+      <div className="space-y-2">
         {categories.map(cat => {
           const isOpen   = openCategories[cat.id] !== false;
           const catMeta  = CATEGORY_COLORS[cat.id] || CATEGORY_COLORS.crimes;
           const catColor = catMeta.color;
           const bonus    = bonusByCategory[cat.id];
-          const unlockedPct = cat.total_tiers ? Math.round((100 * cat.unlocked_count) / cat.total_tiers) : 0;
 
           const lastUnlockedTierId = [...(cat.tiers || [])]
             .filter(t => t.unlocked)
@@ -541,86 +508,68 @@ export default function RankingBadges() {
             .pop();
 
           return (
-            <div key={cat.id} className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 rb-fade-in mobile-panel`}>
-              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div key={cat.id} className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
               <button
                 type="button"
                 onClick={() => toggle(cat.id)}
-                className="rb-cat-head w-full flex items-center gap-2 px-2.5 py-1.5 min-h-9 text-left hover:bg-primary/5 transition-smooth touch-manipulation"
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-primary/5 transition-smooth"
               >
-                <span className="rb-cat-chev shrink-0">
-                  {isOpen
-                    ? <ChevronDown  size={12} style={{ color: catColor }} />
-                    : <ChevronRight size={12} style={{ color: catColor }} />
-                  }
-                </span>
-                <div className="rb-cat-name flex flex-col min-w-0">
-                  <span className="text-[9px] font-heading font-bold uppercase tracking-[0.12em]" style={{ color: catColor }}>
+                {isOpen
+                  ? <ChevronDown  size={14} style={{ color: catColor, flexShrink: 0 }} />
+                  : <ChevronRight size={14} style={{ color: catColor, flexShrink: 0 }} />
+                }
+                <div className="flex flex-col min-w-0">
+                  <span className="font-heading font-bold uppercase tracking-wider text-sm" style={{ color: catColor }}>
                     {cat.name}
                   </span>
                   {CATEGORY_DESCRIPTIONS[cat.id] && (
-                    <span className="text-[9px] text-mutedForeground font-heading truncate">
+                    <span className="text-[10px] text-mutedForeground font-heading">
                       {CATEGORY_DESCRIPTIONS[cat.id]}
                     </span>
                   )}
                   {bonus && (
-                    <span className="text-[9px] text-mutedForeground font-heading">
+                    <span className="text-[10px] text-mutedForeground font-heading">
                       +{bonus.bonus_pct}% {bonus.benefit}
                     </span>
                   )}
                 </div>
-                <span className="rb-cat-count text-[10px] text-mutedForeground shrink-0 font-heading tabular-nums">
+                <span className="text-mutedForeground text-xs shrink-0 font-heading">
                   {cat.unlocked_count}/{cat.total_tiers}
                 </span>
-                <div className="rb-cat-bar flex-1 min-w-0 flex items-center gap-1.5">
-                  <div className="rb-progress-track flex-1 min-w-[64px]">
+                <div className="flex-1 min-w-0 ml-1">
+                  <div className="h-1.5 bg-zinc-700/50 rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full"
+                      className="h-full rounded-full transition-all duration-700"
                       style={{
-                        width: `${unlockedPct}%`,
-                        minWidth: unlockedPct > 0 ? 4 : 0,
+                        width: `${cat.total_tiers ? (100 * cat.unlocked_count) / cat.total_tiers : 0}%`,
                         background: `linear-gradient(90deg, ${catColor}88, ${catColor}cc)`,
-                        transition: 'width 0.3s ease',
                       }}
-                      role="progressbar"
-                      aria-valuenow={unlockedPct}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
                     />
                   </div>
-                  <span className="text-[9px] sm:text-[10px] font-heading tabular-nums shrink-0 w-7" style={{ color: catColor }}>
-                    {unlockedPct}%
-                  </span>
                 </div>
                 {lastUnlockedTierId && (
-                  <div className="rb-cat-mini shrink-0">
+                  <div className="shrink-0 ml-2">
                     <MiniBadge tierId={lastUnlockedTierId} catColor={catColor} />
                   </div>
                 )}
               </button>
 
               {isOpen && (
-                <div className="px-2.5 pb-2 pt-1">
+                <div className="px-4 pb-5 pt-2">
                   {cat.next_target != null && (
-                    <div className="mb-2">
-                      <div className="flex justify-between gap-2 text-[9px] text-mutedForeground mb-1 font-heading tracking-wider">
-                        <span className="truncate">Progress → {cat.next_target_label}</span>
-                        <span className="tabular-nums shrink-0">{cat.progress_display}</span>
-                        <span className="tabular-nums shrink-0">{cat.percent_to_next}%</span>
+                    <div className="mb-4">
+                      <div className="flex justify-between text-[10px] text-mutedForeground mb-1.5 font-heading tracking-wider">
+                        <span>Progress → {cat.next_target_label}</span>
+                        <span>{cat.progress_display}</span>
+                        <span>{cat.percent_to_next}%</span>
                       </div>
-                      <div className="rb-progress-track">
+                      <div className="h-1.5 bg-zinc-800/60 rounded-full overflow-hidden">
                         <div
-                          className="h-full rounded-full"
+                          className="h-full rounded-full transition-all duration-700"
                           style={{
                             width: `${cat.percent_to_next}%`,
-                            minWidth: cat.percent_to_next > 0 ? 4 : 0,
                             background: `linear-gradient(90deg, ${catColor}66, ${catColor}aa)`,
-                            transition: 'width 0.3s ease',
                           }}
-                          role="progressbar"
-                          aria-valuenow={cat.percent_to_next}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
                         />
                       </div>
                     </div>
@@ -638,7 +587,6 @@ export default function RankingBadges() {
                   </div>
                 </div>
               )}
-              <div className="rb-art-line text-primary mx-2.5" />
             </div>
           );
         })}

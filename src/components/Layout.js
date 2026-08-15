@@ -350,10 +350,11 @@ function SidebarCatHeader({ label, classic }) {
   );
 }
 
-function RightStatGroup({ label, children }) {
+function RightStatGroup({ label, children, ruleStyle }) {
   return (
     <div className="space-y-0.5">
-      <p className="text-[8px] font-heading uppercase tracking-[0.14em] px-1 pb-0.5" style={{ color: 'var(--noir-muted)' }}>{label}</p>
+      {ruleStyle ? <div className="-mx-2" style={ruleStyle} aria-hidden="true" /> : null}
+      <p className="text-[8px] font-heading uppercase tracking-[0.14em] px-1 pb-0.5 pt-1.5" style={{ color: 'var(--noir-muted)' }}>{label}</p>
       {children}
     </div>
   );
@@ -966,6 +967,8 @@ export default function Layout({ children }) {
     const run = () => {
       if (cancelled) return;
       preloadRoute('/account/missions');
+      preloadRoute('/account/objectives');
+      preloadRoute('/game/users-online');
       prefetchMissionsPageData({ force: false }).catch(() => {});
     };
     let idleId = null;
@@ -1418,6 +1421,8 @@ export default function Layout({ children }) {
     if (!el || typeof el.animate !== 'function') return;
     try {
       if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+      if (document.documentElement.getAttribute('data-mobile-compositor-safe') === 'on') return;
+      if (window.matchMedia?.('(max-width: 767px)')?.matches) return;
       el.animate(
         [
           { opacity: 0.45, transform: 'translateY(6px)' },
@@ -3134,7 +3139,7 @@ export default function Layout({ children }) {
 
             {/* IMPROVEMENT 4: username + rank in header; page + user for logs */}
             <div
-              className={`h-12 flex flex-col justify-center px-2.5 border-b ${styles.borderGoldLight} shrink-0 gap-0.5`}
+              className="h-12 flex flex-col justify-center px-2.5 shrink-0 gap-0.5"
               style={isOldSchool ? {
                 background: 'linear-gradient(180deg, #5e5e5e 0%, #3a3a3a 55%, #2e2e2e 100%)',
                 borderColor: '#c8c8c8',
@@ -3160,11 +3165,12 @@ export default function Layout({ children }) {
                 )}
               </div>
             </div>
+            <div className="h-px w-full shrink-0" style={dividerStyle} aria-hidden="true" />
 
             <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2 min-h-0">
               {/* IMPROVEMENT 4: rank progress at top */}
               {rankProgress && (
-                <div className="pt-1 pb-2 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.12)' }}>
+                <div className="pt-1 pb-1">
                   <p className="text-[9px] font-heading uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-muted)' }}>Rank Progress</p>
                   <div className="h-2 w-full rounded-full overflow-hidden mb-1" style={{ backgroundColor: 'var(--noir-raised)' }}>
                     <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
@@ -3175,7 +3181,7 @@ export default function Layout({ children }) {
 
               {/* Stat rows — grouped so the list is scannable */}
               <div className="space-y-2.5">
-                <RightStatGroup label="Money">
+                <RightStatGroup label="Money" ruleStyle={dividerStyle}>
                   {[
                     { label: 'Cash', value: formatMoney(user.money), className: 'text-primary', isLink: true, to: '/bank' },
                     { label: 'Points', value: formatInt(user.points), isLink: true, to: '/game/store?tab=points' },
@@ -3189,7 +3195,7 @@ export default function Layout({ children }) {
                     <RightStatRow key={row.label} row={row} closeOnMobile={() => isMobileViewport && setRightSidebarOpen(false)} />
                   ))}
                 </RightStatGroup>
-                <RightStatGroup label="Combat">
+                <RightStatGroup label="Combat" ruleStyle={dividerStyle}>
                   {[
                     { label: 'Health', value: Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%', className: Number(user.health) > 50 ? 'text-emerald-400' : Number(user.health) > 25 ? 'text-amber-400' : 'text-red-400', isLink: true, to: '/game/store?tab=upgrades' },
                     { label: 'Kills', value: formatInt(user.total_kills), className: 'text-red-400', isLink: true, to: '/kill/attack' },
@@ -3200,7 +3206,7 @@ export default function Layout({ children }) {
                     <RightStatRow key={row.label} row={row} closeOnMobile={() => isMobileViewport && setRightSidebarOpen(false)} />
                   ))}
                 </RightStatGroup>
-                <RightStatGroup label="Location">
+                <RightStatGroup label="Location" ruleStyle={dividerStyle}>
                   {[
                     { label: 'Location', value: user.current_state || user.location || '—', truncate: true, isLink: true, to: '/travel' },
                     {
@@ -3263,7 +3269,7 @@ export default function Layout({ children }) {
                 </form>
               </div>
 
-              <div className="h-px shrink-0" style={dividerStyle} />
+              <div className="h-px -mx-2 shrink-0" style={dividerStyle} aria-hidden="true" />
 
               <div className="space-y-1 pt-1">
                 <SameRouteAwareLink to="/game/leaderboard" onClick={() => isMobileViewport && setRightSidebarOpen(false)}

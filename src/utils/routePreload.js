@@ -20,7 +20,11 @@ const ROUTE_PRELOADERS = {
   '/account/game-events': () => import('../pages/Account/GameEvents'),
   '/account/inventory': () => import('../pages/Account/MyInventory'),
   '/account/profile': () => import('../pages/Account/Profile'),
-  '/account/objectives': () => import('../pages/Account/Objectives'),
+  '/account/objectives': () =>
+    Promise.all([
+      import('../pages/Account/Objectives'),
+      prefetchStatsAndObjectivesData({ force: false }).catch(() => null),
+    ]),
   '/account/missions': () =>
     Promise.all([
       import('../pages/Account/Missions'),

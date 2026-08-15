@@ -1,50 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, Banknote, Star, Clock, AlertCircle, XCircle, UserCheck, ChevronDown, ChevronRight, Wrench, Bot } from 'lucide-react';
+import { Users, Banknote, Star, Clock, AlertCircle, XCircle, UserCheck, ChevronDown, ChevronRight, Wrench, Check, Bot } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 const OC_STYLES = `
   @keyframes oc-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .oc-fade-in { animation: oc-fade-in 0.4s ease-out both; }
-  .oc-row:hover, .oc-role-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
+  .oc-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
   .oc-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
-
-  @media (max-width: 767px) {
-    .oc-row {
-      display: grid !important;
-      grid-template-columns: minmax(0, 1fr) auto;
-      grid-template-areas:
-        "name action"
-        "meta action";
-      column-gap: 8px;
-      row-gap: 3px;
-      align-items: center;
-      padding: 7px 8px !important;
-    }
-    .oc-row-name { grid-area: name; min-width: 0; }
-    .oc-row-meta { grid-area: meta; display: flex; align-items: center; gap: 6px; min-width: 0; }
-    .oc-row-action { grid-area: action; align-self: center; width: auto !important; justify-content: flex-end; }
-    .oc-row-name .oc-name-text {
-      white-space: normal;
-      overflow: visible;
-      text-overflow: clip;
-      line-height: 1.25;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-    }
-    .oc-row-action .oc-action-btn {
-      min-width: 4.25rem;
-      justify-content: center;
-    }
-    .oc-col-head { display: none !important; }
-  }
 `;
-
-const OC_ACTION_IDLE =
-  'oc-action-btn bg-zinc-700/50 text-mutedForeground rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed font-heading';
-const OC_ACTION_GO =
-  'oc-action-btn tap-feedback bg-primary/20 text-primary rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 active:scale-[0.97] transition-all touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed font-heading';
 
 const formatMoney = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 
@@ -126,9 +90,9 @@ const useCooldownTicker = (cooldownUntil, onCooldownExpired) => {
 const AutoRankIcon = () => (
   <span
     title="Auto Rank — Organised Crime is running automatically. Manual play disabled."
-    className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-sm border border-amber-500/40 bg-amber-500/10"
+    className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-amber-500/40 bg-amber-500/10 oc-fade-in"
   >
-    <Bot size={10} className="text-amber-400" />
+    <Bot size={14} className="text-amber-400" />
   </span>
 );
 
@@ -142,55 +106,48 @@ const EquipmentSection = ({ equipmentData, onSelect, selecting }) => {
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+      <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
         <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
           <Wrench size={10} />
           Equipment
         </span>
       </div>
-      <p className="px-2.5 pt-1.5 text-[9px] text-mutedForeground">
-        Pick gear for your next heist. Cost is charged when you run the heist. Better gear = higher success chance.
-      </p>
-      <div className="oc-col-head hidden md:flex items-center gap-3 px-2 pt-1.5 pb-0.5">
-        <span className="flex-1 min-w-0 text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Gear</span>
-        <span className="w-16 text-right text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Cost</span>
-        <span className="w-[60px] shrink-0" aria-hidden />
-      </div>
-      <div className="p-1.5 space-y-0.5 sm:space-y-1">
+      <div className="p-1.5 space-y-0.5">
+        <p className="text-[9px] text-mutedForeground">
+          Pick gear for your next heist. Cost is charged when you run the heist. Better gear = higher success chance.
+        </p>
+        <div className="space-y-0.5">
           {list.map((eq) => {
             const isSelected = eq.id === selectedId;
             const canAfford = eq.can_afford;
             const desc = (eq.description || '').replace(/%/g, '');
-            const locked = selecting || (eq.cost > 0 && !canAfford);
             return (
               <div
                 key={eq.id}
-                className={`oc-row flex items-center justify-between gap-3 px-2 py-1.5 rounded-md transition-all ${
-                  isSelected ? 'bg-primary/10 border border-primary/40' : 'bg-zinc-800/30 border border-transparent hover:border-primary/20'
+                className={`flex items-center justify-between gap-1.5 px-2 py-1 rounded border ${
+                  isSelected ? 'bg-primary/10 border-primary/40' : 'bg-zinc-800/20 border-zinc-700/50'
                 }`}
               >
-                <div className="oc-row-name flex items-center gap-1 min-w-0 flex-1">
-                  <span className="text-primary/50 text-[10px] shrink-0">▸</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="oc-name-text text-xs font-heading font-bold text-foreground truncate">{eq.name}</div>
-                    <div className="text-[9px] text-mutedForeground truncate hidden sm:block mt-0.5">{desc}</div>
-                  </div>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-heading font-bold text-foreground">{eq.name}</div>
+                  <div className="text-[9px] text-mutedForeground">{desc}</div>
                 </div>
-                <div className="oc-row-meta flex items-center gap-2 shrink-0">
-                  <span className="sm:hidden text-[9px] text-mutedForeground truncate max-w-[8rem]">{desc}</span>
-                  <div className="shrink-0 w-16 text-right">
-                    <span className="text-[10px] font-heading font-bold tabular-nums text-primary">{formatMoney(eq.cost)}</span>
-                  </div>
-                </div>
-                <div className="oc-row-action shrink-0 w-[60px] flex justify-end">
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-[10px] text-primary font-bold">{formatMoney(eq.cost)}</span>
                   {isSelected ? (
-                    <button type="button" disabled className={OC_ACTION_IDLE}>Ready</button>
+                    <span className="flex items-center gap-0.5 text-[9px] text-emerald-400 font-heading">
+                      <Check size={10} /> Selected
+                    </span>
                   ) : (
                     <button
                       type="button"
                       onClick={() => onSelect(eq.id)}
-                      disabled={locked}
-                      className={locked ? OC_ACTION_IDLE : OC_ACTION_GO}
+                      disabled={selecting || (eq.cost > 0 && !canAfford)}
+                      className={`px-1.5 py-0.5 text-[9px] font-bold uppercase rounded border ${
+                        selecting || (eq.cost > 0 && !canAfford)
+                          ? 'opacity-50 cursor-not-allowed bg-zinc-800/50 text-zinc-500 border-zinc-600/50'
+                          : 'bg-primary/20 text-primary border-primary/50 hover:bg-primary/30'
+                      }`}
                     >
                       {selecting ? '...' : 'Select'}
                     </button>
@@ -199,46 +156,41 @@ const EquipmentSection = ({ equipmentData, onSelect, selecting }) => {
               </div>
             );
           })}
+        </div>
       </div>
       <div className="oc-art-line text-primary mx-2.5" />
     </div>
   );
 };
 
-const JobRow = ({ job, selected, onSelect }) => (
-  <div
-    className={`oc-row flex items-center justify-between gap-3 px-2 py-1.5 rounded-md transition-all ${
-      selected
-        ? 'bg-primary/15 border border-primary/40'
-        : 'bg-zinc-800/30 border border-transparent hover:border-primary/20'
+// Job card for grid layout
+const JobCard = ({ job, selected, onSelect }) => (
+  <button
+    type="button"
+    onClick={() => onSelect(job.id)}
+    className={`flex flex-col p-1.5 rounded-md transition-all text-left ${
+      selected 
+        ? 'bg-primary/15 border-2 border-primary/50 shadow shadow-primary/10' 
+        : 'bg-zinc-800/30 border border-zinc-700/50 hover:border-primary/30 hover:bg-zinc-800/50'
     }`}
   >
-    <div className="oc-row-name flex items-center gap-1 min-w-0 flex-1">
-      <span className="text-primary/50 text-[10px] shrink-0">▸</span>
-      <span className="oc-name-text text-xs font-heading font-bold text-foreground truncate">{job.name}</span>
+    <div className="flex items-center gap-1 mb-1">
+      <span className={`w-2.5 h-2.5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+        selected ? 'border-primary bg-primary' : 'border-zinc-600'
+      }`}>
+        {selected && <span className="w-0.5 h-0.5 rounded-full bg-primaryForeground" />}
+      </span>
+      <span className="text-[11px] font-heading font-bold text-foreground truncate">{job.name}</span>
     </div>
-    <div className="oc-row-meta flex items-center gap-2 shrink-0">
-      <div className="shrink-0 w-20 text-right">
-        <span className="text-[10px] font-heading font-bold tabular-nums text-primary">
-          ${(job.cash || 0).toLocaleString()}
-        </span>
+    <div className="flex items-center justify-between gap-1 text-[10px] font-heading">
+      <span className="text-primary font-bold">${(job.cash || 0).toLocaleString()}</span>
+    </div>
+    {job.total_cost != null && (
+      <div className="text-[9px] font-heading text-red-400/80 mt-0.5">
+        Cost: ${(job.total_cost).toLocaleString()}
       </div>
-      <div className="shrink-0 w-16 text-right">
-        <span className="text-[10px] font-heading font-bold tabular-nums text-red-400">
-          {job.total_cost != null ? `$${Number(job.total_cost).toLocaleString()}` : '—'}
-        </span>
-      </div>
-    </div>
-    <div className="oc-row-action shrink-0 w-[60px] flex justify-end">
-      {selected ? (
-        <button type="button" disabled className={OC_ACTION_IDLE}>Ready</button>
-      ) : (
-        <button type="button" onClick={() => onSelect(job.id)} className={OC_ACTION_GO}>
-          Select
-        </button>
-      )}
-    </div>
-  </div>
+    )}
+  </button>
 );
 
 // Styled toggle button group for role assignment
@@ -256,7 +208,7 @@ const RoleToggleGroup = ({ roleId, value, onValueChange }) => {
           key={opt.id}
           type="button"
           onClick={() => onValueChange(opt.id)}
-          className={`px-2.5 py-1.5 min-h-9 text-[9px] font-heading font-bold uppercase transition-all touch-manipulation ${
+          className={`px-2 py-1 text-[9px] font-heading font-bold uppercase transition-all ${
             value === opt.id
               ? opt.id === 'self'
                 ? 'bg-emerald-500/20 text-emerald-400 border-r border-emerald-500/30'
@@ -275,26 +227,29 @@ const RoleToggleGroup = ({ roleId, value, onValueChange }) => {
 
 // Compact role slot row
 const RoleSlotRow = ({ roleId, value, onValueChange, inviteInput, onInviteChange, pct, onPctChange, isNpc }) => (
-  <div className="oc-role-row flex flex-wrap items-center gap-2 px-2 py-1.5 rounded-md bg-zinc-800/30 border border-transparent">
-    <div className="w-24 flex items-center gap-1 shrink-0">
+  <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-zinc-800/20 border border-transparent oc-row">
+    {/* Role name */}
+    <div className="w-20 flex items-center gap-1">
       <span className="text-[11px]">{ROLE_ICONS[roleId]}</span>
-      <span className="text-xs font-heading font-bold text-primary">{ROLE_LABELS[roleId] || roleId}</span>
+      <span className="text-[10px] font-heading font-bold text-primary">{ROLE_LABELS[roleId] || roleId}</span>
     </div>
 
-    <div className="flex items-center min-w-0">
-      <RoleToggleGroup roleId={roleId} value={value} onValueChange={onValueChange} />
-    </div>
+    {/* Toggle buttons */}
+    <RoleToggleGroup roleId={roleId} value={value} onValueChange={onValueChange} />
 
-    <div className="flex items-center gap-2 ml-auto shrink-0">
-      {value === 'invite' && (
-        <input
-          type="text"
-          placeholder="Username"
-          value={inviteInput}
-          onChange={(e) => onInviteChange(e.target.value)}
-          className="w-24 min-h-9 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 text-[10px] text-foreground focus:border-primary/50 focus:outline-none"
-        />
-      )}
+    {/* Invite input */}
+    {value === 'invite' && (
+      <input
+        type="text"
+        placeholder="Username"
+        value={inviteInput}
+        onChange={(e) => onInviteChange(e.target.value)}
+        className="w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-1.5 py-0.5 text-[10px] text-foreground focus:border-primary/50 focus:outline-none"
+      />
+    )}
+
+    {/* Percentage */}
+    <div className="flex items-center gap-0.5 ml-auto">
       <input
         type="number"
         min={0}
@@ -302,9 +257,9 @@ const RoleSlotRow = ({ roleId, value, onValueChange, inviteInput, onInviteChange
         value={pct}
         onChange={(e) => onPctChange(e.target.value)}
         readOnly={isNpc}
-        className={`w-12 min-h-9 border rounded px-1.5 text-[10px] text-right focus:outline-none tabular-nums ${
-          isNpc
-            ? 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground cursor-default'
+        className={`w-10 border rounded px-1 py-0.5 text-[10px] text-right focus:outline-none ${
+          isNpc 
+            ? 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground cursor-default' 
             : 'bg-zinc-900/50 border-zinc-700/50 text-foreground focus:border-primary/50'
         }`}
       />
@@ -315,18 +270,17 @@ const RoleSlotRow = ({ roleId, value, onValueChange, inviteInput, onInviteChange
 // Pending heist section
 const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, pendingSlotEdit, setPendingSlotEdit, setPendingSlot, manualPlayDisabled }) => {
   if (!status?.pending_heist) return null;
-  const waitStr = formatCooldown(status?.cooldown_until);
 
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-amber-500/30 oc-fade-in mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between">
+      <div className="px-2 py-1 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between">
         <span className="text-[9px] font-heading font-bold text-amber-400 uppercase tracking-[0.12em] flex items-center gap-1">
           <UserCheck size={10} />
           Pending Heist
         </span>
       </div>
-      <div className="p-1.5 space-y-0.5 sm:space-y-1">
+      <div className="p-1.5 space-y-0.5">
         {ROLE_IDS.map((roleId) => {
           const val = status.pending_heist[roleId];
           const inv = (status.pending_invites || []).find((i) => i.role === roleId);
@@ -337,13 +291,13 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
           const editing = pendingSlotEdit.role === roleId;
           
           return (
-            <div key={roleId} className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-zinc-800/30 text-[10px]">
-              <span className="w-24 font-heading font-bold text-primary flex items-center gap-1 shrink-0">
+            <div key={roleId} className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-800/30 text-[10px]">
+              <span className="w-16 font-heading font-bold text-primary flex items-center gap-0.5">
                 <span>{ROLE_ICONS[roleId]}</span> {ROLE_LABELS[roleId] || roleId}
               </span>
               <span className="font-heading text-foreground">{displayVal}</span>
               {inv && (
-                <span className={`px-1 py-0.5 rounded text-[8px] font-bold uppercase ${
+                <span className={`px-1 py-0.5 rounded text-[9px] font-bold ${
                   statusStr === 'accepted' 
                     ? 'bg-emerald-500/20 text-emerald-400' 
                     : statusStr === 'pending'
@@ -354,39 +308,39 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
                 </span>
               )}
               {canClear && (
-                <button type="button" onClick={() => onCancel(inv.invite_id)} className="text-mutedForeground hover:text-red-400 ml-auto min-h-9 min-w-9 inline-flex items-center justify-center touch-manipulation">
-                  <XCircle size={14} />
+                <button type="button" onClick={() => onCancel(inv.invite_id)} className="text-mutedForeground hover:text-red-400 ml-auto">
+                  <XCircle size={10} />
                 </button>
               )}
               {isEmpty && !editing && (
                 <button
                   type="button"
                   onClick={() => setPendingSlotEdit({ role: roleId, value: '' })}
-                  className={`${OC_ACTION_GO} ml-auto`}
+                  className="text-[9px] font-heading text-primary hover:underline ml-auto"
                 >
                   Set
                 </button>
               )}
               {isEmpty && editing && (
-                <div className="flex items-center gap-1 ml-auto">
+                <div className="flex items-center gap-0.5 ml-auto">
                   <input
                     type="text"
                     placeholder="npc / username"
                     value={pendingSlotEdit.value}
                     onChange={(e) => setPendingSlotEdit((p) => ({ ...p, value: e.target.value }))}
-                    className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 min-h-9 text-[10px] w-24 text-foreground focus:border-primary/50 focus:outline-none"
+                    className="bg-zinc-900/50 border border-zinc-700/50 rounded px-1.5 py-0.5 text-[9px] w-20 text-foreground focus:border-primary/50 focus:outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => { setPendingSlot(pendingSlotEdit.role, pendingSlotEdit.value); setPendingSlotEdit({ role: null, value: '' }); }}
-                    className={OC_ACTION_GO}
+                    className="text-[9px] font-bold text-primary"
                   >
-                    Set
+                    ✓
                   </button>
                   <button
                     type="button"
                     onClick={() => setPendingSlotEdit({ role: null, value: '' })}
-                    className={OC_ACTION_IDLE}
+                    className="text-[9px] text-mutedForeground"
                   >
                     ✕
                   </button>
@@ -405,9 +359,13 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
             (status.pending_invites || []).some((i) => i.status === 'pending') ||
             ROLE_IDS.some((r) => status.pending_heist[r] == null || status.pending_heist[r] === '')
           }
-          className={`w-full mt-1 ${manualPlayDisabled || executing || onCooldown ? OC_ACTION_IDLE : OC_ACTION_GO}`}
+          className={`w-full mt-1 rounded px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide touch-manipulation border ${
+            manualPlayDisabled
+              ? 'bg-zinc-700/50 text-mutedForeground border-zinc-600/50 cursor-not-allowed'
+              : 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed'
+          }`}
         >
-          {manualPlayDisabled ? 'Locked' : executing ? 'Running...' : onCooldown ? (waitStr ? `Wait · ${waitStr}` : 'Wait') : 'Run Heist'}
+          {manualPlayDisabled ? 'Locked' : executing ? 'Running...' : '🎯 Run Heist'}
         </button>
       </div>
     </div>
@@ -420,7 +378,7 @@ const InfoSection = ({ cooldownHours, isCollapsed, onToggle }) => (
     <button
       type="button"
       onClick={onToggle}
-      className="w-full px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors min-h-9"
+      className="w-full px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
     >
       <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         ℹ️ Rules
@@ -778,13 +736,13 @@ export default function OrganisedCrime() {
   const cooldownStr = formatCooldown(status?.cooldown_until);
 
   return (
-    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="organised-crime-page">
+    <div className={`space-y-1.5 ${styles.pageContent} mobile-page-root`} data-testid="organised-crime-page">
       <style>{OC_STYLES}</style>
 
-      <p className="relative oc-fade-in text-[9px] text-zinc-500 font-heading italic inline-flex items-center gap-1.5 flex-wrap leading-none">
-        <span>Pick a job, fill your crew, set cuts. Run the heist.</span>
+      <div className="relative oc-fade-in flex items-center gap-2 flex-wrap">
+        <p className="text-[9px] text-zinc-500 font-heading italic">Pick a job, fill your crew, set cuts. Run the heist.</p>
         {autoRankOcDisabled && <AutoRankIcon />}
-      </p>
+      </div>
 
       {/* Pending Heist */}
       <PendingHeistSection
@@ -811,26 +769,20 @@ export default function OrganisedCrime() {
       {/* Job Selection */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+        <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
             Select Job
           </span>
         </div>
-        <p className="px-2.5 pt-1.5 text-[9px] text-mutedForeground font-heading">
-          Reward shown in cyan, cost in red. Success chance is 50%; rest is fail or jail.
-        </p>
-        <div className="oc-col-head hidden md:flex items-center gap-3 px-2 pt-1.5 pb-0.5">
-          <span className="flex-1 min-w-0 text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Job</span>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="w-20 text-right text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Reward</span>
-            <span className="w-16 text-right text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Cost</span>
+        <div className="p-1.5">
+          <p className="text-[9px] text-mutedForeground font-heading mb-0.5">
+            Reward shown in cyan, cost in red. Success chance is 50%; rest is fail or jail.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
+            {(config.jobs || []).map((job) => (
+              <JobCard key={job.id} job={job} selected={selectedJobId === job.id} onSelect={setSelectedJobId} />
+            ))}
           </div>
-          <span className="w-[60px] shrink-0" aria-hidden />
-        </div>
-        <div className="p-1.5 space-y-0.5 sm:space-y-1">
-          {(config.jobs || []).map((job) => (
-            <JobRow key={job.id} job={job} selected={selectedJobId === job.id} onSelect={setSelectedJobId} />
-          ))}
         </div>
         <div className="oc-art-line text-primary mx-2.5" />
       </div>
@@ -838,7 +790,7 @@ export default function OrganisedCrime() {
       {/* Team Slots */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in mobile-panel`} style={{ animationDelay: '0.04s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+        <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
             Team & Cut
           </span>
@@ -846,12 +798,7 @@ export default function OrganisedCrime() {
             {pctTotal}
           </span>
         </div>
-        <div className="oc-col-head hidden md:flex items-center gap-3 px-2 pt-1.5 pb-0.5">
-          <span className="w-24 text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Role</span>
-          <span className="flex-1 text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Assign</span>
-          <span className="text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Cut</span>
-        </div>
-        <div className="p-1.5 space-y-0.5 sm:space-y-1">
+        <div className="p-1 space-y-0.5">
           {ROLE_IDS.map((roleId) => (
             <RoleSlotRow
               key={roleId}
@@ -890,9 +837,13 @@ export default function OrganisedCrime() {
           type="button"
           onClick={autoRankOcDisabled ? undefined : execute}
           disabled={autoRankOcDisabled || !canExecute || onCooldown || executing}
-          className={`w-full ${autoRankOcDisabled || !canExecute || onCooldown || executing ? OC_ACTION_IDLE : OC_ACTION_GO}`}
+          className={`w-full py-1.5 font-heading font-bold uppercase tracking-wider text-[10px] transition-all touch-manipulation rounded-md ${
+            autoRankOcDisabled || !canExecute || onCooldown || executing
+              ? 'opacity-50 cursor-not-allowed bg-zinc-800 text-mutedForeground border border-zinc-700'
+              : 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 shadow'
+          }`}
         >
-          {autoRankOcDisabled ? 'Locked' : executing ? 'Running...' : onCooldown ? `Wait · ${cooldownStr}` : hasInviteSlot() ? 'Send Invites' : 'Run Heist'}
+          {autoRankOcDisabled ? 'Locked' : executing ? 'Running...' : onCooldown ? `Cooldown ${cooldownStr}` : hasInviteSlot() ? '📨 Send Invites' : '🎯 Run Heist'}
         </button>
       )}
 

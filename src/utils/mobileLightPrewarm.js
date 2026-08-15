@@ -15,6 +15,8 @@ const LIGHT_CHUNK_PATHS = [
   '/kill/attack',
   '/crime/jail',
   '/account/profile',
+  '/account/objectives',
+  '/game/users-online',
 ];
 
 let ranForUserId = null;

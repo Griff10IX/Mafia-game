@@ -19,37 +19,6 @@ const JAIL_STYLES = `
   @keyframes j-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .j-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
   .j-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
-
-  @media (max-width: 767px) {
-    .j-row {
-      display: grid !important;
-      grid-template-columns: minmax(0, 1fr) auto;
-      grid-template-areas:
-        "name action"
-        "meta action";
-      column-gap: 8px;
-      row-gap: 3px;
-      align-items: center;
-      padding: 7px 8px !important;
-    }
-    .j-row-name { grid-area: name; min-width: 0; }
-    .j-row-meta { grid-area: meta; display: flex; align-items: center; gap: 6px; min-width: 0; }
-    .j-row-action { grid-area: action; align-self: center; width: auto !important; justify-content: flex-end; }
-    .j-row-name .j-name-text {
-      white-space: normal;
-      overflow: visible;
-      text-overflow: clip;
-      line-height: 1.25;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-    }
-    .j-row-action .j-action-btn {
-      min-width: 4.25rem;
-      justify-content: center;
-    }
-    .j-col-head { display: none !important; }
-  }
 `;
 // Applied only on the first visit per session — replaying the fade on every
 // navigation makes the page look like it fully reloaded.
@@ -159,7 +128,7 @@ const JailStatusCard = ({
               type="button"
               onClick={onLeaveJail}
               disabled={leavingJail}
-              className="bg-primary/20 text-primary rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1 font-heading"
+              className="bg-primary/20 text-primary rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1 font-heading"
             >
               <DoorOpen size={10} />
               {leavingJail ? 'Leaving...' : 'Leave Jail (3 pts)'}
@@ -169,7 +138,7 @@ const JailStatusCard = ({
                 type="button"
                 onClick={onBailoutToken}
                 disabled={bailingOut}
-                className="bg-violet-500/20 text-violet-300 rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-violet-500/40 hover:bg-violet-500/30 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1 font-heading"
+                className="bg-violet-500/20 text-violet-300 rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-violet-500/40 hover:bg-violet-500/30 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1 font-heading"
               >
                 {bailingOut ? '...' : `Bailout token (${bailoutTokens})`}
               </button>
@@ -178,7 +147,7 @@ const JailStatusCard = ({
               type="button"
               onClick={onSnitchClick}
               disabled={snitching}
-              className="bg-amber-500/20 text-amber-400 rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1 font-heading"
+              className="bg-amber-500/20 text-amber-400 rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1 font-heading"
               title="Snitch on someone to get released; they serve time and get a notification (not who did it)"
             >
               <UserMinus size={10} />
@@ -223,14 +192,14 @@ const JailStatusCard = ({
                 value={bustRewardInput}
                 onChange={onBustRewardChange}
                 placeholder="0"
-                className="w-full min-h-9 pl-5 pr-1.5 rounded border border-primary/30 bg-black/40 text-white text-[10px] font-heading focus:border-primary/50 focus:outline-none"
+                className="w-full h-6 pl-5 pr-1.5 rounded border border-primary/30 bg-black/40 text-white text-[10px] font-heading focus:border-primary/50 focus:outline-none"
               />
             </div>
             <button
               type="button"
               onClick={onSetReward}
               disabled={setRewardLoading}
-              className="min-h-9 px-2.5 rounded bg-primary/20 text-primary font-heading text-[9px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all touch-manipulation"
+              className="h-6 px-2 rounded bg-primary/20 text-primary font-heading text-[9px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all"
             >
               {setRewardLoading ? '...' : 'Set'}
             </button>
@@ -245,16 +214,11 @@ const JailStatusCard = ({
 const AutoRankIcon = () => (
   <span
     title="Auto Rank — Busts are running automatically. Manual play disabled."
-    className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-sm border border-amber-500/40 bg-amber-500/10"
+    className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-amber-500/40 bg-amber-500/10 j-fade-in"
   >
-    <Bot size={10} className="text-amber-400" />
+    <Bot size={14} className="text-amber-400" />
   </span>
 );
-
-const JAIL_ACTION_IDLE =
-  'j-action-btn bg-zinc-700/50 text-mutedForeground rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed font-heading';
-const JAIL_ACTION_BUST =
-  'j-action-btn tap-feedback bg-primary/20 text-primary rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 active:scale-[0.97] transition-all touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed font-heading';
 
 const JailedPlayerRow = ({
   player,
@@ -279,28 +243,25 @@ const JailedPlayerRow = ({
     (player.online_color ||
       (player.is_admin ? adminColor : player.is_moderator ? modColor : undefined));
 
-  const waitSecs = player.unbustable ? Math.max(1, Number(player.unbustable_seconds || 0)) : 0;
-  const rewardCash = Number(player.bust_reward_cash ?? 0);
-
   return (
     <div
-      className={`j-row flex items-center justify-between gap-3 px-2 py-1.5 rounded-md transition-all ${
+      className={`flex items-center justify-between gap-2 px-2 py-1 rounded-md transition-all j-row ${
         player.is_self
           ? 'bg-red-500/10 border border-red-500/20 opacity-60'
           : 'bg-zinc-800/30 border border-transparent hover:border-primary/20'
       }`}
       data-testid={`jailed-player-${index}`}
     >
-      <div className="j-row-name flex items-center gap-1 min-w-0 flex-1">
-        <span className="text-primary/50 text-[10px] shrink-0">▸</span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1 flex-wrap gap-y-0.5">
+      {/* Player info */}
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <div className="min-w-0">
+          <div className="text-[11px] font-heading font-bold truncate">
             {isNpc ? (
-              <span className="j-name-text text-xs font-heading font-bold text-foreground truncate">{player.username}</span>
+              <span className="text-foreground">{player.username}</span>
             ) : (
               <Link
                 to={`/profile/${encodeURIComponent(player.username)}`}
-                className={`j-name-text text-xs font-heading font-bold truncate transition-colors hover:underline ${displayColor ? '' : 'text-primary'}`}
+                className={`transition-colors hover:underline ${displayColor ? '' : 'text-primary'}`}
                 style={displayColor ? { color: displayColor } : undefined}
                 onPointerDown={() => warmProfilePrefetchFromUsername(player.username)}
                 onPointerEnter={() => warmProfilePrefetchFromUsername(player.username)}
@@ -308,64 +269,71 @@ const JailedPlayerRow = ({
                 {player.username}
               </Link>
             )}
-            {player.is_self ? (
-              <span className="px-1 py-0.5 rounded text-[8px] font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/40">You</span>
-            ) : isNpc ? (
-              <span
-                className={`px-1 py-0.5 rounded text-[8px] font-bold uppercase border ${
-                  player.private_cell_npc
-                    ? 'bg-violet-500/15 text-violet-300 border-violet-500/35'
-                    : 'bg-zinc-700/50 text-mutedForeground border-zinc-600/50'
-                }`}
-              >
-                {player.private_cell_npc ? 'Yours' : 'NPC'}
-              </span>
-            ) : null}
           </div>
-          <div className="text-[9px] text-mutedForeground truncate hidden sm:block mt-0.5">
+          <div className="text-[9px] text-mutedForeground truncate">
             {player.rank_name}
           </div>
         </div>
       </div>
 
-      <div className="j-row-meta flex items-center gap-2 shrink-0">
-        {player.rank_name ? (
-          <span className="j-rank-mobile text-[9px] text-mutedForeground truncate sm:hidden max-w-[7rem]">
-            {player.rank_name}
+      {/* Badge */}
+      <div className="shrink-0">
+        {player.is_self ? (
+          <span className="px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/40">
+            You
+          </span>
+        ) : player.unbustable ? (
+          <span className="px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-500/15 text-amber-300 border border-amber-500/35">
+            Unbustable
+          </span>
+        ) : isNpc ? (
+          <span
+            className={`px-1 py-0.5 rounded text-[9px] font-bold uppercase border ${
+              player.private_cell_npc
+                ? 'bg-violet-500/15 text-violet-300 border-violet-500/35'
+                : 'bg-zinc-700/50 text-mutedForeground border-zinc-600/50'
+            }`}
+          >
+            {player.private_cell_npc ? 'Yours' : 'NPC'}
           </span>
         ) : null}
-        <div className="shrink-0 w-16 text-right">
-          <span className="text-[10px] font-heading font-bold tabular-nums text-primary">
-            {rewardCash > 0 ? `$${rewardCash.toLocaleString()}` : '—'}
-          </span>
-        </div>
-        <div className="shrink-0 w-10 text-center">
-          {waitSecs > 0 ? (
-            <span className="text-[10px] text-amber-300/90 font-heading tabular-nums" title={`Unbustable for ${waitSecs}s`}>
-              {waitSecs}s
-            </span>
-          ) : (
-            <span className="text-[9px] text-mutedForeground">—</span>
-          )}
-        </div>
       </div>
 
-      <div className="j-row-action shrink-0 w-[60px] flex justify-end">
+      {/* Stats: cash reward only */}
+      <div className="flex items-center gap-2 text-[10px] font-heading shrink-0">
+        <span className="text-mutedForeground w-12 text-right">
+          {(player.bust_reward_cash ?? 0) > 0 ? `$${Number(player.bust_reward_cash ?? 0).toLocaleString()}` : '—'}
+        </span>
+      </div>
+
+      {/* Action */}
+      <div className="shrink-0 min-w-[4.5rem] flex justify-end">
         {player.is_self ? (
-          <span className="text-[9px] text-mutedForeground">—</span>
-        ) : player.unbustable || bustCooldownActive ? (
-          <button type="button" disabled className={JAIL_ACTION_IDLE}>Wait</button>
+          <span className="text-[10px] text-mutedForeground w-10 text-center inline-block">—</span>
+        ) : player.unbustable ? (
+          <span
+            className="text-[9px] text-amber-300/90 font-heading uppercase px-1"
+            title={`Unbustable for ${Math.max(1, Number(player.unbustable_seconds || 0))}s`}
+          >
+            {Math.max(1, Number(player.unbustable_seconds || 0))}s
+          </span>
         ) : manualPlayDisabled ? (
-          <button type="button" disabled className={JAIL_ACTION_IDLE}>Locked</button>
-        ) : (
+          <button
+            type="button"
+            disabled
+            className="bg-zinc-700/50 text-mutedForeground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed inline-flex items-center gap-0.5"
+          >
+            Locked
+          </button>
+        ) : bustCooldownActive ? null : (
           <button
             type="button"
             onClick={() => onBust(player.username)}
             disabled={loading || userInJail}
-            className={JAIL_ACTION_BUST}
+            className="bg-primary/20 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-0.5 font-heading"
             data-testid={`bust-out-${index}`}
           >
-            Bust
+            🔓 Bust
           </button>
         )}
       </div>
@@ -813,10 +781,9 @@ export default function Jail() {
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="jail-page">
       <style>{JAIL_STYLES + (animateIn ? JAIL_FADE_STYLES : '')}</style>
 
-      <p className="relative j-fade-in text-[9px] text-zinc-500 font-heading italic inline-flex items-center gap-1.5 flex-wrap leading-none">
-        <span>Bust out jailed players for RP. Set a reward if you get locked up.</span>
-        {autoRankJailDisabled && <AutoRankIcon />}
-      </p>
+      <div className="relative j-fade-in flex items-center gap-2 flex-wrap">
+        <p className="text-[9px] text-zinc-500 font-heading italic">Bust out jailed players for RP. Set a reward if you get locked up.</p>
+      </div>
 
       <JailStatusCard
         inJail={!!jailStatus.in_jail}
@@ -900,6 +867,12 @@ export default function Jail() {
         </div>
       )}
 
+      {autoRankJailDisabled && (
+        <div className="j-fade-in flex items-center justify-start">
+          <AutoRankIcon />
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2 j-fade-in rounded border border-primary/15 bg-zinc-900/40 px-2 py-1.5">
         <button
           type="button"
@@ -911,7 +884,7 @@ export default function Jail() {
             autoRankJailDisabled ||
             privateCell.global_npc_count > 0
           }
-          className="j-action-btn shrink-0 min-h-9 px-2.5 py-1.5 rounded border border-primary/40 bg-primary/15 text-primary text-[9px] font-heading font-bold uppercase tracking-wide hover:bg-primary/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all touch-manipulation"
+          className="shrink-0 px-2.5 py-1 rounded border border-primary/40 bg-primary/15 text-primary text-[9px] font-heading font-bold uppercase tracking-wide hover:bg-primary/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
           {privateCellLoading ? '…' : 'Private cell'}
         </button>
@@ -969,16 +942,7 @@ export default function Jail() {
             No players currently in jail
           </div>
         ) : (
-          <>
-        <div className="j-col-head hidden md:flex items-center gap-3 px-2 pt-1.5 pb-0.5">
-          <span className="flex-1 min-w-0 text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Player</span>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="w-16 text-right text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Reward</span>
-            <span className="w-10 text-center text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Wait</span>
-          </div>
-          <span className="w-[60px] shrink-0" aria-hidden />
-        </div>
-          <div className="p-1.5 space-y-0.5 sm:space-y-1">
+          <div className="p-1.5 space-y-0.5">
             {jailedPlayers.map((player, index) => (
               <JailedPlayerRow
                 key={player.username != null ? `${String(player.username)}-${index}` : `player-${index}`}
@@ -994,7 +958,6 @@ export default function Jail() {
               />
             ))}
           </div>
-          </>
         )}
         <div className="j-art-line text-primary mx-2.5" />
       </div>

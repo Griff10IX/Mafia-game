@@ -25,14 +25,70 @@ const PRESTIGE_CRIME_INFO = {
   5: { name: "Godfather's Orders",    dropType: 'Guaranteed ×1',    rewards: ['Cash', 'Respect', 'Booze', 'Bullets', 'Points'] },
 };
 
+const PRESTIGE_PAGE_STYLES = `
+  @keyframes prestige-glow { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.85; } }
+  .prestige-glow { animation: prestige-glow 3s ease-in-out infinite; }
+  @keyframes prestige-fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .prestige-fade { animation: prestige-fade 0.4s ease-out both; }
+  .pr-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+  .pr-progress-track { height: 8px; background: #333333; border-radius: 9999px; overflow: hidden; }
+
+  @media (max-width: 767px) {
+    .pr-row {
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "name action"
+        "meta action";
+      column-gap: 8px;
+      row-gap: 3px;
+      align-items: center;
+      padding: 7px 8px !important;
+    }
+    .pr-row-name { grid-area: name; min-width: 0; }
+    .pr-row-meta { grid-area: meta; display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+    .pr-row-action { grid-area: action; align-self: center; width: auto !important; justify-content: flex-end; }
+    .pr-row-name .pr-name-text {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      line-height: 1.25;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .pr-col-head { display: none !important; }
+  }
+`;
+
+const PR_ACTION_IDLE =
+  'pr-action-btn bg-zinc-700/50 text-mutedForeground rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed font-heading';
+const PR_ACTION_GO =
+  'pr-action-btn tap-feedback rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border transition-all touch-manipulation active:scale-[0.97] font-heading';
+
 function ProgressBar({ value, max, color }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return (
-    <div className="relative h-2 rounded-full bg-zinc-800/60 overflow-hidden">
-      <div
-        className="h-full rounded-full transition-all duration-700"
-        style={{ width: `${pct}%`, backgroundColor: color, boxShadow: pct > 0 ? `0 0 8px ${color}60` : undefined }}
-      />
+    <div className="flex items-center gap-1.5">
+      <div className="pr-progress-track flex-1 min-w-[64px]">
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: `${pct}%`,
+            minWidth: pct > 0 ? 4 : 0,
+            backgroundColor: color,
+            boxShadow: pct > 0 ? `0 0 8px ${color}60` : undefined,
+            transition: 'width 0.3s ease',
+          }}
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        />
+      </div>
+      <span className="text-[9px] sm:text-[10px] font-heading tabular-nums shrink-0 w-7" style={{ color }}>
+        {pct}%
+      </span>
     </div>
   );
 }
@@ -52,44 +108,15 @@ function benefitDefault(key) {
   return 1;
 }
 
-function LevelStatLines({ row, isUnlocked, color }) {
-  const lines = [
-    ['Points', `+${Number(row.points_reward ?? 0).toLocaleString()}`],
-    ['Crime', `+${Math.round(((row.crime_mult ?? 1) - 1) * 100)}%`],
-    ['OC', `+${Math.round(((row.oc_mult ?? 1) - 1) * 100)}%`],
-    ['GTA', `+${row.gta_rare_boost ?? 0}×`],
-    ['NPC', `+${Math.round(((row.npc_mult ?? 1) - 1) * 100)}%`],
-    ['Missions', `×${Number(row.mission_reward_mult ?? 1)}`],
-    ['Business', `+${Math.round(((row.illegal_business_mult ?? 1) - 1) * 100)}%`],
-    ['Ranks', `×${Number(row.rank_threshold_mult ?? 1)}`],
-  ];
-  return (
-    <div className="flex flex-col gap-1 mt-0.5 pt-2 border-t border-zinc-800/60">
-      {lines.map(([label, val]) => (
-        <div key={label} className="flex justify-between items-center text-[8px] font-heading">
-          <span className="text-zinc-600">{label}</span>
-          <span style={{ color: isUnlocked ? color : '#52525b' }} className="font-bold tabular-nums">{val}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// Horizontally scrollable level card for mobile levels section
-function LevelCard({ row, isCurrent, isUnlocked }) {
+function LevelRow({ row, isCurrent, isUnlocked }) {
   const color = PRESTIGE_COLORS[row.level];
   return (
     <div
-      className="flex-shrink-0 flex flex-col gap-1.5 rounded-xl p-3 border transition-all"
-      style={{
-        width: 140,
-        borderColor: isCurrent ? color : isUnlocked ? `${color}40` : 'rgba(63,63,70,0.5)',
-        backgroundColor: isCurrent ? `${color}0a` : isUnlocked ? `${color}05` : 'transparent',
-        boxShadow: isCurrent ? `0 0 0 1px ${color}` : undefined,
-      }}
+      data-level={row.level}
+      className="pr-row flex items-center justify-between gap-3 px-2 py-1.5 rounded-md transition-all"
+      style={isCurrent ? { backgroundColor: `${color}10`, border: `1px solid ${color}40` } : undefined}
     >
-      {/* Badge */}
-      <div className="flex items-center gap-2">
+      <div className="pr-row-name flex items-center gap-1.5 min-w-0 flex-1">
         {isUnlocked ? (
           <PrestigeBadge level={row.level} size="sm" />
         ) : (
@@ -97,33 +124,38 @@ function LevelCard({ row, isCurrent, isUnlocked }) {
             <Lock size={7} /> {ROMAN[row.level]}
           </span>
         )}
-        {isCurrent && (
-          <span
-            className="text-[7px] font-heading font-black uppercase tracking-widest px-1.5 py-0.5 rounded"
-            style={{ color, backgroundColor: `${color}20` }}
-          >
-            YOU
-          </span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1">
+            <span className="pr-name-text text-xs font-heading font-bold truncate" style={{ color: isUnlocked ? color : '#52525b' }}>
+              {row.name}
+            </span>
+            {isCurrent && (
+              <span className="px-1 py-0.5 rounded text-[8px] font-bold uppercase" style={{ color, backgroundColor: `${color}20` }}>
+                You
+              </span>
+            )}
+          </div>
+          <div className="text-[9px] text-mutedForeground truncate hidden sm:block mt-0.5 tabular-nums">
+            {(row.godfather_req || 0).toLocaleString()} RP
+            {(row.points_reward || 0) > 0 ? ` · +${Number(row.points_reward).toLocaleString()} pts` : ''}
+          </div>
+        </div>
+      </div>
+      <div className="pr-row-meta flex items-center gap-2 shrink-0 text-[10px] font-heading font-bold tabular-nums" style={{ color: isUnlocked ? color : '#52525b' }}>
+        <span className="sm:hidden">{(row.godfather_req || 0).toLocaleString()} RP</span>
+        <span className="hidden sm:inline w-16 text-right">+{Number(row.points_reward ?? 0).toLocaleString()}</span>
+        <span className="hidden sm:inline w-12 text-right">+{Math.round(((row.crime_mult ?? 1) - 1) * 100)}%</span>
+        <span className="hidden sm:inline w-12 text-right">+{Math.round(((row.oc_mult ?? 1) - 1) * 100)}%</span>
+      </div>
+      <div className="pr-row-action shrink-0 w-[60px] flex justify-end">
+        {isCurrent ? (
+          <span className="text-[9px] font-heading font-bold uppercase" style={{ color }}>You</span>
+        ) : isUnlocked ? (
+          <span className="text-[9px] text-mutedForeground font-heading uppercase">On</span>
+        ) : (
+          <button type="button" disabled className={PR_ACTION_IDLE}>Locked</button>
         )}
       </div>
-
-      {/* Name */}
-      <div
-        className="text-[9px] font-heading font-bold uppercase tracking-wide leading-tight"
-        style={{ color: isUnlocked ? color : '#52525b' }}
-      >
-        {row.name}
-      </div>
-
-      {/* Req */}
-      <div className="text-[8px] font-heading text-zinc-600 tabular-nums">
-        {(row.godfather_req || 0).toLocaleString()} RP
-        {(row.points_reward || 0) > 0 ? (
-          <span className="text-zinc-500"> · +{Number(row.points_reward).toLocaleString()} pts</span>
-        ) : null}
-      </div>
-
-      <LevelStatLines row={row} isUnlocked={isUnlocked} color={color} />
     </div>
   );
 }
@@ -186,8 +218,8 @@ export default function Prestige() {
 
   if (!hasLoaded) {
     return (
-      <div className={`space-y-3 md:space-y-4 ${styles.pageContent} mobile-page-root flex items-center justify-center min-h-[40vh]`}>
-        <span className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Loading prestige…</span>
+      <div className={`space-y-2 ${styles.pageContent} mobile-page-root flex items-center justify-center min-h-[40vh]`}>
+        <span className="text-[9px] font-heading uppercase tracking-wider text-mutedForeground">Loading prestige…</span>
       </div>
     );
   }
@@ -209,370 +241,311 @@ export default function Prestige() {
   const fadeClass = animateIn ? 'prestige-fade' : '';
 
   return (
-    <div className={`space-y-3 md:space-y-4 ${styles.pageContent} mobile-page-root`}>
-      <style>{`
-        @keyframes prestige-glow { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.85; } }
-        .prestige-glow { animation: prestige-glow 3s ease-in-out infinite; }
-        @keyframes prestige-fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        .prestige-fade { animation: prestige-fade 0.4s ease-out both; }
-        .levels-scroll::-webkit-scrollbar { display: none; }
-        .levels-scroll { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-      `}</style>
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="prestige-page">
+      <style>{PRESTIGE_PAGE_STYLES}</style>
 
-      {/* ── HERO CARD ──────────────────────────────────────────────────── */}
+      <p className={`relative ${fadeClass} text-[9px] text-zinc-500 font-heading italic inline-flex items-center gap-1.5 flex-wrap leading-none`}>
+        <span>Reach Godfather, then prestige. Rank resets. Bonuses stack.</span>
+      </p>
+
       <div
-        className={`relative ${styles.panel} rounded-xl overflow-hidden ${fadeClass} mobile-panel`}
+        className={`relative ${styles.panel} rounded-md overflow-hidden ${fadeClass} mobile-panel`}
         style={{ borderColor: `${color}30`, borderWidth: 1, borderStyle: 'solid' }}
       >
-        <div className="h-0.5" style={{ background: `linear-gradient(90deg, transparent, ${color}80, transparent)` }} />
-
-        <div className="px-4 py-4 md:px-5 md:py-5">
-          {/* Badge + name row — compact on mobile */}
-          <div className="flex items-center gap-3 mb-3">
-            <div className="shrink-0">
-              {level > 0
-                ? <PrestigeBadge level={level} size="lg" showLabel />
-                : <span className="inline-flex items-center gap-1.5 text-zinc-600 text-xs font-heading"><Star size={14} /> No Prestige Yet</span>
-              }
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[9px] text-zinc-600 font-heading uppercase tracking-[0.2em] mb-0.5 hidden sm:block">
-                La Cosa Nostra — Prestige
-              </p>
-              <h1
-                className="text-lg md:text-xl font-heading font-bold uppercase tracking-wider leading-tight"
-                style={{ color }}
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+          <span className="text-[9px] font-heading font-bold uppercase tracking-[0.12em] flex items-center gap-1" style={{ color }}>
+            <Star size={10} />
+            {level > 0 ? info.prestige_name : 'Begin Your Legacy'}
+          </span>
+          <span className="text-[10px] font-heading font-bold tabular-nums" style={{ color }}>
+            {info.at_max_prestige ? 'MAX' : `${level}/5`}
+          </span>
+        </div>
+        <div className="p-2 flex items-center gap-2">
+          <div className="shrink-0">
+            {level > 0
+              ? <PrestigeBadge level={level} size="lg" showLabel />
+              : <span className="inline-flex items-center gap-1.5 text-zinc-600 text-[10px] font-heading"><Star size={12} /> No Prestige Yet</span>
+            }
+          </div>
+          <div className="flex-1 min-w-0">
+            {level > 0 && (
+              <p className="text-[9px] text-mutedForeground font-heading">Level {level} of 5</p>
+            )}
+            {info.can_prestige && (
+              <button
+                type="button"
+                onClick={() => setShowConfirm(true)}
+                disabled={activating}
+                className={`${PR_ACTION_GO} mt-1.5`}
+                style={{
+                  background: `${nextColor}18`,
+                  borderColor: `${nextColor}50`,
+                  color: nextColor,
+                }}
               >
-                {level > 0 ? info.prestige_name : 'Begin Your Legacy'}
-              </h1>
-              {level > 0 && (
-                <p className="text-[10px] text-zinc-500 font-heading mt-0.5">Level {level} of 5</p>
-              )}
-            </div>
-            {/* MAX badge on desktop — on mobile moves below */}
-            {info.at_max_prestige && (
-              <span
-                className="hidden sm:inline px-3 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-widest border shrink-0"
-                style={{ borderColor: `${color}40`, color, backgroundColor: `${color}10` }}
-              >
-                MAX
-              </span>
+                {activating ? '...' : `Prestige → ${level + 1}`}
+              </button>
             )}
           </div>
-
-          {/* ── MOBILE: benefit chips row ─────────────────────────────── */}
-          {level > 0 && (
-            <div className="flex gap-2 mb-3 md:hidden overflow-x-auto pb-1 -mx-1 px-1">
-              {BENEFIT_ROWS.map(({ key, label, fmt }) => {
-                const val = info.current_benefits?.[key] ?? benefitDefault(key);
-                const short = label.split(' ')[0];
-                return (
-                  <div
-                    key={key}
-                    className="min-w-[4.25rem] flex-shrink-0 flex flex-col items-center py-1.5 px-1.5 rounded-lg border"
-                    style={{ borderColor: `${color}22`, backgroundColor: `${color}07` }}
-                  >
-                    <span className="text-[7px] font-heading text-zinc-600 uppercase tracking-wider mb-0.5">{short}</span>
-                    <span className="text-[11px] font-heading font-bold tabular-nums" style={{ color }}>{fmt(val)}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* ── CTA button: full-width on mobile, inline on desktop ───── */}
-          {info.can_prestige && (
-            <button
-              onClick={() => setShowConfirm(true)}
-              disabled={activating}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs font-heading font-bold uppercase tracking-widest transition-all active:scale-[0.98] touch-manipulation"
-              style={{
-                background: `${nextColor}18`,
-                border: `1px solid ${nextColor}50`,
-                color: nextColor,
-                boxShadow: `0 0 16px ${nextColor}20`,
-              }}
-            >
-              <Star size={13} />
-              {activating ? 'Prestiging…' : `Prestige → Level ${level + 1}`}
-            </button>
-          )}
-
-          {/* MAX badge on mobile */}
-          {info.at_max_prestige && (
-            <div
-              className="sm:hidden mt-1 w-full flex items-center justify-center py-2.5 rounded-xl border text-[11px] font-heading font-bold uppercase tracking-widest"
-              style={{ borderColor: `${color}40`, color, backgroundColor: `${color}10` }}
-            >
-              MAX PRESTIGE
-            </div>
-          )}
         </div>
+        <div className="pr-art-line text-primary mx-2.5" />
       </div>
 
-      {/* ── PROGRESS — full-width on mobile ────────────────────────────── */}
       {!info.at_max_prestige && (
         <div
-          className={`${styles.panel} rounded-xl overflow-hidden ${fadeClass} mobile-panel`}
+          className={`relative ${styles.panel} rounded-md overflow-hidden ${fadeClass} mobile-panel`}
           style={{ animationDelay: '0.05s' }}
         >
-          <div className="px-4 py-3 border-b border-zinc-800/40 flex items-center gap-2">
-            <TrendingUp size={14} style={{ color: nextColor }} />
-            <span className="text-xs font-heading font-bold uppercase tracking-widest" style={{ color: nextColor }}>
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+            <span className="text-[9px] font-heading font-bold uppercase tracking-[0.12em] flex items-center gap-1" style={{ color: nextColor }}>
+              <TrendingUp size={10} />
               Path to Prestige {level + 1}
             </span>
+            <span className="text-[10px] font-heading font-bold tabular-nums" style={{ color: nextColor }}>
+              {prestigePathMet ? '100%' : `${effRpNum.toLocaleString()} / ${pathTargetNum.toLocaleString()}`}
+            </span>
           </div>
-          <div className="p-4 space-y-3">
-            <div>
-              <div className="flex items-center justify-between mb-1.5 gap-2">
-                <span className="text-[10px] font-heading text-zinc-500">Progress</span>
-                <span className="text-[10px] font-heading font-bold tabular-nums shrink-0" style={{ color: nextColor }}>
-                  {prestigePathMet
-                    ? '100%'
-                    : `${effRpNum.toLocaleString()} / ${pathTargetNum.toLocaleString()}`}
-                </span>
-              </div>
-              <ProgressBar value={effRpNum} max={pathTargetNum || 1} color={nextColor} />
-              {!prestigePathMet && (
-                <p className="text-[9px] text-zinc-600 font-heading mt-1.5">
-                  Target {pathTargetNum.toLocaleString()} RP (Godfather tier is{' '}
-                  {(info.godfather_effective_threshold ?? 0).toLocaleString()}
-                  {godReqNum > (info.godfather_effective_threshold ?? 0)
-                    ? `; prestige gate ${godReqNum.toLocaleString()}`
-                    : ''}
-                  ). Higher prestige makes each street rank (Rat→Godfather) require more RP than the last prestige.
-                </p>
-              )}
-            </div>
-
-            {/* Stat rows */}
-            <div className="flex flex-col gap-1.5 pt-1">
+          <div className="p-2 space-y-2">
+            <ProgressBar value={effRpNum} max={pathTargetNum || 1} color={nextColor} />
+            {!prestigePathMet && (
+              <p className="text-[9px] text-mutedForeground font-heading">
+                Target {pathTargetNum.toLocaleString()} RP (Godfather tier is{' '}
+                {(info.godfather_effective_threshold ?? 0).toLocaleString()}
+                {godReqNum > (info.godfather_effective_threshold ?? 0)
+                  ? `; prestige gate ${godReqNum.toLocaleString()}`
+                  : ''}
+                ). Higher prestige makes each street rank (Rat→Godfather) require more RP than the last prestige.
+              </p>
+            )}
+            <div className="flex flex-col gap-1">
               {[
                 ['Current rank',   info.rank_name, 'primary'],
                 ['Rank points',    info.rank_points.toLocaleString(), 'fg'],
                 ['Effective RP',   effectiveRp.toLocaleString(), 'fg'],
               ].map(([label, val, tone]) => (
                 <div key={label} className="flex justify-between items-center text-[10px] font-heading">
-                  <span className="text-zinc-500">{label}</span>
-                  <span
-                    className={`font-bold tabular-nums ${tone === 'primary' ? 'text-primary' : 'text-foreground'}`}
-                  >
+                  <span className="text-mutedForeground">{label}</span>
+                  <span className={`font-bold tabular-nums ${tone === 'primary' ? 'text-primary' : 'text-foreground'}`}>
                     {val}
                   </span>
                 </div>
               ))}
             </div>
           </div>
+          <div className="pr-art-line text-primary mx-2.5" />
         </div>
       )}
 
-      {/* MAX PRESTIGE reached */}
       {info.at_max_prestige && (
         <div
-          className={`${styles.panel} rounded-xl overflow-hidden ${fadeClass} mobile-panel`}
+          className={`relative ${styles.panel} rounded-md overflow-hidden ${fadeClass} mobile-panel`}
           style={{ animationDelay: '0.05s' }}
         >
-          <div className="px-4 py-3 border-b border-zinc-800/40 flex items-center gap-2">
-            <TrendingUp size={14} style={{ color }} />
-            <span className="text-xs font-heading font-bold uppercase tracking-widest" style={{ color }}>Maximum Reached</span>
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+            <span className="text-[9px] font-heading font-bold uppercase tracking-[0.12em] flex items-center gap-1" style={{ color }}>
+              <TrendingUp size={10} />
+              Maximum Reached
+            </span>
           </div>
-          <div className="p-6 text-center">
-            <Star size={28} className="mx-auto mb-2" style={{ color }} />
-            <p className="text-xs font-heading" style={{ color }}>You have reached the pinnacle.</p>
-            <p className="text-[10px] text-zinc-600 font-heading mt-1 italic">Godfather Legacy — feared by all.</p>
+          <div className="px-3 py-4 text-center">
+            <p className="text-[10px] font-heading" style={{ color }}>You have reached the pinnacle.</p>
+            <p className="text-[9px] text-mutedForeground font-heading mt-1 italic">Godfather Legacy — feared by all.</p>
           </div>
+          <div className="pr-art-line text-primary mx-2.5" />
         </div>
       )}
 
-      {/* ── BENEFITS — 2×2 grid on mobile, list on desktop ─────────────── */}
       <div
-        className={`${styles.panel} rounded-xl overflow-hidden ${fadeClass} mobile-panel`}
+        className={`relative ${styles.panel} rounded-md overflow-hidden ${fadeClass} mobile-panel`}
         style={{ animationDelay: '0.1s' }}
       >
-        <div className="px-4 py-3 border-b border-zinc-800/40 flex items-center gap-2 flex-wrap">
-          <Star size={14} style={{ color }} />
-          <span className="text-xs font-heading font-bold uppercase tracking-widest" style={{ color }}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+          <span className="text-[9px] font-heading font-bold uppercase tracking-[0.12em] flex items-center gap-1" style={{ color }}>
+            <Star size={10} />
             {level > 0 ? 'Active Benefits' : 'Benefits Await'}
           </span>
           {level > 0 && (
-            <span
-              className="ml-auto inline-flex items-center gap-1 text-[8px] font-heading font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
-              style={{ color, backgroundColor: `${color}18`, border: `1px solid ${color}30` }}
-            >
-              <Check size={9} /> Live on your account
+            <span className="text-[9px] font-heading font-bold uppercase" style={{ color }}>
+              Live
             </span>
           )}
         </div>
 
         {level === 0 ? (
-          <div className="p-4 space-y-2">
-            <p className="text-[10px] text-zinc-500 font-heading italic">
+          <div className="p-2 space-y-1">
+            <p className="text-[9px] text-mutedForeground font-heading italic">
               Reach Godfather rank and prestige to unlock passive bonuses on all activities.
             </p>
-            <p className="text-[10px] text-zinc-500 font-heading">
+            <p className="text-[9px] text-mutedForeground font-heading">
               Badge effects (crime, GTA, jail, OC, booze, melt, hitlist, kills) gain a 0.5% boost per prestige level.
             </p>
           </div>
         ) : (
-          /* 2×2 grid on mobile; single-col list on md+ */
-          <div className="grid grid-cols-2 md:grid-cols-1 gap-2 p-3 md:p-4">
-            {BENEFIT_ROWS.map(({ key, icon: Icon, label, fmt }) => {
-              const val = info.current_benefits?.[key] ?? benefitDefault(key);
-              return (
-                <div
-                  key={key}
-                  className="flex flex-col md:flex-row md:items-center md:justify-between gap-1 md:gap-2 px-3 py-3 md:py-2 rounded-xl"
-                  style={{ backgroundColor: `${color}08`, border: `1px solid ${color}15` }}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Icon size={12} style={{ color }} className="shrink-0" />
-                    <span className="text-[9px] md:text-[10px] font-heading text-zinc-400 leading-tight">{label}</span>
+          <>
+            <div className="pr-col-head hidden md:flex items-center gap-3 px-2 pt-1.5 pb-0.5">
+              <span className="flex-1 min-w-0 text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Benefit</span>
+              <span className="w-16 text-right text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Bonus</span>
+            </div>
+            <div className="p-1.5 space-y-0.5 sm:space-y-1">
+              {BENEFIT_ROWS.map(({ key, icon: Icon, label, fmt }) => {
+                const val = info.current_benefits?.[key] ?? benefitDefault(key);
+                return (
+                  <div key={key} className="flex items-center justify-between gap-3 px-2 py-1.5 rounded-md bg-zinc-800/30">
+                    <div className="flex items-center gap-1 min-w-0 flex-1">
+                      <Icon size={12} style={{ color }} className="shrink-0" />
+                      <span className="text-xs font-heading font-bold text-foreground truncate">{label}</span>
+                    </div>
+                    <div className="shrink-0 w-16 text-right">
+                      <span className="text-[10px] font-heading font-bold tabular-nums" style={{ color }}>{fmt(val)}</span>
+                    </div>
                   </div>
-                  <span
-                    className="text-base md:text-[10px] font-heading font-bold tabular-nums leading-none"
-                    style={{ color }}
-                  >
-                    {fmt(val)}
-                  </span>
-                </div>
-              );
-            })}
-            <p className="col-span-2 md:col-span-1 text-[9px] font-heading text-zinc-500 px-3 pt-1">
+                );
+              })}
+            </div>
+            <p className="px-2.5 pb-2 text-[9px] font-heading text-mutedForeground">
               These bonuses apply automatically in-game (crime/OC/NPC cash, GTA rare weights, missions, illegal business, scaled rank ladder). Badge effects also gain a 0.5% boost per prestige level.
             </p>
-          </div>
+          </>
         )}
+        <div className="pr-art-line text-primary mx-2.5" />
       </div>
 
-      {/* ── PRESTIGE CRIMES ────────────────────────────────────────────── */}
       <div
-        className={`${styles.panel} rounded-xl overflow-hidden ${fadeClass} mobile-panel`}
-        style={{ animationDelay: '0.12s', border: '1px solid rgba(184,145,68,0.18)' }}
+        className={`relative ${styles.panel} rounded-md overflow-hidden ${fadeClass} mobile-panel`}
+        style={{ animationDelay: '0.12s' }}
       >
-        <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: 'rgba(184,145,68,0.15)', background: 'rgba(184,145,68,0.05)' }}>
-          <Star size={14} style={{ color: 'var(--noir-primary-bright)' }} />
-          <span className="text-xs font-heading font-bold uppercase tracking-widest" style={{ color: 'var(--noir-primary-bright)' }}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
+            <Star size={10} />
             Prestige Crimes
           </span>
-          <span className="ml-auto text-[8px] font-heading text-zinc-600 uppercase tracking-wider">Exclusive per level</span>
+          <span className="text-[9px] font-heading text-mutedForeground uppercase">Exclusive</span>
         </div>
-        <div className="divide-y divide-zinc-800/40">
+        <div className="pr-col-head hidden md:flex items-center gap-3 px-2 pt-1.5 pb-0.5">
+          <span className="flex-1 min-w-0 text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Crime</span>
+          <span className="w-28 text-right text-[8px] font-heading font-bold uppercase tracking-[0.12em] text-mutedForeground">Drop</span>
+          <span className="w-[60px] shrink-0" aria-hidden />
+        </div>
+        <div className="p-1.5 space-y-0.5 sm:space-y-1">
           {[1, 2, 3, 4, 5].map((lvl) => {
-            const info = PRESTIGE_CRIME_INFO[lvl];
+            const crimeInfo = PRESTIGE_CRIME_INFO[lvl];
             const crimeColor = PRESTIGE_COLORS[lvl];
             const isUnlocked = lvl <= level;
             const isGuaranteed = lvl >= 4;
             return (
               <div
                 key={lvl}
-                className="flex flex-col gap-1.5 px-4 py-3"
-                style={isUnlocked ? { background: `${crimeColor}06` } : undefined}
+                className="pr-row flex items-center justify-between gap-3 px-2 py-1.5 rounded-md transition-all"
+                style={isUnlocked ? { background: `${crimeColor}08` } : { background: 'rgba(39,39,42,0.3)' }}
               >
-                {/* Level badge + crime name */}
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="pr-row-name flex items-center gap-1.5 min-w-0 flex-1">
                   {isUnlocked ? (
                     <PrestigeBadge level={lvl} size="sm" />
                   ) : (
-                    <span
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-heading font-bold border"
-                      style={{ color: '#52525b', borderColor: 'rgba(63,63,70,0.5)' }}
-                    >
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-heading font-bold border text-zinc-600 border-zinc-700/50">
                       <Lock size={7} /> {ROMAN[lvl]}
                     </span>
                   )}
-                  <span
-                    className="text-[11px] font-heading font-bold truncate"
-                    style={{ color: isUnlocked ? crimeColor : '#52525b' }}
-                  >
-                    {info.name}
-                  </span>
-                  {!isUnlocked && (
-                    <span className="ml-auto text-[8px] font-heading text-zinc-600 shrink-0">Requires Prestige {lvl}</span>
-                  )}
+                  <div className="min-w-0">
+                    <span
+                      className="pr-name-text text-xs font-heading font-bold truncate block"
+                      style={{ color: isUnlocked ? crimeColor : '#52525b' }}
+                    >
+                      {crimeInfo.name}
+                    </span>
+                    <div className="hidden sm:flex items-center gap-1 flex-wrap mt-0.5">
+                      {crimeInfo.rewards.map((r) => (
+                        <span
+                          key={r}
+                          className="text-[9px] font-heading px-1 py-0.5 rounded"
+                          style={isUnlocked
+                            ? { color: crimeColor, background: `${crimeColor}15` }
+                            : { color: '#3f3f46', background: 'rgba(39,39,42,0.4)' }
+                          }
+                        >
+                          {r}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                {/* Drop type chip + reward pills */}
-                <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="pr-row-meta shrink-0 w-28 text-right">
                   <span
-                    className="shrink-0 inline-flex items-center text-[8px] font-heading font-bold uppercase px-1.5 py-0.5 rounded border"
+                    className="text-[10px] font-heading font-bold uppercase"
                     style={isUnlocked
-                      ? isGuaranteed
-                        ? { color: '#34d399', borderColor: 'rgba(52,211,153,0.3)', background: 'rgba(52,211,153,0.08)' }
-                        : { color: '#fbbf24', borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.08)' }
-                      : { color: '#3f3f46', borderColor: 'rgba(63,63,70,0.4)' }
+                      ? { color: isGuaranteed ? '#34d399' : '#fbbf24' }
+                      : { color: '#52525b' }
                     }
                   >
-                    {info.dropType}
+                    {crimeInfo.dropType}
                   </span>
-                  {info.rewards.map((r) => (
-                    <span
-                      key={r}
-                      className="shrink-0 inline-flex items-center text-[8px] font-heading px-1.5 py-0.5 rounded"
-                      style={isUnlocked
-                        ? { color: crimeColor + 'cc', background: crimeColor + '10', border: `1px solid ${crimeColor}22` }
-                        : { color: '#3f3f46', background: 'rgba(39,39,42,0.4)', border: '1px solid rgba(63,63,70,0.3)' }
-                      }
-                    >
-                      {r}
-                    </span>
-                  ))}
+                  <div className="sm:hidden flex items-center gap-1 flex-wrap justify-end mt-0.5">
+                    {crimeInfo.rewards.map((r) => (
+                      <span key={r} className="text-[9px] font-heading text-mutedForeground">{r}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className="pr-row-action shrink-0 w-[60px] flex justify-end">
+                  {isUnlocked ? (
+                    <span className="text-[9px] text-mutedForeground font-heading uppercase">On</span>
+                  ) : (
+                    <button type="button" disabled className={PR_ACTION_IDLE}>Locked</button>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
+        <div className="pr-art-line text-primary mx-2.5" />
       </div>
 
-      {/* ── ALL LEVELS ─────────────────────────────────────────────────────
-           Mobile: horizontal scroll cards
-           Desktop: traditional table
-      ─────────────────────────────────────────────────────────────────── */}
       <div
-        className={`${styles.panel} rounded-xl overflow-hidden ${fadeClass} mobile-panel`}
+        className={`relative ${styles.panel} rounded-md overflow-hidden ${fadeClass} mobile-panel`}
         style={{ animationDelay: '0.15s' }}
       >
-        <div className="px-4 py-3 border-b border-zinc-800/40 flex items-center gap-2">
-          <Shield size={14} className="text-zinc-400" />
-          <span className="text-xs font-heading font-bold text-zinc-400 uppercase tracking-widest">
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
+            <Shield size={10} />
             All Prestige Levels
-          </span>
-          {/* Scroll hint on mobile */}
-          <span className="ml-auto text-[8px] font-heading text-zinc-700 uppercase tracking-wider md:hidden">
-            ← swipe →
           </span>
         </div>
 
-        {/* ── MOBILE: horizontal card scroll ── */}
         <div
           ref={levelsScrollRef}
-          className="levels-scroll md:hidden flex gap-2.5 overflow-x-auto px-3 py-3"
+          className="md:hidden p-1.5 space-y-0.5"
         >
           {(info.all_levels || []).map((row) => (
-            <div key={row.level} data-level={row.level}>
-              <LevelCard
-                row={row}
-                isCurrent={row.level === level}
-                isUnlocked={row.level <= level}
-              />
-            </div>
+            <LevelRow
+              key={row.level}
+              row={row}
+              isCurrent={row.level === level}
+              isUnlocked={row.level <= level}
+            />
           ))}
         </div>
 
-        {/* ── DESKTOP: table (unchanged) ── */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-[10px] font-heading">
             <thead>
-              <tr className="border-b border-zinc-800/60">
-                <th className="text-left px-4 py-2 text-zinc-600 font-bold uppercase tracking-widest">Level</th>
-                <th className="text-left px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest">Title</th>
-                <th className="text-center px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest" title="Effective RP to prestige into this tier (not per street rank)">Prestige RP</th>
-                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest" title="Store points awarded when you reach this prestige">Points</th>
-                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">Crime</th>
-                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">OC</th>
-                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">GTA</th>
-                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">NPC</th>
-                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">Missions</th>
-                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">Business</th>
-                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">Ranks</th>
+              <tr className="pr-col-head">
+                <th className="text-left px-2 py-1.5 text-[8px] text-mutedForeground font-bold uppercase tracking-[0.12em]">Level</th>
+                <th className="text-left px-2 py-1.5 text-[8px] text-mutedForeground font-bold uppercase tracking-[0.12em]">Title</th>
+                <th className="text-center px-2 py-1.5 text-[8px] text-mutedForeground font-bold uppercase tracking-[0.12em]" title="Effective RP to prestige into this tier (not per street rank)">Prestige RP</th>
+                <th className="text-center px-2 py-1.5 text-[8px] text-mutedForeground font-bold uppercase tracking-[0.12em]" title="Store points awarded when you reach this prestige">Points</th>
+                <th className="text-center px-2 py-1.5 text-[8px] text-mutedForeground font-bold uppercase tracking-[0.12em]">Crime</th>
+                <th className="text-center px-2 py-1.5 text-[8px] text-mutedForeground font-bold uppercase tracking-[0.12em]">OC</th>
+                <th className="text-center px-2 py-1.5 text-[8px] text-mutedForeground font-bold uppercase tracking-[0.12em]">GTA</th>
+                <th className="text-center px-2 py-1.5 text-[8px] text-mutedForeground font-bold uppercase tracking-[0.12em]">NPC</th>
+                <th className="text-center px-2 py-1.5 text-[8px] text-mutedForeground font-bold uppercase tracking-[0.12em]">Missions</th>
+                <th className="text-center px-2 py-1.5 text-[8px] text-mutedForeground font-bold uppercase tracking-[0.12em]">Business</th>
+                <th className="text-center px-2 py-1.5 text-[8px] text-mutedForeground font-bold uppercase tracking-[0.12em]">Ranks</th>
               </tr>
             </thead>
             <tbody>
@@ -586,7 +559,7 @@ export default function Prestige() {
                     className="border-b border-zinc-800/30 transition-colors"
                     style={isCurrent ? { backgroundColor: `${rowColor}10` } : undefined}
                   >
-                    <td className="px-4 py-2.5">
+                    <td className="px-2 py-1.5">
                       <div className="flex items-center gap-2">
                         {isUnlocked
                           ? <PrestigeBadge level={row.level} size="sm" />
@@ -599,22 +572,23 @@ export default function Prestige() {
                         )}
                       </div>
                     </td>
-                    <td className="px-3 py-2.5" style={{ color: isUnlocked ? rowColor : '#52525b' }}>{row.name}</td>
-                    <td className="px-3 py-2.5 text-center text-zinc-500 tabular-nums">{(row.godfather_req ?? 0).toLocaleString()}</td>
-                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{(row.points_reward ?? 0).toLocaleString()}</td>
-                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.crime_mult ?? 1) - 1) * 100)}%</td>
-                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.oc_mult ?? 1) - 1) * 100)}%</td>
-                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{row.gta_rare_boost ?? 0}×</td>
-                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.npc_mult ?? 1) - 1) * 100)}%</td>
-                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>×{Number(row.mission_reward_mult ?? 1)}</td>
-                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.illegal_business_mult ?? 1) - 1) * 100)}%</td>
-                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>×{Number(row.rank_threshold_mult ?? 1)}</td>
+                    <td className="px-2 py-1.5" style={{ color: isUnlocked ? rowColor : '#52525b' }}>{row.name}</td>
+                    <td className="px-2 py-1.5 text-center text-zinc-500 tabular-nums">{(row.godfather_req ?? 0).toLocaleString()}</td>
+                    <td className="px-2 py-1.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{(row.points_reward ?? 0).toLocaleString()}</td>
+                    <td className="px-2 py-1.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.crime_mult ?? 1) - 1) * 100)}%</td>
+                    <td className="px-2 py-1.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.oc_mult ?? 1) - 1) * 100)}%</td>
+                    <td className="px-2 py-1.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{row.gta_rare_boost ?? 0}×</td>
+                    <td className="px-2 py-1.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.npc_mult ?? 1) - 1) * 100)}%</td>
+                    <td className="px-2 py-1.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>×{Number(row.mission_reward_mult ?? 1)}</td>
+                    <td className="px-2 py-1.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.illegal_business_mult ?? 1) - 1) * 100)}%</td>
+                    <td className="px-2 py-1.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>×{Number(row.rank_threshold_mult ?? 1)}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
+        <div className="pr-art-line text-primary mx-2.5" />
       </div>
 
       {/* ── CONFIRM MODAL (unchanged logic, tightened mobile padding) ───── */}
@@ -666,18 +640,20 @@ export default function Prestige() {
 
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={() => setShowConfirm(false)}
-                  className="flex-1 py-3 rounded-xl text-xs font-heading font-bold uppercase tracking-wider border border-zinc-600/40 text-zinc-400 hover:border-zinc-500 transition-all touch-manipulation"
+                  className={`flex-1 ${PR_ACTION_IDLE} !cursor-pointer hover:border-zinc-500`}
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={handlePrestige}
                   disabled={activating}
-                  className="flex-1 py-3 rounded-xl text-xs font-heading font-bold uppercase tracking-wider transition-all active:scale-[0.98] touch-manipulation"
+                  className={`flex-1 ${PR_ACTION_GO}`}
                   style={{
                     background: `${nextColor}20`,
-                    border: `1px solid ${nextColor}60`,
+                    borderColor: `${nextColor}60`,
                     color: nextColor,
                   }}
                 >

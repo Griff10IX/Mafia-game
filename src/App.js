@@ -169,7 +169,7 @@ const withGamblingBan = (node, mode = 'notice') => (
  * Silent chrome shell only — never empty (reads as a black screen on mobile) and no "Loading…" text.
  */
 const PageLoader = () => (
-  <div className="space-y-3 mobile-page-root px-3.5 py-3 max-w-[900px] mx-auto min-h-[45vh]" aria-hidden>
+  <div className="space-y-3 mobile-page-root px-3.5 py-3 max-w-[900px] mx-auto min-h-[45vh]" style={{ backgroundColor: 'var(--noir-content, #1a1a1a)' }} aria-hidden>
     <div className="h-3 w-2/3 max-w-xs rounded bg-zinc-800/70" />
     <div className="rounded-md border border-primary/20 bg-zinc-900/40 overflow-hidden">
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

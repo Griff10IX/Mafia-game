@@ -10,9 +10,22 @@ const OBJ_CACHE_KEY = 'mafia_objectives_v1';
 
 const OBJ_STYLES = `
   @keyframes obj-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-  .obj-fade-in { animation: obj-fade-in 0.4s ease-out both; }
+  .obj-fade-in { opacity: 1; }
   @keyframes obj-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
-  .obj-scale-in { animation: obj-scale-in 0.35s ease-out both; }
+  .obj-scale-in { opacity: 1; }
+  @media (prefers-reduced-motion: no-preference) {
+    html:not([data-mobile-compositor-safe="on"]) .obj-fade-in { animation: obj-fade-in 0.4s ease-out both; }
+    html:not([data-mobile-compositor-safe="on"]) .obj-scale-in { animation: obj-scale-in 0.35s ease-out both; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .obj-fade-in, .obj-scale-in, .obj-glow { animation: none !important; transform: none !important; opacity: 1 !important; }
+  }
+  html[data-mobile-compositor-safe="on"] .obj-fade-in,
+  html[data-mobile-compositor-safe="on"] .obj-scale-in {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
   @keyframes obj-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
   .obj-glow { animation: obj-glow 4s ease-in-out infinite; }
   .obj-card { transition: all 0.3s ease; }

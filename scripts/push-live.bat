@@ -32,16 +32,31 @@ git commit -m "%msg%" 2>nul || echo No new changes to commit
 echo/
 
 if "%NEED_RESTART%"=="0" (
-    git diff --name-only origin/MAfiaGame2 HEAD > "%TEMP%\mafia-push-files.txt" 2>nul
-    findstr /i /r /c:"^backend/.*\.py$" /c:"^backend\\.*\.py$" "%TEMP%\mafia-push-files.txt" >nul 2>nul && set "NEED_RESTART=1"
+    echo      Checking live server commit...
+    plink -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && git rev-parse HEAD" > "%TEMP%\mafia-server-sha.txt" 2>nul
+)
+set "SERVER_SHA="
+if exist "%TEMP%\mafia-server-sha.txt" (
+    findstr /r /i /c:"^[0-9a-f][0-9a-f]*$" "%TEMP%\mafia-server-sha.txt" > "%TEMP%\mafia-server-sha2.txt" 2>nul
+    set /p SERVER_SHA=<"%TEMP%\mafia-server-sha2.txt"
+)
+if defined SERVER_SHA set "SERVER_SHA=%SERVER_SHA:~0,40%"
+
+if "%NEED_RESTART%"=="0" if defined SERVER_SHA (
+    git diff --name-only "%SERVER_SHA%" HEAD -- backend > "%TEMP%\mafia-push-files.txt" 2>nul
+    findstr /i /e ".py" "%TEMP%\mafia-push-files.txt" >nul 2>nul && set "NEED_RESTART=1"
+)
+if "%NEED_RESTART%"=="0" (
+    git diff --name-only origin/MAfiaGame2 HEAD -- backend > "%TEMP%\mafia-push-files.txt" 2>nul
+    findstr /i /e ".py" "%TEMP%\mafia-push-files.txt" >nul 2>nul && set "NEED_RESTART=1"
 )
 
 if "%NEED_RESTART%"=="1" (
     set "DEPLOY_SH=bash scripts/deploy-after-pull.sh --restart-backend"
-    echo      API restart: YES - backend Python changed, or --restart
+    echo      API restart: YES - backend Python changed vs live, or --restart
 ) else (
     set "DEPLOY_SH=bash scripts/deploy-after-pull.sh"
-    echo      API restart: NO - frontend-only, no downtime
+    echo      API restart: NO - no backend Python changes vs live server
 )
 echo/
 
@@ -59,7 +74,7 @@ echo      - Atomic frontend build then nginx reload
 if "%NEED_RESTART%"=="1" (
     echo      - Maintenance page while API restarts, then restore
 ) else (
-    echo      - Backend left running
+    echo      - Backend left running unless server sees Python changes
 )
 plink -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; %DEPLOY_SH%"
 echo/
