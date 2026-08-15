@@ -103,7 +103,7 @@ function PaidSkipPanel({ info, isAdmin, lockSecondsLeft, unlocking, onUnlock }) 
       <p className="text-[11px] sm:text-sm text-zinc-300 font-heading leading-snug">
         Free play again in <span className="text-amber-300 font-semibold tabular-nums">{formatDuration(lockSecondsLeft)}</span>
         {slotsLeft > 0
-          ? ` — or pay ${formatMoney(replayCost)} to skip (up to ${maxDay} paid skips per UTC day). Each guess still costs ${formatMoney(info?.entry_cost ?? 250_000)}.`
+          ? ` — or pay ${formatMoney(replayCost)} to skip (up to ${maxDay} paid skips per UTC day). Each guess still costs ${formatMoney(info?.entry_cost ?? 15_000_000)}.`
           : ' — paid skips for today are used up; wait for the timer.'}
       </p>
       <button
@@ -595,7 +595,7 @@ export default function CrackSafe() {
       {/* Page header */}
       <div className="cs-fade-in">
         <p className="text-[9px] text-zinc-500 font-heading italic">
-          Enter 5 numbers between 1 and 9 to crack the safe. Each attempt costs {formatMoney(info?.entry_cost ?? 1_000_000)}.
+          Enter 5 numbers between 1 and 9 to crack the safe. Each attempt costs {formatMoney(info?.entry_cost ?? 15_000_000)}.
           After you crack it, wait 24h to play again or pay {formatMoney(info?.replay_cost ?? 15_000_000)} (max {info?.replay_max_per_day ?? 3} per UTC day).
         </p>
       </div>
@@ -704,13 +704,13 @@ export default function CrackSafe() {
                   cursor: guessing ? 'not-allowed' : 'pointer',
                 }}
               >
-                {guessing ? '🔐 Cracking...' : `Guess ${formatMoney(info?.entry_cost ?? 1_000_000)}`}
+                {guessing ? '🔐 Cracking...' : `Guess ${formatMoney(info?.entry_cost ?? 15_000_000)}`}
               </button>
             )}
 
             {!info?.can_guess && !isAdmin && !info?.win_locked && (
               <div className="w-full py-2.5 rounded-lg text-center border border-zinc-700/30 bg-zinc-900/30">
-                <p className="text-xs font-heading text-zinc-400">You need {formatMoney(info?.entry_cost ?? 1_000_000)} to attempt</p>
+                <p className="text-xs font-heading text-zinc-400">You need {formatMoney(info?.entry_cost ?? 15_000_000)} to attempt</p>
               </div>
             )}
 
@@ -737,7 +737,7 @@ export default function CrackSafe() {
             </div>
             <div className="p-2.5 space-y-1 text-xs font-heading" style={{ lineHeight: 1.6 }}>
               <p className="text-zinc-400">Enter 5 numbers between 1 and 9 to crack the safe!</p>
-              <p className="text-zinc-400">Each attempt costs <span className="text-primary font-semibold">{formatMoney(info?.entry_cost ?? 1_000_000)}</span>. As many attempts as you can afford until you win.</p>
+              <p className="text-zinc-400">Each attempt costs <span className="text-primary font-semibold">{formatMoney(info?.entry_cost ?? 15_000_000)}</span>. As many attempts as you can afford until you win.</p>
               <p className="text-zinc-400">After a jackpot win: <span className="text-amber-400 font-semibold">24h cooldown</span>, or pay <span className="text-amber-400 font-semibold">{formatMoney(info?.replay_cost ?? 15_000_000)}</span> to skip (max <span className="text-amber-400 font-semibold">{info?.replay_max_per_day ?? 3}</span> paid skips per UTC day). Entry fee still applies each guess. <span className="text-amber-500/90">Use the amber <span className="font-semibold text-amber-300">Pay to skip</span> panel directly under the jackpot.</span></p>
               <p className="text-zinc-400">Current Jackpot: <span className="text-yellow-400 font-bold">{formatMoney(info?.jackpot ?? 0)}</span></p>
               <p className="text-zinc-400">Total attempts: <span className="text-primary font-semibold">{(info?.total_attempts ?? 0).toLocaleString()}</span></p>
@@ -793,6 +793,8 @@ export default function CrackSafe() {
               {(info?.possible_rewards ?? [
                 { id: 'cash', name: 'Cash Jackpot', desc: 'Full jackpot amount (always)' },
                 { id: 'loot_pieces', name: 'Loot Box Pieces', desc: '10 or 15 pieces (25% chance)' },
+                { id: 'mission_skip', name: 'Mission Skip Token', desc: 'Skip one mission — 1 token (rare, 2% chance)' },
+                { id: 'robot_bodyguard_hire', name: 'Free Robot Bodyguard Token', desc: 'Hire one robot bodyguard — 1 token (rare, 2% chance)' },
                 { id: 'xp_crimes', name: 'Crimes XP Token', desc: '2x XP from crimes, 1h — 1 type, 1–2 tokens (25% chance)' },
                 { id: 'xp_gta', name: 'GTA XP Token', desc: '2x XP from GTA, 1h — 1–3 types, 1–2 each (25% chance)' },
                 { id: 'melt', name: 'Melt Token', desc: 'Reduced melt cooldown, 1h — 1–3 types, 1–2 each (25% chance)' },

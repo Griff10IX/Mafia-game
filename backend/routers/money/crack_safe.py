@@ -1,6 +1,7 @@
 # Crack the Safe: jackpot game. Each attempt costs SAFE_ENTRY_COST. After a win, 24h lock unless you pay
 # SAFE_REPLAY_COST (max SAFE_REPLAY_MAX_PER_DAY per UK calendar day). Admins unlimited / no win lock.
 # Reward pool: cash jackpot (always) + 25% chance for 1 bonus token + 25% chance for 10–15 loot box pieces
+# + 2% chance for 1 mission skip or robot bodyguard token
 from datetime import datetime, timedelta, timezone
 import asyncio
 import logging
@@ -37,9 +38,15 @@ def _spawn_crack_safe_bookkeeping(user_id: str, coro_factory) -> None:
 
 # Token types that can drop as bonus reward (matches armoury TOKEN_TYPES)
 SAFE_TOKEN_REWARD_TYPES = (
-    "xp_crimes", "xp_gta", "auto_rank_2h", "melt", "oc_reduced", "booze", "racket", "travel", "properties", "jailbust_bonus"
+    "xp_crimes", "xp_gta", "auto_rank_2h", "melt", "oc_reduced", "booze", "racket", "travel", "properties", "jailbust_bonus",
 )
+SAFE_RARE_TOKEN_TYPES = ("mission_skip", "robot_bodyguard_hire")
+SAFE_TOKEN_COUNT_FIELDS = {
+    "mission_skip": "mission_skip_tokens",
+    "robot_bodyguard_hire": "robot_bodyguard_hire_tokens",
+}
 SAFE_TOKEN_REWARD_CHANCE = 0.25  # 25% chance for bonus tokens on win
+SAFE_RARE_TOKEN_CHANCE = 0.02  # 2% chance for 1 mission skip or robot bodyguard
 SAFE_TOKEN_REWARD_MIN_TYPES = 1   # exactly 1 token type
 SAFE_TOKEN_REWARD_MAX_TYPES = 1
 SAFE_TOKEN_REWARD_MIN_AMOUNT = 1  # 1–2 total tokens
@@ -47,8 +54,8 @@ SAFE_TOKEN_REWARD_MAX_AMOUNT = 2
 SAFE_LOOT_REWARD_CHANCE = 0.25
 SAFE_LOOT_PIECES_OPTIONS = (10, 15)
 
-SAFE_ENTRY_COST = 250_000
-SAFE_JACKPOT_SEED = 100_000_000
+SAFE_ENTRY_COST = 15_000_000
+SAFE_JACKPOT_SEED = 500_000_000
 SAFE_JACKPOT_PER_ATTEMPT = 250_000  # Each wrong guess adds this to the jackpot (entry fee stays separate)
 SAFE_DIGITS = 5
 SAFE_MIN = 1
@@ -97,7 +104,7 @@ async def _get_or_create_safe():
     # One-time bump: legacy seeds migrate to the current floor.
     if safe:
         jp = int(safe.get("jackpot") or 0)
-        if jp in (250_000, 25_000_000):
+        if jp < SAFE_JACKPOT_SEED:
             await db.safe_game.update_one({"_id": safe["_id"]}, {"$set": {"jackpot": SAFE_JACKPOT_SEED}})
             safe = await db.safe_game.find_one({})
     if not safe:
@@ -178,6 +185,12 @@ def register(router):
             "travel": "Cheaper & faster travel, 1h",
             "properties": "3x property income, 1h",
             "jailbust_bonus": "+10% bust success, 1h",
+            "mission_skip": "Skip one mission",
+            "robot_bodyguard_hire": "Hire one robot bodyguard",
+        }
+        _token_names = {
+            "mission_skip": "Mission Skip Token",
+            "robot_bodyguard_hire": "Free Robot Bodyguard Token",
         }
         possible_rewards = [{"id": "cash", "name": "Cash Jackpot", "desc": "Full jackpot amount (always)"}]
         possible_rewards.append({
@@ -186,8 +199,13 @@ def register(router):
             "desc": f"{SAFE_LOOT_PIECES_OPTIONS[0]} or {SAFE_LOOT_PIECES_OPTIONS[1]} pieces ({int(SAFE_LOOT_REWARD_CHANCE * 100)}% chance)",
         })
         for t in SAFE_TOKEN_REWARD_TYPES:
-            name = t.replace("_", " ").title() + " Token"
-            desc = (_token_desc.get(t, "1h bonus") + " — 1 type, 1–2 tokens (25% chance)")
+            name = _token_names.get(t) or (t.replace("_", " ").title() + " Token")
+            desc = (_token_desc.get(t, "1h bonus") + " — 1–2 tokens (25% chance)")
+            possible_rewards.append({"id": t, "name": name, "desc": desc})
+        rare_pct = max(1, int(round(SAFE_RARE_TOKEN_CHANCE * 100)))
+        for t in SAFE_RARE_TOKEN_TYPES:
+            name = _token_names.get(t) or (t.replace("_", " ").title() + " Token")
+            desc = (_token_desc.get(t, "rare token") + f" — 1 token (rare, {rare_pct}% chance)")
             possible_rewards.append({"id": t, "name": name, "desc": desc})
 
         cd = user.get("crack_safe_cooldown_until")
@@ -388,6 +406,7 @@ def register(router):
             jackpot_amount = won_safe.get("jackpot", SAFE_JACKPOT_SEED)
             win_lock_until = now + timedelta(hours=SAFE_WIN_LOCK_HOURS)
             win_inc: dict = {"money": jackpot_amount}
+            bonus_tokens = []
             bonus_loot_pieces = 0
             if _rng.random() < SAFE_LOOT_REWARD_CHANCE:
                 bonus_loot_pieces = _rng.choice(SAFE_LOOT_PIECES_OPTIONS)
@@ -403,7 +422,6 @@ def register(router):
                     },
                 )
 
-            bonus_tokens = []
             if _rng.random() < SAFE_TOKEN_REWARD_CHANCE:
                 try:
                     from routers.kill.armoury import TOKEN_CONFIG
@@ -413,15 +431,23 @@ def register(router):
                     incs = {}
                     for token_type in chosen:
                         cfg = TOKEN_CONFIG.get(token_type)
-                        if cfg:
-                            amt = _rng.randint(SAFE_TOKEN_REWARD_MIN_AMOUNT, SAFE_TOKEN_REWARD_MAX_AMOUNT)
-                            count_field = cfg["count_field"]
-                            incs[count_field] = incs.get(count_field, 0) + amt
-                            bonus_tokens.append({"token_type": token_type, "amount": amt})
+                        count_field = (cfg or {}).get("count_field") or SAFE_TOKEN_COUNT_FIELDS.get(token_type)
+                        if not count_field:
+                            continue
+                        amt = 1 if token_type in SAFE_TOKEN_COUNT_FIELDS else _rng.randint(SAFE_TOKEN_REWARD_MIN_AMOUNT, SAFE_TOKEN_REWARD_MAX_AMOUNT)
+                        incs[count_field] = incs.get(count_field, 0) + amt
+                        bonus_tokens.append({"token_type": token_type, "amount": amt})
                     if incs:
                         await db.users.update_one({"id": uid}, {"$inc": incs})
                 except Exception:
                     pass
+
+            if _rng.random() < SAFE_RARE_TOKEN_CHANCE and SAFE_RARE_TOKEN_TYPES:
+                rare_type = _rng.choice(SAFE_RARE_TOKEN_TYPES)
+                rare_field = SAFE_TOKEN_COUNT_FIELDS.get(rare_type)
+                if rare_field:
+                    await db.users.update_one({"id": uid}, {"$inc": {rare_field: 1}})
+                    bonus_tokens.append({"token_type": rare_type, "amount": 1})
 
             async def _post_win_bookkeeping():
                 await db.safe_winners.insert_one({

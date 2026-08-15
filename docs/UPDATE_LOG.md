@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-15[/color][/b] — [b]Crack the Safe: prize pool[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Crack the Safe:[/b] Each attempt is [b]$15,000,000[/b]. The jackpot now starts at [b]$500,000,000[/b]. Cracking it still pays the full cash pot, and the bonus prize pool can now include [b]Mission Skip[/b] and [b]Free Robot Bodyguard[/b] (rare).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-15[/color][/b] — [b]Inbox overhaul, Lottery $1B, Telegram Chat ID[/b][/size]
 [quote]
 [list]
