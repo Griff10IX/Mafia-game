@@ -4,7 +4,7 @@ REM Optional: push-live.bat "Your commit message"
 REM Optional: push-live.bat --restart
 REM Optional: push-live.bat --restart "Your commit message"
 setlocal EnableExtensions
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 REM SSH Password (change this after first use!)
 set "SSH_PASSWORD=Ka?dz5Z6MK?h#4t"
