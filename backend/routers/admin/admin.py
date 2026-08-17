@@ -7663,6 +7663,7 @@ def register(router):
         skip_usernames: Optional[List[str]] = None
         gradual_add: Optional[bool] = None
         seconds_between_adds: Optional[int] = None
+        read_game_chat: Optional[bool] = None
         run_now: bool = False
 
     @router.get("/admin/presence-simulator")
@@ -7710,6 +7711,8 @@ def register(router):
             cur["gradual_add"] = bool(body.gradual_add)
         if body.seconds_between_adds is not None:
             cur["seconds_between_adds"] = body.seconds_between_adds
+        if body.read_game_chat is not None:
+            cur["read_game_chat"] = bool(body.read_game_chat)
         if was_enabled and body.enabled is False:
             # Turning simulator off: restore users that were temporarily put on auto-rank.
             await clear_presence_simulator_autorank(db)

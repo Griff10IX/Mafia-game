@@ -50,6 +50,11 @@ def default_presence_config() -> Dict[str, Any]:
         "skip_usernames": [],  # lowercase compared; never added to pool; removed from pool if already present
         "gradual_add": True,  # space out DB updates for new pool members across seconds_between_adds
         "seconds_between_adds": 25,
+        "read_game_chat": True,  # drip viewed_by on recent game chat; never the whole pool at once
+        "chat_readers_min": 1,
+        "chat_readers_max": 3,
+        "chat_marks_min": 1,
+        "chat_marks_max": 3,
         "active_user_ids": [],
         "last_tick_at": None,
         "ticks_total": 0,
@@ -85,6 +90,17 @@ def _merge_cfg(raw: Optional[dict]) -> Dict[str, Any]:
     out["skip_usernames"] = skip_list
     out["gradual_add"] = bool(out.get("gradual_add", True))
     out["seconds_between_adds"] = max(5, min(300, int(out.get("seconds_between_adds") or 25)))
+    out["read_game_chat"] = bool(out.get("read_game_chat", True))
+    out["chat_readers_min"] = max(0, min(8, int(out.get("chat_readers_min") if out.get("chat_readers_min") is not None else 1)))
+    out["chat_readers_max"] = max(
+        out["chat_readers_min"],
+        min(10, int(out.get("chat_readers_max") if out.get("chat_readers_max") is not None else 3)),
+    )
+    out["chat_marks_min"] = max(1, min(8, int(out.get("chat_marks_min") or 1)))
+    out["chat_marks_max"] = max(
+        out["chat_marks_min"],
+        min(10, int(out.get("chat_marks_max") or 3)),
+    )
     return out
 
 
@@ -151,6 +167,135 @@ async def _filter_active_skip_skipped(db, active_ids: List[str], skip_set: set) 
             continue
         kept.append(uid)
     return kept
+
+
+_CHAT_LOOKBACK = 12
+_CHAT_RETENTION_DAYS = 7
+
+
+async def _recent_game_chat_messages(
+    db, *, channel: str, family_id: Optional[str] = None, limit: int = _CHAT_LOOKBACK
+) -> List[Dict[str, Any]]:
+    """Newest on-screen messages only — same window a real open chat would see."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=_CHAT_RETENTION_DAYS)).isoformat()
+    if channel == "family":
+        if not family_id:
+            return []
+        query: Dict[str, Any] = {
+            "channel": "family",
+            "family_id": family_id,
+            "created_at": {"$gte": cutoff},
+        }
+    else:
+        query = {
+            "$and": [
+                {
+                    "$or": [
+                        {"channel": "global"},
+                        {"channel": {"$exists": False}},
+                        {"channel": None},
+                    ]
+                },
+                {"created_at": {"$gte": cutoff}},
+            ]
+        }
+    return await db.game_chat_messages.find(
+        query, {"_id": 0, "id": 1, "user_id": 1, "viewed_by": 1}
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+
+
+def _unread_chat_ids(messages: List[Dict[str, Any]], viewer_id: str, mark_n: int) -> List[str]:
+    ids: List[str] = []
+    if not viewer_id or mark_n <= 0:
+        return ids
+    for msg in messages:
+        mid = msg.get("id")
+        author = msg.get("user_id")
+        if not mid or not author or author == viewer_id:
+            continue
+        viewed = msg.get("viewed_by")
+        viewed_set = {str(x) for x in viewed if x} if isinstance(viewed, list) else set()
+        if viewer_id in viewed_set:
+            continue
+        ids.append(str(mid))
+        if len(ids) >= mark_n:
+            break
+    return ids
+
+
+def _remember_chat_views(messages: List[Dict[str, Any]], viewer_id: str, marked_ids: List[str]) -> None:
+    """Keep this tick's later readers off the same newest lines so counts drip downward."""
+    if not marked_ids:
+        return
+    marked = set(marked_ids)
+    for msg in messages:
+        if msg.get("id") not in marked:
+            continue
+        viewed = list(msg.get("viewed_by") or [])
+        if viewer_id not in viewed:
+            viewed.append(viewer_id)
+            msg["viewed_by"] = viewed
+
+
+async def _mark_chat_views_for_user(db, viewer_id: str, messages: List[Dict[str, Any]], mark_n: int) -> int:
+    ids = _unread_chat_ids(messages, viewer_id, mark_n)
+    if not ids:
+        return 0
+    await db.game_chat_messages.update_many(
+        {"id": {"$in": ids}},
+        {"$addToSet": {"viewed_by": viewer_id}},
+    )
+    _remember_chat_views(messages, viewer_id, ids)
+    return len(ids)
+
+
+async def _sim_read_game_chat(db, active_ids: List[str], cfg: Dict[str, Any]) -> Dict[str, int]:
+    """A few pool members open chat and mark a couple of newest unread lines — not the whole pool."""
+    empty = {"readers": 0, "marked": 0}
+    if not cfg.get("read_game_chat", True):
+        return empty
+    pool = [uid for uid in (active_ids or []) if uid]
+    if not pool:
+        return empty
+    readers_min = int(cfg.get("chat_readers_min") or 0)
+    readers_max = int(cfg.get("chat_readers_max") or 3)
+    if readers_max <= 0:
+        return empty
+    n = random.randint(readers_min, min(readers_max, len(pool)))
+    if n <= 0:
+        return empty
+    random.shuffle(pool)
+    chosen = pool[:n]
+    users = await db.users.find(
+        {"id": {"$in": chosen}},
+        {"_id": 0, "id": 1, "family_id": 1},
+    ).to_list(len(chosen) + 2)
+    by_id = {str(u.get("id") or ""): u for u in users}
+    global_msgs = await _recent_game_chat_messages(db, channel="global")
+    family_cache: Dict[str, List[Dict[str, Any]]] = {}
+    marks_min = int(cfg.get("chat_marks_min") or 1)
+    marks_max = int(cfg.get("chat_marks_max") or 3)
+    readers = 0
+    marked = 0
+    for i, uid in enumerate(chosen):
+        if i > 0:
+            await asyncio.sleep(random.uniform(0.8, 2.5))
+        mark_n = random.randint(marks_min, marks_max)
+        n_g = await _mark_chat_views_for_user(db, uid, global_msgs, mark_n)
+        n_f = 0
+        fam = (by_id.get(uid) or {}).get("family_id")
+        if fam and random.random() < 0.35:
+            if fam not in family_cache:
+                family_cache[fam] = await _recent_game_chat_messages(
+                    db, channel="family", family_id=str(fam)
+                )
+            n_f = await _mark_chat_views_for_user(
+                db, uid, family_cache[fam], random.randint(1, min(2, mark_n))
+            )
+        if n_g or n_f:
+            readers += 1
+            marked += n_g + n_f
+    return {"readers": readers, "marked": marked}
 
 
 async def _refresh_sim_user(db, uid: str, now: datetime, spread_secs: int) -> None:
@@ -458,18 +603,26 @@ async def _presence_simulator_tick_impl(db, admin_emails: List[str], *, force: b
         except Exception:
             logger.exception("presence_simulator refresh failed for %s", uid)
 
+    chat_stats = {"readers": 0, "marked": 0}
+    try:
+        chat_stats = await _sim_read_game_chat(db, active, cfg)
+    except Exception:
+        logger.exception("presence_simulator game chat read failed")
+
     cfg["active_user_ids"] = active
     cfg["last_tick_at"] = now_iso
     cfg["ticks_total"] = int(cfg.get("ticks_total") or 0) + 1
     await save_presence_config(db, cfg)
     logger.info(
-        "presence_simulator tick: pool=%s added=%s removed_prior=%s spread_s=%s gradual=%s skip_n=%s",
+        "presence_simulator tick: pool=%s added=%s removed_prior=%s spread_s=%s gradual=%s skip_n=%s chat_readers=%s chat_marked=%s",
         len(active),
         seen_new,
         remove_n,
         spread_secs,
         gradual,
         len(skip_set),
+        chat_stats.get("readers") or 0,
+        chat_stats.get("marked") or 0,
     )
     return cfg
 

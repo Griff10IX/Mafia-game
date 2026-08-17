@@ -779,6 +779,7 @@ export default function Admin() {
     skipUsernames: '',
     gradualAdd: true,
     secondsBetweenAdds: '25',
+    readGameChat: true,
   });
   const [crackSafeInfo, setCrackSafeInfo] = useState(null);
   const [crackSafeJackpotInput, setCrackSafeJackpotInput] = useState('');
@@ -2391,6 +2392,7 @@ export default function Admin() {
           skipUsernames: Array.isArray(d.skip_usernames) ? d.skip_usernames.join('\n') : '',
           gradualAdd: d.gradual_add !== false,
           secondsBetweenAdds: String(d.seconds_between_adds ?? 25),
+          readGameChat: d.read_game_chat !== false,
         });
       }
     } catch {
@@ -2440,6 +2442,7 @@ export default function Admin() {
         skip_usernames: skipUsernames,
         gradual_add: !!psForm.gradualAdd,
         seconds_between_adds: Number.isNaN(secBetween) ? 25 : secBetween,
+        read_game_chat: !!psForm.readGameChat,
       });
       setPresenceSim(res.data);
       toast.success('Presence simulator settings saved');
@@ -14832,7 +14835,7 @@ export default function Admin() {
               On each tick, removes up to “max remove” sim users from the pool (they then drift off Users Online as{' '}
               <code className="text-[9px] bg-zinc-800/80 px-1 rounded">last_seen</code> ages) and adds up to “max add” new offline players.{' '}
               <code className="text-[9px] bg-zinc-800/80 px-1 rounded">last_seen</code> is staggered per user so counts don’t jump in one instant; use an interval under ~5 minutes so pool members stay inside the online window. Overlapping ticks (loop + Run tick now) are deduped unless you use Run tick now (that always runs). Auto-rank (non-idle) accounts are skipped.{' '}
-              <span className="text-mutedForeground/90">Usernames listed below are never added and are dropped from the pool if present. With “Gradual adds”, new pool members get their first bump spaced apart (capped so one tick stays within most of the interval).</span>
+              <span className="text-mutedForeground/90">Usernames listed below are never added and are dropped from the pool if present. With “Gradual adds”, new pool members get their first bump spaced apart (capped so one tick stays within most of the interval). “Read game chat” has a few pool members mark a couple of newest unread lines each tick so the eye counts rise slowly instead of jumping by the whole pool.</span>
             </p>
             {presenceSimLoading && !presenceSim ? (
               <p className="text-[10px] text-mutedForeground font-heading">Loading…</p>
@@ -14907,6 +14910,15 @@ export default function Admin() {
                       className="rounded border-zinc-600"
                     />
                     <span className="text-mutedForeground">Gradual adds (space new pool members over time)</span>
+                  </label>
+                  <label className="flex flex-row sm:col-span-3 items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!psForm.readGameChat}
+                      onChange={(e) => setPsForm((f) => ({ ...f, readGameChat: e.target.checked }))}
+                      className="rounded border-zinc-600"
+                    />
+                    <span className="text-mutedForeground">Read game chat gradually (1–3 readers, 1–3 newest unread each tick)</span>
                   </label>
                   <label className="flex flex-col gap-0.5 sm:col-span-3">
                     <span className="text-mutedForeground">Skip usernames (one per line; never simulated)</span>
