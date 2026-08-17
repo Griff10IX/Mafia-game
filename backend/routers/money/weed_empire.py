@@ -24,7 +24,6 @@ from utils.weed_empire_catalog import (
     DAILY_SELL_CAP_STEP_USD,
     CLEAN_FEE_FRAC,
     DAILY_CLEAN_CAP_MAX_USD,
-    DAILY_EQUIP_UPGRADE_CAP,
     DAILY_SELL_CAP_USD,
     DAILY_WITHDRAW_CAP_USD,
     EQUIPMENT_BY_ID,
@@ -252,8 +251,6 @@ def _default_farm(user_id: str) -> Dict[str, Any]:
         "daily_sold_utc_date": _utc_date_str(),
         "daily_withdrawn_usd": 0,
         "daily_withdrawn_utc_date": _utc_date_str(),
-        "daily_equip_upgrades": 0,
-        "daily_equip_upgrades_utc_date": _utc_date_str(),
         "laundry_install": None,
         "lifetime_sold_usd": 0,
         "grower_level": 1,
@@ -484,25 +481,6 @@ def _queue_laundry_install(farm: dict, cat_id: str, to_level: int, now: datetime
         "name": cat.get("name") or cat_id,
     }
     return True
-
-
-def _ensure_daily_equip(farm: dict) -> dict:
-    today = _utc_date_str()
-    if farm.get("daily_equip_upgrades_utc_date") != today:
-        farm["daily_equip_upgrades_utc_date"] = today
-        farm["daily_equip_upgrades"] = 0
-    return farm
-
-
-def _consume_equip_upgrade_slot(farm: dict) -> None:
-    _ensure_daily_equip(farm)
-    used = int(farm.get("daily_equip_upgrades") or 0)
-    if used >= DAILY_EQUIP_UPGRADE_CAP:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Daily equipment upgrade cap reached ({DAILY_EQUIP_UPGRADE_CAP}). Resets at UTC midnight.",
-        )
-    farm["daily_equip_upgrades"] = used + 1
 
 
 def _laundry_clean_cap_for_farm(farm: dict) -> int:
@@ -1518,7 +1496,6 @@ def _ensure_daily_cap(farm: dict) -> dict:
     if farm.get("daily_withdrawn_utc_date") != today:
         farm["daily_withdrawn_utc_date"] = today
         farm["daily_withdrawn_usd"] = 0
-    _ensure_daily_equip(farm)
     return farm
 
 
@@ -2124,11 +2101,6 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         "clean_fee_frac": CLEAN_FEE_FRAC,
         "min_clean_usd": MIN_CLEAN_USD,
         "laundry_install": farm.get("laundry_install"),
-        "daily_equip_upgrades": int(farm.get("daily_equip_upgrades") or 0),
-        "daily_equip_upgrade_cap": DAILY_EQUIP_UPGRADE_CAP,
-        "daily_equip_upgrades_remaining": max(
-            0, DAILY_EQUIP_UPGRADE_CAP - int(farm.get("daily_equip_upgrades") or 0)
-        ),
         "laundry_seize_relief": laundry_seize_relief(_equip_levels(farm)),
         "daily_sold_usd": sold,
         "daily_sold_cap": sell_cap,
@@ -3161,7 +3133,6 @@ async def weed_upgrade_equip(body: UpgradeEquipBody, current_user: dict = Depend
         pending = farm.get("laundry_install")
         if isinstance(pending, dict) and pending.get("ready_at") and not _laundry_install_ready(farm, now):
             raise HTTPException(status_code=400, detail="A cleaning machine is already installing")
-        _consume_equip_upgrade_slot(farm)
         _spend(farm, cost)
         if not _queue_laundry_install(farm, body.category_id, nxt, now, stolen=False):
             raise HTTPException(status_code=400, detail="A cleaning machine is already installing")
@@ -3170,8 +3141,6 @@ async def weed_upgrade_equip(body: UpgradeEquipBody, current_user: dict = Depend
             {
                 "business_cash": farm["business_cash"],
                 "laundry_install": farm.get("laundry_install"),
-                "daily_equip_upgrades": farm.get("daily_equip_upgrades"),
-                "daily_equip_upgrades_utc_date": farm.get("daily_equip_upgrades_utc_date"),
                 "equipment": farm.get("equipment"),
             },
         )
@@ -3185,7 +3154,6 @@ async def weed_upgrade_equip(body: UpgradeEquipBody, current_user: dict = Depend
             "farm": _public_farm(farm, username=current_user.get("username") or ""),
         }
 
-    _consume_equip_upgrade_slot(farm)
     _spend(farm, cost)
     equip = dict(farm.get("equipment") or {})
     equip[body.category_id] = nxt
@@ -3206,8 +3174,6 @@ async def weed_upgrade_equip(body: UpgradeEquipBody, current_user: dict = Depend
             "equipment": equip,
             "soil_stock": farm.get("soil_stock"),
             "equipment_rebuy": farm.get("equipment_rebuy"),
-            "daily_equip_upgrades": farm.get("daily_equip_upgrades"),
-            "daily_equip_upgrades_utc_date": farm.get("daily_equip_upgrades_utc_date"),
         },
     )
     return {

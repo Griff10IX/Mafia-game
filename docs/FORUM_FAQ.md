@@ -426,7 +426,7 @@ Open [b]Money → Weed Empire[/b] (when the feature is live). Grow strains, care
 [*][color=#888888][b]6 machines × 6 levels[/b] (36 upgrades): shoe box, bill strapper, car-wash front, invoice press, counting room, offshore stack[/color]
 [*][color=#888888]Every farm starts with [b]shoe box Lv1[/b] already working. Next machine unlocks when the previous is maxed (plus house tier)[/color]
 [*][color=#888888]One install at a time (~1.5h early, ~2.5h mid, ~3.5h late). Current clean cap stays live while the next level installs. No points skip[/color]
-[*][color=#888888]Clean cap ramps toward [b]$3B/day[/b] only when grow gear and this whole line are maxed. Grow + laundry share a [b]40 upgrades/day[/b] cap[/color]
+[*][color=#888888]Clean cap ramps toward [b]$3B/day[/b] only when grow gear and this whole line are maxed. Buy as many upgrades as you can afford — laundry still installs one at a time[/color]
 [/list]
 
 [color=#27AE60][b]Heat & busts[/b][/color]

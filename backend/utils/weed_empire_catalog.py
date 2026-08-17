@@ -18,7 +18,6 @@ DAILY_WITHDRAW_CAP_USD = 3_000_000_000  # legacy alias: max daily clean throughp
 DAILY_CLEAN_CAP_MAX_USD = 3_000_000_000
 CLEAN_FEE_FRAC = 0.15
 MIN_CLEAN_USD = 10_000
-DAILY_EQUIP_UPGRADE_CAP = 40
 BASE_STREET_PRICE_PER_OZ = 22_500
 MAX_DEALERS_LEVEL = 20
 # Must keep this much business cash in the farm when cleaning to personal money.

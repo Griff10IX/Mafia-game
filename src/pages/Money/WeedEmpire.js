@@ -950,10 +950,6 @@ export default function WeedEmpire() {
             much you can send to wallet (15% fee, seize risk). Old sell-cap store buys still lower seize
             chance.
           </p>
-          <span className="text-[10px] text-emerald-400/80 uppercase">
-            Upgrades left today {Number(farm.daily_equip_upgrades_remaining ?? 40)}/
-            {Number(farm.daily_equip_upgrade_cap || 40)}
-          </span>
         </div>
 
         <div className="weed-panel p-3 space-y-2">
