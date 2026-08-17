@@ -1738,14 +1738,14 @@
       "related_intents": [
         "cross_feature.feature.weed-grow",
         "cross_feature.feature.weed-cash",
-        "cross_feature.feature.weed-heat"
+        "cross_feature.feature.weed-clean"
       ],
       "follow_ups": [
         "How do Weed Empire raids work?",
         "What are special strains?",
         "How does weed business cash work?",
         "How do I grow weed?",
-        "How does Weed Empire heat work?"
+        "How do I clean weed money?"
       ]
     },
     {
@@ -4638,14 +4638,14 @@
       "related_intents": [
         "cross_feature.feature.weed-empire",
         "cross_feature.feature.weed-cash",
-        "cross_feature.feature.weed-heat"
+        "cross_feature.feature.weed-clean"
       ],
       "follow_ups": [
         "How does Weed Empire work?",
         "How does weed business cash work?",
-        "How does Weed Empire heat work?",
-        "How do Weed Empire raids work?",
-        "How does Weed Empire crew work?"
+        "How do I clean weed money?",
+        "How does cleaning equipment work?",
+        "How does Weed Empire heat work?"
       ]
     },
     {
@@ -4653,7 +4653,8 @@
       "domain": "cross_feature",
       "entities": [
         "weed business cash",
-        "Safety Deposit"
+        "Safety Deposit",
+        "Clean money"
       ],
       "sections": [
         {
@@ -4661,6 +4662,12 @@
           "kind": "subsection",
           "category": "WEED EMPIRE",
           "title": "Business cash"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Clean money"
         },
         {
           "source": "how_to",
@@ -4675,7 +4682,6 @@
       "variants": [
         "How does weed business cash work?",
         "Explain the weed vault",
-        "How do I withdraw weed cash?",
         "What is weed business cash?",
         "Weed cash guide",
         "How does Safety Deposit work?",
@@ -4684,14 +4690,114 @@
       "related_intents": [
         "cross_feature.feature.weed-empire",
         "cross_feature.feature.weed-grow",
-        "cross_feature.feature.weed-heat"
+        "cross_feature.feature.weed-clean"
       ],
       "follow_ups": [
         "How does Weed Empire work?",
-        "How do Weed Empire raids work?",
+        "How do I clean weed money?",
         "How do I grow weed?",
-        "How does Weed Empire heat work?",
-        "How does Weed Empire crew work?"
+        "How does cleaning equipment work?",
+        "How does Weed Empire heat work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.weed-clean",
+      "domain": "cross_feature",
+      "entities": [
+        "Clean money",
+        "15%",
+        "seize"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Clean money"
+        },
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Cleaning equipment"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Cash & vault"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How do I clean weed money?",
+        "How do I withdraw weed cash?",
+        "Explain Clean money",
+        "What is Clean money?",
+        "Weed clean money guide",
+        "How does the weed laundry work?",
+        "Tell me about cleaning weed cash"
+      ],
+      "related_intents": [
+        "cross_feature.feature.weed-empire",
+        "cross_feature.feature.weed-grow",
+        "cross_feature.feature.weed-cash"
+      ],
+      "follow_ups": [
+        "How does cleaning equipment work?",
+        "How does weed business cash work?",
+        "How does Weed Empire work?",
+        "How do I grow weed?",
+        "How does Weed Empire heat work?"
+      ]
+    },
+    {
+      "id": "cross_feature.feature.weed-laundry",
+      "domain": "cross_feature",
+      "entities": [
+        "cleaning equipment",
+        "shoe box",
+        "offshore"
+      ],
+      "sections": [
+        {
+          "source": "faq",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Cleaning equipment"
+        },
+        {
+          "source": "how_to",
+          "kind": "subsection",
+          "category": "WEED EMPIRE",
+          "title": "Cash & vault"
+        }
+      ],
+      "source_preference": "faq",
+      "route_aliases": [],
+      "intent_type": "definition",
+      "variants": [
+        "How does cleaning equipment work?",
+        "What is Weed Empire laundry?",
+        "Explain cleaning equipment",
+        "How do I upgrade the shoe box?",
+        "Weed laundry guide",
+        "Tell me about cleaning machines",
+        "How do I raise my clean cap?"
+      ],
+      "related_intents": [
+        "cross_feature.feature.weed-empire",
+        "cross_feature.feature.weed-grow",
+        "cross_feature.feature.weed-cash"
+      ],
+      "follow_ups": [
+        "How do I clean weed money?",
+        "How does Weed Empire work?",
+        "How do I grow weed?",
+        "How does weed business cash work?",
+        "How does Weed Empire heat work?"
       ]
     },
     {
@@ -4737,7 +4843,7 @@
         "How do Weed Empire raids work?",
         "How do I grow weed?",
         "How does weed business cash work?",
-        "How does Weed Empire crew work?"
+        "How do I clean weed money?"
       ]
     },
     {
@@ -4829,7 +4935,7 @@
         "How do Weed Empire raids work?",
         "How does Weed Empire work?",
         "How does weed business cash work?",
-        "How does Weed Empire heat work?"
+        "How do I clean weed money?"
       ]
     },
     {
@@ -4869,7 +4975,7 @@
         "How do loot boxes work?",
         "How do I grow weed?",
         "How does weed business cash work?",
-        "How does Weed Empire heat work?"
+        "How do I clean weed money?"
       ]
     },
     {

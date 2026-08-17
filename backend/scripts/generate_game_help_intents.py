@@ -1504,7 +1504,6 @@ EXTRA_FEATURE_GUIDES = (
         [
             "How does weed business cash work?",
             "Explain the weed vault",
-            "How do I withdraw weed cash?",
             "What is weed business cash?",
             "Weed cash guide",
             "How does Safety Deposit work?",
@@ -1512,10 +1511,48 @@ EXTRA_FEATURE_GUIDES = (
         ],
         [
             ("faq", "WEED EMPIRE", "Business cash"),
+            ("faq", "WEED EMPIRE", "Clean money"),
             ("how_to", "WEED EMPIRE", "Cash & vault"),
         ],
-        ["weed business cash", "Safety Deposit"],
-        ["How does Weed Empire work?", "How do Weed Empire raids work?"],
+        ["weed business cash", "Safety Deposit", "Clean money"],
+        ["How does Weed Empire work?", "How do I clean weed money?"],
+    ),
+    _guide(
+        "weed-clean",
+        [
+            "How do I clean weed money?",
+            "How do I withdraw weed cash?",
+            "Explain Clean money",
+            "What is Clean money?",
+            "Weed clean money guide",
+            "How does the weed laundry work?",
+            "Tell me about cleaning weed cash",
+        ],
+        [
+            ("faq", "WEED EMPIRE", "Clean money"),
+            ("faq", "WEED EMPIRE", "Cleaning equipment"),
+            ("how_to", "WEED EMPIRE", "Cash & vault"),
+        ],
+        ["Clean money", "15%", "seize"],
+        ["How does cleaning equipment work?", "How does weed business cash work?"],
+    ),
+    _guide(
+        "weed-laundry",
+        [
+            "How does cleaning equipment work?",
+            "What is Weed Empire laundry?",
+            "Explain cleaning equipment",
+            "How do I upgrade the shoe box?",
+            "Weed laundry guide",
+            "Tell me about cleaning machines",
+            "How do I raise my clean cap?",
+        ],
+        [
+            ("faq", "WEED EMPIRE", "Cleaning equipment"),
+            ("how_to", "WEED EMPIRE", "Cash & vault"),
+        ],
+        ["cleaning equipment", "shoe box", "offshore"],
+        ["How do I clean weed money?", "How does Weed Empire work?"],
     ),
     _guide(
         "weed-heat",

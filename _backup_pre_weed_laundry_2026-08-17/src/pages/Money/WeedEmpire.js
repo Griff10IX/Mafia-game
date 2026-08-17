@@ -705,18 +705,10 @@ export default function WeedEmpire() {
       applyFarm(data.farm, { force: true });
       setWithdrawAmount("");
       setWithdrawConfirm(null);
-      if (data.seized) {
-        toast.error(
-          `Cops seized the bag. ${money(data.cleaned || amount)} dirty sent · ${money(data.fee || 0)} fee burned.`
-        );
-      } else {
-        toast.success(
-          `Cleaned ${money(data.wallet || data.withdrawn)} to wallet after a ${money(data.fee || 0)} fee`
-        );
-      }
+      toast.success(`Withdrew ${money(data.withdrawn)} to personal money`);
     });
 
-  const requestWithdraw = (amount, label = "Clean money") => {
+  const requestWithdraw = (amount, label = "Withdraw") => {
     const n = Math.floor(Number(amount));
     if (!(n > 0)) return;
     setWithdrawConfirm({ amount: n, label });
@@ -829,22 +821,16 @@ export default function WeedEmpire() {
   const heatBandLo = Number(heatBand[0] ?? 3);
   const heatBandHi = Number(heatBand[1] ?? 8);
   const reserveCash = Number(farm.business_cash_reserve || 50000);
-  const dailyWithdrawCap = Number(farm.daily_clean_cap || farm.daily_withdraw_cap || 50_000_000);
+  const dailyWithdrawCap = Number(farm.daily_withdraw_cap || 250_000_000);
   const dailyWithdrawRemaining = Math.max(
     0,
-    Number(
-      farm.daily_clean_remaining ??
-        farm.daily_withdraw_remaining ??
-        dailyWithdrawCap - Number(farm.daily_cleaned_usd || farm.daily_withdrawn_usd || 0)
-    )
+    Number(farm.daily_withdraw_remaining ?? dailyWithdrawCap - Number(farm.daily_withdrawn_usd || 0))
   );
   const afterReserve = Math.max(0, Number(farm.business_cash || 0) - reserveCash);
   const withdrawable = Math.max(
     0,
-    Number(farm.cleanable_cash ?? farm.withdrawable_cash ?? Math.min(afterReserve, dailyWithdrawRemaining))
+    Number(farm.withdrawable_cash ?? Math.min(afterReserve, dailyWithdrawRemaining))
   );
-  const cleanFee = Number(farm.clean_fee_frac || 0.15);
-  const laundryInstall = farm.laundry_install;
   const cleanlinessPct = Math.max(0, Math.min(100, Number(farm.cleanliness_pct ?? farm.cleanliness ?? 100)));
   const cleanlinessRisk = cleanlinessPct < 30;
   const mitePct = Math.max(0, Math.min(100, Number(selectedPlot?.mite_infestation_pct || 0)));
@@ -865,8 +851,8 @@ export default function WeedEmpire() {
               Weed Empire
             </h1>
             <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
-              Farm cash is dirty. Clean money always takes 15%; cops can seize the bag. Keep{" "}
-              {money(reserveCash)} in the farm. Cleaning kit caps how much you can clean today.
+              Upgrades use business cash only. Personal withdraw is fixed at {money(dailyWithdrawCap)}/day (keep{" "}
+              {money(reserveCash)} in the business). Sell cap upgrades are separate — Points Store.
               {staffPreview ? (
                 <span className="ml-2 inline-flex items-center rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase text-amber-300">
                   Staff preview
@@ -888,7 +874,7 @@ export default function WeedEmpire() {
             </div>
           </div>
           <div className="text-[10px] text-muted-foreground">
-            Cleanable {money(withdrawable)}
+            Withdrawable {money(withdrawable)}
             <span className="block sm:inline sm:before:content-['·_']">
               Daily left {money(dailyWithdrawRemaining)} / {money(dailyWithdrawCap)}
             </span>
@@ -907,15 +893,15 @@ export default function WeedEmpire() {
             <button
               type="button"
               disabled={busy || withdrawable <= 0 || !(Number(withdrawAmount) > 0)}
-              onClick={() => requestWithdraw(withdrawAmount, "Clean money")}
+              onClick={() => requestWithdraw(withdrawAmount, "Withdraw")}
               className="text-[10px] uppercase px-2.5 py-1 rounded-md border border-emerald-500/40 text-emerald-300 tap-feedback min-h-10 disabled:opacity-40"
             >
-              Clean
+              Withdraw
             </button>
             <button
               type="button"
               disabled={busy || withdrawable <= 0}
-              onClick={() => requestWithdraw(withdrawable, "Max clean")}
+              onClick={() => requestWithdraw(withdrawable, "Max withdraw")}
               className="text-[10px] uppercase px-2.5 py-1 rounded-md bg-emerald-700/80 tap-feedback min-h-10 disabled:opacity-40"
             >
               Max
@@ -924,36 +910,34 @@ export default function WeedEmpire() {
         </div>
       </header>
 
-      {laundryInstall?.ready_at ? (
-        <div className="weed-panel p-3 text-xs text-amber-200/90 border border-amber-500/30">
-          Installing {laundryInstall.name || "cleaning equipment"} — ready{" "}
-          {String(laundryInstall.ready_at).replace("T", " ").slice(0, 16)} UTC. Current clean cap stays
-          active until it finishes.
-        </div>
-      ) : null}
-
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="weed-panel p-3 space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <div className="text-[10px] uppercase tracking-wider font-heading text-muted-foreground">
-              Daily sell / clean
+              Daily sell cap
             </div>
             <span className="text-[10px] tabular-nums text-muted-foreground">
-              Kit {money(dailyWithdrawCap)}/day
+              {Number(farm.daily_cap_bonus_tiers || 0)}/{Number(farm.daily_cap_bonus_max_tiers || 19)} tiers
             </span>
           </div>
           <div className="font-heading text-sm tabular-nums text-foreground">
-            Sold {money(farm.daily_sold_usd)} / {money(farm.daily_sold_cap)}
+            {money(farm.daily_sold_usd)} / {money(farm.daily_sold_cap)}
           </div>
           <p className="text-[10px] text-muted-foreground hidden sm:block">
-            Street &amp; dealer sales share a ${"3,000,000,000"} dirty ceiling. Cleaning equipment caps how
-            much you can send to wallet (15% fee, seize risk). Old sell-cap store buys still lower seize
-            chance.
+            Street &amp; dealer sales only. Base {money(farm.daily_sell_cap_base || 250_000_000)}; +
+            {money(farm.daily_sell_cap_step || 250_000_000)} per Points Store buy (max{" "}
+            {money(5_000_000_000)}). Withdraw stays {money(dailyWithdrawCap)}/day.
           </p>
-          <span className="text-[10px] text-emerald-400/80 uppercase">
-            Upgrades left today {Number(farm.daily_equip_upgrades_remaining ?? 40)}/
-            {Number(farm.daily_equip_upgrade_cap || 40)}
-          </span>
+          {farm.daily_cap_next_cost_points != null ? (
+            <Link
+              to="/game/store?tab=upgrades#store-weed-daily-cap"
+              className="inline-flex text-[10px] uppercase text-emerald-300 hover:underline"
+            >
+              Upgrade in Points Store · {farm.daily_cap_next_cost_points} pts
+            </Link>
+          ) : (
+            <span className="text-[10px] text-emerald-400/80 uppercase">Sell cap maxed</span>
+          )}
         </div>
 
         <div className="weed-panel p-3 space-y-2">
@@ -993,9 +977,9 @@ export default function WeedEmpire() {
                 </span>
               </div>
               <p className="text-[10px] text-muted-foreground">
-                Dirty parking — raid- and bust-safe, still must be cleaned to reach your wallet. Expand:{" "}
-                {money(farm.safety_bank_unit_cost || 10_000_000)} business → +
-                {money(farm.safety_bank_unit_capacity || 25_000_000)} (max {money(5_000_000_000)}).
+                Survives raids and heat busts. Expand: {money(farm.safety_bank_unit_cost || 10_000_000)}{" "}
+                business → +{money(farm.safety_bank_unit_capacity || 25_000_000)} (max{" "}
+                {money(5_000_000_000)}).
               </p>
               {Number(farm.safety_bank_capacity || 0) <= 0 && (
                 <p className="text-[10px] text-amber-300/90">
@@ -2061,10 +2045,9 @@ export default function WeedEmpire() {
           <p className="text-xs text-muted-foreground flex items-start gap-2">
             <Shield className="w-4 h-4 shrink-0 mt-0.5" />
             Reach Grower Lv {raidMeta.required_grower_level || 5} to raid or be raided. Success steals the full stash,
-            up to $80M dirty cash, and one gear line (they keep their upgrade
-            level — rebuy in Equipment to restore it). A cleaning machine can be stolen once per day from that farm
-            and once per day by you; other raids that day take grow gear. Stolen laundry still needs the install
-            timer. Cooldown is {raidMeta.raid_cooldown_hours || 3}h per target — you can still raid other growers. After a heat
+            cash, and one gear line (they keep their upgrade
+            level — rebuy in Equipment to restore it; stolen gear auto-equips when your house can hold it).
+            Cooldown is {raidMeta.raid_cooldown_hours || 3}h per target — you can still raid other growers. After a heat
             bust, growers are raid-protected for {farm.bust_raid_immune_hours || 6}h. Target security caps your odds —
             fully maxed security = 25% success (75% fail).
             {farm.sabotage_unlocked ? " Sabotage heat spike unlocked." : " Harvest 10 plants to unlock sabotage."}
@@ -2181,11 +2164,10 @@ export default function WeedEmpire() {
       {withdrawConfirm ? (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-md rounded border border-emerald-500/40 bg-zinc-950 p-4 space-y-3 shadow-xl">
-            <h2 className="font-heading text-lg text-emerald-300">Confirm Clean money</h2>
+            <h2 className="font-heading text-lg text-emerald-300">Confirm withdraw</h2>
             <p className="text-sm text-muted-foreground">
-              Send {money(withdrawConfirm.amount)} dirty cash through the cleaner? You always lose{" "}
-              {money(Math.floor(withdrawConfirm.amount * cleanFee))} (15%). The remaining bag can still be
-              seized. Daily clean left: {money(dailyWithdrawRemaining)} / {money(dailyWithdrawCap)}.
+              Move {money(withdrawConfirm.amount)} from weed business cash to your personal money? Daily
+              personal withdraw is capped at {money(dailyWithdrawCap)} (this does not use the sell cap).
             </p>
             <div className="flex gap-2">
               <button
@@ -2202,7 +2184,7 @@ export default function WeedEmpire() {
                 onClick={() => withdrawCash(withdrawConfirm.amount)}
                 className="flex-1 text-xs uppercase py-2.5 rounded bg-emerald-700/80 min-h-11 tap-feedback disabled:opacity-40"
               >
-                Confirm {withdrawConfirm.label || "Clean money"}
+                Confirm {withdrawConfirm.label || "Withdraw"}
               </button>
             </div>
           </div>

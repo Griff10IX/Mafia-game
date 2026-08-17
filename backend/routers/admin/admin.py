@@ -3178,6 +3178,7 @@ def register(router):
         "travel": "travel_tokens",
         "properties": "properties_tokens",
         "jailbust_bonus": "jailbust_tokens",
+        "mission_skip": "mission_skip_tokens",
     }
 
     @router.get("/admin/token-types")
@@ -20564,7 +20565,11 @@ def register(router):
             lines.append(car_info.get("name", car_id) if car_info else str(car_id))
         for token_type, amount in (reward_dict.get("tokens") or {}).items():
             if amount:
-                lines.append(f"{int(amount)} {str(token_type).replace('_', ' ')} token(s)")
+                n = int(amount)
+                if str(token_type) == "mission_skip":
+                    lines.append(f"{n} mission skip{'s' if n != 1 else ''}")
+                else:
+                    lines.append(f"{n} {str(token_type).replace('_', ' ')} token(s)")
         return lines
 
     @router.get("/admin/redeem-codes")

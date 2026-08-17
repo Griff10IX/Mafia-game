@@ -168,9 +168,9 @@ const GP_STRAIN_BY_TIER = {
   42: {
     id: 'gp_wedding_cake',
     name: 'Wedding Cake',
-    label: '+25% / +15% daily withdraw',
+    label: 'Lower Clean money seize chance',
     description:
-      'Raises your Weed Empire daily personal withdraw cap: +25% while VIP is active this season, then +15% permanently once unlocked.',
+      'Lowers the chance cops seize a Weed Empire clean bag: −4% while VIP is active this season, then −2% permanently. Does not skip the 15% fee.',
   },
   50: {
     id: 'gp_gorilla_glue',

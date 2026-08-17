@@ -555,15 +555,61 @@ async def buy_weed_daily_cap(
     pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Retired: leftover tiers still lower Clean money seize chance. Sell cap is $3B."""
-    await require_store_item_allowed(db, "weed_empire", current_user)
-    raise HTTPException(
-        status_code=400,
-        detail=(
-            "Weed sell-cap upgrades are retired. Daily sell is capped at $3B. "
-            "Tiers you already bought still lower Clean money seize chance."
-        ),
+    """+250M Weed Empire daily sell cap (50 pts). Does not raise withdraw cap. Max $5B."""
+    from utils.weed_empire_catalog import (
+        DAILY_CAP_BONUS_MAX_TIERS,
+        DAILY_SELL_CAP_POINTS_COST,
+        DAILY_SELL_CAP_STEP_USD,
+        daily_cap_bonus_tiers,
+        daily_sell_cap_for_farm,
     )
+
+    await require_store_item_allowed(db, "weed_empire", current_user)
+    farm = await db.weed_farms.find_one({"user_id": current_user["id"]}, {"_id": 0})
+    if not farm:
+        raise HTTPException(status_code=400, detail="Open Weed Empire once before buying sell-cap upgrades")
+    tiers = daily_cap_bonus_tiers(farm)
+    if tiers >= DAILY_CAP_BONUS_MAX_TIERS:
+        raise HTTPException(status_code=400, detail="Weed daily sell cap is already at max ($5B)")
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, DAILY_SELL_CAP_POINTS_COST, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    user_result = await db.users.update_one({"id": current_user["id"], **gte_filter}, {"$inc": inc})
+    if user_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    new_tiers = tiers + 1
+    farm_result = await db.weed_farms.update_one(
+        {
+            "user_id": current_user["id"],
+            "$or": [
+                {"daily_cap_bonus_tiers": {"$lt": DAILY_CAP_BONUS_MAX_TIERS}},
+                {"daily_cap_bonus_tiers": {"$exists": False}},
+            ],
+        },
+        {"$set": {"daily_cap_bonus_tiers": new_tiers}},
+    )
+    if farm_result.modified_count == 0:
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": cost_used}})
+        raise HTTPException(status_code=400, detail="Weed daily sell cap purchase failed")
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"weed_daily_cap_bonus_tiers": new_tiers}},
+    )
+    await _record_store_points_spend(
+        current_user,
+        inc,
+        "buy-weed-daily-cap",
+        cost_used=cost_used,
+        extra={"tiers": new_tiers},
+    )
+    farm["daily_cap_bonus_tiers"] = new_tiers
+    new_cap = daily_sell_cap_for_farm(farm)
+    return {
+        "message": f"Weed daily sell cap raised to ${new_cap:,} (+${DAILY_SELL_CAP_STEP_USD:,}). Withdraw stays $250M/day.",
+        "cost": cost_used,
+        "daily_cap_bonus_tiers": new_tiers,
+        "daily_sold_cap": new_cap,
+    }
 
 
 async def get_weed_empire_store_summary(current_user: dict = Depends(get_current_user)):
@@ -607,7 +653,7 @@ async def get_weed_empire_store_summary(current_user: dict = Depends(get_current
         "daily_sell_cap_step": DAILY_SELL_CAP_STEP_USD,
         "daily_sell_cap_max": DAILY_SELL_CAP_MAX_USD,
         "daily_sell_cap_points_cost": DAILY_SELL_CAP_POINTS_COST,
-        "at_max_sell_cap": True,
+        "at_max_sell_cap": tiers >= DAILY_CAP_BONUS_MAX_TIERS,
         "safety_bank_unlocked": unlocked,
         "safety_bank_unlock_points": SAFETY_BANK_UNLOCK_POINTS,
     }

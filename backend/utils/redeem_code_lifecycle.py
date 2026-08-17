@@ -175,6 +175,8 @@ async def apply_redeem_code(db: Any, user: dict, code: str) -> dict:
         cfg = TOKEN_CONFIG.get(token_type)
         if cfg and amount:
             inc[cfg["count_field"]] = int(amount)
+        elif token_type == "mission_skip" and amount:
+            inc["mission_skip_tokens"] = int(amount)
     inc["redeem_stats_total_money"] = int(rewards.get("money") or 0)
     inc["redeem_stats_total_points"] = int(rewards.get("points") or 0)
     inc["redeem_stats_total_respect_points"] = int(rewards.get("respect_points") or 0)

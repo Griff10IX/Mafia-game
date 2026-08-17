@@ -1,5 +1,6 @@
 import { User, Target, Building2, Plane, Factory, Mail, Skull, Trophy, Crown, Sparkles } from 'lucide-react';
 import FamilyEmblem from './FamilyEmblem';
+import CivilianProtectionBadge from './CivilianProtectionBadge';
 import styles from '../styles/noir.module.css';
 
 /**
@@ -85,6 +86,11 @@ export default function ProfileHoverPreview({ preview, userStatus = 'online' }) 
               >
                 {preview.username}
               </span>
+              <CivilianProtectionBadge
+                active={preview.civilian_protection_active}
+                endsAt={preview.civilian_protection_ends_at}
+                size="sm"
+              />
               {preview.custom_profile_badge ? (
                 preview.custom_profile_badge_url ? (
                   <img

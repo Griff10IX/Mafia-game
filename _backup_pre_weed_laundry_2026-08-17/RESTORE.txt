@@ -1,0 +1,28 @@
+Weed Empire laundry restore point — 2026-08-17
+
+Copy these files back over the working tree to undo the clean-money / laundry pass.
+
+  xcopy /E /Y _backup_pre_weed_laundry_2026-08-17\* .
+
+Or copy each path back to the same relative location in the repo root.
+
+Live DB is separate — file revert does not undo player farm cash / laundry state.
+
+Files snapshotted:
+- backend/routers/money/weed_empire.py
+- backend/utils/weed_empire_catalog.py
+- backend/utils/weed_empire_equipment.py
+- backend/utils/weed_empire_exclusive_strains.py
+- backend/utils/game_pass_weed_strains.py
+- backend/utils/loot_reclaimable_passives.py
+- backend/routers/game/store.py
+- backend/tests/test_weed_empire_economy.py
+- backend/data/game_help_intents/weed_empire.json
+- src/pages/Money/WeedEmpire.js
+- src/components/weed/WeedShop.js
+- src/components/weed/WeedEmpire3D.js
+- src/components/weed/weedRoomBuilders.js
+- src/components/weed/weedPhenotypes.js
+- docs/FORUM_HOW_TO.md
+- docs/FORUM_FAQ.md
+- src/pages/Game/Store.js

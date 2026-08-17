@@ -58,12 +58,12 @@ GAME_PASS_STRAIN_BUFFS: Dict[str, Dict[str, Any]] = {
         "kind": "bust_soft",
     },
     GP_WEDDING_CAKE: {
-        "label": "Lower Clean money seize chance",
+        "label": "+25% / +15% daily withdraw",
         "description": (
-            "Lowers the chance cops seize a Weed Empire clean bag: −4% while you have active "
-            "VIP this season, then −2% permanently once unlocked. Does not skip the 15% fee."
+            "Raises your Weed Empire daily personal withdraw cap: +25% while you have active "
+            "VIP this season, then +15% permanently once unlocked."
         ),
-        "kind": "seize_relief",
+        "kind": "withdraw_cap",
     },
     GP_GORILLA_GLUE: {
         "label": "−10% upgrade costs",
@@ -87,10 +87,8 @@ GAME_PASS_STRAIN_SEED: List[tuple] = [
 GP_RANK_POINTS_BONUS_MULT = 1.05
 GP_RAID_SUCCESS_MULT_WHEN_PLANTED = 0.95
 GP_UPGRADE_COST_MULT = 0.90
-GP_WITHDRAW_MULT_PERMANENT = 1.15  # legacy alias unused
-GP_WITHDRAW_MULT_ACTIVE_VIP = 1.25  # legacy alias unused
-GP_SEIZE_RELIEF_PERMANENT = 0.02
-GP_SEIZE_RELIEF_ACTIVE_VIP = 0.04
+GP_WITHDRAW_MULT_PERMANENT = 1.15
+GP_WITHDRAW_MULT_ACTIVE_VIP = 1.25
 
 
 def is_game_pass_strain_id(strain_id: Optional[str]) -> bool:
@@ -418,17 +416,16 @@ def game_pass_buffs_public(owned_ids: Set[str], *, active_vip: bool = False) -> 
         description = buff.get("description") or label
         if sid == GP_WEDDING_CAKE:
             if active_vip:
-                label = "−4% clean seize chance (active VIP)"
+                label = "+25% daily withdraw (active VIP)"
                 description = (
-                    "Cops are 4% less likely to seize a Clean money bag while VIP Game Pass "
-                    "is active this season. After the pass ends it stays at −2% forever. "
-                    "The 15% cleaner fee still applies."
+                    "Your daily personal withdraw cap from the Weed business is +25% while VIP "
+                    "Game Pass is active this season. After the pass ends it stays at +15% forever."
                 )
             else:
-                label = "−2% clean seize chance (permanent)"
+                label = "+15% daily withdraw (permanent)"
                 description = (
-                    "Cops are 2% less likely to seize a Clean money bag while you own Wedding Cake. "
-                    "The 15% cleaner fee still applies."
+                    "Your daily personal withdraw cap from the Weed business is permanently "
+                    "+15% while you own Wedding Cake."
                 )
         out.append(
             {

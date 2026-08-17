@@ -22,8 +22,7 @@ BUFF_CAR_SELL = "car_sell_mult"
 BUFF_JAILBUST = "jailbust_success_bonus"  # additive to success rate (0.15 = +15%)
 BUFF_IBM_INCOME = "ibm_income_mult"
 BUFF_TRAVEL_COST = "travel_cost_mult"
-BUFF_WEED_WITHDRAW = "weed_withdraw_cap_mult"  # legacy key; unused for wallet
-BUFF_WEED_SEIZE_RELIEF = "weed_seize_relief"
+BUFF_WEED_WITHDRAW = "weed_withdraw_cap_mult"
 BUFF_KILL_BULLETS = "kill_bullets_mult"
 BUFF_BANK_INTEREST = "bank_interest_mult"
 BUFF_TRIBUTE_CASH = "tribute_cash_mult"
@@ -62,8 +61,8 @@ RECLAIMABLE_PASSIVES: Dict[str, Dict[str, Any]] = {
     },
     "distributors_badge": {
         "name": "Distributor's Badge",
-        "buff_label": "−5% Weed Empire Clean money seize chance",
-        "buffs": {BUFF_WEED_SEIZE_RELIEF: 0.05},
+        "buff_label": "+20% Weed Empire daily withdraw-to-wallet cap",
+        "buffs": {BUFF_WEED_WITHDRAW: 1.20},
     },
     "armourers_mark": {
         "name": "Armourer's Mark",
@@ -92,7 +91,6 @@ _DEFAULT_MULTS: Dict[str, float] = {
     BUFF_IBM_INCOME: 1.0,
     BUFF_TRAVEL_COST: 1.0,
     BUFF_WEED_WITHDRAW: 1.0,
-    BUFF_WEED_SEIZE_RELIEF: 0.0,
     BUFF_KILL_BULLETS: 1.0,
     BUFF_BANK_INTEREST: 1.0,
     BUFF_TRIBUTE_CASH: 1.0,
@@ -238,7 +236,7 @@ def _merge_buffs_for_ids(ids) -> Dict[str, float]:
     for item_id in ids or []:
         buffs = (RECLAIMABLE_PASSIVES.get(str(item_id)) or {}).get("buffs") or {}
         for k, v in buffs.items():
-            if k in (BUFF_JAILBUST, BUFF_WEED_SEIZE_RELIEF):
+            if k == BUFF_JAILBUST:
                 mults[k] = float(mults.get(k) or 0.0) + float(v)
             elif k in (BUFF_TRAVEL_COST, BUFF_KILL_BULLETS, BUFF_MISSION_REQ):
                 mults[k] = float(mults.get(k) or 1.0) * float(v)

@@ -23,8 +23,8 @@
     },
     {
       "file": "weed_empire.json",
-      "intents": 26,
-      "variants": 182
+      "intents": 30,
+      "variants": 210
     },
     {
       "file": "cars_crimes.json",
@@ -78,10 +78,10 @@
     },
     {
       "file": "cross_feature.json",
-      "intents": 114,
-      "variants": 800
+      "intents": 116,
+      "variants": 813
     }
   ],
-  "intent_count": 542,
-  "variant_count": 3796
+  "intent_count": 548,
+  "variant_count": 3837
 }

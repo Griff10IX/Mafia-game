@@ -23,7 +23,6 @@ const GROUP_META = [
   { id: "harvest", label: "Harvest", Icon: Sparkles },
   { id: "power", label: "Power", Icon: Lightbulb },
   { id: "security", label: "Security", Icon: Shield },
-  { id: "laundry", label: "Cleaning", Icon: Sparkles },
 ];
 
 const TIER_STYLE = {
@@ -53,8 +52,7 @@ export default function WeedShop({
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
         Business cash only. Premium gear unlocks with <strong>Grower level</strong>, house tier, and
-        prerequisite upgrades — locked cards stay visible so you can plan the path. Cleaning machines
-        install one at a time and cap how much dirty cash you can clean each day.
+        prerequisite upgrades — locked cards stay visible so you can plan the path.
       </p>
 
       <div className="-mx-1 px-1 overflow-x-auto overscroll-x-contain">
@@ -148,9 +146,6 @@ export default function WeedShop({
                       {row.needs_rebuy ? (
                         <span className="text-[9px] uppercase text-amber-300">Raided · rebuy</span>
                       ) : null}
-                      {row.installing ? (
-                        <span className="text-[9px] uppercase text-sky-300">Installing</span>
-                      ) : null}
                       {locked ? (
                         <span className="inline-flex items-center gap-0.5 text-[9px] text-amber-400/90">
                           <Lock className="w-3 h-3" /> Locked
@@ -183,12 +178,6 @@ export default function WeedShop({
                         <span className="text-emerald-400/90">+{Math.round(y * 100)}% yield/lvl</span>
                       ) : null}
                       {q ? <span className="text-sky-300/80">+{q} quality/lvl</span> : null}
-                      {row.is_laundry && row.clean_cap_at_owned ? (
-                        <span className="text-emerald-300/90">Cleans {money(row.clean_cap_at_owned)}/day</span>
-                      ) : null}
-                      {row.is_laundry && row.install_hours_next ? (
-                        <span className="text-sky-300/80">{row.install_hours_next}h install</span>
-                      ) : null}
                     </div>
                     {locked || (!row.can_upgrade && row.lock_reason) ? (
                       <p className="text-[10px] text-amber-400/80 mt-1.5">{row.lock_reason}</p>

@@ -234,6 +234,12 @@ TOKEN_CONFIG = {
         # Effect stacking is allowed (buy again after consuming); choose a large cap so stacking isn't artificially limited.
         "max_stack_hours": 8760,  # ~1 year
     },
+    # Count-only (Missions page); dummy until_field so redeem/loot grant via TOKEN_CONFIG.
+    "mission_skip": {
+        "count_field": "mission_skip_tokens",
+        "until_field": "mission_skip_dummy_until",
+        "max_stack_hours": 1,
+    },
 }
 
 # My Inventory: exchange 1× Auto Rank (2h) token → 2 random distinct 1h tokens from pool (no cash/points).

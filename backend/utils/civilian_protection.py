@@ -302,3 +302,16 @@ def civilian_protection_status_payload(user: dict) -> Dict[str, Any]:
         "protection_hours": PROTECTION_HOURS,
         "casino_claim_remaining_hours": CASINO_CLAIM_PROTECTION_REMAINING_HOURS,
     }
+
+
+def civilian_protection_public_fields(user: Optional[dict]) -> Dict[str, Any]:
+    """Minimal public fields for profile / hover cards when protection is active."""
+    if not is_civilian_protected(user):
+        return {
+            "civilian_protection_active": False,
+            "civilian_protection_ends_at": None,
+        }
+    return {
+        "civilian_protection_active": True,
+        "civilian_protection_ends_at": protection_window_end_iso(user),
+    }

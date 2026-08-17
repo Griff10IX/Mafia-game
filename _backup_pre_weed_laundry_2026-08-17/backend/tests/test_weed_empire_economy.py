@@ -1,7 +1,6 @@
 from utils.weed_empire_catalog import (
     BASE_STREET_PRICE_PER_OZ,
     DAILY_SELL_CAP_USD,
-    HOUSES,
     MAX_DEALERS_LEVEL,
     STRAINS,
     STRAIN_BY_ID,
@@ -10,15 +9,9 @@ from utils.weed_empire_catalog import (
     dealer_drip_fraction,
     dealers_upgrade_cost,
     grams_to_oz,
-    laundry_clean_cap,
     market_price_per_oz,
 )
-from utils.weed_empire_equipment import (
-    EQUIPMENT_CATEGORIES,
-    LAUNDRY_CATEGORY_IDS,
-    equipment_level_cost,
-    is_laundry_category,
-)
+from utils.weed_empire_equipment import EQUIPMENT_CATEGORIES
 
 
 def _max_yield_mult() -> float:
@@ -29,7 +22,7 @@ def _max_yield_mult() -> float:
 
 
 def _best_normal_strain():
-    normal = [s for s in STRAINS if not s.get("loot_exclusive") and not s.get("game_pass_strain")]
+    normal = [s for s in STRAINS if not s.get("loot_exclusive")]
     return max(
         normal,
         key=lambda strain: strain["yield_g_max"]
@@ -37,8 +30,8 @@ def _best_normal_strain():
     )
 
 
-def test_daily_sell_cap_is_3b():
-    assert DAILY_SELL_CAP_USD == 3_000_000_000
+def test_daily_sell_cap_is_250m():
+    assert DAILY_SELL_CAP_USD == 250_000_000
 
 
 def test_typical_starter_harvest_is_worth_at_least_30k():
@@ -54,8 +47,8 @@ def test_typical_starter_harvest_is_worth_at_least_30k():
     assert price * grams_to_oz(37.4) >= 30_000
 
 
-def test_fully_maxed_compound_harvest_is_about_1_125b():
-    """No exclusives: one full Compound harvest lands near $1.05–1.20B."""
+def test_fully_maxed_compound_harvest_approaches_250m_cap():
+    """No exclusives: one full Compound harvest lands near the $200–250M band."""
     yield_mult = _max_yield_mult()
     best_strain = _best_normal_strain()
     grams_per_plot = best_strain["yield_g_max"] * yield_mult * 1.05
@@ -68,11 +61,11 @@ def test_fully_maxed_compound_harvest_is_about_1_125b():
     )
     full_harvest_value = price * grams_to_oz(grams_per_plot) * 24
 
-    assert 1_050_000_000 <= full_harvest_value <= 1_200_000_000
+    assert 200_000_000 <= full_harvest_value <= 260_000_000
 
 
-def test_exclusives_stay_under_or_clip_at_3b_sell_cap():
-    """Critical Mass ×1.5 yield + Godfather ×1.5 price cannot print past the $3B sell cap."""
+def test_exclusives_cannot_break_daily_sell_cap():
+    """Critical Mass ×1.5 yield + Godfather ×1.5 price still sell-capped at $250M."""
     yield_mult = _max_yield_mult() * 1.5
     best_strain = _best_normal_strain()
     grams_per_plot = best_strain["yield_g_max"] * yield_mult * 1.05
@@ -86,49 +79,8 @@ def test_exclusives_stay_under_or_clip_at_3b_sell_cap():
     uncapped_harvest = price * grams_to_oz(grams_per_plot) * 24
     sellable = min(uncapped_harvest, DAILY_SELL_CAP_USD)
 
-    assert uncapped_harvest <= DAILY_SELL_CAP_USD * 1.05
-    assert sellable <= DAILY_SELL_CAP_USD
-
-
-def test_crap_strains_stay_cheap_and_slow():
-    ditch = STRAIN_BY_ID["ditch_weed"]
-    widow = STRAIN_BY_ID["white_widow"]
-    rs11 = STRAIN_BY_ID["rs11"]
-    assert ditch["base_grow_hours"] > widow["base_grow_hours"]
-    assert ditch["base_price_per_oz"] < widow["base_price_per_oz"]
-    assert rs11["min_grow_hours"] >= 4.5
-    assert round(rs11["base_price_per_oz"] / 28) >= 6500
-
-
-def test_laundry_line_caps_and_cost():
-    assert laundry_clean_cap({cid: 0 for cid in LAUNDRY_CATEGORY_IDS}) == 50_000_000
-    assert laundry_clean_cap({"laundry_shoe_box": 6}) == 90_000_000
-    assert laundry_clean_cap({"laundry_offshore": 6}) == 3_000_000_000
-    total = 0
-    for cid in LAUNDRY_CATEGORY_IDS:
-        cat = next(c for c in EQUIPMENT_CATEGORIES if c["id"] == cid)
-        start = 2 if cid == "laundry_shoe_box" else 1
-        for lvl in range(start, 7):
-            total += equipment_level_cost(cat, lvl)
-    assert 2_000_000_000 <= total <= 2_300_000_000
-
-
-def test_house_and_dealer_retune():
-    by_id = {h["id"]: h for h in HOUSES}
-    assert by_id["suburban"]["cost"] == 5_000_000
-    assert by_id["warehouse"]["cost"] == 80_000_000
-    assert by_id["compound"]["cost"] == 350_000_000
-    dealer_total = sum(dealers_upgrade_cost(lvl) for lvl in range(1, 20))
-    assert 350_000_000 <= dealer_total <= 480_000_000
-
-
-def test_grow_catalog_late_levels_are_expensive():
-    grow = [c for c in EQUIPMENT_CATEGORIES if not is_laundry_category(c["id"])]
-    total = 0
-    for cat in grow:
-        for lvl in range(1, int(cat["max_level"]) + 1):
-            total += equipment_level_cost(cat, lvl)
-    assert 8_000_000_000 <= total <= 14_000_000_000
+    assert uncapped_harvest > DAILY_SELL_CAP_USD
+    assert sellable == DAILY_SELL_CAP_USD
 
 
 def test_active_light_class_prefers_better_fixture():

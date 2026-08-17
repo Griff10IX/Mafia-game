@@ -23,7 +23,6 @@ def _cat(
     light_class: Optional[str] = None,
     consumable_stock_key: Optional[str] = None,
     bag_units: Optional[int] = None,
-    extra: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     row: Dict[str, Any] = {
         "id": id,
@@ -46,8 +45,6 @@ def _cat(
     if consumable_stock_key:
         row["consumable_stock_key"] = consumable_stock_key
         row["bag_units"] = bag_units or 4
-    if extra:
-        row.update(extra)
     return row
 
 
@@ -569,187 +566,28 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
         stats_per_level={"odor_stealth": 0.4, "heat_gain_mult": -0.005, "quality_ceiling": 0.3},
         description="True sealed environment.",
     ),
-    # --- laundry (6 machines × 6 levels; paid from dirty cash; timed install) ---
-    _cat(
-        "laundry_shoe_box", "Shoe Box", "laundry",
-        max_level=6, base_cost=200_000, cost_growth=1.2,
-        min_house_tier=0, min_grower_level=1, tier="starter", icon="box",
-        room_visual="generic",
-        description="Starter cleaner. Every farm has Lv1 working. Caps early cleans.",
-        extra={
-            "is_laundry": True,
-            "cost_table": [0, 200_000, 400_000, 800_000, 1_400_000, 2_200_000],
-            "clean_caps": [50_000_000, 58_000_000, 66_000_000, 74_000_000, 82_000_000, 90_000_000],
-            "install_hours": [0.0, 1.5, 1.5, 1.5, 1.5, 1.5],
-            "seize_relief": [0.00, 0.005, 0.01, 0.014, 0.017, 0.02],
-        },
-    ),
-    _cat(
-        "laundry_bill_strapper", "Bill Strapper", "laundry",
-        max_level=6, base_cost=4_000_000, cost_growth=1.2,
-        min_house_tier=0, min_grower_level=1,
-        requires={"category_id": "laundry_shoe_box", "min_level": 6},
-        tier="starter", icon="strap", room_visual="generic",
-        description="Bands dirty stacks. Unlocks after the shoe box is maxed.",
-        extra={
-            "is_laundry": True,
-            "cost_table": [4_000_000, 8_000_000, 12_000_000, 16_000_000, 18_000_000, 22_000_000],
-            "clean_caps": [110_000_000, 128_000_000, 146_000_000, 164_000_000, 182_000_000, 200_000_000],
-            "install_hours": [1.5, 1.5, 1.5, 2.0, 2.0, 2.0],
-            "seize_relief": [0.022, 0.026, 0.03, 0.034, 0.037, 0.04],
-        },
-    ),
-    _cat(
-        "laundry_car_wash", "Car-Wash Front", "laundry",
-        max_level=6, base_cost=15_000_000, cost_growth=1.2,
-        min_house_tier=2, min_grower_level=1,
-        requires={"category_id": "laundry_bill_strapper", "min_level": 6},
-        tier="mid", icon="wash", room_visual="generic",
-        description="Cash through a car-wash till. Needs a Suburban house.",
-        extra={
-            "is_laundry": True,
-            "cost_table": [15_000_000, 25_000_000, 35_000_000, 42_000_000, 48_000_000, 55_000_000],
-            "clean_caps": [230_000_000, 265_000_000, 300_000_000, 335_000_000, 370_000_000, 400_000_000],
-            "install_hours": [2.5, 2.5, 2.5, 2.5, 2.5, 2.5],
-            "seize_relief": [0.045, 0.05, 0.055, 0.06, 0.065, 0.07],
-        },
-    ),
-    _cat(
-        "laundry_invoice_press", "Invoice Press", "laundry",
-        max_level=6, base_cost=30_000_000, cost_growth=1.2,
-        min_house_tier=2, min_grower_level=1,
-        requires={"category_id": "laundry_car_wash", "min_level": 6},
-        tier="mid", icon="press", room_visual="generic",
-        description="Fake invoices at volume. Suburban or Warehouse.",
-        extra={
-            "is_laundry": True,
-            "cost_table": [30_000_000, 45_000_000, 60_000_000, 75_000_000, 85_000_000, 105_000_000],
-            "clean_caps": [460_000_000, 530_000_000, 600_000_000, 670_000_000, 735_000_000, 800_000_000],
-            "install_hours": [2.5, 2.5, 2.5, 3.0, 3.0, 3.0],
-            "seize_relief": [0.075, 0.08, 0.085, 0.09, 0.095, 0.10],
-        },
-    ),
-    _cat(
-        "laundry_counting_room", "Counting Room", "laundry",
-        max_level=6, base_cost=40_000_000, cost_growth=1.2,
-        min_house_tier=3, min_grower_level=1,
-        requires={"category_id": "laundry_invoice_press", "min_level": 6},
-        tier="premium", icon="count", room_visual="generic",
-        description="A real count room. Warehouse and up.",
-        extra={
-            "is_laundry": True,
-            "cost_table": [40_000_000, 60_000_000, 80_000_000, 100_000_000, 120_000_000, 150_000_000],
-            "clean_caps": [920_000_000, 1_060_000_000, 1_200_000_000, 1_330_000_000, 1_470_000_000, 1_600_000_000],
-            "install_hours": [3.0, 3.0, 3.0, 3.0, 3.5, 3.5],
-            "seize_relief": [0.11, 0.118, 0.126, 0.134, 0.142, 0.15],
-        },
-    ),
-    _cat(
-        "laundry_offshore", "Offshore Stack", "laundry",
-        max_level=6, base_cost=70_000_000, cost_growth=1.2,
-        min_house_tier=4, min_grower_level=1,
-        requires={"category_id": "laundry_counting_room", "min_level": 6},
-        tier="endgame", icon="offshore", room_visual="generic",
-        description="Last machine. Lv6 unlocks the $3B daily clean cap.",
-        extra={
-            "is_laundry": True,
-            "cost_table": [70_000_000, 100_000_000, 130_000_000, 160_000_000, 190_000_000, 250_000_000],
-            "clean_caps": [1_800_000_000, 2_050_000_000, 2_300_000_000, 2_550_000_000, 2_780_000_000, 3_000_000_000],
-            "install_hours": [3.5, 3.5, 3.5, 3.5, 3.5, 3.5],
-            "seize_relief": [0.155, 0.162, 0.168, 0.174, 0.178, 0.18],
-        },
-    ),
 ]
 
 EQUIPMENT_BY_ID: Dict[str, Dict[str, Any]] = {c["id"]: c for c in EQUIPMENT_CATEGORIES}
-
-LAUNDRY_SHOE_BOX_ID = "laundry_shoe_box"
-LAUNDRY_CATEGORY_IDS: Tuple[str, ...] = (
-    "laundry_shoe_box",
-    "laundry_bill_strapper",
-    "laundry_car_wash",
-    "laundry_invoice_press",
-    "laundry_counting_room",
-    "laundry_offshore",
-)
-LAUNDRY_CLEAN_CAP_FLOOR = 50_000_000
-LAUNDRY_CLEAN_CAP_MAX = 3_000_000_000
-
-
-def is_laundry_category(cat_id: Optional[str]) -> bool:
-    return str(cat_id or "") in LAUNDRY_CATEGORY_IDS
-
-
-def laundry_level_clean_cap(cat: Dict[str, Any], level: int) -> int:
-    caps = cat.get("clean_caps") or []
-    lvl = int(level or 0)
-    if not caps or lvl <= 0:
-        return 0
-    idx = min(len(caps) - 1, max(0, lvl - 1))
-    return max(0, int(caps[idx] or 0))
-
-
-def laundry_clean_cap(equipment_levels: Optional[Dict[str, int]] = None) -> int:
-    """Daily dirty-to-clean cap from installed laundry only (pending installs do not count)."""
-    levels = equipment_levels or {}
-    best = LAUNDRY_CLEAN_CAP_FLOOR
-    for cid in LAUNDRY_CATEGORY_IDS:
-        cat = EQUIPMENT_BY_ID.get(cid) or {}
-        try:
-            lvl = int(levels.get(cid) or 0)
-        except (TypeError, ValueError):
-            lvl = 0
-        best = max(best, laundry_level_clean_cap(cat, lvl))
-    return min(LAUNDRY_CLEAN_CAP_MAX, max(LAUNDRY_CLEAN_CAP_FLOOR, best))
-
-
-def laundry_seize_relief(equipment_levels: Optional[Dict[str, int]] = None) -> float:
-    levels = equipment_levels or {}
-    best = 0.0
-    for cid in LAUNDRY_CATEGORY_IDS:
-        cat = EQUIPMENT_BY_ID.get(cid) or {}
-        rel = cat.get("seize_relief") or []
-        try:
-            lvl = int(levels.get(cid) or 0)
-        except (TypeError, ValueError):
-            lvl = 0
-        if lvl > 0 and rel:
-            best = max(best, float(rel[min(len(rel) - 1, lvl - 1)] or 0))
-    return min(0.20, max(0.0, best))
-
-
-def laundry_install_hours(cat: Dict[str, Any], level: int) -> float:
-    hours = cat.get("install_hours") or []
-    lvl = max(1, int(level or 1))
-    if not hours:
-        return 1.5
-    return max(0.0, float(hours[min(len(hours) - 1, lvl - 1)] or 0))
 
 
 def equipment_level_cost(cat: Dict[str, Any], level: int) -> int:
     """Business-cash cost for buying/reaching this level.
 
-    Laundry uses an explicit cost table. Grow gear: first 12 levels stay cheap;
-    later levels climb into millions so the full grow catalog is about $8–12B.
+    Early levels stay exponential and affordable; deep levels (15–100) use a
+    softer curve so maxing the catalog lands in the hundreds of millions, not
+    astronomical pure-exponential blowups.
     """
-    table = cat.get("cost_table")
-    lvl = max(1, int(level))
-    if isinstance(table, (list, tuple)) and table:
-        idx = min(len(table) - 1, lvl - 1)
-        return max(0, int(table[idx] or 0))
-
     base = max(1.0, float(cat.get("base_cost") or 1))
     growth = min(1.28, max(1.05, float(cat.get("cost_growth") or 1.2)))
+    lvl = max(1, int(level))
     early_cap = 12
     if lvl <= early_cap:
         return max(1, int(round(base * (growth ** (lvl - 1)))))
     early_cost = base * (growth ** (early_cap - 1))
-    max_l = max(early_cap + 1, int(cat.get("max_level") or 70))
-    t = (lvl - early_cap) / max(1.0, float(max_l - early_cap))
-    t = min(1.0, max(0.0, t)) ** 1.55
-    peak = 2_600_000 + base * 2_200
-    start_late = max(early_cost * 1.2, 30_000 + base * 25)
-    return max(1, int(round(start_late + (peak - start_late) * t)))
+    # Soft growth ~1.04–1.08 depending on catalog growth.
+    soft = 1.0 + max(0.038, (growth - 1.0) * 0.16)
+    return max(1, int(round(early_cost * (soft ** (lvl - early_cap)))))
 
 
 def xp_to_next_level(level: int) -> int:
@@ -853,10 +691,6 @@ def equipment_unlock_state(
         "stats_per_level": cat.get("stats_per_level") or {},
         "light_class": cat.get("light_class"),
         "consumable_stock_key": cat.get("consumable_stock_key"),
-        "is_laundry": bool(cat.get("is_laundry") or cat.get("group") == "laundry"),
-        "clean_cap_at_owned": laundry_level_clean_cap(cat, owned) if cat.get("is_laundry") else None,
-        "clean_cap_at_next": laundry_level_clean_cap(cat, nxt) if cat.get("is_laundry") and owned < max_level else None,
-        "install_hours_next": laundry_install_hours(cat, nxt) if cat.get("is_laundry") and owned < max_level else None,
         "locked": locked,
         "lock_reason": lock_reason,
         "can_upgrade": can_upgrade and owned < max_level and nxt <= house_max_equip_tier,

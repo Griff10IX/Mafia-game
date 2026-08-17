@@ -9,19 +9,15 @@ GRAMS_PER_LB = GRAMS_PER_OZ * OZ_PER_LB  # 448
 GRAMS_PER_KG = 1000
 
 START_BUSINESS_CASH = 100_000
-DAILY_SELL_CAP_USD = 3_000_000_000
+DAILY_SELL_CAP_USD = 250_000_000
 DAILY_SELL_CAP_STEP_USD = 250_000_000
-DAILY_SELL_CAP_MAX_USD = 3_000_000_000
+DAILY_SELL_CAP_MAX_USD = 5_000_000_000
 DAILY_SELL_CAP_POINTS_COST = 50
-DAILY_CAP_BONUS_MAX_TIERS = 19  # leftover store receipts → laundry seize insurance only
-DAILY_WITHDRAW_CAP_USD = 3_000_000_000  # legacy alias: max daily clean throughput
-DAILY_CLEAN_CAP_MAX_USD = 3_000_000_000
-CLEAN_FEE_FRAC = 0.15
-MIN_CLEAN_USD = 10_000
-DAILY_EQUIP_UPGRADE_CAP = 40
+DAILY_CAP_BONUS_MAX_TIERS = (DAILY_SELL_CAP_MAX_USD - DAILY_SELL_CAP_USD) // DAILY_SELL_CAP_STEP_USD  # 19
+DAILY_WITHDRAW_CAP_USD = 250_000_000
 BASE_STREET_PRICE_PER_OZ = 22_500
 MAX_DEALERS_LEVEL = 20
-# Must keep this much business cash in the farm when cleaning to personal money.
+# Must keep this much business cash in the farm when withdrawing to personal money.
 MIN_BUSINESS_CASH_RESERVE = 50_000
 MIN_CURE_MINUTES = 5.0
 MAX_CURE_MINUTES = 20.0
@@ -45,8 +41,11 @@ def daily_cap_bonus_tiers(farm: Optional[dict] = None) -> int:
 
 
 def daily_sell_cap_for_farm(farm: Optional[dict] = None) -> int:
-    """Daily street/dealer sell ceiling. Store $5B tiers no longer raise this."""
-    return int(DAILY_SELL_CAP_USD)
+    """Effective daily street/dealer sell cap (Points Store tiers raise this; withdraw stays fixed)."""
+    return min(
+        DAILY_SELL_CAP_MAX_USD,
+        DAILY_SELL_CAP_USD + daily_cap_bonus_tiers(farm) * DAILY_SELL_CAP_STEP_USD,
+    )
 
 
 def safety_bank_capacity_units(farm: Optional[dict] = None) -> int:
@@ -100,7 +99,7 @@ HOUSES: List[Dict[str, Any]] = [
         "id": "suburban",
         "name": "Suburban House",
         "plots": 8,
-        "cost": 5_000_000,
+        "cost": 850_000,
         "max_equip_tier": 68,
         "grow_speed_mult": 1.12,
         "market_mult": 2.0,
@@ -113,7 +112,7 @@ HOUSES: List[Dict[str, Any]] = [
         "id": "warehouse",
         "name": "Warehouse",
         "plots": 16,
-        "cost": 80_000_000,
+        "cost": 7_500_000,
         "max_equip_tier": 90,
         "grow_speed_mult": 1.2,
         "market_mult": 3.15,
@@ -126,7 +125,7 @@ HOUSES: List[Dict[str, Any]] = [
         "id": "compound",
         "name": "Compound",
         "plots": 24,
-        "cost": 350_000_000,
+        "cost": 48_000_000,
         "max_equip_tier": 120,
         "grow_speed_mult": 1.3,
         "market_mult": 6.4,
@@ -138,84 +137,74 @@ HOUSES: List[Dict[str, Any]] = [
 
 # Real-life style strain names (public common names; no brand claims).
 _STRAIN_SEED: List[Tuple[str, str, str, float, Tuple[int, int], float, int, str]] = [
-    # id, display, type, base_hours, yield_g, price_per_oz_mult, unlock_tier, bud_mesh
-    # Crap: longer + cheap. Early widow/NL keep tutorial stickers. Mid 1.5–2×. Tier 4 ×4.5.
-    ("ditch_weed", "Ditch Weed", "hybrid", 5.0, (8, 14), 0.65, 0, "airy"),
-    ("schwag", "Schwag Brick", "indica", 4.8, (10, 16), 0.7, 0, "dense"),
+    # id-ish name, display, type, base_hours, yield_g, price_per_oz_mult, unlock_tier, bud_mesh
+    ("ditch_weed", "Ditch Weed", "hybrid", 2.5, (8, 14), 0.65, 0, "airy"),
+    ("schwag", "Schwag Brick", "indica", 2.0, (10, 16), 0.7, 0, "dense"),
     ("northern_lights", "Northern Lights", "indica", 3.0, (14, 22), 1.0, 0, "dense"),
     ("white_widow", "White Widow", "hybrid", 3.5, (16, 24), 1.05, 0, "frosty"),
-    ("skunk_1", "Skunk #1", "hybrid", 3.8, (15, 23), 1.0, 1, "dense"),
+    ("skunk_1", "Skunk #1", "hybrid", 3.0, (15, 23), 1.0, 1, "dense"),
     ("blue_dream", "Blue Dream", "hybrid", 4.0, (18, 28), 1.15, 1, "airy"),
     ("sour_diesel", "Sour Diesel", "sativa", 4.5, (16, 26), 1.2, 1, "airy"),
     ("og_kush", "OG Kush", "hybrid", 4.0, (17, 27), 1.25, 1, "dense"),
     ("purple_haze", "Purple Haze", "sativa", 5.0, (14, 22), 1.2, 1, "purple"),
-    ("ak47", "AK-47", "hybrid", 4.0, (18, 28), 1.1, 1, "dense"),
-    ("hindu_kush", "Hindu Kush", "indica", 3.8, (16, 24), 1.05, 1, "dense"),
-    ("afghani", "Afghani", "indica", 4.0, (15, 24), 1.0, 1, "dense"),
-    ("jack_herer", "Jack Herer", "sativa", 5.0, (16, 25), 1.95, 2, "airy"),
-    ("girl_scout_cookies", "Girl Scout Cookies", "hybrid", 5.0, (18, 28), 2.1, 2, "frosty"),
-    ("gelato", "Gelato", "hybrid", 5.5, (17, 27), 2.175, 2, "frosty"),
-    ("wedding_cake", "Wedding Cake", "hybrid", 5.5, (18, 28), 2.25, 2, "dense"),
-    ("gorilla_glue", "Gorilla Glue", "hybrid", 4.5, (20, 32), 2.025, 2, "frosty"),
-    ("pineapple_express", "Pineapple Express", "hybrid", 4.2, (17, 26), 1.875, 2, "airy"),
-    ("bubba_kush", "Bubba Kush", "indica", 4.2, (16, 25), 1.8, 2, "dense"),
-    ("granddaddy_purple", "Granddaddy Purple", "indica", 4.2, (15, 24), 1.95, 2, "purple"),
-    ("amnesia_haze", "Amnesia Haze", "sativa", 6.0, (16, 26), 2.025, 2, "airy"),
-    ("super_lemon_haze", "Super Lemon Haze", "sativa", 5.5, (17, 27), 2.1, 2, "airy"),
-    ("green_crack", "Green Crack", "sativa", 4.2, (18, 28), 1.8, 2, "airy"),
-    ("trainwreck", "Trainwreck", "hybrid", 4.2, (17, 27), 1.725, 2, "dense"),
-    ("chemdawg", "Chemdawg", "hybrid", 4.5, (16, 26), 1.95, 2, "frosty"),
-    ("durban_poison", "Durban Poison", "sativa", 5.0, (15, 24), 1.875, 2, "airy"),
-    ("maui_wowie", "Maui Wowie", "sativa", 5.0, (14, 22), 1.8, 2, "airy"),
-    ("lemon_skunk", "Lemon Skunk", "hybrid", 4.2, (16, 25), 1.725, 2, "airy"),
-    ("blueberry", "Blueberry", "indica", 4.2, (15, 24), 1.875, 2, "purple"),
-    ("strawberry_cough", "Strawberry Cough", "sativa", 5.0, (14, 23), 1.95, 2, "airy"),
-    ("zkittlez", "Zkittlez", "indica", 5.5, (16, 25), 3.1, 3, "frosty"),
-    ("runtz", "Runtz", "hybrid", 6.0, (17, 27), 3.3, 3, "frosty"),
-    ("gelato_41", "Gelato 41", "hybrid", 6.0, (18, 28), 3.4, 3, "frosty"),
-    ("do_si_dos", "Do-Si-Dos", "indica", 5.0, (17, 27), 3.0, 3, "dense"),
-    ("mimosa", "Mimosa", "hybrid", 5.0, (16, 26), 2.9, 3, "airy"),
-    ("sunset_sherbet", "Sunset Sherbet", "hybrid", 5.5, (16, 26), 3.0, 3, "frosty"),
-    ("mac1", "MAC-1", "hybrid", 6.0, (18, 28), 3.5, 3, "frosty"),
-    ("gmo_cookies", "GMO Cookies", "hybrid", 5.5, (19, 30), 3.2, 3, "dense"),
-    ("ice_cream_cake", "Ice Cream Cake", "indica", 5.5, (18, 28), 3.1, 3, "dense"),
-    ("purple_punch", "Purple Punch", "indica", 5.0, (16, 25), 2.9, 3, "purple"),
-    ("wedding_crasher", "Wedding Crasher", "hybrid", 5.5, (17, 27), 3.0, 3, "frosty"),
-    ("cereal_milk", "Cereal Milk", "hybrid", 6.0, (17, 27), 3.4, 3, "frosty"),
-    ("london_pound_cake", "London Pound Cake", "hybrid", 6.0, (18, 28), 3.6, 3, "dense"),
-    ("apple_fritter", "Apple Fritter", "hybrid", 5.5, (18, 29), 3.3, 3, "frosty"),
-    ("permanent_marker", "Permanent Marker", "hybrid", 6.5, (18, 28), 3.7, 3, "frosty"),
-    ("jealousy", "Jealousy", "hybrid", 6.0, (17, 27), 3.6, 3, "frosty"),
-    ("rs11", "RS-11", "hybrid", 6.5, (18, 28), 8.4, 4, "frosty"),
-    ("grape_gas", "Grape Gas", "hybrid", 6.0, (17, 27), 7.875, 4, "purple"),
-    ("oreoz", "Oreoz", "indica", 5.5, (18, 28), 7.65, 4, "dense"),
-    ("candy_fumez", "Candy Fumez", "hybrid", 6.5, (16, 26), 8.325, 4, "frosty"),
-    ("tropicana_cookies", "Tropicana Cookies", "sativa", 6.0, (16, 26), 7.65, 4, "airy"),
-    ("garlic_breath", "Garlic Breath", "indica", 5.5, (19, 30), 7.425, 4, "dense"),
-    ("peanut_butter_breath", "Peanut Butter Breath", "hybrid", 5.5, (18, 28), 7.65, 4, "dense"),
-    ("forbidden_fruit", "Forbidden Fruit", "indica", 5.5, (16, 25), 7.2, 4, "purple"),
-    ("larry_og", "Larry OG", "hybrid", 5.5, (17, 27), 6.3, 4, "dense"),
-    ("tahoe_og", "Tahoe OG", "hybrid", 5.5, (17, 26), 6.3, 4, "dense"),
-    ("sfv_og", "SFV OG", "hybrid", 5.5, (16, 26), 6.075, 4, "dense"),
-    ("ghost_og", "Ghost OG", "hybrid", 5.5, (17, 27), 6.75, 4, "frosty"),
-    ("headband", "Headband", "hybrid", 5.5, (17, 27), 6.3, 4, "dense"),
-    ("chocolope", "Chocolope", "sativa", 5.5, (16, 25), 6.525, 4, "airy"),
-    ("tangie", "Tangie", "sativa", 5.5, (15, 24), 6.75, 4, "airy"),
-    ("lemon_tree", "Lemon Tree", "hybrid", 5.5, (16, 26), 6.975, 4, "airy"),
-    ("papaya", "Papaya", "indica", 5.5, (18, 28), 6.75, 4, "dense"),
-    ("guava", "Guava", "hybrid", 5.5, (17, 27), 7.2, 4, "frosty"),
-    ("zkittlez_cake", "Zkittlez Cake", "hybrid", 6.0, (17, 27), 8.325, 4, "frosty"),
-    ("wedding_gelato", "Wedding Gelato", "hybrid", 6.0, (18, 28), 8.1, 4, "frosty"),
+    ("ak47", "AK-47", "hybrid", 3.5, (18, 28), 1.1, 1, "dense"),
+    ("hindu_kush", "Hindu Kush", "indica", 3.0, (16, 24), 1.05, 1, "dense"),
+    ("afghani", "Afghani", "indica", 2.8, (15, 24), 1.0, 1, "dense"),
+    ("jack_herer", "Jack Herer", "sativa", 5.0, (16, 25), 1.3, 2, "airy"),
+    ("girl_scout_cookies", "Girl Scout Cookies", "hybrid", 5.0, (18, 28), 1.4, 2, "frosty"),
+    ("gelato", "Gelato", "hybrid", 5.5, (17, 27), 1.45, 2, "frosty"),
+    ("wedding_cake", "Wedding Cake", "hybrid", 5.5, (18, 28), 1.5, 2, "dense"),
+    ("gorilla_glue", "Gorilla Glue", "hybrid", 4.5, (20, 32), 1.35, 2, "frosty"),
+    ("pineapple_express", "Pineapple Express", "hybrid", 4.0, (17, 26), 1.25, 2, "airy"),
+    ("bubba_kush", "Bubba Kush", "indica", 3.5, (16, 25), 1.2, 2, "dense"),
+    ("granddaddy_purple", "Granddaddy Purple", "indica", 4.0, (15, 24), 1.3, 2, "purple"),
+    ("amnesia_haze", "Amnesia Haze", "sativa", 6.0, (16, 26), 1.35, 2, "airy"),
+    ("super_lemon_haze", "Super Lemon Haze", "sativa", 5.5, (17, 27), 1.4, 2, "airy"),
+    ("green_crack", "Green Crack", "sativa", 4.0, (18, 28), 1.2, 2, "airy"),
+    ("trainwreck", "Trainwreck", "hybrid", 4.0, (17, 27), 1.15, 2, "dense"),
+    ("chemdawg", "Chemdawg", "hybrid", 4.5, (16, 26), 1.3, 2, "frosty"),
+    ("durban_poison", "Durban Poison", "sativa", 5.0, (15, 24), 1.25, 2, "airy"),
+    ("maui_wowie", "Maui Wowie", "sativa", 5.0, (14, 22), 1.2, 2, "airy"),
+    ("lemon_skunk", "Lemon Skunk", "hybrid", 4.0, (16, 25), 1.15, 2, "airy"),
+    ("blueberry", "Blueberry", "indica", 4.0, (15, 24), 1.25, 2, "purple"),
+    ("strawberry_cough", "Strawberry Cough", "sativa", 5.0, (14, 23), 1.3, 2, "airy"),
+    ("zkittlez", "Zkittlez", "indica", 5.5, (16, 25), 1.55, 3, "frosty"),
+    ("runtz", "Runtz", "hybrid", 6.0, (17, 27), 1.65, 3, "frosty"),
+    ("gelato_41", "Gelato 41", "hybrid", 6.0, (18, 28), 1.7, 3, "frosty"),
+    ("do_si_dos", "Do-Si-Dos", "indica", 5.0, (17, 27), 1.5, 3, "dense"),
+    ("mimosa", "Mimosa", "hybrid", 5.0, (16, 26), 1.45, 3, "airy"),
+    ("sunset_sherbet", "Sunset Sherbet", "hybrid", 5.5, (16, 26), 1.5, 3, "frosty"),
+    ("mac1", "MAC-1", "hybrid", 6.0, (18, 28), 1.75, 3, "frosty"),
+    ("gmo_cookies", "GMO Cookies", "hybrid", 5.5, (19, 30), 1.6, 3, "dense"),
+    ("ice_cream_cake", "Ice Cream Cake", "indica", 5.5, (18, 28), 1.55, 3, "dense"),
+    ("purple_punch", "Purple Punch", "indica", 4.5, (16, 25), 1.45, 3, "purple"),
+    ("wedding_crasher", "Wedding Crasher", "hybrid", 5.5, (17, 27), 1.5, 3, "frosty"),
+    ("cereal_milk", "Cereal Milk", "hybrid", 6.0, (17, 27), 1.7, 3, "frosty"),
+    ("london_pound_cake", "London Pound Cake", "hybrid", 6.0, (18, 28), 1.8, 3, "dense"),
+    ("apple_fritter", "Apple Fritter", "hybrid", 5.5, (18, 29), 1.65, 3, "frosty"),
+    ("permanent_marker", "Permanent Marker", "hybrid", 6.5, (18, 28), 1.85, 3, "frosty"),
+    ("jealousy", "Jealousy", "hybrid", 6.0, (17, 27), 1.8, 3, "frosty"),
+    ("rs11", "RS-11", "hybrid", 6.5, (18, 28), 1.9, 4, "frosty"),
+    ("grape_gas", "Grape Gas", "hybrid", 6.0, (17, 27), 1.75, 4, "purple"),
+    ("oreoz", "Oreoz", "indica", 5.5, (18, 28), 1.7, 4, "dense"),
+    ("candy_fumez", "Candy Fumez", "hybrid", 6.5, (16, 26), 1.85, 4, "frosty"),
+    ("tropicana_cookies", "Tropicana Cookies", "sativa", 6.0, (16, 26), 1.7, 4, "airy"),
+    ("garlic_breath", "Garlic Breath", "indica", 5.5, (19, 30), 1.65, 4, "dense"),
+    ("peanut_butter_breath", "Peanut Butter Breath", "hybrid", 5.5, (18, 28), 1.7, 4, "dense"),
+    ("forbidden_fruit", "Forbidden Fruit", "indica", 5.0, (16, 25), 1.6, 4, "purple"),
+    ("larry_og", "Larry OG", "hybrid", 4.5, (17, 27), 1.4, 4, "dense"),
+    ("tahoe_og", "Tahoe OG", "hybrid", 4.5, (17, 26), 1.4, 4, "dense"),
+    ("sfv_og", "SFV OG", "hybrid", 4.5, (16, 26), 1.35, 4, "dense"),
+    ("ghost_og", "Ghost OG", "hybrid", 5.0, (17, 27), 1.5, 4, "frosty"),
+    ("headband", "Headband", "hybrid", 5.0, (17, 27), 1.4, 4, "dense"),
+    ("chocolope", "Chocolope", "sativa", 5.5, (16, 25), 1.45, 4, "airy"),
+    ("tangie", "Tangie", "sativa", 5.0, (15, 24), 1.5, 4, "airy"),
+    ("lemon_tree", "Lemon Tree", "hybrid", 5.5, (16, 26), 1.55, 4, "airy"),
+    ("papaya", "Papaya", "indica", 4.5, (18, 28), 1.5, 4, "dense"),
+    ("guava", "Guava", "hybrid", 5.5, (17, 27), 1.6, 4, "frosty"),
+    ("zkittlez_cake", "Zkittlez Cake", "hybrid", 6.0, (17, 27), 1.85, 4, "frosty"),
+    ("wedding_gelato", "Wedding Gelato", "hybrid", 6.0, (18, 28), 1.8, 4, "frosty"),
 ]
-
-
-def _strain_min_grow_hours(sid: str, hours: float, tier: int) -> float:
-    """Floor after speed gear / Super Silver Haze. Best genetics cannot compress to ~3h."""
-    if sid in ("ditch_weed", "schwag"):
-        return 3.0
-    if tier >= 4:
-        return 4.5
-    return 0.75
 
 
 def _build_strains() -> List[Dict[str, Any]]:
@@ -227,7 +216,6 @@ def _build_strains() -> List[Dict[str, Any]]:
                 "name": name,
                 "type": typ,
                 "base_grow_hours": hours,
-                "min_grow_hours": _strain_min_grow_hours(sid, hours, tier),
                 "yield_g_min": yld[0],
                 "yield_g_max": yld[1],
                 "base_price_per_oz": round(BASE_STREET_PRICE_PER_OZ * price_mult, 2),
@@ -251,10 +239,9 @@ def _build_strains() -> List[Dict[str, Any]]:
                 "name": name,
                 "type": typ,
                 "base_grow_hours": hours,
-                "min_grow_hours": 4.5,
                 "yield_g_min": yld[0],
                 "yield_g_max": yld[1],
-                "base_price_per_oz": round(BASE_STREET_PRICE_PER_OZ * price_mult * 3.0, 2),
+                "base_price_per_oz": round(BASE_STREET_PRICE_PER_OZ * price_mult, 2),
                 "unlock_house_tier": 99,
                 "seed_cost": int(25_000 + price_mult * 8_000),
                 "rarity": "loot_exclusive",
@@ -279,10 +266,9 @@ def _build_strains() -> List[Dict[str, Any]]:
                 "name": name,
                 "type": typ,
                 "base_grow_hours": hours,
-                "min_grow_hours": 4.5,
                 "yield_g_min": yld[0],
                 "yield_g_max": yld[1],
-                "base_price_per_oz": round(BASE_STREET_PRICE_PER_OZ * price_mult * 3.0, 2),
+                "base_price_per_oz": round(BASE_STREET_PRICE_PER_OZ * price_mult, 2),
                 "unlock_house_tier": 99,
                 "seed_cost": int(20_000 + price_mult * 6_000),
                 "rarity": "game_pass",
@@ -307,20 +293,11 @@ STRAIN_BY_ID: Dict[str, Dict[str, Any]] = {s["id"]: s for s in STRAINS}
 from utils.weed_empire_equipment import (  # noqa: E402
     EQUIPMENT_BY_ID,
     EQUIPMENT_CATEGORIES,
-    LAUNDRY_CATEGORY_IDS,
-    LAUNDRY_CLEAN_CAP_FLOOR,
-    LAUNDRY_CLEAN_CAP_MAX,
-    LAUNDRY_SHOE_BOX_ID,
     apply_grower_xp,
     assert_can_upgrade_equipment,
     equipment_level_cost,
     equipment_shop_entries,
     grower_progress,
-    is_laundry_category,
-    laundry_clean_cap,
-    laundry_install_hours,
-    laundry_level_clean_cap,
-    laundry_seize_relief,
     rarity_xp_mult,
     shop_status_for_farm,
     xp_to_next_level,
@@ -420,11 +397,11 @@ def dealers_upgrade_cost(current_level: int) -> int:
     """Business-cash cost to go from current_level → current_level+1.
 
     Early dealer ranks stay reachable after unlock; late ranks are a serious sink
-    (~$400M total to climb 1→20).
+    (~$90M total to climb 1→20).
     """
     lvl = max(1, int(current_level))
-    # Lv1→2 ≈ $490k … Lv19→20 ≈ $112M; sum 1→20 ≈ $400M
-    return int(round(160_000 * ((lvl + 1) ** 1.95)))
+    # Lv1→2 ≈ $55k … Lv19→20 ≈ $12.5M
+    return int(round(18_000 * ((lvl + 1) ** 1.95)))
 
 
 def aggregate_stats(equipment_levels: Dict[str, int], house: Dict[str, Any]) -> Dict[str, float]:

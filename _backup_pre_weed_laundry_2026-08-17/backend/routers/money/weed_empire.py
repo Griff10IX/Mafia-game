@@ -22,20 +22,14 @@ from utils.weed_empire_catalog import (
     DAILY_CAP_BONUS_MAX_TIERS,
     DAILY_SELL_CAP_POINTS_COST,
     DAILY_SELL_CAP_STEP_USD,
-    CLEAN_FEE_FRAC,
-    DAILY_CLEAN_CAP_MAX_USD,
-    DAILY_EQUIP_UPGRADE_CAP,
     DAILY_SELL_CAP_USD,
     DAILY_WITHDRAW_CAP_USD,
     EQUIPMENT_BY_ID,
     EQUIPMENT_CATEGORIES,
-    LAUNDRY_CATEGORY_IDS,
-    LAUNDRY_SHOE_BOX_ID,
     HOUSE_BY_TIER,
     HOUSES,
     MAX_DEALERS_LEVEL,
     MIN_BUSINESS_CASH_RESERVE,
-    MIN_CLEAN_USD,
     SAFETY_BANK_MAX_UNITS,
     SAFETY_BANK_UNIT_CAPACITY,
     SAFETY_BANK_UNIT_COST,
@@ -57,10 +51,6 @@ from utils.weed_empire_catalog import (
     equipment_shop_entries,
     grams_to_oz,
     grower_progress,
-    is_laundry_category,
-    laundry_clean_cap,
-    laundry_install_hours,
-    laundry_seize_relief,
     market_price_per_oz,
     rarity_xp_mult,
     safety_bank_capacity,
@@ -83,9 +73,9 @@ from utils.game_pass_weed_strains import (
     GP_PURPLE_PUNCH,
     GP_RAID_SUCCESS_MULT_WHEN_PLANTED,
     GP_UPGRADE_COST_MULT,
-    GP_SEIZE_RELIEF_ACTIVE_VIP,
-    GP_SEIZE_RELIEF_PERMANENT,
     GP_WEDDING_CAKE,
+    GP_WITHDRAW_MULT_ACTIVE_VIP,
+    GP_WITHDRAW_MULT_PERMANENT,
     farm_has_strain_planted,
     game_pass_buffs_public,
     is_game_pass_strain_id,
@@ -114,11 +104,8 @@ MIN_RAID_GROWER_LEVEL = 5  # cannot raid until Grower Lv 5
 MIN_RAID_TARGET_GROWER_LEVEL = 5  # cannot be raided until Grower Lv 5
 RAID_PER_TARGET_COOLDOWN_HOURS = 3
 RAID_GLOBAL_COOLDOWN_HOURS = RAID_PER_TARGET_COOLDOWN_HOURS  # legacy alias
-RAID_CASH_STEAL_CAP = 80_000_000
+RAID_CASH_STEAL_CAP = 1_000_000
 RAID_CASH_STEAL_FRAC = 0.12
-RAID_FAIL_FINE_BY_HOUSE = (25_000, 75_000, 250_000, 800_000, 2_000_000)
-CLEAN_SEIZE_JAIL_SECONDS = 180
-CLEAN_SEIZE_JAIL_MIN_USD = 250_000_000
 # Security shop lanes that drive raid defence / fail chance.
 SECURITY_EQUIPMENT_IDS = (
     "security",
@@ -237,24 +224,13 @@ def _default_farm(user_id: str) -> Dict[str, Any]:
         "user_id": user_id,
         "house_tier": 0,
         "plots": plots,
-        "equipment": {
-            "lights_cfl": 1,
-            "pots": 1,
-            "soil_conventional": 1,
-            "tents": 1,
-            "irrigation": 1,
-            "nutes_base": 1,
-            LAUNDRY_SHOE_BOX_ID: 1,
-        },
+        "equipment": {"lights_cfl": 1, "pots": 1, "soil_conventional": 1, "tents": 1, "irrigation": 1, "nutes_base": 1},
         "soil_stock": {"soil_conventional": 4},
         "business_cash": START_BUSINESS_CASH,
         "daily_sold_usd": 0,
         "daily_sold_utc_date": _utc_date_str(),
         "daily_withdrawn_usd": 0,
         "daily_withdrawn_utc_date": _utc_date_str(),
-        "daily_equip_upgrades": 0,
-        "daily_equip_upgrades_utc_date": _utc_date_str(),
-        "laundry_install": None,
         "lifetime_sold_usd": 0,
         "grower_level": 1,
         "grower_xp": 0,
@@ -346,8 +322,6 @@ async def _get_or_create_farm(user_id: str) -> Dict[str, Any]:
         if farm.get("safety_bank_unlocked") and safety_bank_capacity_units(farm) <= 0:
             farm["safety_bank_capacity_units"] = 1
             migration["safety_bank_capacity_units"] = 1
-        if _ensure_shoe_box(farm):
-            migration["equipment"] = farm.get("equipment")
         if migration:
             await db.weed_farms.update_one({"user_id": user_id}, {"$set": migration})
         await _attach_exclusive_owned(farm)
@@ -360,9 +334,6 @@ async def _get_or_create_farm(user_id: str) -> Dict[str, Any]:
                     "plots": farm.get("plots") or [],
                     "cleanliness_pct": farm["cleanliness_pct"],
                     "last_cleanliness_tick_at": farm["last_cleanliness_tick_at"],
-                    "equipment": farm.get("equipment"),
-                    "laundry_install": farm.get("laundry_install"),
-                    "stolen_equipment": farm.get("stolen_equipment"),
                 }
             },
         )
@@ -417,148 +388,6 @@ def _equip_levels(farm: dict) -> Dict[str, int]:
     return out
 
 
-def _ensure_shoe_box(farm: dict) -> bool:
-    """Every farm keeps shoe box Lv1 so they can always clean."""
-    equip = dict(farm.get("equipment") or {}) if isinstance(farm.get("equipment"), dict) else {}
-    try:
-        have = int(equip.get(LAUNDRY_SHOE_BOX_ID) or 0)
-    except (TypeError, ValueError):
-        have = 0
-    if have >= 1:
-        return False
-    equip[LAUNDRY_SHOE_BOX_ID] = 1
-    farm["equipment"] = equip
-    return True
-
-
-def _laundry_install_ready(farm: dict, now: Optional[datetime] = None) -> bool:
-    pending = farm.get("laundry_install")
-    if not isinstance(pending, dict) or not pending.get("ready_at"):
-        return False
-    ready = _parse_iso(pending.get("ready_at"))
-    if not ready:
-        return False
-    return (now or _utcnow()) >= ready
-
-
-def _complete_laundry_install(farm: dict, now: Optional[datetime] = None) -> bool:
-    if not _laundry_install_ready(farm, now):
-        return False
-    pending = farm.get("laundry_install") or {}
-    cat_id = str(pending.get("category_id") or "")
-    try:
-        to_level = int(pending.get("to_level") or 0)
-    except (TypeError, ValueError):
-        to_level = 0
-    farm["laundry_install"] = None
-    if not cat_id or to_level <= 0:
-        return True
-    equip = dict(farm.get("equipment") or {})
-    equip[cat_id] = max(int(equip.get(cat_id) or 0), to_level)
-    farm["equipment"] = equip
-    return True
-
-
-def _queue_laundry_install(farm: dict, cat_id: str, to_level: int, now: datetime, *, stolen: bool = False) -> bool:
-    pending = farm.get("laundry_install")
-    if isinstance(pending, dict) and pending.get("ready_at") and not _laundry_install_ready(farm, now):
-        return False
-    if _laundry_install_ready(farm, now):
-        _complete_laundry_install(farm, now)
-        pending = farm.get("laundry_install")
-        if isinstance(pending, dict) and pending.get("ready_at"):
-            return False
-    cat = EQUIPMENT_BY_ID.get(cat_id) or {}
-    hours = laundry_install_hours(cat, to_level)
-    if hours <= 0:
-        equip = dict(farm.get("equipment") or {})
-        equip[cat_id] = max(int(equip.get(cat_id) or 0), int(to_level))
-        farm["equipment"] = equip
-        return True
-    farm["laundry_install"] = {
-        "category_id": cat_id,
-        "to_level": int(to_level),
-        "started_at": _iso(now),
-        "ready_at": _iso(now + timedelta(hours=hours)),
-        "stolen": bool(stolen),
-        "name": cat.get("name") or cat_id,
-    }
-    return True
-
-
-def _ensure_daily_equip(farm: dict) -> dict:
-    today = _utc_date_str()
-    if farm.get("daily_equip_upgrades_utc_date") != today:
-        farm["daily_equip_upgrades_utc_date"] = today
-        farm["daily_equip_upgrades"] = 0
-    return farm
-
-
-def _consume_equip_upgrade_slot(farm: dict) -> None:
-    _ensure_daily_equip(farm)
-    used = int(farm.get("daily_equip_upgrades") or 0)
-    if used >= DAILY_EQUIP_UPGRADE_CAP:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Daily equipment upgrade cap reached ({DAILY_EQUIP_UPGRADE_CAP}). Resets at UTC midnight.",
-        )
-    farm["daily_equip_upgrades"] = used + 1
-
-
-def _laundry_clean_cap_for_farm(farm: dict) -> int:
-    return int(laundry_clean_cap(_equip_levels(farm)))
-
-
-def _wedding_seize_relief(farm: dict) -> float:
-    if GP_WEDDING_CAKE not in set(farm.get("_gp_owned_ids") or []):
-        return 0.0
-    return GP_SEIZE_RELIEF_ACTIVE_VIP if farm.get("_gp_active_vip") else GP_SEIZE_RELIEF_PERMANENT
-
-
-def _badge_seize_relief(farm: dict) -> float:
-    try:
-        from utils.loot_reclaimable_passives import BUFF_WEED_SEIZE_RELIEF, get_reclaimable_passive_mults_from_user
-
-        user_stub = {"loot_reclaimable_passive_ids": farm.get("_loot_reclaimable_passive_ids") or []}
-        return max(0.0, float(get_reclaimable_passive_mults_from_user(user_stub).get(BUFF_WEED_SEIZE_RELIEF) or 0.0))
-    except Exception:
-        return 0.0
-
-
-def _clean_seize_chance(farm: dict, amount: int) -> float:
-    size = min(1.0, max(0.0, float(amount) / float(DAILY_CLEAN_CAP_MAX_USD)))
-    heat = min(1.0, max(0.0, float(farm.get("heat") or 0) / MAX_HEAT))
-    relief = laundry_seize_relief(_equip_levels(farm))
-    kit_weak = max(0.0, 0.18 - relief) / 0.18
-    chance = 0.02 + size * 0.12 + heat * 0.12 + kit_weak * 0.08
-    chance -= _wedding_seize_relief(farm)
-    chance -= _badge_seize_relief(farm)
-    chance -= daily_cap_bonus_tiers(farm) * 0.003
-    return min(0.45, max(0.02, chance))
-
-
-def _sell_heat_for_payout(payout: int) -> float:
-    return min(18.0, max(0.4, float(payout) / 80_000_000.0))
-
-
-def _clean_heat_for_amount(amount: int, *, failed: bool) -> float:
-    base = min(16.0, max(0.5, float(amount) / 100_000_000.0))
-    if not failed:
-        return base
-    extra = 8.0 + 7.0 * min(1.0, float(amount) / float(DAILY_CLEAN_CAP_MAX_USD))
-    return base + extra
-
-
-def _raid_fail_fine(farm: dict) -> int:
-    tier = max(0, min(4, int(farm.get("house_tier") or 0)))
-    return int(RAID_FAIL_FINE_BY_HOUSE[tier])
-
-
-def _utc_day_used(stamp: Any, today: Optional[str] = None) -> bool:
-    day = today or _utc_date_str()
-    return str(stamp or "") == day
-
-
 def _auto_equip_stolen_inventory(farm: dict) -> bool:
     """Install stolen gear the house can hold; absorb same/lower duplicates. Returns True if mutated."""
     inv = list(farm.get("stolen_equipment") or [])
@@ -595,22 +424,6 @@ def _auto_equip_stolen_inventory(farm: dict) -> bool:
             )
             continue
         cur = int(equip.get(cat_id) or 0)
-        if is_laundry_category(cat_id):
-            if lvl <= cur:
-                mutated = True
-                continue
-            if _queue_laundry_install(farm, cat_id, lvl, _utcnow(), stolen=True):
-                equip = dict(farm.get("equipment") or {})
-                mutated = True
-                continue
-            kept.append(
-                {
-                    "category_id": cat_id,
-                    "level": lvl,
-                    "name": item.get("name") or cat.get("name") or cat_id,
-                }
-            )
-            continue
         if lvl > cur:
             equip[cat_id] = lvl
         mutated = True
@@ -1336,7 +1149,6 @@ def _dealer_sell_stash(farm: dict, *, assistant_share: bool = False) -> Dict[str
         assistant_cut = int(math.floor(total_payout * ASSISTANT_PROFIT_SHARE))
         farm_gain = total_payout - assistant_cut
     farm["business_cash"] = int(farm.get("business_cash") or 0) + farm_gain
-    _add_heat(farm, _sell_heat_for_payout(total_payout))
     return {
         "payout": total_payout,
         "farm_gain": farm_gain,
@@ -1370,8 +1182,6 @@ def _apply_heat_bust(farm: dict, user_id: str, now: datetime) -> Dict[str, Any]:
     for starter in ("pots", "soil_conventional", "tents", "irrigation", "nutes_base"):
         if starter not in halved:
             halved[starter] = 1
-    if int(halved.get(LAUNDRY_SHOE_BOX_ID) or 0) < 1:
-        halved[LAUNDRY_SHOE_BOX_ID] = 1
     farm["equipment"] = halved
     farm["stolen_equipment"] = []
     if soft:
@@ -1518,13 +1328,26 @@ def _ensure_daily_cap(farm: dict) -> dict:
     if farm.get("daily_withdrawn_utc_date") != today:
         farm["daily_withdrawn_utc_date"] = today
         farm["daily_withdrawn_usd"] = 0
-    _ensure_daily_equip(farm)
     return farm
 
 
 def _daily_withdraw_cap(farm: dict) -> int:
-    """Daily dirty cash you can send through Clean money (kit cap, max $3B)."""
-    return min(int(DAILY_CLEAN_CAP_MAX_USD), _laundry_clean_cap_for_farm(farm))
+    """Effective daily withdraw cap (Wedding Cake Game Pass strain + Distributor's Badge)."""
+    base = int(DAILY_WITHDRAW_CAP_USD)
+    gp = set(farm.get("_gp_owned_ids") or [])
+    if GP_WEDDING_CAKE in gp:
+        mult = GP_WITHDRAW_MULT_ACTIVE_VIP if farm.get("_gp_active_vip") else GP_WITHDRAW_MULT_PERMANENT
+        base = int(round(base * mult))
+    try:
+        from utils.loot_reclaimable_passives import BUFF_WEED_WITHDRAW, get_reclaimable_passive_mults_from_user
+
+        user_stub = {"loot_reclaimable_passive_ids": farm.get("_loot_reclaimable_passive_ids") or []}
+        wmult = float(get_reclaimable_passive_mults_from_user(user_stub).get(BUFF_WEED_WITHDRAW) or 1.0)
+        if wmult > 1.001:
+            base = int(round(base * wmult))
+    except Exception:
+        pass
+    return base
 
 
 def _upgrade_cost_mult(farm: dict) -> float:
@@ -1557,8 +1380,7 @@ def _grow_hours_needed(strain: dict, stats: dict, preferred_ok: bool) -> float:
     hours = base / max(0.35, speed)
     if preferred_ok:
         hours *= 0.95
-    floor = float(strain.get("min_grow_hours") or 0.75)
-    return max(floor, hours)
+    return max(0.75, hours)
 
 
 def _plot_stage(planted_at: datetime, hours_needed: float, now: datetime) -> Tuple[str, float]:
@@ -1673,13 +1495,12 @@ def _clean_room_cost(farm: dict) -> int:
     )
 
 
-def _cool_off_cost(heat: float, farm: Optional[dict] = None) -> int:
-    """Business-cash cost to fully clear current heat. Scales with laundry clean cap."""
+def _cool_off_cost(heat: float) -> int:
+    """Business-cash cost to fully clear current heat (middle-ground pricing)."""
     h = max(0.0, min(MAX_HEAT, float(heat or 0)))
     if h < 0.5:
         return 0
-    cap = _laundry_clean_cap_for_farm(farm) if farm else 50_000_000
-    return max(15_000, int(round(2_000 + float(cap) * 0.0008 * (h / 100.0))))
+    return int(round(COOL_OFF_BASE_COST + h * COOL_OFF_COST_PER_HEAT))
 
 
 def _heat_hotness(farm: dict, stats: dict) -> float:
@@ -1752,9 +1573,6 @@ def _clear_plot_mites(plot: dict) -> None:
 
 
 def _tick_environment(farm: dict, stats: dict, now: datetime) -> dict:
-    _ensure_shoe_box(farm)
-    if _complete_laundry_install(farm, now):
-        _auto_equip_stolen_inventory(farm)
     farm = _tick_passive_heat(farm, stats, now)
     last_clean = _parse_iso(farm.get("last_cleanliness_tick_at")) or now
     elapsed_hours = max(0.0, (now - last_clean).total_seconds() / 3600.0)
@@ -2075,22 +1893,6 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         equipment_levels=_equip_levels(farm),
     )
     cost_mult = _upgrade_cost_mult(farm)
-    pending_laundry = farm.get("laundry_install") if isinstance(farm.get("laundry_install"), dict) else None
-    if pending_laundry:
-        pid = str(pending_laundry.get("category_id") or "")
-        for row in shop:
-            if not isinstance(row, dict):
-                continue
-            if not row.get("is_laundry"):
-                continue
-            row["can_upgrade"] = False
-            if str(row.get("category_id") or "") == pid:
-                row["installing"] = True
-                row["install_ready_at"] = pending_laundry.get("ready_at")
-                row["lock_reason"] = "Installing"
-                row["action_label"] = "Installing"
-            elif not row.get("lock_reason"):
-                row["lock_reason"] = "Another machine is installing"
     if cost_mult < 0.999:
         for row in shop:
             if not isinstance(row, dict):
@@ -2114,22 +1916,9 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         "business_cash": int(farm.get("business_cash") or 0),
         "business_cash_reserve": MIN_BUSINESS_CASH_RESERVE,
         "withdrawable_cash": _withdrawable_cash(farm),
-        "cleanable_cash": _withdrawable_cash(farm),
         "daily_withdraw_cap": _daily_withdraw_cap(farm),
-        "daily_clean_cap": _daily_withdraw_cap(farm),
         "daily_withdrawn_usd": withdrawn_today,
-        "daily_cleaned_usd": withdrawn_today,
         "daily_withdraw_remaining": max(0, _daily_withdraw_cap(farm) - withdrawn_today),
-        "daily_clean_remaining": max(0, _daily_withdraw_cap(farm) - withdrawn_today),
-        "clean_fee_frac": CLEAN_FEE_FRAC,
-        "min_clean_usd": MIN_CLEAN_USD,
-        "laundry_install": farm.get("laundry_install"),
-        "daily_equip_upgrades": int(farm.get("daily_equip_upgrades") or 0),
-        "daily_equip_upgrade_cap": DAILY_EQUIP_UPGRADE_CAP,
-        "daily_equip_upgrades_remaining": max(
-            0, DAILY_EQUIP_UPGRADE_CAP - int(farm.get("daily_equip_upgrades") or 0)
-        ),
-        "laundry_seize_relief": laundry_seize_relief(_equip_levels(farm)),
         "daily_sold_usd": sold,
         "daily_sold_cap": sell_cap,
         "daily_sold_remaining": max(0, sell_cap - sold),
@@ -2150,7 +1939,7 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         "heat_gain_rate_max": HEAT_PASSIVE_MAX_PER_HOUR,
         "heat_gain_rate_band": list(farm.get("heat_gain_rate_band") or _passive_heat_rate_band(farm, stats)),
         "heat_gain_last_rate": farm.get("heat_gain_last_rate"),
-        "cool_off_cost": _cool_off_cost(float(farm.get("heat") or 0), farm),
+        "cool_off_cost": _cool_off_cost(float(farm.get("heat") or 0)),
         "last_heat_tick_at": farm.get("last_heat_tick_at"),
         "cleanliness_pct": round(float(farm.get("cleanliness_pct", 100.0)), 2),
         "last_cleanliness_tick_at": farm.get("last_cleanliness_tick_at"),
@@ -2502,7 +2291,6 @@ async def weed_status(current_user: dict = Depends(_gate)):
             "assistant_level": farm.get("assistant_level"),
             "equipment": farm.get("equipment"),
             "stolen_equipment": farm.get("stolen_equipment"),
-            "laundry_install": farm.get("laundry_install"),
             "house_tier": farm.get("house_tier"),
             "bust_restart_seed": farm.get("bust_restart_seed"),
             "last_bust_at": farm.get("last_bust_at"),
@@ -2971,7 +2759,7 @@ async def weed_sell(body: SellBody, http_request: Request, current_user: dict = 
         missions = dict(farm.get("missions") or {})
         missions["sell_count"] = int(missions.get("sell_count") or 0) + 1
         farm["missions"] = missions
-        _add_heat(farm, _sell_heat_for_payout(payout))
+        _add_heat(farm, min(3.5, 0.25 + oz * 0.04))
         _track_heat_for_bust(farm, _utcnow())
 
         # Dealer passive unlock nudge
@@ -3155,37 +2943,6 @@ async def weed_upgrade_equip(body: UpgradeEquipBody, current_user: dict = Depend
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     cost = _scaled_upgrade_cost(farm, equipment_level_cost(cat, nxt))
-    now = _utcnow()
-    _complete_laundry_install(farm, now)
-    if is_laundry_category(body.category_id):
-        pending = farm.get("laundry_install")
-        if isinstance(pending, dict) and pending.get("ready_at") and not _laundry_install_ready(farm, now):
-            raise HTTPException(status_code=400, detail="A cleaning machine is already installing")
-        _consume_equip_upgrade_slot(farm)
-        _spend(farm, cost)
-        if not _queue_laundry_install(farm, body.category_id, nxt, now, stolen=False):
-            raise HTTPException(status_code=400, detail="A cleaning machine is already installing")
-        await _save_farm(
-            farm,
-            {
-                "business_cash": farm["business_cash"],
-                "laundry_install": farm.get("laundry_install"),
-                "daily_equip_upgrades": farm.get("daily_equip_upgrades"),
-                "daily_equip_upgrades_utc_date": farm.get("daily_equip_upgrades_utc_date"),
-                "equipment": farm.get("equipment"),
-            },
-        )
-        return {
-            "ok": True,
-            "category_id": body.category_id,
-            "level": nxt,
-            "cost": cost,
-            "installing": True,
-            "laundry_install": farm.get("laundry_install"),
-            "farm": _public_farm(farm, username=current_user.get("username") or ""),
-        }
-
-    _consume_equip_upgrade_slot(farm)
     _spend(farm, cost)
     equip = dict(farm.get("equipment") or {})
     equip[body.category_id] = nxt
@@ -3206,8 +2963,6 @@ async def weed_upgrade_equip(body: UpgradeEquipBody, current_user: dict = Depend
             "equipment": equip,
             "soil_stock": farm.get("soil_stock"),
             "equipment_rebuy": farm.get("equipment_rebuy"),
-            "daily_equip_upgrades": farm.get("daily_equip_upgrades"),
-            "daily_equip_upgrades_utc_date": farm.get("daily_equip_upgrades_utc_date"),
         },
     )
     return {
@@ -3284,7 +3039,7 @@ async def weed_unlock_strain(body: UnlockStrainBody, current_user: dict = Depend
 async def weed_cool_off(current_user: dict = Depends(_gate)):
     farm = await _get_or_create_farm(current_user["id"])
     heat = float(farm.get("heat") or 0)
-    cost = _cool_off_cost(heat, farm)
+    cost = _cool_off_cost(heat)
     if cost <= 0 or heat < 0.5:
         return {"ok": True, "farm": _public_farm(farm, username=current_user.get("username") or ""), "cleared": 0}
     _spend(farm, cost)
@@ -3309,130 +3064,81 @@ async def weed_cool_off(current_user: dict = Depends(_gate)):
 
 
 @router.post("/withdraw")
-@router.post("/clean")
 async def weed_withdraw(body: WithdrawBody, current_user: dict = Depends(_gate)):
-    """Clean dirty farm cash into personal money. Always 15% fee; bag can be seized."""
+    """Move weed business cash to personal money. Must leave $50k; $250M daily withdraw cap."""
     lock = await _weed_farm_lock(current_user["id"])
     async with lock:
         farm = await _get_or_create_farm(current_user["id"])
-        _complete_laundry_install(farm, _utcnow())
-        _ensure_shoe_box(farm)
         farm = _ensure_daily_cap(farm)
         expected_at = farm.get("updated_at")
         cash = int(farm.get("business_cash") or 0)
         after_reserve = max(0, cash - MIN_BUSINESS_CASH_RESERVE)
-        cleaned_today = int(farm.get("daily_withdrawn_usd") or 0)
-        clean_cap = _daily_withdraw_cap(farm)
-        remaining_cap = max(0, clean_cap - cleaned_today)
-        cleanable = min(after_reserve, remaining_cap)
-        try:
-            amount = int(body.amount)
-        except (TypeError, ValueError):
-            raise HTTPException(status_code=400, detail="Amount must be a whole dollar value")
-        if amount < MIN_CLEAN_USD:
-            raise HTTPException(status_code=400, detail=f"Minimum clean is ${MIN_CLEAN_USD:,}.")
+        withdrawn_today = int(farm.get("daily_withdrawn_usd") or 0)
+        withdraw_cap = _daily_withdraw_cap(farm)
+        remaining_cap = max(0, withdraw_cap - withdrawn_today)
+        withdrawable = min(after_reserve, remaining_cap)
+        amount = int(body.amount)
         if cash <= MIN_BUSINESS_CASH_RESERVE:
             raise HTTPException(
                 status_code=400,
                 detail=f"Must keep at least ${MIN_BUSINESS_CASH_RESERVE:,} in the farm. Current: ${cash:,}.",
             )
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Amount must be positive")
         if remaining_cap <= 0:
             raise HTTPException(
                 status_code=400,
-                detail=f"Daily clean cap reached (${clean_cap:,}). Upgrade cleaning equipment or wait for UTC midnight.",
+                detail=f"Daily withdraw cap reached (${withdraw_cap:,}). Resets at UTC midnight.",
             )
-        amount = min(amount, cleanable)
-        if amount < MIN_CLEAN_USD:
+        if amount > remaining_cap:
             raise HTTPException(
                 status_code=400,
-                detail=f"Can clean up to ${cleanable:,} right now (kit cap ${clean_cap:,}, leave ${MIN_BUSINESS_CASH_RESERVE:,}).",
+                detail=f"Daily withdraw remaining: ${remaining_cap:,} of ${withdraw_cap:,}.",
             )
-
-        debit = await db.weed_farms.find_one_and_update(
-            {
-                "user_id": farm["user_id"],
-                "business_cash": {"$gte": amount},
-                **({"updated_at": expected_at} if expected_at is not None else {}),
-            },
-            {"$inc": {"business_cash": -int(amount)}},
-        )
-        if not debit:
-            raise HTTPException(status_code=409, detail="Clean conflict — refresh and try again")
+        if amount > after_reserve:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Can withdraw up to ${after_reserve:,} (must leave ${MIN_BUSINESS_CASH_RESERVE:,}).",
+            )
+        if amount > withdrawable:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Can withdraw up to ${withdrawable:,} right now.",
+            )
         farm["business_cash"] = cash - amount
-        farm["daily_withdrawn_usd"] = cleaned_today + amount
+        farm["daily_withdrawn_usd"] = withdrawn_today + amount
         farm["daily_withdrawn_utc_date"] = farm.get("daily_withdrawn_utc_date") or _utc_date_str()
-
-        fee = int(math.floor(amount * CLEAN_FEE_FRAC))
-        bag = max(0, amount - fee)
-        seize_chance = _clean_seize_chance(farm, amount)
-        seized = _rng.random() < seize_chance
-        wallet = 0 if seized else bag
-        _add_heat(farm, _clean_heat_for_amount(amount, failed=seized))
-        _track_heat_for_bust(farm, _utcnow())
-
-        jail_iso = None
-        if seized and amount >= CLEAN_SEIZE_JAIL_MIN_USD:
-            until = _utcnow() + timedelta(seconds=CLEAN_SEIZE_JAIL_SECONDS)
-            jail_iso = until.isoformat()
-            await db.users.update_one(
-                {"id": current_user["id"]},
-                {
-                    "$set": {
-                        "in_jail": True,
-                        "jail_until": jail_iso,
-                        "unbreakable_until": jail_iso,
-                    }
-                },
-            )
-
         saved = await _save_farm(
             farm,
             {
                 "business_cash": farm["business_cash"],
                 "daily_withdrawn_usd": farm["daily_withdrawn_usd"],
                 "daily_withdrawn_utc_date": farm["daily_withdrawn_utc_date"],
-                "heat": farm["heat"],
-                "heat_high_since": farm.get("heat_high_since"),
             },
+            expected_updated_at=expected_at,
         )
         if not saved:
-            raise HTTPException(status_code=409, detail="Clean conflict — refresh and try again")
-        if wallet > 0:
-            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": int(wallet)}})
+            raise HTTPException(status_code=409, detail="Withdraw conflict — refresh and try again")
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": amount}})
         try:
             await log_activity(
                 current_user["id"],
                 current_user.get("username") or "",
-                "weed_empire_clean",
+                "weed_empire_withdraw",
                 {
                     "amount": amount,
-                    "fee": fee,
-                    "bag": bag,
-                    "wallet": wallet,
-                    "seized": seized,
-                    "seize_chance": round(seize_chance, 4),
                     "business_cash_remaining": farm["business_cash"],
-                    "daily_cleaned_usd": farm["daily_withdrawn_usd"],
+                    "daily_withdrawn_usd": farm["daily_withdrawn_usd"],
                 },
             )
         except Exception:
             pass
-        remaining = max(0, _daily_withdraw_cap(farm) - int(farm["daily_withdrawn_usd"]))
         return {
             "ok": True,
-            "cleaned": amount,
-            "withdrawn": wallet,
-            "fee": fee,
-            "bag": bag,
-            "wallet": wallet,
-            "seized": seized,
-            "seize_chance": round(seize_chance, 3),
-            "jail_until": jail_iso,
+            "withdrawn": amount,
             "business_cash": farm["business_cash"],
             "daily_withdrawn_usd": farm["daily_withdrawn_usd"],
-            "daily_cleaned_usd": farm["daily_withdrawn_usd"],
-            "daily_withdraw_remaining": remaining,
-            "daily_clean_remaining": remaining,
+            "daily_withdraw_remaining": max(0, _daily_withdraw_cap(farm) - int(farm["daily_withdrawn_usd"])),
             "farm": _public_farm(farm, username=current_user.get("username") or "", apply_curing_tick=False),
         }
 
@@ -3683,7 +3389,7 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
     sabotage_note = None
 
     if not success:
-        fine = min(int(atk.get("business_cash") or 0), _raid_fail_fine(atk))
+        fine = min(int(atk.get("business_cash") or 0), 2_500)
         atk["business_cash"] = int(atk.get("business_cash") or 0) - fine
         _add_heat(atk, 2.5)
         rs = dict(atk.get("raid_stats") or {})
@@ -3746,54 +3452,22 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
         atk["business_cash"] = int(atk.get("business_cash") or 0) + cash_take
         stolen["cash"] = cash_take
 
-    # Steal one equipment piece — laundry at most once per farm and once per raider per UTC day
+    # Steal one equipment piece — defender keeps upgrade level (must rebuy to reinstall)
     dfn_equip = dict(dfn.get("equipment") or {})
-    today = _utc_date_str(now)
-    laundry_slot_free = (not _utc_day_used(dfn.get("laundry_stolen_utc_date"), today)) and (
-        not _utc_day_used(atk.get("laundry_stole_utc_date"), today)
-    )
-
-    def _piece_value(kv: Tuple[str, int]) -> int:
-        cat = EQUIPMENT_BY_ID.get(kv[0]) or {"base_cost": 1000, "cost_growth": 1.2}
-        return int(kv[1]) * equipment_level_cost(cat, max(1, kv[1]))
-
-    laundry_stealable = []
-    grow_stealable = []
-    for k, raw in dfn_equip.items():
-        try:
-            lvl = int(raw or 0)
-        except (TypeError, ValueError):
-            continue
-        if lvl <= 0:
-            continue
-        if is_laundry_category(k):
-            if k == LAUNDRY_SHOE_BOX_ID and lvl <= 1:
-                continue
-            laundry_stealable.append((k, lvl))
-        elif k != "lights_cfl":
-            grow_stealable.append((k, lvl))
-    if not grow_stealable:
-        grow_stealable = [
-            (k, int(v))
-            for k, v in dfn_equip.items()
-            if int(v or 0) > 0 and not is_laundry_category(k)
-        ]
-    pick = None
-    if laundry_slot_free and laundry_stealable:
-        laundry_stealable.sort(key=_piece_value, reverse=True)
-        pick = laundry_stealable[0]
-    elif grow_stealable:
-        grow_stealable.sort(key=_piece_value, reverse=True)
-        pick = grow_stealable[0]
-    if pick:
-        cat_id, lvl = pick
-        if is_laundry_category(cat_id) and cat_id == LAUNDRY_SHOE_BOX_ID:
-            dfn_equip[cat_id] = 1
-        else:
-            dfn_equip.pop(cat_id, None)
-        if is_laundry_category(cat_id):
-            dfn["laundry_stolen_utc_date"] = today
-            atk["laundry_stole_utc_date"] = today
+    stealable = [(k, int(v)) for k, v in dfn_equip.items() if int(v or 0) > 0 and k != "lights_cfl"]
+    if not stealable:
+        stealable = [(k, int(v)) for k, v in dfn_equip.items() if int(v or 0) > 0]
+    if stealable:
+        stealable.sort(
+            key=lambda kv: kv[1]
+            * equipment_level_cost(
+                EQUIPMENT_BY_ID.get(kv[0]) or {"base_cost": 1000, "cost_growth": 1.2},
+                max(1, kv[1]),
+            ),
+            reverse=True,
+        )
+        cat_id, lvl = stealable[0]
+        dfn_equip.pop(cat_id, None)
         dfn["equipment"] = dfn_equip
         rebuy = _equipment_rebuy_map(dfn)
         rebuy[cat_id] = max(int(rebuy.get(cat_id) or 0), int(lvl))
@@ -3821,16 +3495,8 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
             and int(x.get("level") or 0) == int(lvl)
             for x in (atk.get("stolen_equipment") or [])
         )
-        stolen["equipment"]["is_laundry"] = is_laundry_category(cat_id)
-        pending_install = atk.get("laundry_install") if isinstance(atk.get("laundry_install"), dict) else None
-        if pending_install and str(pending_install.get("category_id") or "") == cat_id:
-            stolen["equipment"]["installed"] = False
-            stolen["equipment"]["installing"] = True
-            stolen["equipment"]["stored"] = False
-        else:
-            stolen["equipment"]["installed"] = not still_stored
-            stolen["equipment"]["stored"] = still_stored
-            stolen["equipment"]["installing"] = False
+        stolen["equipment"]["installed"] = not still_stored
+        stolen["equipment"]["stored"] = still_stored
 
     if body.sabotage and atk.get("sabotage_unlocked"):
         dfn["heat"] = min(MAX_HEAT, float(dfn.get("heat") or 0) + 20)
@@ -3857,8 +3523,6 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
             "business_cash": atk["business_cash"],
             "equipment": atk.get("equipment"),
             "stolen_equipment": atk.get("stolen_equipment"),
-            "laundry_install": atk.get("laundry_install"),
-            "laundry_stole_utc_date": atk.get("laundry_stole_utc_date"),
             "raid_stats": ars,
             "missions": missions,
             "heat": atk["heat"],
@@ -3873,7 +3537,6 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
                 "equipment": dfn.get("equipment"),
                 "equipment_rebuy": dfn.get("equipment_rebuy") or {},
                 "last_equipment_stolen": dfn.get("last_equipment_stolen"),
-                "laundry_stolen_utc_date": dfn.get("laundry_stolen_utc_date"),
                 "heat": dfn.get("heat"),
                 "raid_stats": drs,
                 "updated_at": _iso(),

@@ -6,6 +6,23 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-17[/color][/b] — [b]Weed Empire: clean the money[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Farm earnings stay [b]dirty business cash[/b]. There is no fee-free withdraw. Use [b]Clean money[/b] to move cash to your wallet — always a [b]15%[/b] cleaner cut. Leave at least [b]$50,000[/b] in the farm.[/color]
+[*][color=#888888][b]New:[/b] Cops can [b]seize the bag[/b] after you send it. Fail chance goes up with a bigger bag, higher [b]heat[/b], and weaker cleaning gear (never 0%). On a fail you lose that bag; the farm is not wiped. That attempt still counts toward your daily clean cap.[/color]
+[*][color=#888888][b]New:[/b] [b]Cleaning equipment[/b] — 6 machines, 6 levels each ([b]36[/b] upgrades), paid from farm cash. Each level takes time to install (one at a time). Your kit caps how much you can clean per day. Every farm starts with a [b]shoe box[/b] so the first harvest can be cleaned. [b]$3B/day[/b] clean only when grow gear and this line are both maxed (a few days of installs even if you already have the cash).[/color]
+[*][color=#888888][b]Changed:[/b] A fully tooled Compound with the best weed tops out around [b]$3B dirty a day[/b] from [b]1–2 harvests[/b] (about [b]8–10 hours[/b] grow time). A 3-hour crop does not print the cap. Worse strains take longer and pay less; better strains are faster and fatter.[/color]
+[*][color=#888888][b]Changed:[/b] Daily street/dealer sell ceiling is [b]$3B[/b] (old Point Store +$250M sell-cap tiers no longer raise it past that). Dealers still share that same sell cap.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Heat[/b] now rises with how much money you [b]sell[/b] and [b]clean[/b] (big dumps add a lot; a tiny closet sale still just ticks). A failed clean adds extra heat. Cool-off costs scale with farm size — Compound is millions, not pocket change. Stay near max heat too long and you can still [b]heat bust[/b].[/color]
+[*][color=#888888][b]Changed:[/b] House, grow-gear, and dealer prices are retuned so maxing the whole farm takes [b]weeks[/b], not one shopping trip. Early closet upgrades stay cheap. Safety Deposit is still [b]dirty[/b] raid-safe parking — it does not skip the cleaner.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Distributor’s Badge[/b] / Wedding Cake no longer raise a fee-free withdraw cap. They help a little on [b]seize chance[/b] only.[/color]
+[*][color=#888888][b]Changed:[/b] Raids can take dirty cash up to [b]$80M[/b] and [b]one[/b] gear piece. A [b]cleaning machine[/b] can be stolen at most [b]once per day[/b] from that farm and once per day by that raider; other raids that day take grow gear. Shoe box Lv1 stays so you can still clean. Stolen laundry still needs the install timer.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-15[/color][/b] — [b]Hitlist: better practice NPC rewards[/b][/size]
 [quote]
 [list]

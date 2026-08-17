@@ -13,6 +13,7 @@ import {
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
 import PrestigeBadge from '../../components/PrestigeBadge';
+import CivilianProtectionBadge from '../../components/CivilianProtectionBadge';
 import CountryFlagThumb from '../../components/CountryFlagThumb';
 import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
 import { filterProfanity } from '../../utils/profanityFilter';
@@ -661,6 +662,10 @@ const ProfileInfoCard = ({
               {profile.prestige_level > 0 && (
                 <PrestigeBadge level={profile.prestige_level} size="sm" showLabel />
               )}
+              <CivilianProtectionBadge
+                active={profile.civilian_protection_active}
+                endsAt={profile.civilian_protection_ends_at}
+              />
               {isCustomBadge && (
                 profile.custom_profile_badge_url ? (
                   <img

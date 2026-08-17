@@ -71,6 +71,7 @@ from pydantic import BaseModel, Field
 from utils.profile_cosmetics import profile_cosmetic_public_fields
 from utils.civilian_protection import (
     civilian_protection_status_payload,
+    civilian_protection_public_fields,
     maybe_revoke_civilian_protection,
     require_protection_revoke_confirm,
 )
@@ -612,6 +613,10 @@ def register(router):
                 "is_help_desk_operator": 1,
                 "is_entertainer": 1,
                 "email": 1,
+                "is_npc": 1,
+                "created_at": 1,
+                "civilian_protection_revoked_at": 1,
+                "civilian_protection_ends_at": 1,
                 # Needed by profile_cosmetic_public_fields (glow/border/custom badge in the hover card)
                 "badges": 1,
                 "custom_profile_badge": 1,
@@ -762,6 +767,7 @@ def register(router):
             "founding_member": bool(user.get("founding_member")),
             "modkill_wipe": bool(user.get("modkill_wipe")),
             **profile_cosmetic_public_fields(user),
+            **civilian_protection_public_fields(user),
         }
 
     @router.get("/users/{username}/profile")
@@ -1099,6 +1105,7 @@ def register(router):
             "founding_member": bool(user.get("founding_member")),
             "modkill_wipe": bool(user.get("modkill_wipe")),
             **profile_cosmetic_public_fields(user),
+            **civilian_protection_public_fields(user),
             "achievement_badges": achievement_badges,
         }
         wr_until = user.get("war_rat_badge_until")
