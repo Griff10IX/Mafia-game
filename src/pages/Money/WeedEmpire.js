@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   Droplets,
   Bug,
+  Check,
   Leaf,
   Lightbulb,
   Package,
@@ -90,7 +91,21 @@ const WEED_STYLES = `
     position: relative;
     overflow: hidden;
     border-radius: 0.65rem;
-    transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+  }
+  .weed-pot-selected {
+    border-color: rgba(52, 211, 153, 0.95) !important;
+    background:
+      linear-gradient(180deg, rgba(16, 185, 129, 0.28), rgba(16, 185, 129, 0.08)),
+      rgba(6, 16, 12, 0.92) !important;
+    box-shadow:
+      inset 0 0 0 2px rgba(52, 211, 153, 0.85),
+      0 0 0 1px rgba(16, 185, 129, 0.45);
+  }
+  .weed-pot-selected.weed-pot-focused {
+    box-shadow:
+      inset 0 0 0 2px rgba(110, 231, 183, 1),
+      0 0 0 2px rgba(52, 211, 153, 0.55);
   }
   .weed-pot::before {
     content: "";
@@ -1550,8 +1565,7 @@ export default function WeedEmpire() {
             <div>
               <div className="flex items-center justify-between gap-2 mb-1.5">
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-heading">
-                  Pots · {(farm.plots || []).length}
-                  {selectedPlotIds.length > 1 ? ` · ${selectedPlotIds.length} selected` : ""}
+                  Pots · {selectedIdSet.size} of {(farm.plots || []).length} selected
                 </div>
                 <div className="text-[10px] text-muted-foreground">
                   {(farm.plots || []).filter((p) => isPlantablePlot(p)).length} empty
@@ -1626,16 +1640,16 @@ export default function WeedEmpire() {
                       type="button"
                       onClick={() => togglePlotSelect(p.id)}
                       className={`weed-pot text-left border px-1.5 py-1.5 min-h-[3.6rem] tap-feedback touch-manipulation active:scale-[0.97] ${tone} ${
-                        active
-                          ? focused
-                            ? "ring-1 ring-emerald-400/50 border-emerald-400/70"
-                            : "ring-1 ring-emerald-500/30"
-                          : ""
+                        active ? `weed-pot-selected${focused ? " weed-pot-focused" : ""}` : ""
                       }`}
                     >
                       <div className="flex items-center justify-between gap-0.5">
                         <div className="text-[10px] font-heading leading-tight text-foreground/95">#{idx + 1}</div>
-                        {needsCare ? (
+                        {active ? (
+                          <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-400 text-zinc-950 shrink-0">
+                            <Check className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
+                          </span>
+                        ) : needsCare ? (
                           <span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" aria-hidden />
                         ) : ready ? (
                           <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" aria-hidden />
