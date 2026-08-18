@@ -69,6 +69,48 @@ def is_exclusive_strain_id(strain_id: Optional[str]) -> bool:
     return bool(strain_id) and str(strain_id) in EXCLUSIVE_STRAIN_IDS
 
 
+def exclusive_grams_in_bags(*bags: Any, strain_ids: List[str]) -> Dict[str, float]:
+    """Sum exclusive strain grams across open stash and stash vault maps."""
+    ids = {str(s) for s in strain_ids if s}
+    out: Dict[str, float] = {}
+    for bag in bags:
+        if not isinstance(bag, dict):
+            continue
+        for sid in ids:
+            try:
+                grams = float(bag.get(sid) or 0)
+            except (TypeError, ValueError):
+                continue
+            if grams > 0:
+                out[sid] = round(float(out.get(sid) or 0) + grams, 4)
+    return out
+
+
+def take_exclusive_grams_from_bag(bag: Any, strain_ids: List[str]) -> tuple[Dict[str, float], Dict[str, float]]:
+    """Remove exclusive grams from a stash/vault map. Returns (remaining bag, moved)."""
+    remaining: Dict[str, float] = dict(bag or {}) if isinstance(bag, dict) else {}
+    moved: Dict[str, float] = {}
+    ids = {str(s) for s in strain_ids if s}
+    for sid in ids:
+        try:
+            grams = float(remaining.get(sid) or 0)
+        except (TypeError, ValueError):
+            continue
+        if grams <= 0:
+            continue
+        moved[sid] = round(grams, 4)
+        remaining.pop(sid, None)
+    cleaned = {}
+    for key, val in remaining.items():
+        try:
+            grams = round(float(val or 0), 4)
+        except (TypeError, ValueError):
+            continue
+        if grams >= 0.01:
+            cleaned[str(key)] = grams
+    return cleaned, moved
+
+
 def exclusive_strain_display_name(strain_id: str) -> str:
     for sid, name, *_rest in EXCLUSIVE_STRAIN_SEED:
         if sid == strain_id:
@@ -344,7 +386,7 @@ async def transfer_exclusive_weed_strains_on_kill(
         transferred_set = set(transferred)
         victim_farm = await db.weed_farms.find_one(
             {"user_id": victim_id},
-            {"_id": 0, "plots": 1, "stash": 1, "curing": 1},
+            {"_id": 0, "plots": 1, "stash": 1, "stash_vault": 1, "curing": 1},
         )
         victim_set: Dict[str, Any] = {}
         if victim_farm:
@@ -378,14 +420,20 @@ async def transfer_exclusive_weed_strains_on_kill(
 
             victim_stash = dict(victim_farm.get("stash") or {})
             moved_stash: Dict[str, float] = {}
-            for sid in transferred:
-                grams = float(victim_stash.get(sid) or 0)
-                if grams > 0:
-                    moved_stash[sid] = round(grams, 4)
-                    stolen_stash_grams[sid] = moved_stash[sid]
-                    victim_stash.pop(sid, None)
-            if moved_stash:
+            victim_stash, moved_open = take_exclusive_grams_from_bag(victim_stash, transferred)
+            for sid, grams in moved_open.items():
+                moved_stash[sid] = round(float(moved_stash.get(sid) or 0) + grams, 4)
+                stolen_stash_grams[sid] = round(float(stolen_stash_grams.get(sid) or 0) + grams, 4)
+            if moved_open:
                 victim_set["stash"] = victim_stash
+
+            victim_vault = dict(victim_farm.get("stash_vault") or {})
+            victim_vault, moved_vault = take_exclusive_grams_from_bag(victim_vault, transferred)
+            for sid, grams in moved_vault.items():
+                moved_stash[sid] = round(float(moved_stash.get(sid) or 0) + grams, 4)
+                stolen_stash_grams[sid] = round(float(stolen_stash_grams.get(sid) or 0) + grams, 4)
+            if moved_vault:
+                victim_set["stash_vault"] = victim_vault
 
             victim_curing = list(victim_farm.get("curing") or [])
             moved_curing = [b for b in victim_curing if (b or {}).get("strain_id") in transferred_set]
@@ -625,18 +673,21 @@ async def restore_exclusive_weed_strains_on_revive(
     if not stash_map and restored and killer_id:
         # Take whatever exclusive grams killer still holds for restored strains.
         try:
-            kf = await db.weed_farms.find_one({"user_id": killer_id}, {"_id": 0, "stash": 1})
-            for sid in restored:
-                g = float((kf or {}).get("stash", {}).get(sid) or 0)
-                if g > 0:
-                    stash_map[sid] = g
+            kf = await db.weed_farms.find_one(
+                {"user_id": killer_id}, {"_id": 0, "stash": 1, "stash_vault": 1}
+            )
+            stash_map = exclusive_grams_in_bags(
+                (kf or {}).get("stash"),
+                (kf or {}).get("stash_vault"),
+                strain_ids=restored,
+            )
         except Exception:
             logger.exception("exclusive weed stash probe on revive failed killer=%s", killer_id)
 
     if stash_map and killer_id and killer_id != victim_id:
         try:
             killer_farm = await db.weed_farms.find_one(
-                {"user_id": killer_id}, {"_id": 0, "stash": 1, "curing": 1}
+                {"user_id": killer_id}, {"_id": 0, "stash": 1, "stash_vault": 1, "curing": 1}
             )
             victim_farm = await db.weed_farms.find_one(
                 {"user_id": victim_id}, {"_id": 0, "stash": 1, "curing": 1}
@@ -651,18 +702,24 @@ async def restore_exclusive_weed_strains_on_revive(
 
             if killer_farm is not None:
                 k_stash = dict((killer_farm or {}).get("stash") or {})
+                k_vault = dict((killer_farm or {}).get("stash_vault") or {})
                 v_stash = dict((victim_farm or {}).get("stash") or {})
                 moved_any = False
                 for sid, want in stash_map.items():
-                    have = float(k_stash.get(sid) or 0)
-                    take = min(have, float(want or 0)) if have > 0 else 0.0
-                    if take <= 0:
-                        continue
-                    k_stash[sid] = round(have - take, 4)
-                    if k_stash[sid] <= 0:
-                        k_stash.pop(sid, None)
-                    v_stash[sid] = round(float(v_stash.get(sid) or 0) + take, 4)
-                    moved_any = True
+                    remaining = float(want or 0)
+                    for bag in (k_stash, k_vault):
+                        if remaining <= 0:
+                            break
+                        have = float(bag.get(sid) or 0)
+                        take = min(have, remaining) if have > 0 else 0.0
+                        if take <= 0:
+                            continue
+                        bag[sid] = round(have - take, 4)
+                        if bag[sid] <= 0:
+                            bag.pop(sid, None)
+                        v_stash[sid] = round(float(v_stash.get(sid) or 0) + take, 4)
+                        remaining = round(remaining - take, 4)
+                        moved_any = True
                 k_curing = list((killer_farm or {}).get("curing") or [])
                 restored_set = set(restored) | set(stash_map.keys())
                 move_c = [b for b in k_curing if (b or {}).get("strain_id") in restored_set]
@@ -673,7 +730,7 @@ async def restore_exclusive_weed_strains_on_revive(
                         v_curing.extend(move_c)
                     await db.weed_farms.update_one(
                         {"user_id": killer_id},
-                        {"$set": {"stash": k_stash, "curing": keep_c}},
+                        {"$set": {"stash": k_stash, "stash_vault": k_vault, "curing": keep_c}},
                     )
                     await db.weed_farms.update_one(
                         {"user_id": victim_id},

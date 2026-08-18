@@ -115,6 +115,7 @@ async def capture_death_revive_snapshot(
     try:
         from utils.weed_empire_exclusive_strains import (
             EXCLUSIVE_WEED_STRAINS_COLLECTION,
+            exclusive_grams_in_bags,
             is_exclusive_strain_id,
         )
 
@@ -130,13 +131,13 @@ async def capture_death_revive_snapshot(
         if exclusive_weed_strains:
             farm = await db.weed_farms.find_one(
                 {"user_id": victim_id},
-                {"_id": 0, "stash": 1, "curing": 1},
+                {"_id": 0, "stash": 1, "stash_vault": 1, "curing": 1},
             )
             stash = (farm or {}).get("stash") or {}
-            for sid in exclusive_weed_strains:
-                grams = float(stash.get(sid) or 0)
-                if grams > 0:
-                    exclusive_weed_stash[sid] = round(grams, 4)
+            vault = (farm or {}).get("stash_vault") or {}
+            exclusive_weed_stash = exclusive_grams_in_bags(
+                stash, vault, strain_ids=exclusive_weed_strains
+            )
             sid_set = set(exclusive_weed_strains)
             for batch in (farm or {}).get("curing") or []:
                 if (batch or {}).get("strain_id") in sid_set:

@@ -40,6 +40,7 @@ from utils.weed_empire_catalog import (
     SAFETY_BANK_UNIT_COST,
     SAFETY_BANK_UNLOCK_POINTS,
     SOIL_CHARGE_PER_PLANT,
+    STASH_SAFE_MAX_LEVEL,
     START_BUSINESS_CASH,
     STRAIN_BY_ID,
     STRAINS,
@@ -66,6 +67,12 @@ from utils.weed_empire_catalog import (
     safety_bank_capacity_units,
     safety_bank_unlocked,
     shop_status_for_farm,
+    stash_grams_total,
+    stash_safe_installed_level,
+    stash_safe_next_spec,
+    stash_safe_spec,
+    stash_vault_capacity_g,
+    normalize_stash_grams,
     unit_to_grams,
 )
 from utils.weed_empire_exclusive_strains import (
@@ -285,6 +292,9 @@ def _default_farm(user_id: str) -> Dict[str, Any]:
         "safety_bank_unlocked": False,
         "safety_bank_cash": 0,
         "safety_bank_capacity_units": 0,
+        "stash_vault": {},
+        "stash_safe_level": 1,
+        "stash_safe_install": None,
         "missions": {"harvest_count": 0, "sell_count": 0, "raid_wins": 0},
         "sabotage_unlocked": False,
         "created_at": _iso(),
@@ -345,6 +355,10 @@ async def _get_or_create_farm(user_id: str) -> Dict[str, Any]:
             migration["safety_bank_capacity_units"] = 1
         if _ensure_shoe_box(farm):
             migration["equipment"] = farm.get("equipment")
+        if _ensure_stash_safe(farm):
+            migration["stash_safe_level"] = farm.get("stash_safe_level")
+            migration["stash_vault"] = farm.get("stash_vault")
+            migration["stash_safe_install"] = farm.get("stash_safe_install")
         if migration:
             await db.weed_farms.update_one({"user_id": user_id}, {"$set": migration})
         await _attach_exclusive_owned(farm)
@@ -359,6 +373,8 @@ async def _get_or_create_farm(user_id: str) -> Dict[str, Any]:
                     "last_cleanliness_tick_at": farm["last_cleanliness_tick_at"],
                     "equipment": farm.get("equipment"),
                     "laundry_install": farm.get("laundry_install"),
+                    "stash_safe_level": farm.get("stash_safe_level"),
+                    "stash_safe_install": farm.get("stash_safe_install"),
                     "stolen_equipment": farm.get("stolen_equipment"),
                 }
             },
@@ -412,6 +428,138 @@ def _equip_levels(farm: dict) -> Dict[str, int]:
         if lvl > 0:
             out[str(k)] = lvl
     return out
+
+
+def _ensure_stash_safe(farm: dict) -> bool:
+    """Every farm keeps a free Hidden cubby (Lv1)."""
+    changed = False
+    vault = farm.get("stash_vault")
+    if not isinstance(vault, dict):
+        farm["stash_vault"] = {}
+        changed = True
+    level = stash_safe_installed_level(farm)
+    if level < 1:
+        farm["stash_safe_level"] = 1
+        changed = True
+    return changed
+
+
+def _stash_safe_install_ready(farm: dict, now: Optional[datetime] = None) -> bool:
+    pending = farm.get("stash_safe_install")
+    if not isinstance(pending, dict) or not pending.get("ready_at"):
+        return False
+    ready = _parse_iso(pending.get("ready_at"))
+    if not ready:
+        return False
+    return (now or _utcnow()) >= ready
+
+
+def _complete_stash_safe_install(farm: dict, now: Optional[datetime] = None) -> bool:
+    if not _stash_safe_install_ready(farm, now):
+        return False
+    pending = farm.get("stash_safe_install") or {}
+    try:
+        to_level = int(pending.get("to_level") or 0)
+    except (TypeError, ValueError):
+        to_level = 0
+    farm["stash_safe_install"] = None
+    if to_level > stash_safe_installed_level(farm):
+        farm["stash_safe_level"] = min(STASH_SAFE_MAX_LEVEL, to_level)
+    return True
+
+
+def _queue_stash_safe_install(farm: dict, to_level: int, now: datetime) -> bool:
+    pending = farm.get("stash_safe_install")
+    if isinstance(pending, dict) and pending.get("ready_at") and not _stash_safe_install_ready(farm, now):
+        return False
+    if _stash_safe_install_ready(farm, now):
+        _complete_stash_safe_install(farm, now)
+        pending = farm.get("stash_safe_install")
+        if isinstance(pending, dict) and pending.get("ready_at"):
+            return False
+    spec = stash_safe_spec(to_level) or {}
+    hours = float(spec.get("install_hours") or 0)
+    if hours <= 0:
+        farm["stash_safe_level"] = min(STASH_SAFE_MAX_LEVEL, int(to_level))
+        farm["stash_safe_install"] = None
+        return True
+    farm["stash_safe_install"] = {
+        "to_level": int(to_level),
+        "name": spec.get("name"),
+        "cap_g": spec.get("cap_g"),
+        "started_at": _iso(now),
+        "ready_at": _iso(now + timedelta(hours=hours)),
+    }
+    return True
+
+
+def _add_stash_grams(bag: Dict[str, float], strain_id: str, grams: float) -> None:
+    sid = str(strain_id or "").strip()
+    take = round(float(grams or 0), 4)
+    if not sid or take < 0.01:
+        return
+    bag[sid] = round(float(bag.get(sid) or 0) + take, 4)
+
+
+def _take_stash_grams(bag: Dict[str, float], strain_id: str, grams: float) -> float:
+    sid = str(strain_id or "").strip()
+    want = round(float(grams or 0), 4)
+    have = float(bag.get(sid) or 0)
+    take = min(have, want)
+    if not sid or take < 0.01:
+        return 0.0
+    left = round(have - take, 4)
+    if left < 0.01:
+        bag.pop(sid, None)
+    else:
+        bag[sid] = left
+    return round(take, 4)
+
+
+def _stash_safe_public(farm: dict) -> Dict[str, Any]:
+    _complete_stash_safe_install(farm)
+    _ensure_stash_safe(farm)
+    vault = normalize_stash_grams(farm.get("stash_vault"))
+    farm["stash_vault"] = vault
+    level = stash_safe_installed_level(farm)
+    spec = stash_safe_spec(level) or {}
+    cap = stash_vault_capacity_g(farm)
+    used = stash_grams_total(vault)
+    nxt = stash_safe_next_spec(farm)
+    pending = farm.get("stash_safe_install") if isinstance(farm.get("stash_safe_install"), dict) else None
+    installing = bool(pending and pending.get("ready_at") and not _stash_safe_install_ready(farm))
+    house_tier = int(farm.get("house_tier") or 0)
+    next_pub = None
+    if nxt:
+        need_house = int(nxt.get("min_house_tier") or 0)
+        house = HOUSE_BY_TIER.get(need_house) or HOUSE_BY_TIER[0]
+        lock = None
+        if installing:
+            lock = "A safe house upgrade is already installing"
+        elif house_tier < need_house:
+            lock = f"Need {house.get('name') or 'a bigger house'}"
+        next_pub = {
+            "level": int(nxt.get("level") or 0),
+            "id": nxt.get("id"),
+            "name": nxt.get("name"),
+            "cap_g": float(nxt.get("cap_g") or 0),
+            "cost": int(nxt.get("cost") or 0),
+            "min_house_tier": need_house,
+            "house_name": house.get("name"),
+            "install_hours": float(nxt.get("install_hours") or 0),
+            "can_upgrade": (not installing) and house_tier >= need_house,
+            "lock_reason": lock,
+        }
+    return {
+        "stash_vault": vault,
+        "stash_vault_used_g": used,
+        "stash_vault_capacity_g": cap,
+        "stash_safe_level": level,
+        "stash_safe_name": spec.get("name") or "Hidden cubby",
+        "stash_safe_max_level": STASH_SAFE_MAX_LEVEL,
+        "stash_safe_install": pending,
+        "stash_safe_next": next_pub,
+    }
 
 
 def _ensure_shoe_box(farm: dict) -> bool:
@@ -1371,6 +1519,7 @@ def _apply_heat_bust(farm: dict, user_id: str, now: datetime) -> Dict[str, Any]:
     else:
         farm["stash"] = {}
         farm["curing"] = []
+    # Stash Safe parked grams and locker level stay (raid- and bust-safe).
     farm["heat"] = 5.0
     farm["heat_high_since"] = None
     farm["last_heat_tick_at"] = _iso(now)
@@ -1730,8 +1879,10 @@ def _clear_plot_mites(plot: dict) -> None:
 
 def _tick_environment(farm: dict, stats: dict, now: datetime) -> dict:
     _ensure_shoe_box(farm)
+    _ensure_stash_safe(farm)
     if _complete_laundry_install(farm, now):
         _auto_equip_stolen_inventory(farm)
+    _complete_stash_safe_install(farm, now)
     farm = _tick_passive_heat(farm, stats, now)
     last_clean = _parse_iso(farm.get("last_cleanliness_tick_at")) or now
     elapsed_hours = max(0.0, (now - last_clean).total_seconds() / 3600.0)
@@ -2195,6 +2346,7 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         "safety_bank_max_units": SAFETY_BANK_MAX_UNITS,
         "safety_bank_unlock_points": SAFETY_BANK_UNLOCK_POINTS,
         "safety_bank_can_expand": safety_bank_unlocked(farm) and bank_units < SAFETY_BANK_MAX_UNITS,
+        **_stash_safe_public(farm),
         **gp,
         "staff_preview": True,
     }
@@ -2355,6 +2507,11 @@ class SafetyBankAmountBody(BaseModel):
     amount: int = Field(..., gt=0)
 
 
+class StashVaultMoveBody(BaseModel):
+    strain_id: str
+    grams: float = Field(..., gt=0)
+
+
 class UpgradeEquipBody(BaseModel):
     category_id: str
 
@@ -2475,6 +2632,9 @@ async def weed_status(current_user: dict = Depends(_gate)):
             "equipment": farm.get("equipment"),
             "stolen_equipment": farm.get("stolen_equipment"),
             "laundry_install": farm.get("laundry_install"),
+            "stash_safe_level": farm.get("stash_safe_level"),
+            "stash_safe_install": farm.get("stash_safe_install"),
+            "stash_vault": farm.get("stash_vault"),
             "house_tier": farm.get("house_tier"),
             "bust_restart_seed": farm.get("bust_restart_seed"),
             "last_bust_at": farm.get("last_bust_at"),
@@ -3503,6 +3663,163 @@ async def weed_safety_bank_withdraw(body: SafetyBankAmountBody, current_user: di
         }
 
 
+@router.post("/stash-safe/upgrade")
+async def weed_stash_safe_upgrade(current_user: dict = Depends(_gate)):
+    lock = await _weed_farm_lock(current_user["id"])
+    async with lock:
+        farm = await _get_or_create_farm(current_user["id"])
+        now = _utcnow()
+        _complete_stash_safe_install(farm, now)
+        _ensure_stash_safe(farm)
+        nxt = stash_safe_next_spec(farm)
+        if not nxt:
+            raise HTTPException(status_code=400, detail="Stash Safe is already maxed")
+        pending = farm.get("stash_safe_install")
+        if isinstance(pending, dict) and pending.get("ready_at") and not _stash_safe_install_ready(farm, now):
+            raise HTTPException(status_code=400, detail="A safe house upgrade is already installing")
+        need_house = int(nxt.get("min_house_tier") or 0)
+        house_tier = int(farm.get("house_tier") or 0)
+        if house_tier < need_house:
+            house = HOUSE_BY_TIER.get(need_house) or {}
+            raise HTTPException(
+                status_code=400,
+                detail=f"Need {house.get('name') or f'house tier {need_house}'} for {nxt.get('name')}",
+            )
+        cost = int(nxt.get("cost") or 0)
+        if cost > 0:
+            _spend(farm, cost)
+        if not _queue_stash_safe_install(farm, int(nxt["level"]), now):
+            raise HTTPException(status_code=400, detail="A safe house upgrade is already installing")
+        await _save_farm(
+            farm,
+            {
+                "business_cash": farm["business_cash"],
+                "stash_safe_level": farm.get("stash_safe_level"),
+                "stash_safe_install": farm.get("stash_safe_install"),
+                "stash_vault": farm.get("stash_vault") or {},
+            },
+        )
+        return {
+            "ok": True,
+            "level": int(nxt["level"]),
+            "cost": cost,
+            "installing": True,
+            "stash_safe_install": farm.get("stash_safe_install"),
+            "farm": _public_farm(farm, username=current_user.get("username") or ""),
+        }
+
+
+def _move_stash_into_vault(farm: dict, strain_id: str, grams: float) -> float:
+    stash = normalize_stash_grams(farm.get("stash"))
+    vault = normalize_stash_grams(farm.get("stash_vault"))
+    cap = stash_vault_capacity_g(farm)
+    free = max(0.0, cap - stash_grams_total(vault))
+    take = _take_stash_grams(stash, strain_id, min(float(grams), free))
+    if take >= 0.01:
+        _add_stash_grams(vault, strain_id, take)
+    farm["stash"] = stash
+    farm["stash_vault"] = vault
+    return take
+
+
+def _move_stash_from_vault(farm: dict, strain_id: str, grams: float) -> float:
+    stash = normalize_stash_grams(farm.get("stash"))
+    vault = normalize_stash_grams(farm.get("stash_vault"))
+    take = _take_stash_grams(vault, strain_id, float(grams))
+    if take >= 0.01:
+        _add_stash_grams(stash, strain_id, take)
+    farm["stash"] = stash
+    farm["stash_vault"] = vault
+    return take
+
+
+@router.post("/stash-vault/deposit")
+async def weed_stash_vault_deposit(body: StashVaultMoveBody, current_user: dict = Depends(_gate)):
+    lock = await _weed_farm_lock(current_user["id"])
+    async with lock:
+        farm = await _get_or_create_farm(current_user["id"])
+        _complete_stash_safe_install(farm)
+        _ensure_stash_safe(farm)
+        if stash_vault_capacity_g(farm) <= 0:
+            raise HTTPException(status_code=400, detail="No stash safe yet")
+        moved = _move_stash_into_vault(farm, body.strain_id, body.grams)
+        if moved < 0.01:
+            raise HTTPException(status_code=400, detail="Nothing to park (empty stash or safe is full)")
+        await _save_farm(
+            farm,
+            {
+                "stash": farm["stash"],
+                "stash_vault": farm["stash_vault"],
+                "stash_safe_level": farm.get("stash_safe_level"),
+                "stash_safe_install": farm.get("stash_safe_install"),
+            },
+        )
+        return {
+            "ok": True,
+            "deposited_g": moved,
+            "farm": _public_farm(farm, username=current_user.get("username") or ""),
+        }
+
+
+@router.post("/stash-vault/withdraw")
+async def weed_stash_vault_withdraw(body: StashVaultMoveBody, current_user: dict = Depends(_gate)):
+    lock = await _weed_farm_lock(current_user["id"])
+    async with lock:
+        farm = await _get_or_create_farm(current_user["id"])
+        _complete_stash_safe_install(farm)
+        _ensure_stash_safe(farm)
+        moved = _move_stash_from_vault(farm, body.strain_id, body.grams)
+        if moved < 0.01:
+            raise HTTPException(status_code=400, detail="Not enough grams in the safe house")
+        await _save_farm(
+            farm,
+            {
+                "stash": farm["stash"],
+                "stash_vault": farm["stash_vault"],
+                "stash_safe_level": farm.get("stash_safe_level"),
+                "stash_safe_install": farm.get("stash_safe_install"),
+            },
+        )
+        return {
+            "ok": True,
+            "withdrawn_g": moved,
+            "farm": _public_farm(farm, username=current_user.get("username") or ""),
+        }
+
+
+@router.post("/stash-vault/park-max")
+async def weed_stash_vault_park_max(current_user: dict = Depends(_gate)):
+    lock = await _weed_farm_lock(current_user["id"])
+    async with lock:
+        farm = await _get_or_create_farm(current_user["id"])
+        _complete_stash_safe_install(farm)
+        _ensure_stash_safe(farm)
+        stash = normalize_stash_grams(farm.get("stash"))
+        moved = 0.0
+        for sid in list(stash.keys()):
+            take = _move_stash_into_vault(farm, sid, float(stash.get(sid) or 0))
+            moved += take
+            stash = farm.get("stash") or {}
+            if stash_vault_capacity_g(farm) - stash_grams_total(farm.get("stash_vault")) < 0.01:
+                break
+        if moved < 0.01:
+            raise HTTPException(status_code=400, detail="Nothing to park (empty stash or safe is full)")
+        await _save_farm(
+            farm,
+            {
+                "stash": farm.get("stash") or {},
+                "stash_vault": farm.get("stash_vault") or {},
+                "stash_safe_level": farm.get("stash_safe_level"),
+                "stash_safe_install": farm.get("stash_safe_install"),
+            },
+        )
+        return {
+            "ok": True,
+            "deposited_g": round(moved, 4),
+            "farm": _public_farm(farm, username=current_user.get("username") or ""),
+        }
+
+
 @router.get("/raid/targets")
 async def weed_raid_targets(current_user: dict = Depends(_gate)):
     me = current_user["id"]
@@ -3687,7 +4004,8 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
             "farm": _public_farm(atk, username=current_user.get("username") or ""),
         }
 
-    # Success: steal 100% defender stash (exclusive grams move; ownership does not)
+    # Success: steal 100% defender open stash (vault / Stash Safe is raid-safe).
+    # Exclusive grams in open stash move; ownership does not.
     dfn_stash = dict(dfn.get("stash") or {})
     grams_total = 0.0
     for sid, grams in list(dfn_stash.items()):

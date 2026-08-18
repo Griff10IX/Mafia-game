@@ -64,6 +64,114 @@ def safety_bank_capacity(farm: Optional[dict] = None) -> int:
 def safety_bank_unlocked(farm: Optional[dict] = None) -> bool:
     return bool(farm and farm.get("safety_bank_unlocked"))
 
+
+# Stash Safe (raid / heat-bust safe gram locker). Lv1 is free; Lv2–6 are dirty-cash upgrades.
+STASH_SAFE_MAX_LEVEL = 6
+STASH_SAFE_LEVELS: List[Dict[str, Any]] = [
+    {
+        "level": 1,
+        "id": "hidden_cubby",
+        "name": "Hidden cubby",
+        "cap_g": 250,
+        "min_house_tier": 0,
+        "cost": 0,
+        "install_hours": 0,
+    },
+    {
+        "level": 2,
+        "id": "floor_safe",
+        "name": "Floor safe",
+        "cap_g": 2_500,
+        "min_house_tier": 1,
+        "cost": 120_000_000,
+        "install_hours": 2.0,
+    },
+    {
+        "level": 3,
+        "id": "panic_room",
+        "name": "Panic room",
+        "cap_g": 8_000,
+        "min_house_tier": 2,
+        "cost": 400_000_000,
+        "install_hours": 2.5,
+    },
+    {
+        "level": 4,
+        "id": "cage_vault",
+        "name": "Cage vault",
+        "cap_g": 20_000,
+        "min_house_tier": 3,
+        "cost": 900_000_000,
+        "install_hours": 3.0,
+    },
+    {
+        "level": 5,
+        "id": "counting_cellar",
+        "name": "Counting cellar",
+        "cap_g": 40_000,
+        "min_house_tier": 3,
+        "cost": 1_800_000_000,
+        "install_hours": 3.5,
+    },
+    {
+        "level": 6,
+        "id": "compound_bunker",
+        "name": "Compound bunker",
+        "cap_g": 60_000,
+        "min_house_tier": 4,
+        "cost": 3_200_000_000,
+        "install_hours": 4.0,
+    },
+]
+STASH_SAFE_BY_LEVEL: Dict[int, Dict[str, Any]] = {int(r["level"]): r for r in STASH_SAFE_LEVELS}
+
+
+def normalize_stash_grams(raw: Any) -> Dict[str, float]:
+    if not isinstance(raw, dict):
+        return {}
+    out: Dict[str, float] = {}
+    for key, val in raw.items():
+        sid = str(key or "").strip()
+        if not sid:
+            continue
+        try:
+            grams = round(float(val or 0), 4)
+        except (TypeError, ValueError):
+            continue
+        if grams >= 0.01:
+            out[sid] = grams
+    return out
+
+
+def stash_grams_total(raw: Any) -> float:
+    return round(sum(normalize_stash_grams(raw).values()), 4)
+
+
+def stash_safe_installed_level(farm: Optional[dict] = None) -> int:
+    raw = 0 if not farm else farm.get("stash_safe_level")
+    try:
+        level = int(raw or 0)
+    except (TypeError, ValueError):
+        level = 0
+    return max(0, min(STASH_SAFE_MAX_LEVEL, level))
+
+
+def stash_safe_spec(level: int) -> Optional[Dict[str, Any]]:
+    return STASH_SAFE_BY_LEVEL.get(int(level or 0))
+
+
+def stash_vault_capacity_g(farm: Optional[dict] = None) -> float:
+    spec = stash_safe_spec(stash_safe_installed_level(farm))
+    if not spec:
+        return 0.0
+    return float(spec.get("cap_g") or 0)
+
+
+def stash_safe_next_spec(farm: Optional[dict] = None) -> Optional[Dict[str, Any]]:
+    nxt = stash_safe_installed_level(farm) + 1
+    return stash_safe_spec(nxt)
+
+
 # Soil charge consumed per plant
 SOIL_CHARGE_PER_PLANT = 1
 

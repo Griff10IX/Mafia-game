@@ -229,6 +229,8 @@ export default function WeedEmpire() {
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawConfirm, setWithdrawConfirm] = useState(null); // null | { amount, label }
   const [bankAmount, setBankAmount] = useState("");
+  const [vaultStrain, setVaultStrain] = useState("");
+  const [vaultAmount, setVaultAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const farmUpdatedAtRef = useRef("");
@@ -261,6 +263,7 @@ export default function WeedEmpire() {
     setFarm({
       ...f,
       stash: { ...(f.stash || {}) },
+      stash_vault: { ...(f.stash_vault || {}) },
       curing: [...(f.curing || [])],
     });
     if (f?.plots?.length) {
@@ -279,6 +282,11 @@ export default function WeedEmpire() {
     setSellStrain((s) => {
       if (s && stashKeys.includes(s)) return s;
       return stashKeys[0] || "";
+    });
+    const vaultKeys = Object.keys(f?.stash_vault || {});
+    setVaultStrain((s) => {
+      if (s && (vaultKeys.includes(s) || stashKeys.includes(s))) return s;
+      return vaultKeys[0] || stashKeys[0] || "";
     });
   }, []);
 
@@ -761,7 +769,48 @@ export default function WeedEmpire() {
       });
       applyFarm(data.farm, { force: true });
       setBankAmount("");
-      toast.success(`Moved ${money(data.withdrawn)} back to business cash`);
+      toast.success(`Moved ${money(data.withdrawn)} to business cash`);
+    });
+
+  const upgradeStashSafe = () =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/stash-safe/upgrade");
+      applyFarm(data.farm, { force: true });
+      const nxt = data.farm?.stash_safe_install;
+      toast.success(
+        nxt?.name
+          ? `Installing ${nxt.name} — ready ${shortReadyDate(nxt.ready_at)}`
+          : `Safe house upgrade started (${money(data.cost || 0)})`
+      );
+    });
+
+  const depositStashVault = (strainId, grams) =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/stash-vault/deposit", {
+        strain_id: strainId,
+        grams: Number(grams),
+      });
+      applyFarm(data.farm, { force: true });
+      setVaultAmount("");
+      toast.success(`Parked ${Number(data.deposited_g).toFixed(1)}g in the safe house`);
+    });
+
+  const withdrawStashVault = (strainId, grams) =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/stash-vault/withdraw", {
+        strain_id: strainId,
+        grams: Number(grams),
+      });
+      applyFarm(data.farm, { force: true });
+      setVaultAmount("");
+      toast.success(`Moved ${Number(data.withdrawn_g).toFixed(1)}g back to stash`);
+    });
+
+  const parkMaxStashVault = () =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/stash-vault/park-max");
+      applyFarm(data.farm, { force: true });
+      toast.success(`Parked ${Number(data.deposited_g).toFixed(1)}g in the safe house`);
     });
 
   const dealerSell = () =>
@@ -1888,6 +1937,152 @@ export default function WeedEmpire() {
               </div>
             ) : null}
           </div>
+
+          <div className="weed-panel p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-heading uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                <Shield className="h-3 w-3 text-emerald-400/80" /> Safe house
+              </div>
+              <span className="text-[10px] tabular-nums text-muted-foreground">
+                {farm.stash_safe_name || "Hidden cubby"} · Lv {farm.stash_safe_level || 1}/
+                {farm.stash_safe_max_level || 6}
+              </span>
+            </div>
+            <div className="text-sm tabular-nums font-heading">
+              {Number(farm.stash_vault_used_g || 0).toFixed(1)}g{" "}
+              <span className="text-muted-foreground text-xs font-normal">
+                / {Number(farm.stash_vault_capacity_g || 0).toLocaleString()}g capacity
+              </span>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Raid- and bust-safe parked grams. Street and dealers only sell open stash. Exclusive grams
+              still move on a kill.
+            </p>
+            {Object.keys(farm.stash_vault || {}).length === 0 ? (
+              <p className="text-xs text-muted-foreground">Empty safe house.</p>
+            ) : (
+              <div className="text-sm space-y-1">
+                {Object.entries(farm.stash_vault).map(([sid, g]) => (
+                  <div key={sid} className="flex justify-between gap-2">
+                    <span>{strainMap[sid]?.name || sid}</span>
+                    <span>
+                      {Number(g) < 1 ? Number(g).toFixed(2) : Number(g).toFixed(1)}g
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {farm.stash_safe_install?.ready_at ? (
+              <p className="text-[10px] text-amber-200/90">
+                Installing {farm.stash_safe_install.name || "upgrade"} — ready{" "}
+                {shortReadyDate(farm.stash_safe_install.ready_at)}. Current cap stays until it finishes.
+              </p>
+            ) : null}
+            <div className="flex flex-wrap gap-2 items-end pt-1">
+              <select
+                className="bg-background border border-border rounded px-2 py-1.5 text-sm"
+                value={
+                  vaultStrain ||
+                  Object.keys(farm.stash_vault || {})[0] ||
+                  Object.keys(farm.stash || {})[0] ||
+                  ""
+                }
+                onChange={(e) => setVaultStrain(e.target.value)}
+              >
+                {Array.from(
+                  new Set([
+                    ...Object.keys(farm.stash || {}),
+                    ...Object.keys(farm.stash_vault || {}),
+                  ])
+                ).map((sid) => (
+                  <option key={sid} value={sid}>
+                    {strainMap[sid]?.name || sid}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min={0.1}
+                step={0.1}
+                value={vaultAmount}
+                onChange={(e) => setVaultAmount(e.target.value)}
+                placeholder="Grams"
+                disabled={busy}
+                className="w-24 bg-background border border-border rounded px-2 py-1.5 text-sm tabular-nums min-h-10 disabled:opacity-40"
+              />
+              <button
+                type="button"
+                disabled={
+                  busy ||
+                  !(Number(vaultAmount) > 0) ||
+                  Number(farm.stash?.[vaultStrain || Object.keys(farm.stash || {})[0]] || 0) <
+                    Number(vaultAmount)
+                }
+                onClick={() =>
+                  depositStashVault(
+                    vaultStrain || Object.keys(farm.stash || {})[0],
+                    vaultAmount
+                  )
+                }
+                className="text-[10px] uppercase px-2.5 py-1.5 rounded border border-emerald-500/40 text-emerald-300 tap-feedback min-h-10 disabled:opacity-40"
+              >
+                Park
+              </button>
+              <button
+                type="button"
+                disabled={
+                  busy ||
+                  !(Number(vaultAmount) > 0) ||
+                  Number(farm.stash_vault?.[vaultStrain || Object.keys(farm.stash_vault || {})[0]] || 0) <
+                    Number(vaultAmount)
+                }
+                onClick={() =>
+                  withdrawStashVault(
+                    vaultStrain || Object.keys(farm.stash_vault || {})[0],
+                    vaultAmount
+                  )
+                }
+                className="text-[10px] uppercase px-2.5 py-1.5 rounded border border-border/60 tap-feedback min-h-10 disabled:opacity-40"
+              >
+                To stash
+              </button>
+              <button
+                type="button"
+                disabled={
+                  busy ||
+                  Object.keys(farm.stash || {}).length === 0 ||
+                  Number(farm.stash_vault_capacity_g || 0) - Number(farm.stash_vault_used_g || 0) < 0.01
+                }
+                onClick={parkMaxStashVault}
+                className="text-[10px] uppercase px-2.5 py-1.5 rounded bg-emerald-800/70 tap-feedback min-h-10 disabled:opacity-40"
+              >
+                Park max
+              </button>
+            </div>
+            {farm.stash_safe_next ? (
+              <button
+                type="button"
+                disabled={
+                  busy ||
+                  !farm.stash_safe_next.can_upgrade ||
+                  Number(farm.business_cash || 0) < Number(farm.stash_safe_next.cost || 0)
+                }
+                onClick={upgradeStashSafe}
+                className="text-[10px] uppercase px-2.5 py-1.5 rounded bg-emerald-700/80 tap-feedback min-h-10 disabled:opacity-40"
+              >
+                Upgrade {farm.stash_safe_next.name} · {money(farm.stash_safe_next.cost)} ·{" "}
+                {Number(farm.stash_safe_next.cap_g || 0).toLocaleString()}g
+                {farm.stash_safe_next.install_hours
+                  ? ` · ${farm.stash_safe_next.install_hours}h`
+                  : ""}
+              </button>
+            ) : (
+              <p className="text-[10px] text-emerald-400">Safe house maxed.</p>
+            )}
+            {farm.stash_safe_next?.lock_reason ? (
+              <p className="text-[10px] text-amber-300/90">{farm.stash_safe_next.lock_reason}</p>
+            ) : null}
+          </div>
         </div>
       )}
 
@@ -2078,9 +2273,10 @@ export default function WeedEmpire() {
           ) : null}
           <p className="text-xs text-muted-foreground flex items-start gap-2">
             <Shield className="w-4 h-4 shrink-0 mt-0.5" />
-            Reach Grower Lv {raidMeta.required_grower_level || 5} to raid or be raided. Success steals the full stash,
-            up to $80M dirty cash, and one gear line (they keep their upgrade
-            level — rebuy in Equipment to restore it). A cleaning machine can be stolen once per day from that farm
+            Reach Grower Lv {raidMeta.required_grower_level || 5} to raid or be raided. Success steals the full
+            open stash, up to $80M dirty cash, and one gear line (they keep their upgrade
+            level — rebuy in Equipment to restore it). Grams parked in the Safe house stay.
+            A cleaning machine can be stolen once per day from that farm
             and once per day by you; other raids that day take grow gear. Stolen laundry still needs the install
             timer. Cooldown is {raidMeta.raid_cooldown_hours || 3}h per target — you can still raid other growers. After a heat
             bust, growers are raid-protected for {farm.bust_raid_immune_hours || 6}h. Target security caps your odds —
@@ -2182,7 +2378,7 @@ export default function WeedEmpire() {
               (nobody can bust you out). Raid-protected for {bustModal?.raid_immune_hours || farm?.bust_raid_immune_hours || 6}{" "}
               hours — nobody can raid you. House dropped a tier, gear halved, stash wiped
               {bustModal?.assistant_fled ? ", and your assistant fled — you&apos;ll need to rehire" : ""}. Safety
-              Deposit cash is kept. Exclusive strain ownership is safe — plant a free ditch weed seed when
+              Deposit cash and Safe house grams are kept. Exclusive strain ownership is safe — plant a free ditch weed seed when
               you&apos;re out.
             </p>
             <button

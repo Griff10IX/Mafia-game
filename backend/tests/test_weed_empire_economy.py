@@ -5,6 +5,7 @@ from utils.weed_empire_catalog import (
     MAX_DEALERS_LEVEL,
     STRAINS,
     STRAIN_BY_ID,
+    STASH_SAFE_LEVELS,
     active_light_class,
     curing_minutes,
     dealer_drip_fraction,
@@ -12,12 +13,21 @@ from utils.weed_empire_catalog import (
     grams_to_oz,
     laundry_clean_cap,
     market_price_per_oz,
+    stash_grams_total,
+    stash_safe_next_spec,
+    stash_safe_spec,
+    stash_vault_capacity_g,
 )
 from utils.weed_empire_equipment import (
     EQUIPMENT_CATEGORIES,
     LAUNDRY_CATEGORY_IDS,
     equipment_level_cost,
     is_laundry_category,
+)
+from utils.weed_empire_exclusive_strains import (
+    EXCLUSIVE_GODFATHER_OG,
+    exclusive_grams_in_bags,
+    take_exclusive_grams_from_bag,
 )
 
 
@@ -172,3 +182,39 @@ def test_curing_scales_from_five_to_twenty_minutes_by_weight():
     assert curing_minutes(300, 0) == 20
     assert 5 < curing_minutes(33.17, 0) < 7
     assert 5 <= curing_minutes(300, 14) < 20
+
+
+def test_stash_safe_levels_and_max_cap():
+    assert stash_safe_spec(1)["cost"] == 0
+    assert stash_safe_spec(1)["cap_g"] == 250
+    assert stash_safe_spec(1)["install_hours"] == 0
+    assert stash_safe_spec(6)["cap_g"] == 60_000
+    assert stash_safe_spec(6)["min_house_tier"] == 4
+    paid = sum(int(row["cost"]) for row in STASH_SAFE_LEVELS if int(row["level"]) >= 2)
+    assert paid == 6_420_000_000
+    cubby = {"stash_safe_level": 0, "stash_vault": {"rs11": 80}}
+    assert stash_vault_capacity_g(cubby) == 0
+    cubby["stash_safe_level"] = 1
+    assert stash_vault_capacity_g(cubby) == 250
+    cubby["stash_safe_level"] = 6
+    assert stash_vault_capacity_g(cubby) == 60_000
+    assert stash_grams_total(cubby["stash_vault"]) == 80
+    nxt = stash_safe_next_spec({"stash_safe_level": 1})
+    assert nxt["level"] == 2
+    assert nxt["cost"] == 120_000_000
+    assert stash_safe_next_spec({"stash_safe_level": 6}) is None
+
+
+def test_exclusive_vault_grams_count_with_open_stash():
+    vault, moved = take_exclusive_grams_from_bag(
+        {EXCLUSIVE_GODFATHER_OG: 12.5, "rs11": 40},
+        [EXCLUSIVE_GODFATHER_OG],
+    )
+    assert vault == {"rs11": 40}
+    assert moved[EXCLUSIVE_GODFATHER_OG] == 12.5
+    combined = exclusive_grams_in_bags(
+        {"rs11": 10, EXCLUSIVE_GODFATHER_OG: 3},
+        {EXCLUSIVE_GODFATHER_OG: 5},
+        strain_ids=[EXCLUSIVE_GODFATHER_OG],
+    )
+    assert combined[EXCLUSIVE_GODFATHER_OG] == 8
