@@ -822,6 +822,7 @@ export default function WeedEmpire() {
   if (!farm) return null;
 
   const capPct = Math.min(100, ((farm.daily_sold_usd || 0) / (farm.daily_sold_cap || 1)) * 100);
+  const cleanedToday = Number(farm.daily_cleaned_usd || farm.daily_withdrawn_usd || 0);
   const selStrain = strainMap[selectedPlot?.strain_id] || {};
   const plantStrain = strainMap[strainId] || {};
   const plantSeedCost = Number(plantStrain.seed_cost || 0);
@@ -951,19 +952,26 @@ export default function WeedEmpire() {
         <div className="weed-panel p-3 space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <div className="text-[10px] uppercase tracking-wider font-heading text-muted-foreground">
-              Daily sell / clean
+              Daily clean
             </div>
             <span className="text-[10px] tabular-nums text-muted-foreground">
               Kit {money(dailyWithdrawCap)}/day
             </span>
           </div>
           <div className="font-heading text-sm tabular-nums text-foreground">
-            Sold {money(farm.daily_sold_usd)} / {money(farm.daily_sold_cap)}
+            Cleaned {money(cleanedToday)} / {money(dailyWithdrawCap)}
+          </div>
+          <div className="weed-meter !h-1.5">
+            <div
+              className="bg-emerald-400/90"
+              style={{
+                width: `${Math.min(100, (cleanedToday / Math.max(1, dailyWithdrawCap)) * 100)}%`,
+              }}
+            />
           </div>
           <p className="text-[10px] text-muted-foreground hidden sm:block">
-            Street &amp; dealer sales share a ${"3,000,000,000"} dirty ceiling. Cleaning equipment caps how
-            much you can send to wallet (15% fee, seize risk). Old sell-cap store buys still lower seize
-            chance.
+            Cleaning kit caps dirty cash sent to wallet today (15% fee, seize risk). Street &amp; dealer
+            sales still share a ${"3,000,000,000"} dirty ceiling.
           </p>
         </div>
 
