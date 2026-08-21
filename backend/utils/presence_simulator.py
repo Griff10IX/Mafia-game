@@ -1,5 +1,6 @@
 # Background task: gently bump last_seen for a rotating pool of real (non-NPC) users so the game looks more active.
 # Config persisted in game_settings key "presence_simulator". Admin-only API in routers/admin.
+# Does not enable, disable, or overwrite Auto Rank — that was wiping real players' task ticks.
 from __future__ import annotations
 
 import asyncio
@@ -314,134 +315,86 @@ async def _refresh_sim_user(db, uid: str, now: datetime, spread_secs: int) -> No
     )
 
 
-def _sim_mode_for_index(seed: int, idx: int) -> str:
-    return "crimes" if ((seed + idx) % 2 == 0) else "gta"
+_AR_TOGGLE_FIELDS = (
+    "auto_rank_purchased",
+    "auto_rank_enabled",
+    "auto_rank_crimes",
+    "auto_rank_gta",
+    "auto_rank_bust_every_5_sec",
+    "auto_rank_oc",
+    "auto_rank_booze",
+    "auto_rank_melt",
+    "auto_rank_scrap",
+)
 
 
-async def _enable_sim_autorank_for_new(db, new_ids: List[str], seed: int) -> None:
-    """Enable autorank for new simulated users and alternate mode (crimes vs gta)."""
-    for i, uid in enumerate(new_ids):
-        if not uid:
-            continue
-        mode = _sim_mode_for_index(seed, i)
-        user = await db.users.find_one(
-            {"id": uid},
-            {
-                "_id": 0,
-                "id": 1,
-                "auto_rank_purchased": 1,
-                "auto_rank_enabled": 1,
-                "auto_rank_crimes": 1,
-                "auto_rank_gta": 1,
-                "auto_rank_bust_every_5_sec": 1,
-                "auto_rank_oc": 1,
-                "auto_rank_booze": 1,
-                "auto_rank_melt": 1,
-                "auto_rank_scrap": 1,
-                _SIM_AR_MANAGED_FIELD: 1,
-            },
-        )
-        if not user:
-            continue
-        prev = {
-            "auto_rank_purchased": bool(user.get("auto_rank_purchased")),
-            "auto_rank_enabled": bool(user.get("auto_rank_enabled")),
-            "auto_rank_crimes": bool(user.get("auto_rank_crimes")),
-            "auto_rank_gta": bool(user.get("auto_rank_gta")),
-            "auto_rank_bust_every_5_sec": bool(user.get("auto_rank_bust_every_5_sec")),
-            "auto_rank_oc": bool(user.get("auto_rank_oc")),
-            "auto_rank_booze": bool(user.get("auto_rank_booze")),
-            "auto_rank_melt": bool(user.get("auto_rank_melt")),
-            "auto_rank_scrap": bool(user.get("auto_rank_scrap")),
-        }
-        updates = {
-            "auto_rank_purchased": True,
-            "auto_rank_enabled": True,
-            "auto_rank_crimes": mode == "crimes",
-            "auto_rank_gta": mode == "gta",
-            "auto_rank_bust_every_5_sec": False,
-            "auto_rank_oc": False,
-            "auto_rank_booze": False,
-            "auto_rank_melt": False,
-            "auto_rank_scrap": False,
-            _SIM_AR_MANAGED_FIELD: True,
-        }
-        if not bool(user.get(_SIM_AR_MANAGED_FIELD)):
-            updates[_SIM_AR_PREV_FIELD] = prev
-        await db.users.update_one({"id": uid}, {"$set": updates})
+def _parse_iso(raw: Any) -> Optional[datetime]:
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
 
 
-async def _disable_sim_autorank_for_removed(db, removed_ids: List[str]) -> None:
-    """Restore prior autorank settings for users removed from simulated active pool."""
-    for uid in removed_ids:
-        if not uid:
-            continue
-        user = await db.users.find_one(
-            {"id": uid, _SIM_AR_MANAGED_FIELD: True},
-            {"_id": 0, _SIM_AR_PREV_FIELD: 1},
-        )
-        if not user:
-            continue
-        prev = user.get(_SIM_AR_PREV_FIELD) if isinstance(user.get(_SIM_AR_PREV_FIELD), dict) else {}
-        restore = {
-            "auto_rank_purchased": bool(prev.get("auto_rank_purchased", False)),
-            "auto_rank_enabled": bool(prev.get("auto_rank_enabled", False)),
-            "auto_rank_crimes": bool(prev.get("auto_rank_crimes", False)),
-            "auto_rank_gta": bool(prev.get("auto_rank_gta", False)),
-            "auto_rank_bust_every_5_sec": bool(prev.get("auto_rank_bust_every_5_sec", False)),
-            "auto_rank_oc": bool(prev.get("auto_rank_oc", False)),
-            "auto_rank_booze": bool(prev.get("auto_rank_booze", False)),
-            "auto_rank_melt": bool(prev.get("auto_rank_melt", False)),
-            "auto_rank_scrap": bool(prev.get("auto_rank_scrap", False)),
-        }
-        await db.users.update_one(
-            {"id": uid},
-            {
-                "$set": restore,
-                "$unset": {
-                    _SIM_AR_PREV_FIELD: "",
-                    _SIM_AR_MANAGED_FIELD: "",
-                },
-            },
-        )
+def _user_had_real_auto_rank(user: dict, prev: dict) -> bool:
+    """True if Auto Rank was theirs — keep their current ticks, do not restore the sim snapshot."""
+    if user.get("auto_rank_permanent") or user.get("auto_rank_email_entitlement"):
+        return True
+    if prev.get("auto_rank_purchased"):
+        return True
+    until = _parse_iso(user.get("auto_rank_trial_until"))
+    if until and until > datetime.now(timezone.utc):
+        return True
+    return False
 
 
-async def clear_presence_simulator_autorank(db) -> int:
-    """Disable simulator-managed autorank and clear simulator markers for all users."""
+def _restore_autorank_from_prev(prev: dict) -> dict:
+    return {k: bool(prev.get(k, False)) for k in _AR_TOGGLE_FIELDS}
+
+
+async def _release_sim_autorank(db, user_ids: Optional[List[str]] = None) -> int:
+    """Drop simulator Auto Rank ownership. Keep real buyers' ticks; undo fake grants."""
+    query: Dict[str, Any] = {_SIM_AR_MANAGED_FIELD: True}
+    if user_ids is not None:
+        ids = [str(x).strip() for x in user_ids if str(x).strip()]
+        if not ids:
+            return 0
+        query["id"] = {"$in": ids}
     rows = await db.users.find(
-        {_SIM_AR_MANAGED_FIELD: True},
-        {"_id": 0, "id": 1, _SIM_AR_PREV_FIELD: 1},
+        query,
+        {
+            "_id": 0,
+            "id": 1,
+            _SIM_AR_PREV_FIELD: 1,
+            "auto_rank_permanent": 1,
+            "auto_rank_email_entitlement": 1,
+            "auto_rank_trial_until": 1,
+        },
     ).to_list(5000)
-    restored = 0
+    released = 0
+    unset = {_SIM_AR_PREV_FIELD: "", _SIM_AR_MANAGED_FIELD: ""}
     for row in rows:
         uid = str(row.get("id") or "").strip()
         if not uid:
             continue
         prev = row.get(_SIM_AR_PREV_FIELD) if isinstance(row.get(_SIM_AR_PREV_FIELD), dict) else {}
-        restore = {
-            "auto_rank_purchased": bool(prev.get("auto_rank_purchased", False)),
-            "auto_rank_enabled": bool(prev.get("auto_rank_enabled", False)),
-            "auto_rank_crimes": bool(prev.get("auto_rank_crimes", False)),
-            "auto_rank_gta": bool(prev.get("auto_rank_gta", False)),
-            "auto_rank_bust_every_5_sec": bool(prev.get("auto_rank_bust_every_5_sec", False)),
-            "auto_rank_oc": bool(prev.get("auto_rank_oc", False)),
-            "auto_rank_booze": bool(prev.get("auto_rank_booze", False)),
-            "auto_rank_melt": bool(prev.get("auto_rank_melt", False)),
-            "auto_rank_scrap": bool(prev.get("auto_rank_scrap", False)),
-        }
-        res = await db.users.update_one(
-            {"id": uid},
-            {
-                "$set": restore,
-                "$unset": {
-                    _SIM_AR_PREV_FIELD: "",
-                    _SIM_AR_MANAGED_FIELD: "",
-                },
-            },
-        )
+        if _user_had_real_auto_rank(row, prev):
+            op = {"$unset": unset}
+        else:
+            op = {"$set": _restore_autorank_from_prev(prev), "$unset": unset}
+        res = await db.users.update_one({"id": uid}, op)
         if res.modified_count:
-            restored += 1
-    return restored
+            released += 1
+    return released
+
+
+async def clear_presence_simulator_autorank(db) -> int:
+    """Clear leftover simulator Auto Rank markers (keeps real buyers' current ticks)."""
+    return await _release_sim_autorank(db)
 
 
 async def presence_simulator_tick(db, admin_emails: List[str], *, force: bool = False) -> Dict[str, Any]:
@@ -454,6 +407,13 @@ async def _presence_simulator_tick_impl(db, admin_emails: List[str], *, force: b
     cfg = await load_presence_config(db)
     if not cfg.get("enabled"):
         return cfg
+
+    try:
+        released = await _release_sim_autorank(db)
+        if released:
+            logger.info("presence_simulator released leftover Auto Rank overrides n=%s", released)
+    except Exception:
+        logger.exception("presence_simulator autorank release failed")
 
     now = datetime.now(timezone.utc)
     min_gap = int(cfg.get("min_seconds_between_ticks") or 45)
@@ -528,6 +488,11 @@ async def _presence_simulator_tick_impl(db, admin_emails: List[str], *, force: b
                     {"auto_rank_idle": True},
                 ]
             },
+            {
+                "auto_rank_purchased": {"$ne": True},
+                "auto_rank_permanent": {"$ne": True},
+                "auto_rank_email_entitlement": {"$ne": True},
+            },
         ],
     }
     skip_ids = list(active or [])
@@ -567,15 +532,9 @@ async def _presence_simulator_tick_impl(db, admin_emails: List[str], *, force: b
 
     if removed_ids:
         try:
-            await _disable_sim_autorank_for_removed(db, removed_ids)
+            await _release_sim_autorank(db, removed_ids)
         except Exception:
-            logger.exception("presence_simulator autorank disable failed (removed=%s)", len(removed_ids))
-    if new_ids:
-        try:
-            seed = int(cfg.get("ticks_total") or 0)
-            await _enable_sim_autorank_for_new(db, new_ids, seed)
-        except Exception:
-            logger.exception("presence_simulator autorank enable failed (new=%s)", len(new_ids))
+            logger.exception("presence_simulator autorank release failed (removed=%s)", len(removed_ids))
 
     # Cap total sleep so one tick doesn't block longer than most of the configured interval.
     interval_sec = max(120, min(3600, int(cfg.get("interval_seconds") or 300)))

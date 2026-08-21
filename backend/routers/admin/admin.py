@@ -7715,7 +7715,7 @@ def register(router):
         if body.read_game_chat is not None:
             cur["read_game_chat"] = bool(body.read_game_chat)
         if was_enabled and body.enabled is False:
-            # Turning simulator off: restore users that were temporarily put on auto-rank.
+            # Turning simulator off: drop leftover Auto Rank markers (real buyers keep current ticks).
             await clear_presence_simulator_autorank(db)
             cur["active_user_ids"] = []
         await save_presence_config(db, cur)
