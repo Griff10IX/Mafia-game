@@ -14834,7 +14834,7 @@ export default function Admin() {
             <p className="text-[10px] text-mutedForeground font-heading">
               On each tick, removes up to “max remove” sim users from the pool (they then drift off Users Online as{' '}
               <code className="text-[9px] bg-zinc-800/80 px-1 rounded">last_seen</code> ages) and adds up to “max add” new offline players.{' '}
-              <code className="text-[9px] bg-zinc-800/80 px-1 rounded">last_seen</code> is staggered per user so counts don’t jump in one instant; use an interval under ~5 minutes so pool members stay inside the online window. Overlapping ticks (loop + Run tick now) are deduped unless you use Run tick now (that always runs). Auto-rank (non-idle) accounts are skipped.{' '}
+              A heartbeat then bumps only 1–2 stale pool members at a time so the live roster drifts instead of jumping by the whole pool. Interval is how often the pool membership rotates (not a full last_seen refresh). Overlapping ticks (loop + Run tick now) are deduped unless you use Run tick now (that always runs). Auto-rank (non-idle) accounts and Auto Rank owners are skipped.{' '}
               <span className="text-mutedForeground/90">Usernames listed below are never added and are dropped from the pool if present. With “Gradual adds”, new pool members get their first bump spaced apart (capped so one tick stays within most of the interval). “Read game chat” has a few pool members mark a couple of newest unread lines each tick so the eye counts rise slowly instead of jumping by the whole pool.</span>
             </p>
             {presenceSimLoading && !presenceSim ? (

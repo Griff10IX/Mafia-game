@@ -122,16 +122,6 @@ async def save_presence_config(db, cfg: Dict[str, Any]) -> None:
     )
 
 
-def _effective_stagger_seconds(cfg: Dict[str, Any]) -> int:
-    """Spread last_seen within [0, N] seconds in the past so online/idle/offline boundaries don’t all hit at once."""
-    raw = cfg.get("stagger_seconds_max")
-    if raw is not None:
-        return int(raw)
-    interval_sec = int(cfg.get("interval_seconds") or 300)
-    # Stay inside the 5m “online” window right after a tick (cap 4m back); still spreads drop-off over time.
-    return min(4 * 60, max(30, int(interval_sec * 0.85)))
-
-
 def _staggered_last_seen(now: datetime, spread_secs: int) -> str:
     if spread_secs <= 0:
         return now.isoformat()
@@ -299,6 +289,12 @@ async def _sim_read_game_chat(db, active_ids: List[str], cfg: Dict[str, Any]) ->
     return {"readers": readers, "marked": marked}
 
 
+_HEARTBEAT_STALE_SEC = 150  # refresh before the 5-minute "online" window ends
+_HEARTBEAT_SPREAD_SEC = 20
+_HEARTBEAT_LOOP_SEC = 40
+_HEARTBEAT_MAX_REFRESH = 2  # roster moves by 1–2, not the whole pool
+
+
 async def _refresh_sim_user(db, uid: str, now: datetime, spread_secs: int) -> None:
     path = random.choice(_SIM_PAGES)
     ls = _staggered_last_seen(now, spread_secs)
@@ -313,6 +309,52 @@ async def _refresh_sim_user(db, uid: str, now: datetime, spread_secs: int) -> No
             }
         },
     )
+
+
+def _last_seen_age_seconds(raw: Any, now: datetime) -> Optional[float]:
+    dt = _parse_iso(raw)
+    if not dt:
+        return None
+    return (now - dt).total_seconds()
+
+
+async def _heartbeat_pool_last_seen(db, active_ids: List[str], now: datetime) -> int:
+    """Bump a couple of stale pool members so they drift on/off the roster instead of snapping as a pack."""
+    pool = [str(uid).strip() for uid in (active_ids or []) if str(uid).strip()]
+    if not pool:
+        return 0
+    users = await db.users.find(
+        {"id": {"$in": pool}, "is_dead": {"$ne": True}},
+        {"_id": 0, "id": 1, "last_seen": 1},
+    ).to_list(len(pool) + 5)
+    stale: List[str] = []
+    for u in users:
+        uid = str(u.get("id") or "").strip()
+        if not uid:
+            continue
+        age = _last_seen_age_seconds(u.get("last_seen"), now)
+        if age is None or age >= _HEARTBEAT_STALE_SEC:
+            stale.append(uid)
+    if not stale:
+        return 0
+    random.shuffle(stale)
+    n = 0
+    for uid in stale[:_HEARTBEAT_MAX_REFRESH]:
+        try:
+            await _refresh_sim_user(db, uid, now, _HEARTBEAT_SPREAD_SEC)
+            n += 1
+            if n < _HEARTBEAT_MAX_REFRESH:
+                await asyncio.sleep(random.uniform(0.4, 1.2))
+        except Exception:
+            logger.exception("presence_simulator heartbeat refresh failed for %s", uid)
+    if n:
+        logger.info(
+            "presence_simulator heartbeat refreshed=%s stale=%s pool=%s",
+            n,
+            len(stale),
+            len(pool),
+        )
+    return n
 
 
 _AR_TOGGLE_FIELDS = (
@@ -398,7 +440,7 @@ async def clear_presence_simulator_autorank(db) -> int:
 
 
 async def presence_simulator_tick(db, admin_emails: List[str], *, force: bool = False) -> Dict[str, Any]:
-    """One cycle: drop some from pool, add new offline players, refresh last_seen for everyone in pool."""
+    """Heartbeat a couple of pool last_seens; on interval, rotate who is in the pool (no full-pool bump)."""
     async with _tick_lock:
         return await _presence_simulator_tick_impl(db, admin_emails, force=force)
 
@@ -416,30 +458,30 @@ async def _presence_simulator_tick_impl(db, admin_emails: List[str], *, force: b
         logger.exception("presence_simulator autorank release failed")
 
     now = datetime.now(timezone.utc)
-    min_gap = int(cfg.get("min_seconds_between_ticks") or 45)
+    active: List[str] = list(cfg.get("active_user_ids") or [])
+    try:
+        await _heartbeat_pool_last_seen(db, active, now)
+    except Exception:
+        logger.exception("presence_simulator heartbeat failed")
+
+    interval_sec = max(120, min(3600, int(cfg.get("interval_seconds") or 300)))
     last_raw = cfg.get("last_tick_at")
-    if not force and last_raw:
-        try:
-            last_dt = datetime.fromisoformat(str(last_raw).replace("Z", "+00:00"))
-            if last_dt.tzinfo is None:
-                last_dt = last_dt.replace(tzinfo=timezone.utc)
-            if (now - last_dt).total_seconds() < min_gap:
-                logger.info(
-                    "presence_simulator tick skipped (%.0fs since last; min_gap=%ss, force=%s)",
-                    (now - last_dt).total_seconds(),
-                    min_gap,
-                    force,
-                )
-                return cfg
-        except Exception:
-            pass
+    due = bool(force)
+    if not due:
+        if not last_raw:
+            due = True
+        else:
+            last_dt = _parse_iso(last_raw)
+            if not last_dt:
+                due = True
+            elif (now - last_dt).total_seconds() >= interval_sec:
+                due = True
+    if not due:
+        return cfg
 
     ten_min_ago = now - timedelta(minutes=10)
     now_iso = now.isoformat()
-    spread_secs = _effective_stagger_seconds(cfg)
     skip_set = _skip_username_set(cfg)
-    gradual = bool(cfg.get("gradual_add", True))
-    sec_between_raw = max(5, min(300, int(cfg.get("seconds_between_adds") or 25)))
 
     active: List[str] = list(cfg.get("active_user_ids") or [])
     active_before = list(active)
@@ -511,7 +553,6 @@ async def _presence_simulator_tick_impl(db, admin_emails: List[str], *, force: b
     cursor = db.users.find(offline_match, {"_id": 0, "id": 1, "username": 1})
     candidates = await cursor.limit(250).to_list(250)
     random.shuffle(candidates)
-    pool_before_add = list(active)
     to_add_docs: List[Dict[str, Any]] = []
     for doc in candidates:
         if len(to_add_docs) >= add_n:
@@ -536,32 +577,6 @@ async def _presence_simulator_tick_impl(db, admin_emails: List[str], *, force: b
         except Exception:
             logger.exception("presence_simulator autorank release failed (removed=%s)", len(removed_ids))
 
-    # Cap total sleep so one tick doesn't block longer than most of the configured interval.
-    interval_sec = max(120, min(3600, int(cfg.get("interval_seconds") or 300)))
-    max_spread = max(0, int(interval_sec * 0.85))
-    sec_between = sec_between_raw
-    if gradual and len(new_ids) > 1 and max_spread > 0:
-        need = (len(new_ids) - 1) * sec_between
-        if need > max_spread:
-            sec_between = max(5, max_spread // max(1, len(new_ids) - 1))
-
-    # Existing pool first (single batch), then new members with optional delay between each so they appear gradually.
-    for uid in pool_before_add:
-        try:
-            await _refresh_sim_user(db, uid, now, spread_secs)
-        except Exception:
-            logger.exception("presence_simulator refresh failed for %s", uid)
-
-    for i, uid in enumerate(new_ids):
-        if not uid:
-            continue
-        if gradual and i > 0:
-            await asyncio.sleep(float(sec_between))
-        try:
-            await _refresh_sim_user(db, uid, now, spread_secs)
-        except Exception:
-            logger.exception("presence_simulator refresh failed for %s", uid)
-
     chat_stats = {"readers": 0, "marked": 0}
     try:
         chat_stats = await _sim_read_game_chat(db, active, cfg)
@@ -573,12 +588,10 @@ async def _presence_simulator_tick_impl(db, admin_emails: List[str], *, force: b
     cfg["ticks_total"] = int(cfg.get("ticks_total") or 0) + 1
     await save_presence_config(db, cfg)
     logger.info(
-        "presence_simulator tick: pool=%s added=%s removed_prior=%s spread_s=%s gradual=%s skip_n=%s chat_readers=%s chat_marked=%s",
+        "presence_simulator rotate: pool=%s added=%s removed=%s skip_n=%s chat_readers=%s chat_marked=%s",
         len(active),
         seen_new,
         remove_n,
-        spread_secs,
-        gradual,
         len(skip_set),
         chat_stats.get("readers") or 0,
         chat_stats.get("marked") or 0,
@@ -595,11 +608,9 @@ async def run_presence_simulator_loop() -> None:
     while True:
         try:
             cfg = await load_presence_config(db)
-            interval = int(cfg.get("interval_seconds") or 300)
-            interval = max(120, min(3600, interval))
             if cfg.get("enabled"):
                 await presence_simulator_tick(db, admin_emails)
-                await asyncio.sleep(interval)
+                await asyncio.sleep(_HEARTBEAT_LOOP_SEC)
             else:
                 await asyncio.sleep(60)
         except asyncio.CancelledError:
