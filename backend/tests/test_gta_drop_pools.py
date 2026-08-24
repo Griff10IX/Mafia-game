@@ -96,5 +96,19 @@ class GtaDifficultyRankPointsTests(unittest.TestCase):
         self.assertEqual(gta.GTA_DIFFICULTY_RANK_POINTS_MULT.get(99, 1.0), 1.0)
 
 
+class ChopShopSealRarityTests(unittest.TestCase):
+    def test_applies_to_dealership_tiers_only(self):
+        for rarity in ("common", "uncommon", "rare", "ultra_rare", "legendary"):
+            self.assertTrue(gta._chop_shop_seal_applies("car1", rarity), rarity)
+
+    def test_skips_exclusive_vip_custom(self):
+        self.assertFalse(gta._chop_shop_seal_applies("car20", "exclusive"))
+        self.assertFalse(gta._chop_shop_seal_applies("car21", "loot_exclusive"))
+        self.assertFalse(gta._chop_shop_seal_applies("car23", "vip_exclusive"))
+        self.assertFalse(gta._chop_shop_seal_applies("car_custom", "custom"))
+        self.assertFalse(gta._chop_shop_seal_applies("car22", "legendary"))
+        self.assertFalse(gta._chop_shop_seal_applies("car1", "custom"))
+
+
 if __name__ == "__main__":
     unittest.main()

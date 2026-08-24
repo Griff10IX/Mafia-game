@@ -599,7 +599,7 @@ async def ensure_all_indexes(db):
 
         # --- Notifications: unread count (profile has user_id) ---
         await db.notifications.create_index([("user_id", 1), ("read", 1)])
-        await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
+        await db.notifications.create_index([("user_id", 1), ("notification_type", 1), ("created_at", -1)])
         await db.notifications.create_index([("id", 1), ("user_id", 1)])
         await db.notifications.create_index([("user_id", 1), ("sender_id", 1), ("created_at", 1)])
         await db.notifications.create_index([("user_id", 1), ("recipient_id", 1), ("created_at", 1)])

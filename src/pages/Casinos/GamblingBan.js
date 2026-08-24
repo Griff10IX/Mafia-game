@@ -106,7 +106,7 @@ export default function GamblingBan() {
           </h1>
         </div>
         <p className="text-[10px] text-zinc-500 font-heading italic mt-1">
-          Self-exclude from casinos and sports betting for up to 3 days.
+          Self-exclude from casinos and sports betting for up to 3 days. Last Man Standing stays available.
         </p>
       </div>
 
@@ -135,16 +135,17 @@ export default function GamblingBan() {
               </div>
               <p className="text-[10px] text-zinc-400 font-heading leading-relaxed">{NOTICE}</p>
               <p className="text-[9px] text-zinc-500 font-heading">
-                Player MDGs are blocked. You can still join MDGs created by admins or mods.
+                Player MDGs are blocked. You can still join MDGs created by admins or mods,
+                and Last Man Standing still works.
                 Buy/sell points, Quick Trade, and casino ownership (claim, relinquish, list, buy-back) still work.
               </p>
             </>
           ) : !confirmStep ? (
             <>
               <p className="text-[10px] text-zinc-400 font-heading leading-relaxed">
-                Blocks casino games and sports bets for the time you choose. You can still buy and sell
-                points, use Quick Trade, and manage casino ownership (claim / relinquish / list / buy-back).
-                Max length is 3 days.
+                Blocks casino games and sports bets for the time you choose. Last Man Standing still works.
+                You can still buy and sell points, use Quick Trade, and manage casino ownership
+                (claim / relinquish / list / buy-back). Max length is 3 days.
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {DURATIONS.map((d) => (

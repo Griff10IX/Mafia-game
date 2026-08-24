@@ -376,7 +376,7 @@ def register(router):
         extra = {"sender_id": current_user.get("id") or "", "sender_username": sender_username}
         if gif_url:
             extra["gif_url"] = gif_url
-        await send_notification(target["id"], title, message, "user_message", category="messages", **extra)
+        delivered = await send_notification(target["id"], title, message, "user_message", category="messages", **extra)
         _sent_at = datetime.now(timezone.utc).isoformat()
         sent_copy = {
             "id": str(uuid.uuid4()),
@@ -395,6 +395,14 @@ def register(router):
         if gif_url:
             sent_copy["gif_url"] = gif_url
         await db.notifications.insert_one(sent_copy)
+        try:
+            from utils.profile_dm_counts import bump_profile_dm_received, bump_profile_dm_sent
+
+            await bump_profile_dm_sent(db, current_user.get("id") or "")
+            if delivered:
+                await bump_profile_dm_received(db, target["id"])
+        except Exception:
+            pass
         _invalidate_list_cache(target["id"])
         return {"message": f"Message sent to {target['username']}"}
 

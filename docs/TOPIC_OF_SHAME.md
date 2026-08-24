@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-23[/color][/b] — [b]Piece[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Action:[/b] IP ban lifted. Piece is unbanned on a [b]probationary period[/b].[/color]
+[*][color=#888888][b]Warning:[/b] Any further rule break is a [b]permanent ban[/b].[/color]
+[*][color=#888888][b]See also:[/b] 2026-08-14 wipe / botting entry (Piece, Moss, Zugzwang).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-14[/color][/b] — [b]Piece, Moss, Zugzwang[/b][/size]
 [quote]
 [list]
@@ -16,6 +27,6 @@
 [*][color=#888888][b]Taken:[/b] Airport — Chicago (slot 1) from Piece. Moss and Zugzwang had no casino, airport, or armoury.[/color]
 [*][color=#888888][b]Removed from family:[/b] The Devil's Rejects (underboss) — Piece.[/color]
 [*][color=#888888][b]Effect:[/b] Rank reset to Rat (prestige 0) on Piece, Moss, and Zugzwang. Honours, leaderboards, cash, points, and Game Pass stripped. Modkilled badge added. £10 Dead > Alive revive blocked on all three.[/color]
-[*][color=#888888][b]IP ban:[/b] Permanent. Anyone caught playing with a banned user will be [b]modkilled[/b] (wipe).[/color]
+[*][color=#888888][b]IP ban:[/b] Was [b]permanent[/b] (2026-08-14). [b]Lifted 2026-08-23[/b] — Piece is on a [b]probationary period[/b]. Any further rule break is a [b]permanent ban[/b]. Anyone caught playing with a banned user will be [b]modkilled[/b] (wipe).[/color]
 [/list]
 [/quote]

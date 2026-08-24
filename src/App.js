@@ -798,7 +798,7 @@ function App() {
             <Route
               path="/last-man-standing"
               element={
-              withGamblingBan(<LastManStanding />, 'lock-page')
+              <LastManStanding />
               }
             />
             <Route

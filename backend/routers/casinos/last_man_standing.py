@@ -11,7 +11,6 @@ from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from server import db, get_current_user, get_current_user_verified, require_admin_verified
-from utils.gambling_self_ban import raise_if_gambling_self_banned
 from utils.sustained_page_ratelimit import PAGE_KEY_SPORTS_BETTING, check_sustained_page_rl
 from utils import last_man_standing as lms
 
@@ -167,19 +166,16 @@ async def lms_season(season_id: str, current_user: dict = Depends(get_current_us
 
 
 async def lms_join(season_id: str, current_user: dict = Depends(get_current_user_verified)):
-    raise_if_gambling_self_banned(current_user)
     _action_rl(current_user.get("id") or "", "join")
     return await lms.join_season(db, current_user, season_id)
 
 
 async def lms_pick(season_id: str, body: LmsPickBody, current_user: dict = Depends(get_current_user_verified)):
-    raise_if_gambling_self_banned(current_user)
     _action_rl(current_user.get("id") or "", "pick")
     return await lms.submit_pick(db, current_user, season_id, body.gw, body.team_id)
 
 
 async def lms_extra_life(season_id: str, current_user: dict = Depends(get_current_user_verified)):
-    raise_if_gambling_self_banned(current_user)
     _action_rl(current_user.get("id") or "", "life")
     return await lms.buy_extra_life(db, current_user, season_id)
 

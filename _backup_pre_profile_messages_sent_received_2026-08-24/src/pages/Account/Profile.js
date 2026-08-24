@@ -501,6 +501,14 @@ const ProfileInfoCard = ({
       status: profile.status || (profile.online ? 'online' : 'offline')
     },
     { 
+      label: 'Messages', 
+      icon: Mail,
+      value: profile.messages_sent != null 
+        ? `${Number(profile.messages_sent).toLocaleString()} sent / ${Number(profile.messages_received ?? 0).toLocaleString()} received` 
+        : `${Number(profile.messages_received ?? 0).toLocaleString()} received`, 
+      valueClass: 'text-foreground font-heading text-[10px] md:text-sm' 
+    },
+    { 
       label: 'Jailbusts', 
       icon: GalleryVerticalEnd,
       value: Number(profile.jail_busts ?? 0).toLocaleString(),
@@ -544,7 +552,7 @@ const ProfileInfoCard = ({
     : undefined;
   
   let profileRows = isStaffProfile
-    ? allRows.filter((r) => r.label !== 'Status' && r.label !== 'Jailbusts')
+    ? allRows.filter((r) => r.label !== 'Status' && r.label !== 'Messages' && r.label !== 'Jailbusts')
     : allRows;
   // Respect hide_kills_on_profile / hide_jailbusts_on_profile (API sends null when hidden)
   profileRows = profileRows.filter((r) => {

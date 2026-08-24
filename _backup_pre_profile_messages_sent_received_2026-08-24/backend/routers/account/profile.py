@@ -625,6 +625,8 @@ def register(router):
                 "profile_cosmetic_until": 1,
                 "profile_name_glow_color": 1,
                 "profile_border_style": 1,
+                "profile_dm_sent": 1,
+                "profile_dm_received": 1,
             },
         )
         if not user:
@@ -637,6 +639,11 @@ def register(router):
                 {"_id": 1},
             )
             return doc is not None
+
+        async def _message_counts():
+            from utils.profile_dm_counts import resolve_profile_dm_counts
+
+            return await resolve_profile_dm_counts(db, user)
 
         async def _family():
             # Prefer denormalized family_id — no membership heal writes on hover path.
@@ -690,17 +697,20 @@ def register(router):
 
         (
             on_hitlist,
+            message_counts,
             family_data,
             owns_casino,
             property_type,
             show_war_rat,
         ) = await asyncio.gather(
             _hitlist_on(),
+            _message_counts(),
             _family(),
             _owns_casino(),
             _property_type(),
             _war_rat_badge_active(user),
         )
+        messages_received, messages_sent = message_counts or (0, 0)
         family_display, family_emblem_preset_id, family_emblem_avatar_url = family_data or (None, None, None)
 
         _prestige_mult = float(user.get("prestige_rank_multiplier") or 1.0)
@@ -727,6 +737,8 @@ def register(router):
             "kills": None if hide_kills else effective_player_kill_count(user),
             "jail_busts": None if hide_jail else int(user.get("jail_busts") or 0),
             "on_hitlist": bool(on_hitlist),
+            "messages_sent": messages_sent,
+            "messages_received": messages_received,
             "family": family_display,
             "family_emblem_preset_id": family_emblem_preset_id,
             "family_emblem_avatar_url": family_emblem_avatar_url,
@@ -923,6 +935,11 @@ def register(router):
                 None if pid else fam.get("avatar_url"),
             )
 
+        async def _inbox_sent_message_counts():
+            from utils.profile_dm_counts import resolve_profile_dm_counts
+
+            return await resolve_profile_dm_counts(db, user)
+
         async def _empty_casino_list():
             return []
 
@@ -937,6 +954,7 @@ def register(router):
             property_,
             garage_dealership,
             sports_betting,
+            message_counts,
             top_cars,
             show_war_rat,
         ) = await asyncio.gather(
@@ -950,6 +968,7 @@ def register(router):
             _user_owns_any_property(user_id),
             _user_owns_garage_dealership(user_id),
             _user_owns_sports_betting_book(user_id),
+            _inbox_sent_message_counts(),
             _top_cars_for_profile(
                 user_id,
                 5,
@@ -960,6 +979,7 @@ def register(router):
             ),
             _war_rat_badge_active(user),
         )
+        messages_received, messages_sent_count = message_counts
 
         (
             family_id,
@@ -979,6 +999,7 @@ def register(router):
             garage_dealership = {"type": "garage_dealership"}
         if sports_betting and user_id != current_user.get("id"):
             sports_betting = {"type": "sports_betting"}
+        messages_sent = int(messages_sent_count or 0)
 
         # Own profile only if the requested profile is the current user (by id and by URL username)
         requested_username_norm = (username or "").strip().lower()
@@ -1042,6 +1063,8 @@ def register(router):
             "property": property_,
             "garage_dealership": garage_dealership,
             "sports_betting": sports_betting,
+            "messages_sent": messages_sent,
+            "messages_received": messages_received,
             "top_cars": top_cars or [],
             "show_cars_on_profile": user.get("profile_show_cars", False),
             "youtube_url": (user.get("profile_youtube_url") or "").strip() or None,

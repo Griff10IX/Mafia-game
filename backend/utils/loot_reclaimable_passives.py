@@ -42,7 +42,7 @@ RECLAIMABLE_PASSIVES: Dict[str, Dict[str, Any]] = {
     },
     "chop_shop_seal": {
         "name": "Chop-Shop Seal",
-        "buff_label": "+20% car sell value",
+        "buff_label": "+20% scrap cash on dealership cars (common–legendary)",
         "buffs": {BUFF_CAR_SELL: 1.20},
     },
     "bail_bond_ring": {

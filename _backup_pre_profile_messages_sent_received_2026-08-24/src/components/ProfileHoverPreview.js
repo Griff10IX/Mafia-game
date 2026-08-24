@@ -1,4 +1,4 @@
-import { User, Target, Building2, Plane, Factory, Skull, Trophy, Crown, Sparkles } from 'lucide-react';
+import { User, Target, Building2, Plane, Factory, Mail, Skull, Trophy, Crown, Sparkles } from 'lucide-react';
 import FamilyEmblem from './FamilyEmblem';
 import CivilianProtectionBadge from './CivilianProtectionBadge';
 import styles from '../styles/noir.module.css';
@@ -193,6 +193,17 @@ export default function ProfileHoverPreview({ preview, userStatus = 'online' }) 
                     Kills &amp; jail busts hidden
                   </div>
                 ) : null}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-mutedForeground inline-flex items-center gap-1.5">
+                    <Mail size={12} className="opacity-70" aria-hidden />
+                    Messages
+                  </span>
+                  <span className="text-foreground font-bold tabular-nums">
+                    {Number(preview.messages_sent ?? 0).toLocaleString()}
+                    {' / '}
+                    {Number(preview.messages_received ?? 0).toLocaleString()}
+                  </span>
+                </div>
               </>
             )}
           </div>

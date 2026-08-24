@@ -1292,6 +1292,7 @@ GARAGE_FETCH_LIMIT = 250_000
 GARAGE_SPECIAL_ROWS_MAX = 500
 _MARKET_EXCLUSIVE_RARITIES = frozenset({"exclusive", "loot_exclusive", "vip_exclusive"})
 _CUSTOM_IMAGE_CAR_IDS = frozenset({"car_custom", "car22"})
+_DEALERSHIP_RARITIES = frozenset({"common", "uncommon", "rare", "ultra_rare", "legendary"})
 _VALID_GARAGE_RARITIES = frozenset(
     {"common", "uncommon", "rare", "ultra_rare", "legendary", "custom", "loot_exclusive", "exclusive", "vip_exclusive"}
 )
@@ -1308,6 +1309,16 @@ def _normalize_garage_rarity_str(raw: object) -> str:
     if s == "ultrarare":
         s = "ultra_rare"
     return s if s in _VALID_GARAGE_RARITIES else "common"
+
+
+def _chop_shop_seal_applies(car_id: Optional[str], rarity_hint: Optional[str] = None) -> bool:
+    """Chop-Shop Seal +20% scrap cash: dealership tiers only (not exclusive / VIP / custom)."""
+    if car_id in _CUSTOM_IMAGE_CAR_IDS:
+        return False
+    rarity = (rarity_hint or "").strip().lower().replace(" ", "_").replace("-", "_")
+    if rarity == "ultrarare":
+        rarity = "ultra_rare"
+    return rarity in _DEALERSHIP_RARITIES
 
 
 def _is_damage_immune_car(car_id: Optional[str], rarity_hint: Optional[str] = None) -> bool:
@@ -1631,18 +1642,19 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                     total_bullets += car_bullets
                 else:
                     car_cash = int(catalog_value * 0.5)
-                    try:
-                        from utils.loot_reclaimable_passives import (
-                            BUFF_CAR_SELL,
-                            get_reclaimable_passive_mults_from_user,
-                        )
+                    if _chop_shop_seal_applies(model_id, car_info.get("rarity")):
+                        try:
+                            from utils.loot_reclaimable_passives import (
+                                BUFF_CAR_SELL,
+                                get_reclaimable_passive_mults_from_user,
+                            )
 
-                        car_cash = int(
-                            car_cash
-                            * float(get_reclaimable_passive_mults_from_user(user).get(BUFF_CAR_SELL) or 1.0)
-                        )
-                    except Exception:
-                        pass
+                            car_cash = int(
+                                car_cash
+                                * float(get_reclaimable_passive_mults_from_user(user).get(BUFF_CAR_SELL) or 1.0)
+                            )
+                        except Exception:
+                            pass
                     total_value += car_cash
                 deleted_count += 1
                 processed += 1

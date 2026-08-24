@@ -12,7 +12,7 @@ import {
  * Gambling self-exclusion banner. Ownership / claim / Quick Trade stay clickable.
  * @param {'notice'|'lock-page'|'hard'} mode
  *   notice / hard (default) = banner only so claim / sell / buy-back work
- *   lock-page = full overlay (bet-only pages: keno, LMS, multiplayer)
+ *   lock-page = full overlay (bet-only pages: keno, multiplayer)
  */
 export default function GamblingSelfBanGate({ children, mode = 'notice' }) {
   const user = useAuthUser();
