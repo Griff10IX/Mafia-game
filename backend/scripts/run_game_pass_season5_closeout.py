@@ -54,12 +54,11 @@ NEW_SEASON_END_AT = uk_midnight_first_of_month(2026, 10).isoformat()
 async def _complete_remaining(*, dry_run: bool) -> Dict[str, Any]:
     season_id = await current_game_pass_season_id(db)
     stamp = await get_season_completion_stamp(db, season_id)
-    if not dry_run and stamp and stamp.get("live_completed_at"):
-        return {
-            "skipped": True,
-            "reason": f"complete-remaining already live for season {season_id}",
-            "stamp": stamp,
-        }
+    if stamp and stamp.get("live_completed_at"):
+        print(
+            f"note: prior complete-remaining stamp exists for season {season_id} "
+            f"({stamp.get('live_completed_at')}); still granting anyone below tier {MAX_MICRO_TIER}."
+        )
 
     filt = eligible_vip_users_filter()
     proj = {**first_vip_completion_user_projection(), "game_pass_season_id": 1, "points": 1}
