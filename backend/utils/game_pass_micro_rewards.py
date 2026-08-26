@@ -12,7 +12,10 @@ Scaling:
 
 Season profiles:
   - v2 (season_id < 3): legacy totals — 25k points, 2k loot, no molotovs.
-  - v3 (season_id >= 3): season 3+ — 30k points, 2.5k loot, 1k molotovs every tier.
+  - v3 (season_id == 3): 30k points, 2.5k loot, 1k molotovs every tier.
+  - v4 (season_id == 4): v3 totals + 20 of each extra Store token + 5 permanent Weed strains.
+  - v5 (season_id >= 5): 38k points, $10B cash, 3k loot, v4 Store tokens, 5 Mission Skip,
+    10 Free Robot Bodyguard tokens. No new Weed strains (existing unlocks still work).
 """
 
 from __future__ import annotations
@@ -75,6 +78,8 @@ REWARD_KEY_ORDER = [
     "properties_tokens",
     "auto_rank_2h_tokens",
     *_V4_EXTRA_TOKEN_KEYS,
+    "mission_skip_tokens",
+    "robot_bodyguard_hire_tokens",
 ]
 
 REWARD_KEY_LABELS = {
@@ -102,6 +107,8 @@ REWARD_KEY_LABELS = {
     "cooldown_skip_gta_tokens": "GTA Cooldown Skip",
     "cooldown_skip_booze_tokens": "Booze Travel Skip",
     "cooldown_skip_properties_tokens": "Properties Collect Skip",
+    "mission_skip_tokens": "Mission Skip",
+    "robot_bodyguard_hire_tokens": "Free Robot Bodyguard",
 }
 
 # Shared season targets (cash / bullets / tokens unchanged across profiles).
@@ -208,10 +215,11 @@ def _build_micro_reward_profile(
     target_loot_pieces: int,
     target_molotovs: int,
     include_molotovs: bool,
+    target_cash: Optional[int] = None,
 ) -> _RewardProfile:
     target_random_by_key = _distribute_total(TARGET_RANDOM_TOKENS_TOTAL, _RANDOM_TOKEN_KEYS)
     target_total_by_key: dict[str, int] = {
-        "money": TARGET_CASH_TOTAL,
+        "money": int(target_cash if target_cash is not None else TARGET_CASH_TOTAL),
         "bullets": TARGET_BULLETS_TOTAL,
         "points": target_points,
         "loot_box_pieces": target_loot_pieces,
@@ -310,23 +318,47 @@ _PROFILE_V3 = _build_micro_reward_profile(
 )
 # v4 reuses v3 baselines/rotation; extra Store tokens + GP strains layered in _rewards_for_micro_tier_from_profile.
 _PROFILE_V4 = _PROFILE_V3
-_REWARD_PROFILES: dict[str, _RewardProfile] = {"v2": _PROFILE_V2, "v3": _PROFILE_V3, "v4": _PROFILE_V4}
+# v5: higher cash/points/loot; extra Store tokens + mission skip / robot hire layered in rewards.
+_PROFILE_V5 = _build_micro_reward_profile(
+    seed_free="game_pass_micro_rewards:free:v5",
+    target_points=38_000,
+    target_loot_pieces=3_000,
+    target_molotovs=1_000,
+    include_molotovs=True,
+    target_cash=10_000_000_000,
+)
+_REWARD_PROFILES: dict[str, _RewardProfile] = {
+    "v2": _PROFILE_V2,
+    "v3": _PROFILE_V3,
+    "v4": _PROFILE_V4,
+    "v5": _PROFILE_V5,
+}
 
-# Season 3+ public targets (keep in sync with src/pages/Game/GamePass.js PROFILE_V3 / V4).
+# Season 3–4 public targets (keep in sync with src/pages/Game/GamePass.js PROFILE_V3 / V4).
 TARGET_POINTS_TOTAL = 30_000
 TARGET_LOOT_PIECES_TOTAL = 2_500
 TARGET_MOLOTOVS_TOTAL = 1_000
+# Season 5+ (keep in sync with GamePass.js PROFILE_META.v5).
+TARGET_CASH_TOTAL_V5 = 10_000_000_000
+TARGET_POINTS_TOTAL_V5 = 38_000
+TARGET_LOOT_PIECES_TOTAL_V5 = 3_000
+TARGET_MISSION_SKIP_TOTAL_V5 = 5
+TARGET_ROBOT_HIRE_TOTAL_V5 = 10
+_V5_MISSION_SKIP_TIERS = (20, 40, 60, 80, 100)
+_V5_ROBOT_HIRE_TIERS = (10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
 
 # Back-compat alias for admin/tools that expect a single baseline map.
 MICRO_TIER_REWARD_BASELINES = _PROFILE_V3["baselines"]
 
 
 def season_reward_profile_key(season_id: Optional[str]) -> str:
-    """Map game_pass_season_id → v2 (<3), v3 (3), v4 (4+)."""
+    """Map game_pass_season_id → v2 (<3), v3 (3), v4 (4), v5 (5+)."""
     try:
         n = int(str(season_id or "0").strip() or "0")
     except ValueError:
         return "v2"
+    if n >= 5:
+        return "v5"
     if n >= 4:
         return "v4"
     if n >= 3:
@@ -355,6 +387,16 @@ def _v4_extra_token_grants_for_tier(t: int) -> Dict[str, int]:
     return out
 
 
+def _v5_special_token_grants_for_tier(t: int) -> Dict[str, int]:
+    """Mission Skip (5) and Free Robot Bodyguard (10) on even VIP tiers."""
+    out: Dict[str, int] = {}
+    if t in _V5_MISSION_SKIP_TIERS:
+        out["mission_skip_tokens"] = 1
+    if t in _V5_ROBOT_HIRE_TIERS:
+        out["robot_bodyguard_hire_tokens"] = 1
+    return out
+
+
 def _rewards_for_micro_tier_from_profile(
     micro_tier: int,
     profile: _RewardProfile,
@@ -380,8 +422,12 @@ def _rewards_for_micro_tier_from_profile(
     ar_amt = int(math.ceil(float(ar_cfg["baseAmount"]) * _reward_weight(t, int(ar_cfg["baseTier"]))))
     if ar_amt > 0:
         out["auto_rank_2h_tokens"] = ar_amt
-    if profile_key == "v4":
+    if profile_key in ("v4", "v5"):
         for k, v in _v4_extra_token_grants_for_tier(t).items():
+            if int(v or 0) > 0:
+                out[k] = int(out.get(k) or 0) + int(v)
+    if profile_key == "v5":
+        for k, v in _v5_special_token_grants_for_tier(t).items():
             if int(v or 0) > 0:
                 out[k] = int(out.get(k) or 0) + int(v)
     return out

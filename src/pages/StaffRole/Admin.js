@@ -12003,7 +12003,7 @@ export default function Admin() {
                 <p className="text-[9px] text-mutedForeground font-heading">
                   Same grant as First Game Pass completion, but reusable: once live per{' '}
                   <span className="font-mono">season_id</span>
-                  . Does <span className="text-amber-300">not</span> grant permanent weed strains (those are earned only by buying VIP and hitting tiers 20/28/35/42/50). Confirm phrase:{' '}
+                  . Grants missing VIP tiers and any missing season-4 Weed Empire strains (already owned strains are skipped). Confirm phrase:{' '}
                   <span className="font-mono">{COMPLETE_REMAINING_VIP_CONFIRM}</span>.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
@@ -16713,9 +16713,9 @@ export default function Admin() {
           <div className="p-3 space-y-2">
             <p className="text-[10px] text-mutedForeground font-heading">
               Sets the global season end used for Game Pass countdown and purchase windows. Use ISO 8601 UTC.
-              Season id <span className="font-mono">4+</span> uses the new VIP rewards (extra Store tokens + permanent weed strains).
+              Season id <span className="font-mono">5+</span> uses the season 5 VIP table (38k points, $10B cash, 3k loot, extra Store tokens, Mission Skip + robot hire). Season 4 used extra Store tokens + permanent weed strains.
               Changing season id immediately clears every player's VIP claim/tokens for the old season — they must buy Game Pass again.
-              Prefer: Complete remaining VIP (old season) → then set season id <span className="font-mono">4</span> and end <span className="font-mono">2026-08-31T23:00:00+00:00</span> (00:00 UK 1 Sep).
+              Prefer: Snapshot → Complete remaining VIP (old season, grants missing strains) → then set season id <span className="font-mono">5</span> and end <span className="font-mono">2026-09-30T23:00:00+00:00</span> (00:00 UK 1 Oct). Changing season id clears VIP and prestige for the new season — they must buy Game Pass again; prestige is once per season.
             </p>
             {gamePassSeasonAdmin?.game_pass_season_end_at && (
               <p className="text-[10px] text-mutedForeground font-heading">

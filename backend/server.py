@@ -1784,7 +1784,15 @@ async def send_notification_to_family(family_id: str, title: str, message: str, 
         await send_notification(m["user_id"], title, message, notification_type, category=category, **extra)
 
 
-async def send_notification_to_all(title: str, message: str, notification_type: str = "system", category: Optional[str] = None, **extra):
+async def send_notification_to_all(
+    title: str,
+    message: str,
+    notification_type: str = "system",
+    category: Optional[str] = None,
+    *,
+    exclude_npc: bool = False,
+    **extra,
+):
     """Notify all users (e.g. new E-Games available). Respects each user's notification_preferences when category is set.
 
     Uses batched insert_many while streaming users — avoids O(users) sequential find_one+insert_one round trips
@@ -1793,7 +1801,8 @@ async def send_notification_to_all(title: str, message: str, notification_type: 
     now_iso = datetime.now(timezone.utc).isoformat()
     batch: list = []
     batch_size = 500
-    async for user in db.users.find({}, {"_id": 0, "id": 1, "notification_preferences": 1}):
+    user_filt: dict = {"is_npc": {"$ne": True}} if exclude_npc else {}
+    async for user in db.users.find(user_filt, {"_id": 0, "id": 1, "notification_preferences": 1}):
         uid = user.get("id")
         if not uid:
             continue

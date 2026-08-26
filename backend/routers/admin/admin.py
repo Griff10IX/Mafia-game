@@ -4310,6 +4310,7 @@ def register(router):
     ):
         """
         Reusable: credit missing VIP micro-tier rewards through tier 100 for all VIP-claimed users.
+        Also grants missing season-4 Weed Empire strains (idempotent). Prestige pending auto-applies at 100.
         Idempotent per season_id (game_settings complete_remaining_vip_v1.by_season).
         """
         if not _is_admin(current_user):
@@ -4397,7 +4398,7 @@ def register(router):
                     micro_tier=t,
                     free_cash_last_micro_tier_granted=free_last,
                     season_id=user_sid,
-                    grant_game_pass_strains=False,
+                    grant_game_pass_strains=True,
                 )
                 if not applied:
                     break
@@ -4488,6 +4489,37 @@ def register(router):
                 )
             ),
         }
+
+    @router.get("/admin/game-pass/closeout-snapshot")
+    async def admin_game_pass_closeout_snapshot_preview(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.game_pass_season_closeout import (
+            build_season_closeout_snapshot,
+            get_persisted_closeout_snapshot_meta,
+        )
+
+        snap = await build_season_closeout_snapshot(db)
+        incomplete = [
+            {"username": u.get("username"), "last_granted_micro_tier": u.get("last_granted_micro_tier")}
+            for u in (snap.get("vip_users") or [])
+            if int(u.get("last_granted_micro_tier") or 0) < 100
+        ][:50]
+        return {
+            "season": snap.get("season"),
+            "counts": snap.get("counts"),
+            "targets": snap.get("targets"),
+            "incomplete_sample": incomplete,
+            "persisted": await get_persisted_closeout_snapshot_meta(db),
+        }
+
+    @router.post("/admin/game-pass/closeout-snapshot")
+    async def admin_game_pass_closeout_snapshot_save(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.game_pass_season_closeout import persist_season_closeout_snapshot
+
+        return await persist_season_closeout_snapshot(db, set_by=str(current_user.get("username") or "?"))
 
     class RevokePrematureGpStrainsRequest(BaseModel):
         confirm: str = Field(..., min_length=1)
@@ -22250,6 +22282,19 @@ def register(router):
             from utils.game_pass_season_rp import reconcile_all_stale_game_pass_users
 
             players_reconciled = await reconcile_all_stale_game_pass_users(db)
+            try:
+                await srv.send_notification_to_all(
+                    "New Game Pass season",
+                    (
+                        f"Game Pass season {season_id_out} is live. Previous VIP does not carry over — "
+                        "buy Game Pass again to unlock this season's VIP track. After you finish VIP, "
+                        "you can buy Prestige once this season and climb the same VIP track again."
+                    ),
+                    notification_type="system",
+                    exclude_npc=True,
+                )
+            except Exception:
+                pass
         return {
             "message": (
                 f"Game Pass season updated"

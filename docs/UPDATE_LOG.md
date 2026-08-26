@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-27[/color][/b] — [b]Game Pass season 5[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New season[/b] through [b]1 October 2026[/b] (00:00 UK). Previous VIP does not carry over — buy Game Pass again.[/color]
+[*][color=#888888][b]VIP value:[/b] ~[b]38,000[/b] points, [b]$10,000,000,000[/b] cash, ~[b]3,000[/b] loot pieces, plus the usual bullets / molotovs / XP tokens / Auto Rank (2h) / extra Store tokens. New this season: [b]5 Mission Skip[/b] and [b]10 Free Robot Bodyguard[/b] tokens. Permanent Weed Empire strains are [b]not[/b] on this track (if you already unlocked them last season they still work).[/color]
+[*][color=#888888][b]Prestige[/b] (£10) is [b]once per season[/b]: finish VIP, prestige, climb the [b]same[/b] VIP track again. A new season resets prestige so you can buy it again.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-17[/color][/b] — [b]Weed Empire: clean the money[/b][/size]
 [quote]
 [list]

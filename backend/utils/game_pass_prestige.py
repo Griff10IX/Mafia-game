@@ -11,10 +11,15 @@ from utils.game_pass_micro_rewards import (
     TARGET_AUTO_RANK_2H_TOTAL,
     TARGET_BULLETS_TOTAL,
     TARGET_CASH_TOTAL,
+    TARGET_CASH_TOTAL_V5,
     TARGET_LOOT_PIECES_TOTAL,
+    TARGET_LOOT_PIECES_TOTAL_V5,
+    TARGET_MISSION_SKIP_TOTAL_V5,
     TARGET_MOLOTOVS_TOTAL,
     TARGET_POINTS_TOTAL,
+    TARGET_POINTS_TOTAL_V5,
     TARGET_RANDOM_TOKENS_TOTAL,
+    TARGET_ROBOT_HIRE_TOTAL_V5,
     TARGET_V4_EXTRA_TOKEN_EACH,
     TARGET_XP_CRIMES_TOKENS_TOTAL,
     TARGET_XP_GTA_TOKENS_TOTAL,
@@ -34,7 +39,7 @@ GAME_PASS_PRESTIGE_PRICE_GBP = 10.00
 GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES = 500
 # Max queued prestiges (buy early while climbing VIP; auto-apply at tier 100).
 GAME_PASS_PRESTIGE_PENDING_CAP = 1
-# One prestige only: Free → VIP Game Pass → Prestige (no third £10 buy).
+# One prestige per season: Free → VIP Game Pass → Prestige (same VIP track again). New season resets.
 GAME_PASS_PRESTIGE_MAX_COUNT = 1
 
 PRESTIGE_RATE_TOPUP_EVENT = "game_pass_prestige_rate_topup"
@@ -44,10 +49,20 @@ PRESTIGE_GRANT_EVENT = "game_pass_prestige"
 def season_vip_reward_totals(season_id: Optional[str] = None) -> Dict[str, int]:
     """Published VIP season reward targets for the given season profile."""
     profile = season_reward_profile_key(season_id)
-    points = 25_000 if profile == "v2" else TARGET_POINTS_TOTAL
-    loot = 2_000 if profile == "v2" else TARGET_LOOT_PIECES_TOTAL
+    if profile == "v5":
+        points = TARGET_POINTS_TOTAL_V5
+        loot = TARGET_LOOT_PIECES_TOTAL_V5
+        cash = TARGET_CASH_TOTAL_V5
+    elif profile == "v2":
+        points = 25_000
+        loot = 2_000
+        cash = TARGET_CASH_TOTAL
+    else:
+        points = TARGET_POINTS_TOTAL
+        loot = TARGET_LOOT_PIECES_TOTAL
+        cash = TARGET_CASH_TOTAL
     out: Dict[str, int] = {
-        "money": TARGET_CASH_TOTAL,
+        "money": cash,
         "bullets": TARGET_BULLETS_TOTAL,
         "points": points,
         "loot_box_pieces": loot,
@@ -58,9 +73,12 @@ def season_vip_reward_totals(season_id: Optional[str] = None) -> Dict[str, int]:
     }
     if profile != "v2":
         out["molotovs"] = TARGET_MOLOTOVS_TOTAL
-    if profile == "v4":
+    if profile in ("v4", "v5"):
         for k in _V4_EXTRA_TOKEN_KEYS:
             out[k] = TARGET_V4_EXTRA_TOKEN_EACH
+    if profile == "v5":
+        out["mission_skip_tokens"] = TARGET_MISSION_SKIP_TOTAL_V5
+        out["robot_bodyguard_hire_tokens"] = TARGET_ROBOT_HIRE_TOTAL_V5
     return out
 
 
@@ -322,12 +340,12 @@ def prestige_purchase_eligibility_error(user: Optional[dict]) -> Optional[str]:
     Error if prestige cannot be bought / queued.
 
     Can buy before finishing VIP — queues until VIP tiers 1–100 finish (after you buy/activate
-    Game Pass and complete the track). One prestige only (no second £10 / third loop).
+    Game Pass and complete the track). One prestige per season (same VIP track again after apply).
     """
     if not user:
         return "Not logged in"
     if int(user.get("game_pass_prestige_count") or 0) >= GAME_PASS_PRESTIGE_MAX_COUNT:
-        return "You have already prestiged Game Pass on this account."
+        return "You have already prestiged Game Pass this season."
     pending = int(user.get("game_pass_prestige_pending") or 0)
     if pending >= GAME_PASS_PRESTIGE_PENDING_CAP:
         return "You already have a Game Pass Prestige queued — it will apply automatically when you finish VIP tiers 1–100."
@@ -346,7 +364,7 @@ def prestige_status_payload(user: Optional[dict], season_id: Optional[str] = Non
     can_apply_now = apply_err is None and prestige_count < GAME_PASS_PRESTIGE_MAX_COUNT
     can_purchase = purchase_err is None
     if prestige_count >= GAME_PASS_PRESTIGE_MAX_COUNT:
-        apply_unavailable = "You have already prestiged Game Pass on this account."
+        apply_unavailable = "You have already prestiged Game Pass this season."
     elif apply_err:
         apply_unavailable = apply_err
     else:
@@ -402,7 +420,7 @@ async def queue_game_pass_prestige(db, user_id: str) -> Dict[str, Any]:
         if int((user or {}).get("game_pass_prestige_count") or 0) >= GAME_PASS_PRESTIGE_MAX_COUNT:
             raise HTTPException(
                 status_code=400,
-                detail="You have already prestiged Game Pass on this account.",
+                detail="You have already prestiged Game Pass this season.",
             )
         raise HTTPException(
             status_code=400,
@@ -510,7 +528,7 @@ async def execute_game_pass_prestige(
     if int((user or {}).get("game_pass_prestige_count") or 0) >= GAME_PASS_PRESTIGE_MAX_COUNT:
         raise HTTPException(
             status_code=400,
-            detail="You have already prestiged Game Pass on this account.",
+            detail="You have already prestiged Game Pass this season.",
         )
 
     season_id = str((user or {}).get("game_pass_season_id") or "").strip() or None

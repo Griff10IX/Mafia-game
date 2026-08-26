@@ -92,6 +92,8 @@ def _reconcile_set_fields(current_sid: str) -> Dict[str, Any]:
         "rank_xp_pass_tier_snapshot": None,
         "rank_xp_pass_tokens": 0,
         "rank_xp_pass_rewards_granted": False,
+        "game_pass_prestige_count": 0,
+        "game_pass_prestige_pending": 0,
     }
 
 

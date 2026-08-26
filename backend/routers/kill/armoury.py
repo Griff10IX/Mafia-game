@@ -335,9 +335,8 @@ async def _try_grant_rank_xp_pass_micro_tier(
     if updated.modified_count == 0:
         return None
 
-    # Permanent Game Pass weed strains (v4+) — not $inc fields.
-    # Bulk season close-out must pass grant_game_pass_strains=False so strains are only
-    # earned by players who buy VIP and hit those tiers in the live season.
+    # Permanent Game Pass weed strains (v4 only). Season 5+ does not add new strains.
+    # Season close-out passes True so missing v4 strains are still granted; already owned stay.
     if grant_game_pass_strains:
         try:
             from utils.game_pass_micro_rewards import season_reward_profile_key

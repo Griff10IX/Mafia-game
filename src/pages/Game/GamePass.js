@@ -110,17 +110,30 @@ const PROFILE_META = {
     points: 25_000,
     loot: 2_000,
     molotovs: 0,
+    cash: 5_000_000_000,
   },
   v3: {
     points: 30_000,
     loot: 2_500,
     molotovs: 1_000,
+    cash: 5_000_000_000,
   },
   v4: {
     points: 30_000,
     loot: 2_500,
     molotovs: 1_000,
+    cash: 5_000_000_000,
     extraTokensEach: 20,
+    strains: true,
+  },
+  v5: {
+    points: 38_000,
+    loot: 3_000,
+    molotovs: 1_000,
+    cash: 10_000_000_000,
+    extraTokensEach: 20,
+    missionSkip: 5,
+    robotHire: 10,
   },
 };
 
@@ -185,6 +198,7 @@ const ROT_TOKEN_KEYS = ['melt_tokens', 'jailbust_tokens', 'travel_tokens', 'prop
 
 function profileKeyForSeason(seasonId) {
   const n = parseInt(String(seasonId ?? '0'), 10);
+  if (Number.isFinite(n) && n >= 5) return 'v5';
   if (Number.isFinite(n) && n >= 4) return 'v4';
   if (Number.isFinite(n) && n >= 3) return 'v3';
   return 'v2';
@@ -206,12 +220,23 @@ function v4ExtraTokenGrantsForTier(t) {
   return out;
 }
 
+const V5_MISSION_SKIP_TIERS = new Set([20, 40, 60, 80, 100]);
+const V5_ROBOT_HIRE_TIERS = new Set([10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+
+function v5SpecialTokenGrantsForTier(t) {
+  const out = {};
+  if (V5_MISSION_SKIP_TIERS.has(t)) out.mission_skip_tokens = 1;
+  if (V5_ROBOT_HIRE_TIERS.has(t)) out.robot_bodyguard_hire_tokens = 1;
+  return out;
+}
+
 function buildMicroRewardProfile({
   seedFree,
   targetPoints,
   targetLootPieces,
   targetMolotovs,
   includeMolotovs,
+  targetCash = TARGET_CASH_TOTAL,
 }) {
   const BASE_TIER_BY_KEY = {
     money: MONEY_BASE_TIER,
@@ -230,7 +255,7 @@ function buildMicroRewardProfile({
 
   const targetRandomByKey = distributeTotal(TARGET_RANDOM_TOKENS_TOTAL, SELECTABLE_RANDOM_TOKEN_KEYS);
   const TARGET_TOTAL_BY_KEY = {
-    money: TARGET_CASH_TOTAL,
+    money: targetCash,
     bullets: TARGET_BULLETS_TOTAL,
     points: targetPoints,
     loot_box_pieces: targetLootPieces,
@@ -304,6 +329,7 @@ const REWARD_PROFILES = {
     targetLootPieces: PROFILE_META.v2.loot,
     targetMolotovs: 0,
     includeMolotovs: false,
+    targetCash: PROFILE_META.v2.cash,
   }),
   v3: buildMicroRewardProfile({
     seedFree: 'game_pass_micro_rewards:free:v5',
@@ -311,9 +337,21 @@ const REWARD_PROFILES = {
     targetLootPieces: PROFILE_META.v3.loot,
     targetMolotovs: PROFILE_META.v3.molotovs,
     includeMolotovs: true,
+    targetCash: PROFILE_META.v3.cash,
   }),
 };
 REWARD_PROFILES.v4 = { ...REWARD_PROFILES.v3, profileKey: 'v4' };
+REWARD_PROFILES.v5 = {
+  ...buildMicroRewardProfile({
+    seedFree: 'game_pass_micro_rewards:free:v5',
+    targetPoints: PROFILE_META.v5.points,
+    targetLootPieces: PROFILE_META.v5.loot,
+    targetMolotovs: PROFILE_META.v5.molotovs,
+    includeMolotovs: true,
+    targetCash: PROFILE_META.v5.cash,
+  }),
+  profileKey: 'v5',
+};
 
 function initialBaseGuess(tiers, baseTier, targetTotal) {
   const denom = tiers.reduce((acc, tt) => acc + (tt / baseTier), 0);
@@ -396,17 +434,25 @@ function getRewardsForMicroTier(microTier, profile = REWARD_PROFILES.v3) {
   if (!Number.isFinite(t) || t < 1) return {};
   const tier = Math.max(1, Math.min(100, Math.floor(t)));
   const base = { ...(profile?.precomputedByTier?.[tier] || {}) };
-  if (profile?.profileKey === 'v4') {
+  if (profile?.profileKey === 'v4' || profile?.profileKey === 'v5') {
     const extras = v4ExtraTokenGrantsForTier(tier);
     Object.entries(extras).forEach(([k, v]) => {
       base[k] = (base[k] || 0) + v;
     });
+  }
+  if (profile?.profileKey === 'v4') {
     const strain = GP_STRAIN_BY_TIER[tier];
     if (strain) {
       base._game_pass_strain_name = strain.name;
       base._game_pass_strain_label = strain.label;
       base._game_pass_strain_description = strain.description;
     }
+  }
+  if (profile?.profileKey === 'v5') {
+    const specials = v5SpecialTokenGrantsForTier(tier);
+    Object.entries(specials).forEach(([k, v]) => {
+      base[k] = (base[k] || 0) + v;
+    });
   }
   return base;
 }
@@ -434,6 +480,8 @@ const REWARD_DISPLAY_ORDER = [
   'properties_tokens',
   'auto_rank_2h_tokens',
   ...V4_EXTRA_TOKEN_KEYS,
+  'mission_skip_tokens',
+  'robot_bodyguard_hire_tokens',
 ];
 
 const TOKEN_REWARD_NAMES = {
@@ -457,6 +505,8 @@ const TOKEN_REWARD_NAMES = {
   cooldown_skip_gta_tokens: 'GTA Cooldown Skip',
   cooldown_skip_booze_tokens: 'Booze Travel Skip',
   cooldown_skip_properties_tokens: 'Properties Collect Skip',
+  mission_skip_tokens: 'Mission Skip',
+  robot_bodyguard_hire_tokens: 'Free Robot Bodyguard',
 };
 
 function formatTierRewardItem(key, value) {
@@ -700,7 +750,7 @@ export default function GamePass() {
   const activeSeasonId = user?.game_pass_current_season_id ?? currentSeasonId ?? '2';
   const rewardProfileKey = profileKeyForSeason(activeSeasonId);
   const rewardProfile = REWARD_PROFILES[rewardProfileKey];
-  const seasonTargets = PROFILE_META[rewardProfileKey];
+  const seasonTargets = PROFILE_META[rewardProfileKey] || PROFILE_META.v4;
 
   useEffect(() => {
     // Default selection = current band. Keeps selection stable once picked.
@@ -940,12 +990,12 @@ export default function GamePass() {
               </div>
               <p className="text-[9px] text-zinc-400 font-heading leading-relaxed">
                 {prestigeAlreadyUsed
-                  ? <>VIP Game Pass is active. Prestige (£{GAME_PASS_PRESTIGE_PRICE_GBP}) is one-time and already used on this account — keep climbing the VIP track for rewards.</>
+                  ? <>VIP Game Pass is active. Prestige (£{GAME_PASS_PRESTIGE_PRICE_GBP}) is already used this season — keep climbing the same VIP track for rewards.</>
                   : (
                     <>
-                      Buy both: Game Pass (£{GAME_PASS_PRICE_GBP}) unlocks VIP tiers. Prestige (£{GAME_PASS_PRESTIGE_PRICE_GBP}) is one-time — queues +{GAME_PASS_PRESTIGE_BONUS_PERCENT}% season VIP rewards
+                      Buy both: Game Pass (£{GAME_PASS_PRICE_GBP}) unlocks VIP tiers. Prestige (£{GAME_PASS_PRESTIGE_PRICE_GBP}) is once per season — queues +{GAME_PASS_PRESTIGE_BONUS_PERCENT}% season VIP rewards
                       {GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES ? ` + ${GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES.toLocaleString()} loot` : ''}
-                      {' '}and auto-applies when you finish VIP tiers 1–{MAX_MICRO_TIER}, then resets the track (VIP stays on).
+                      {' '}and auto-applies when you finish VIP tiers 1–{MAX_MICRO_TIER}, then resets the track so you climb the same VIP pass again (VIP stays on).
                     </>
                   )}
               </p>
@@ -959,7 +1009,7 @@ export default function GamePass() {
               )}
               {prestigeAlreadyUsed && (
                 <p className="text-[9px] text-amber-200/90 font-heading">
-                  Prestiged — you already used the one-time £{GAME_PASS_PRESTIGE_PRICE_GBP} Prestige on this account.
+                  Prestiged — you already used the £{GAME_PASS_PRESTIGE_PRICE_GBP} Prestige this season.
                 </p>
               )}
 
@@ -980,7 +1030,7 @@ export default function GamePass() {
 
               <p className="text-[10px] text-mutedForeground font-heading">
                 Value estimate for VIP: <span className="text-primary font-bold">~{seasonTargets.points.toLocaleString()} points</span> +{" "}
-                <span className="text-primary font-bold">~${TARGET_CASH_TOTAL.toLocaleString()} cash</span> +{" "}
+                <span className="text-primary font-bold">~${(seasonTargets.cash || TARGET_CASH_TOTAL).toLocaleString()} cash</span> +{" "}
                 <span className="text-primary font-bold">~{TARGET_BULLETS_TOTAL.toLocaleString()} bullets</span> +{" "}
                 <span className="text-primary font-bold">~{seasonTargets.loot.toLocaleString()} loot pieces</span>
                 {seasonTargets.molotovs > 0 ? (
@@ -993,6 +1043,13 @@ export default function GamePass() {
                   <>
                     {' '}Also <span className="text-primary font-bold">20 of each missing Store token</span> and{' '}
                     <span className="text-primary font-bold">5 permanent Weed Empire strains</span> (tiers 20–50).
+                  </>
+                ) : null}
+                {rewardProfileKey === 'v5' ? (
+                  <>
+                    {' '}Also <span className="text-primary font-bold">20 of each missing Store token</span>,{' '}
+                    <span className="text-primary font-bold">{seasonTargets.missionSkip} Mission Skip</span> tokens, and{' '}
+                    <span className="text-primary font-bold">{seasonTargets.robotHire} Free Robot Bodyguard</span> tokens.
                   </>
                 ) : null}
               </p>
@@ -1071,6 +1128,11 @@ export default function GamePass() {
                   <span className="text-zinc-100 font-bold">Free vs VIP</span> — Free players still get one milestone reward per 10-tier band. Perk lines on tier cards
                   and cumulative VIP payouts require activating Game Pass.
                 </li>
+                {rewardProfileKey === 'v5' && (
+                  <li>
+                    <span className="text-zinc-100 font-bold">This season</span> — Extra Store tokens, {seasonTargets.missionSkip} Mission Skip tokens, and {seasonTargets.robotHire} Free Robot Bodyguard tokens on the VIP track. Weed Empire strains from last season still work if you already unlocked them; they are not on this pass.
+                  </li>
+                )}
               </ul>
             </div>
             <div className="store-art-line text-primary mx-3" />
@@ -1106,7 +1168,7 @@ export default function GamePass() {
                   </div>
                   {prestigeAlreadyUsed ? (
                     <p className="text-[9px] text-zinc-400 font-heading leading-relaxed">
-                      One-time Prestige already used on this account. Keep climbing VIP tiers for the full reward track again.
+                      One Prestige already used this season. Keep climbing VIP tiers for the full reward track again.
                     </p>
                   ) : (
                     <p className="text-[9px] text-zinc-400 font-heading leading-relaxed">
@@ -1121,7 +1183,7 @@ export default function GamePass() {
                       ) : null}
                       {vipRewardTrackComplete
                         ? <>, plus {GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES.toLocaleString()} extra loot pieces, then start the track again from tier 1 (VIP stays active).</>
-                        : <>, plus {GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES.toLocaleString()} loot pieces, then reset the track). One prestige only.</>}
+                        : <>, plus {GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES.toLocaleString()} loot pieces, then reset the track). One prestige per season.</>}
                     </p>
                   )}
                   {Number(prestigeStatus?.prestige_pending || user?.game_pass_prestige_pending || 0) > 0 && (
@@ -1131,7 +1193,7 @@ export default function GamePass() {
                   )}
                   {prestigeAlreadyUsed && (
                     <p className="text-[8px] text-zinc-500 font-heading">
-                      Prestiged on this account — the £{GAME_PASS_PRESTIGE_PRICE_GBP} Prestige cannot be bought again.
+                      Prestiged this season — the £{GAME_PASS_PRESTIGE_PRICE_GBP} Prestige can be bought again next season.
                     </p>
                   )}
                   {vipRewardTrackComplete && !prestigeAlreadyUsed && (

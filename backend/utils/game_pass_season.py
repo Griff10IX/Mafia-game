@@ -173,7 +173,6 @@ async def maybe_force_vip_season_4_sept_2026_once(db) -> Optional[Dict[str, Any]
     if isinstance(raw, dict) and raw.get("done_at"):
         return None
 
-    now = datetime.now(timezone.utc)
     prev_doc = await db.game_settings.find_one(
         {"key": GAME_PASS_SEASON_SETTINGS_KEY},
         {"_id": 0, "value": 1},
@@ -181,6 +180,13 @@ async def maybe_force_vip_season_4_sept_2026_once(db) -> Optional[Dict[str, Any]
     prev_raw = (prev_doc or {}).get("value")
     prev_val = prev_raw if isinstance(prev_raw, dict) else {}
     prev_sid = str(prev_val.get("season_id") or "").strip() or None
+    try:
+        if prev_sid and int(prev_sid) > int(TARGET_VIP_SEASON_ID):
+            return None
+    except ValueError:
+        pass
+
+    now = datetime.now(timezone.utc)
     prev_end = str(prev_val.get("season_end_at") or "")
 
     new_end = uk_midnight_first_of_month(2026, 9).isoformat()
