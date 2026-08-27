@@ -106,6 +106,18 @@ class LmsHelpersTests(unittest.TestCase):
         self.assertEqual(fx[0]["home"], "Arsenal")
         self.assertEqual(fx[-1]["away"], "Chelsea")
 
+    def test_official_gw2_is_full_slate(self):
+        from utils.last_man_standing import official_gw2_2026_fixtures
+        fx = official_gw2_2026_fixtures()
+        ok, n_fx, n_teams = gw1_completeness(fx)
+        self.assertTrue(ok)
+        self.assertEqual(n_fx, 10)
+        self.assertEqual(n_teams, 20)
+        self.assertEqual(fx[0]["home"], "Crystal Palace")
+        self.assertEqual(fx[-1]["away"], "Arsenal")
+        self.assertEqual(slug_team("AFC Bournemouth"), "bournemouth")
+        self.assertEqual(fx[2]["home_team_id"], "bournemouth")
+
 
 if __name__ == "__main__":
     unittest.main()

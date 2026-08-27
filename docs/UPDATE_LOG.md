@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-27[/color][/b] — [b]Last Man Standing: next gameweek[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] [b]Last Man Standing[/b] now moves on to the next Premier League gameweek after the matches are finished, instead of staying stuck on a locked week.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-27[/color][/b] — [b]Dead inheritance login, maintenance screen[/b][/size]
 [quote]
 [list]

@@ -470,10 +470,31 @@ def official_gw1_2026_fixtures() -> List[dict]:
         ("2026-08-23T15:30:00+00:00", "Newcastle United", "Liverpool"),
         ("2026-08-24T19:00:00+00:00", "Fulham", "Chelsea"),
     ]
+    return _official_gw_fixtures(1, rows)
+
+
+def official_gw2_2026_fixtures() -> List[dict]:
+    """2026/27 GW2 (kickoffs in UTC; UK was BST)."""
+    rows = [
+        ("2026-08-28T19:00:00+00:00", "Crystal Palace", "Manchester City"),
+        ("2026-08-29T11:30:00+00:00", "Liverpool", "Nottingham Forest"),
+        ("2026-08-29T14:00:00+00:00", "AFC Bournemouth", "Everton"),
+        ("2026-08-29T14:00:00+00:00", "Coventry City", "Hull City"),
+        ("2026-08-29T16:30:00+00:00", "Tottenham Hotspur", "Newcastle United"),
+        ("2026-08-30T13:00:00+00:00", "Chelsea", "Brighton and Hove Albion"),
+        ("2026-08-30T13:00:00+00:00", "Leeds United", "Brentford"),
+        ("2026-08-30T13:00:00+00:00", "Sunderland", "Fulham"),
+        ("2026-08-30T15:30:00+00:00", "Manchester United", "Ipswich Town"),
+        ("2026-08-31T19:00:00+00:00", "Aston Villa", "Arsenal"),
+    ]
+    return _official_gw_fixtures(2, rows)
+
+
+def _official_gw_fixtures(gw: int, rows: List[Tuple[str, str, str]]) -> List[dict]:
     out = []
     for kick, home, away in rows:
         out.append({
-            "external_event_id": f"pl-2026-gw1-{slug_team(home)}-{slug_team(away)}",
+            "external_event_id": f"pl-2026-gw{int(gw)}-{slug_team(home)}-{slug_team(away)}",
             "home_team_id": slug_team(home),
             "away_team_id": slug_team(away),
             "home": home,
@@ -534,6 +555,12 @@ async def sync_season_fixtures(db, season_id: str) -> dict:
                 if gw not in grouped or not grouped[gw]:
                     grouped[gw] = fx
         gw1_ok, n_fx, n_teams = gw1_completeness(grouped.get(1) or [])
+    gw2_ok, _, _ = gw1_completeness(grouped.get(2) or [])
+    if not gw2_ok:
+        official2 = official_gw2_2026_fixtures()
+        if gw1_completeness(official2)[0]:
+            grouped[2] = official2
+            source = "official-gw2" if source == "none" else f"{source}+official-gw2"
     if not grouped:
         raise HTTPException(status_code=400, detail="Could not load Premier League fixtures")
     upserted = 0
@@ -543,12 +570,10 @@ async def sync_season_fixtures(db, season_id: str) -> dict:
         must_complete = gw == 1
         fixtures = _sort_fixtures(fixtures)
         status = _gw_status_for_fixtures(fixtures, gw1_must_complete=must_complete)
-        if prev_status in ("settling", "settled"):
+        if prev_status in ("settling", "settled", "locked"):
             status = prev_status
             if existing and existing.get("fixtures"):
                 fixtures = existing["fixtures"]
-        elif prev_status == "locked" and status == "picks_open":
-            status = "locked"
         deadline = _deadline_from_fixtures(fixtures)
         await db[COL_GAMEWEEKS].update_one(
             {"season_id": season_id, "gw": gw},
