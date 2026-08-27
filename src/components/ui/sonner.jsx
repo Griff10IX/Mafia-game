@@ -1,6 +1,6 @@
 import { useTheme } from "next-themes"
 import { Toaster as Sonner, toast } from "sonner"
-import { sendToastEvent } from "../../utils/api";
+import { isServerMaintenanceOverlayActive, sendToastEvent } from "../../utils/api";
 import { isCurrentPageToastMuted } from "../../utils/toastPageMutes";
 
 const DEFAULT_TOAST_OPTIONS = {
@@ -121,7 +121,7 @@ export function initToastObservability() {
     toast[method] = (...args) => {
       const options = args[1] && typeof args[1] === "object" ? args[1] : {};
       const unsuppressible = !!(options.unsuppressible || options.forceShow);
-      if (!unsuppressible && isCurrentPageToastMuted()) {
+      if (!unsuppressible && (isCurrentPageToastMuted() || isServerMaintenanceOverlayActive())) {
         return undefined;
       }
       try {

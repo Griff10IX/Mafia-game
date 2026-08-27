@@ -75,6 +75,16 @@ def dead_account_linked_by_email(current_email: Optional[str], dead_user: Option
     return live == cur or before == cur
 
 
+def estate_nudge_should_redirect(current_user: Optional[dict], has_claimable: bool) -> bool:
+    """One-time post-login send to Dead > Alive when this living account still has a claimable estate."""
+    u = current_user or {}
+    if u.get("is_dead"):
+        return False
+    if u.get("dead_alive_estate_nudge_seen_at"):
+        return False
+    return bool(has_claimable)
+
+
 def estate_retrievable(dead_user: Optional[dict], *, cash_percent: float = 0.9995) -> Dict[str, Any]:
     """What Claim Inheritance will actually pay from this dead account right now."""
     u = dead_user or {}
@@ -1083,14 +1093,11 @@ def register(router):
             "game_pass_weed_strains_transferred": list(gp_weed_strains_transferred),
         }
 
-    @router.get("/dead-alive/my-accounts")
-    async def dead_alive_my_accounts(current_user: dict = Depends(get_current_user_verified)):
-        """Dead characters on this email (including email_before_freed) and what Claim Inheritance would pay."""
+    async def list_linked_dead_accounts(current_user: dict):
+        """Dead characters on this email and what Claim Inheritance would pay."""
         email = _norm_email(current_user.get("email"))
-        if current_user.get("is_dead"):
-            raise HTTPException(status_code=400, detail="You must be alive to claim from a fallen account.")
-        if not email or _email_is_tombstone(email):
-            return {"email_linked": False, "accounts": []}
+        if current_user.get("is_dead") or not email or _email_is_tombstone(email):
+            return []
         uid = current_user.get("id")
         cursor = db.users.find(
             {
@@ -1140,7 +1147,7 @@ def register(router):
                 blocked = "unavailable"
                 can = False
             elif not can:
-                blocked = "empty" if estate["retrieval_used"] else "empty"
+                blocked = "empty"
             accounts.append({
                 "username": u.get("username"),
                 "dead_at": u.get("dead_at"),
@@ -1153,7 +1160,44 @@ def register(router):
                 "swiss": int(estate["swiss"]),
             })
         accounts.sort(key=lambda a: str(a.get("dead_at") or ""), reverse=True)
-        return {"email_linked": True, "accounts": accounts}
+        return accounts
+
+    async def has_claimable_linked_estate(current_user: dict) -> bool:
+        for acc in await list_linked_dead_accounts(current_user):
+            if acc.get("can_retrieve"):
+                return True
+        return False
+
+    @router.get("/dead-alive/my-accounts")
+    async def dead_alive_my_accounts(current_user: dict = Depends(get_current_user_verified)):
+        """Dead characters on this email (including email_before_freed) and what Claim Inheritance would pay."""
+        if current_user.get("is_dead"):
+            raise HTTPException(status_code=400, detail="You must be alive to claim from a fallen account.")
+        email = _norm_email(current_user.get("email"))
+        if not email or _email_is_tombstone(email):
+            return {"email_linked": False, "accounts": []}
+        return {"email_linked": True, "accounts": await list_linked_dead_accounts(current_user)}
+
+    @router.get("/dead-alive/estate-nudge")
+    async def dead_alive_estate_nudge(current_user: dict = Depends(get_current_user_verified)):
+        """Whether this login should send the player to Dead > Alive (unclaimed linked estate, once)."""
+        if not estate_nudge_should_redirect(current_user, True):
+            return {"redirect": False}
+        has_claimable = await has_claimable_linked_estate(current_user)
+        return {"redirect": estate_nudge_should_redirect(current_user, has_claimable)}
+
+    @router.post("/dead-alive/estate-nudge/ack")
+    async def dead_alive_estate_nudge_ack(current_user: dict = Depends(get_current_user_verified)):
+        """Remember that this account has been shown Dead > Alive (no further login redirects)."""
+        uid = current_user.get("id")
+        if not uid:
+            return {"ok": False}
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.users.update_one(
+            {"id": uid, "dead_alive_estate_nudge_seen_at": {"$exists": False}},
+            {"$set": {"dead_alive_estate_nudge_seen_at": now_iso}},
+        )
+        return {"ok": True}
 
     @router.get("/dead-alive/revive-eligibility")
     async def revive_eligibility(current_user: dict = Depends(get_current_user_verified)):

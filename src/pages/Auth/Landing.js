@@ -8,6 +8,7 @@ import { Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { Turnstile } from '@marsidev/react-turnstile';
 import api, { getBaseURL, AUTH_ERROR_KEY } from '../../utils/api';
+import { markDeadAliveEstateNudgePending } from '../../utils/deadAliveEstateNudge';
 import { parseIpBanFromError } from '../../utils/ipBan';
 import { useIpBanGate } from '../../hooks/useIpBanGate';
 import IpBannedPanel from '../../components/IpBannedPanel';
@@ -375,6 +376,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
       }
       localStorage.setItem('token', response.data.token);
       setIsAuthenticated(true);
+      markDeadAliveEstateNudgePending();
       toast.success(isLogin ? 'Welcome back.' : 'Account created successfully.');
     } catch (error) {
       let msg;

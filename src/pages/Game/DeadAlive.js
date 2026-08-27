@@ -68,6 +68,10 @@ export default function DeadAlive() {
   }, []);
 
   useEffect(() => {
+    api.post('/dead-alive/estate-nudge/ack').catch(() => {});
+  }, []);
+
+  useEffect(() => {
     api.get('/dead-alive/revive-eligibility')
       .then((r) => setReviveEligibility(r.data && typeof r.data === 'object' ? { ...REVIVE_ELIGIBILITY_BOOT, ...r.data } : REVIVE_ELIGIBILITY_BOOT))
       .catch(() => setReviveEligibility({

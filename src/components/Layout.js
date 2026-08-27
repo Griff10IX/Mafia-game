@@ -29,6 +29,10 @@ import { AuthContext } from '../context/AuthContext';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
 import { setCrimesPrefetch, getCrimesPrefetch, clearProfileSessionLastMeUsername, setProfileSessionLastMeUsername } from '../utils/prefetchCache';
 import { GAME_CHAT_VISIBILITY_EVENT, getGameChatVisible, setGameChatVisible } from '../utils/gameChatVisibility';
+import {
+  clearDeadAliveEstateNudgePending,
+  isDeadAliveEstateNudgePending,
+} from '../utils/deadAliveEstateNudge';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useTheme } from '../context/ThemeContext';
@@ -1074,6 +1078,47 @@ export default function Layout({ children }) {
     };
   }, []); // eslint-disable-line
 
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    if (user.account_locked || user.is_dead || !user.rules_accepted) return undefined;
+    if (user.tutorial_status === 'in_progress') return undefined;
+    const path = location.pathname || '';
+    if (path === '/account/rules-acceptance' || path === '/locked' || path.startsWith('/tjjeujr3wa')) {
+      return undefined;
+    }
+    const onDeadAlive = path === '/game/dead-alive' || path === '/dead-alive';
+    if (onDeadAlive) {
+      if (isDeadAliveEstateNudgePending()) clearDeadAliveEstateNudgePending();
+      return undefined;
+    }
+    if (!isDeadAliveEstateNudgePending()) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/dead-alive/estate-nudge');
+        if (cancelled || !res.data?.redirect) {
+          if (!cancelled) clearDeadAliveEstateNudgePending();
+          return;
+        }
+        clearDeadAliveEstateNudgePending();
+        if (!cancelled) navigate('/game/dead-alive', { replace: true });
+      } catch (_) {
+        /* next login can try again */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    user?.id,
+    user?.account_locked,
+    user?.is_dead,
+    user?.rules_accepted,
+    user?.tutorial_status,
+    location.pathname,
+    navigate,
+  ]);
+
   // Soft SPA navigate from axios / non-React helpers (e.g. jail 403) — avoid full reload theme flash.
   useEffect(() => {
     const onAppNavigate = (event) => {
@@ -1871,6 +1916,7 @@ export default function Layout({ children }) {
     localStorage.removeItem('token');
     clearStaffPortalSession();
     clearProfileSessionLastMeUsername();
+    clearDeadAliveEstateNudgePending();
     window.location.href = '/';
   };
 

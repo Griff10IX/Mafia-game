@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { markDeadAliveEstateNudgePending } from '../../utils/deadAliveEstateNudge';
 import { toast } from 'sonner';
 import { useIpBanGate } from '../../hooks/useIpBanGate';
 import IpBannedPanel from '../../components/IpBannedPanel';
@@ -26,6 +27,7 @@ function finishVerified(navigate, setStatus, setMessage, setIsAuthenticated, dat
   if (data?.token) {
     localStorage.setItem('token', data.token);
     if (setIsAuthenticated) setIsAuthenticated(true);
+    markDeadAliveEstateNudgePending();
   }
   broadcastEmailVerified();
   setStatus('success');

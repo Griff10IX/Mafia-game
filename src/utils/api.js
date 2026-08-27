@@ -266,8 +266,21 @@ function _recordServerUnavailableStrike(nowMs) {
   return _serverUnavailableStrikeCount;
 }
 
-function _shouldSuppressServerUnavailableOverlay() {
+let _serverMaintenanceOverlayActive = false;
+
+export function isServerMaintenanceOverlayActive() {
+  return _serverMaintenanceOverlayActive;
+}
+
+export function setServerMaintenanceOverlayActive(active) {
+  _serverMaintenanceOverlayActive = !!active;
+}
+
+function _shouldSuppressServerUnavailableOverlay(status) {
   if (typeof document !== 'undefined' && document.hidden) return true;
+  // Nginx 502/503/504 during an API restart is real downtime — show the full-screen
+  // maintenance overlay even in the tab-wake grace window / offline flicker.
+  if (status === 502 || status === 503 || status === 504) return false;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
   if (_lastForegroundAt > 0 && (Date.now() - _lastForegroundAt) < _SERVER_UNAVAILABLE_RESUME_GRACE_MS) return true;
   return false;
@@ -551,15 +564,18 @@ api.interceptors.response.use(
       typeof window !== 'undefined' &&
       !isPublicPath() &&
       !_pageUnloading &&
-      !_shouldSuppressServerUnavailableOverlay() &&
+      !_shouldSuppressServerUnavailableOverlay(status) &&
       !_shouldIgnoreServerUnavailableStrike(error.config)
     ) {
       const now = Date.now();
       const strikes = _recordServerUnavailableStrike(now);
-      // Avoid false positives from transient wake/reconnect failures.
-      if (strikes >= _SERVER_UNAVAILABLE_MIN_STRIKES && now - _lastServerUnavailableDispatch >= _SERVER_UNAVAILABLE_THROTTLE_MS) {
+      // Gateway codes: first 502/503/504 is enough (Auto Rank may only poll once).
+      // Bare network errors (status 0) still need two strikes to avoid flaky wifi overlays.
+      const need = isServerUnavailable(status) ? 1 : _SERVER_UNAVAILABLE_MIN_STRIKES;
+      if (strikes >= need && now - _lastServerUnavailableDispatch >= _SERVER_UNAVAILABLE_THROTTLE_MS) {
         _lastServerUnavailableDispatch = now;
         _resetServerUnavailableStrikes();
+        setServerMaintenanceOverlayActive(true);
         window.dispatchEvent(new CustomEvent(SERVER_UNAVAILABLE_EVENT, {
           detail: {
             status,

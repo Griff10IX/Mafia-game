@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import styles from '../styles/noir.module.css';
+import { toast } from 'sonner';
+import { setServerMaintenanceOverlayActive } from '../utils/api';
 
 async function apiIsBack() {
   try {
@@ -14,13 +15,16 @@ export default function ServerUnavailableOverlay() {
   const [visible, setVisible] = useState(false);
   const lastShownRef = useRef(0);
   const reloadingRef = useRef(false);
-  const DEBOUNCE_MS = 8000;
 
   useEffect(() => {
     const handler = () => {
       const now = Date.now();
-      if (visible || now - lastShownRef.current < DEBOUNCE_MS) return;
+      if (visible || now - lastShownRef.current < 400) return;
       lastShownRef.current = now;
+      setServerMaintenanceOverlayActive(true);
+      try {
+        toast.dismiss();
+      } catch (_) { /* ignore */ }
       setVisible(true);
     };
     window.addEventListener('app:server-unavailable', handler);
@@ -39,7 +43,7 @@ export default function ServerUnavailableOverlay() {
         window.location.reload();
       }
     };
-    const id = setInterval(tick, 3000);
+    const id = setInterval(tick, 5000);
     tick();
     return () => {
       cancelled = true;
@@ -51,40 +55,68 @@ export default function ServerUnavailableOverlay() {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      className="fixed inset-0 flex items-center justify-center p-5"
       style={{
-        fontFamily: 'var(--font-heading, system-ui)',
-        backgroundColor: '#0a0a0a',
+        zIndex: 2147483646,
+        background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%)',
+        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
       }}
     >
       <div
-        className={`${styles.panel} text-center max-w-sm mx-6 p-6 rounded-xl border border-primary/30 shadow-2xl`}
+        className="text-center max-w-xl w-full px-8 py-14 rounded-[20px]"
         style={{
-          boxShadow: '0 0 0 1px rgba(var(--noir-primary-rgb), 0.15), 0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+          background: 'rgba(26, 26, 26, 0.8)',
+          border: '2px solid #d4af37',
+          boxShadow: '0 20px 60px rgba(212, 175, 55, 0.3)',
         }}
       >
-        <p className={`${styles.textGold} text-lg font-heading font-bold mb-2 uppercase tracking-wider`}>
-          Updating Game
-        </p>
-        <p className={`${styles.textMuted} text-sm mb-1`}>
-          We&apos;re pushing a fresh update to the streets.
-        </p>
-        <p className={`${styles.textMuted} text-sm mb-4`}>
-          Hang tight — this page will come back on its own.
-        </p>
-        <div className="w-48 h-1 mx-auto mb-4 rounded-full overflow-hidden" style={{ background: '#333' }}>
-          <div
-            className="h-full rounded-full"
-            style={{
-              width: '40%',
-              background: 'linear-gradient(to right, #d4af37, #ca8a04)',
-              animation: 'mafia-maint-bar 1.5s ease-in-out infinite',
-            }}
-          />
+        <div
+          style={{
+            fontSize: 80,
+            marginBottom: 24,
+            lineHeight: 1,
+            animation: 'mafia-maint-pulse 2s ease-in-out infinite',
+          }}
+        >
+          🛠️
         </div>
-        <style>{`@keyframes mafia-maint-bar { 0% { width: 0%; margin-left: 0; } 50% { width: 40%; margin-left: 30%; } 100% { width: 0%; margin-left: 100%; } }`}</style>
-        <p className={`${styles.textMuted} text-[11px] opacity-80`}>
-          Checking every 3 seconds
+        <h1
+          style={{
+            fontSize: 40,
+            color: '#d4af37',
+            marginBottom: 16,
+            textShadow: '0 0 20px rgba(212, 175, 55, 0.5)',
+            fontWeight: 700,
+          }}
+        >
+          Under Maintenance
+        </h1>
+        <p style={{ fontSize: 18, lineHeight: 1.6, color: '#cccccc', marginBottom: 12 }}>
+          Mafia Wars is currently being updated with new features and improvements.
+        </p>
+        <p style={{ fontSize: 18, lineHeight: 1.6, color: '#cccccc', marginBottom: 24 }}>
+          We&apos;ll be back online shortly. Thank you for your patience!
+        </p>
+        <div
+          style={{
+            width: 50,
+            height: 50,
+            margin: '0 auto 24px',
+            border: '4px solid rgba(212, 175, 55, 0.2)',
+            borderTop: '4px solid #d4af37',
+            borderRadius: '50%',
+            animation: 'mafia-maint-spin 1s linear infinite',
+          }}
+        />
+        <style>{`
+          @keyframes mafia-maint-spin { to { transform: rotate(360deg); } }
+          @keyframes mafia-maint-pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+          }
+        `}</style>
+        <p style={{ fontSize: 14, color: '#888' }}>
+          This page will automatically refresh in 5 seconds...
         </p>
       </div>
     </div>

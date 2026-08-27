@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-27[/color][/b] — [b]Dead inheritance login, maintenance screen[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] If you log in with unclaimed points or cash on a fallen account, you are sent to [b]Dead Man's Inheritance[/b] once so you know it is there. Later logins go to the dashboard as usual.[/color]
+[*][color=#888888][b]Changed:[/b] While the game is updating, the [b]Under Maintenance[/b] screen now shows without needing to refresh the page.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-27[/color][/b] — [b]Kill page: target travel[/b][/size]
 [quote]
 [list]

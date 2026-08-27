@@ -3,7 +3,11 @@ import unittest
 
 import server  # noqa: F401
 
-from routers.game.dead_alive import dead_account_linked_by_email, estate_retrievable
+from routers.game.dead_alive import (
+    dead_account_linked_by_email,
+    estate_nudge_should_redirect,
+    estate_retrievable,
+)
 
 
 class TestDeadAccountEmailLink(unittest.TestCase):
@@ -83,6 +87,25 @@ class TestEstateRetrievable(unittest.TestCase):
             }
         )
         self.assertFalse(out["can_retrieve"])
+
+
+class TestEstateNudgeShouldRedirect(unittest.TestCase):
+    def test_claimable_unseen_living(self):
+        self.assertTrue(estate_nudge_should_redirect({"is_dead": False}, True))
+
+    def test_already_seen(self):
+        self.assertFalse(
+            estate_nudge_should_redirect(
+                {"is_dead": False, "dead_alive_estate_nudge_seen_at": "2026-08-27T00:00:00+00:00"},
+                True,
+            )
+        )
+
+    def test_no_estate(self):
+        self.assertFalse(estate_nudge_should_redirect({"is_dead": False}, False))
+
+    def test_dead_user(self):
+        self.assertFalse(estate_nudge_should_redirect({"is_dead": True}, True))
 
 
 if __name__ == "__main__":
