@@ -46,9 +46,9 @@ MDG_MAX_PLAYERS = 100
 ENTERTAINER_MDG_MIN_MAX_PLAYERS = 4  # entertainer-created tables must seat at least this many
 MDG_MAX_OPEN_GAMES_PER_USER = 3
 MDG_MAX_FEE_POINTS = 100_000_000
-MDG_MAX_FEE_MONEY = 1_000_000_000
+MDG_MAX_FEE_MONEY = 50_000_000_000
 MDG_MAX_EXTRA_POT_POINTS = 100_000_000
-MDG_MAX_EXTRA_POT_MONEY = 1_000_000_000
+MDG_MAX_EXTRA_POT_MONEY = 50_000_000_000
 
 # --- Anti-bot join tokens (layer 1, always on) — same scheme as entertainer E-Game joins. ---
 # Issued per-user with the games list; joins must echo the token back. A minimum age check

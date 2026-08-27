@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-27[/color][/b] — [b]MDG money cap[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Player-created [b]MDG[/b] games can now set a money fee and extra pot up to [b]$50,000,000,000[/b] each (was $1B). Points caps are unchanged.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-27[/color][/b] — [b]Last Man Standing: next gameweek[/b][/size]
 [quote]
 [list]
