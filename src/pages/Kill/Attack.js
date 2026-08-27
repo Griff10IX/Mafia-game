@@ -73,6 +73,39 @@ function targetTravelCity(attack) {
   return hop || attack?.location_state || '';
 }
 
+function applyFoundLocationPatches(list, rows, hunterCity) {
+  if (!Array.isArray(list) || !Array.isArray(rows) || rows.length === 0) return list;
+  const byId = {};
+  rows.forEach((r) => {
+    if (r?.attack_id) byId[r.attack_id] = r;
+  });
+  const myCity = String(hunterCity || '').trim();
+  let changed = false;
+  const next = list.map((a) => {
+    const p = byId[a.attack_id];
+    if (!p) return a;
+    const loc = p.location_state || a.location_state;
+    const hop = (p.traveling_to || '').trim() || null;
+    const chase = hop || loc;
+    const canTravel = !!(a.status === 'found' && chase && myCity && myCity !== chase);
+    const canAttack = !!(a.status === 'found' && loc && myCity && myCity === loc && !hop);
+    changed = true;
+    return {
+      ...a,
+      location_state: loc,
+      traveling_to: hop,
+      can_travel: myCity ? canTravel : a.can_travel,
+      can_attack: myCity ? canAttack : (!hop && a.can_attack),
+      message: hop
+        ? `Target is traveling to ${hop}.`
+        : (canAttack
+          ? `Target found in ${loc}! You are in the same location. Ready to attack!`
+          : `Target found in ${loc}! Travel there to attack.`),
+    };
+  });
+  return changed ? next : list;
+}
+
 function bodyguardFindTimePerkActive(untilIso, activeFlag) {
   if (activeFlag) return true;
   if (!untilIso) return false;
@@ -119,12 +152,14 @@ let attackResendCheckDoneThisLoad = false;
 // while /attack/list is in flight. Keyed by JWT-bearing token presence (sessionStorage) — cleared on browser close.
 const _ATTACK_LIST_CACHE_KEY = 'kill_attacks_cache_v1';
 const _ATTACK_LIST_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
-/** Idle list poll — searching rows use the faster interval below. */
-const ATTACK_LIST_POLL_IDLE_MS = 3000;
+/** Idle list poll — found-target city hops use /attack/found-locations instead. */
+const ATTACK_LIST_POLL_IDLE_MS = 10000;
 /** While any row is still "searching", poll a bit faster for found_at flips. */
 const ATTACK_LIST_POLL_SEARCHING_MS = 3000;
 /** Coalesce bursts (focus + events + poll) so we don't stack GETs. */
 const ATTACK_LIST_MIN_GAP_MS = 1500;
+/** JWT-only pulse: target travel shows on My Searches immediately. */
+const FOUND_LOCATION_PULSE_MS = 200;
 const ATTACK_LIST_REFRESH_AFTER_FOCUS_MS = 1500;
 function readCachedAttacks() {
   try {
@@ -1480,6 +1515,8 @@ export default function Attack() {
   const attackListGenRef = useRef(0);
   const recentlyKilledIdsRef = useRef(new Set());
   const recentlyKilledNamesRef = useRef(new Set());
+  const hunterCityRef = useRef('');
+  const foundLocPulseRevRef = useRef(0);
   /** Rotating hidden search code from GET /attack/list (anti-bot for Start Search). */
   const searchCodeRef = useRef(null);
   /** Abort in-flight kill-form bullet calc while typing. */
@@ -1528,6 +1565,7 @@ export default function Attack() {
       setUserBullets(res.data?.bullets ?? 0);
       setUserMolotovs(res.data?.molotovs ?? 0);
       setSlowKillInflationActive(!!res.data?.slow_kill_inflation_active);
+      if (res.data?.current_state) hunterCityRef.current = String(res.data.current_state).trim();
     } catch (e) {}
   };
 
@@ -1941,6 +1979,7 @@ export default function Attack() {
         const meRes = all[0];
         setUserBullets(meRes.data?.bullets ?? 0);
         setUserMolotovs(meRes.data?.molotovs ?? 0);
+        if (meRes.data?.current_state) hunterCityRef.current = String(meRes.data.current_state).trim();
         setBodyguardFindTimeActive(
           bodyguardFindTimePerkActive(meRes.data?.bodyguard_find_time_until, meRes.data?.bodyguard_find_time_active),
         );
@@ -1966,6 +2005,10 @@ export default function Attack() {
     () => (Array.isArray(attacks) ? attacks.some((a) => a.status === 'searching') : false),
     [attacks],
   );
+  const hasFoundAttacks = useMemo(
+    () => (Array.isArray(attacks) ? attacks.some((a) => a.status === 'found') : false),
+    [attacks],
+  );
   useEffect(() => {
     const ms = hasSearchingAttacks ? ATTACK_LIST_POLL_SEARCHING_MS : ATTACK_LIST_POLL_IDLE_MS;
     const interval = setInterval(() => {
@@ -1973,6 +2016,42 @@ export default function Attack() {
     }, ms);
     return () => clearInterval(interval);
   }, [hasSearchingAttacks, refreshAttacks]);
+
+  useEffect(() => {
+    if (!hasFoundAttacks) return undefined;
+    let cancelled = false;
+    let inFlight = false;
+    const tick = async () => {
+      if (cancelled || inFlight) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      inFlight = true;
+      try {
+        const since = foundLocPulseRevRef.current || 0;
+        const res = await api.get('/attack/found-locations', { params: { since } });
+        if (cancelled) return;
+        const rev = Number(res.data?.rev) || 0;
+        if (rev) foundLocPulseRevRef.current = rev;
+        if (!res.data?.changed || !Array.isArray(res.data?.rows) || res.data.rows.length === 0) return;
+        const patched = applyFoundLocationPatches(attacksRef.current, res.data.rows, hunterCityRef.current);
+        if (patched !== attacksRef.current) {
+          setAttacks(patched);
+          attacksRef.current = patched;
+          writeCachedAttacks(patched);
+        }
+        refreshAttacks({ force: true });
+      } catch (_) {
+        /* pulse is best-effort; full list poll still runs */
+      } finally {
+        inFlight = false;
+      }
+    };
+    tick();
+    const interval = setInterval(tick, FOUND_LOCATION_PULSE_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [hasFoundAttacks, refreshAttacks]);
 
   useEffect(() => {
     let timeoutId = null;
@@ -2008,6 +2087,7 @@ export default function Attack() {
     const endsAtMs = killTravelTrip.endsAtMs;
 
     const markArrivedLocally = (arrivedAt) => {
+      hunterCityRef.current = String(arrivedAt || '').trim();
       refreshUser({ current_state: arrivedAt });
       setAttacks((prev) => {
         if (!Array.isArray(prev)) return prev;
@@ -2242,6 +2322,7 @@ export default function Attack() {
         setKillTravelTrip(null);
         setTravelCountdown(null);
         refreshUser({ current_state: arrived });
+        hunterCityRef.current = String(arrived || '').trim();
         setAttacks((prev) => {
           if (!Array.isArray(prev)) return prev;
           return prev.map((a) => {

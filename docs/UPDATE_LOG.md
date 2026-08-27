@@ -9,7 +9,7 @@
 [size=1.5][b][color=#2ECC71]2026-08-27[/color][/b] — [b]Kill page: target travel[/b][/size]
 [quote]
 [list]
-[*][color=#888888][b]Fixed:[/b] [b]My Searches[/b] now shows when a found target travels (plane + city) and picks up the new city within a few seconds — no page refresh.[/color]
+[*][color=#888888][b]Fixed:[/b] [b]My Searches[/b] now shows when a found target travels (plane + city) as soon as they move — no page refresh.[/color]
 [/list]
 [/quote]
 

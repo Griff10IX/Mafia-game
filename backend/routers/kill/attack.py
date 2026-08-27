@@ -2236,6 +2236,29 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
         **search_code,
     }
 
+
+async def found_location_pulse(request: Request, since: int = Query(0)):
+    """JWT-only: hunters on Kill poll this to learn a target city change without rebuilding /attack/list."""
+    from utils.hunt_location_pulse import hunter_pulse_snapshot
+
+    auth = (request.headers.get("authorization") or "").strip()
+    scheme, _, token = auth.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(token.strip(), SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    uid = payload.get("sub")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        since_n = int(since or 0)
+    except (TypeError, ValueError):
+        since_n = 0
+    return hunter_pulse_snapshot(str(uid), since_n)
+
+
 async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depends(get_current_user_verified)):
     ids = [x for x in (request.attack_ids or []) if isinstance(x, str) and x.strip()]
     ids = list(dict.fromkeys(ids))
@@ -4630,6 +4653,7 @@ def register(router):
     router.add_api_route("/attack/search", search_target, methods=["POST"], response_model=AttackSearchResponse, dependencies=_attack_button_rl_v)
     router.add_api_route("/attack/status", get_attack_status, methods=["GET"], response_model=AttackStatusResponse)
     router.add_api_route("/attack/list", list_attacks, methods=["GET"])
+    router.add_api_route("/attack/found-locations", found_location_pulse, methods=["GET"])
     router.add_api_route("/attack/delete", delete_attacks, methods=["POST"], dependencies=_kill_rl_v)
     router.add_api_route("/attack/travel", travel_to_target, methods=["POST"], dependencies=_kill_rl_v)
     router.add_api_route("/attack/bullets/calc", calc_bullets, methods=["POST"], dependencies=_kill_rl_v)

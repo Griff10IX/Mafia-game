@@ -379,6 +379,14 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
                 }
                 _invalidate_travel_info_cache(uid)
                 finalized = True
+                try:
+                    from utils.hunt_location_pulse import schedule_notify_hunters_target_moved
+
+                    schedule_notify_hunters_target_moved(
+                        db, uid, location_state=dest, traveling_to=None
+                    )
+                except Exception:
+                    pass
 
     if not finalized and uid in _travel_info_cache:
         payload, expires = _travel_info_cache[uid]
@@ -780,6 +788,20 @@ async def _start_travel_impl(
             await db.user_cars.update_one(q, {"$set": {"damage_percent": new_damage}})
 
     _invalidate_travel_info_cache(user["id"])
+    try:
+        from utils.hunt_location_pulse import schedule_notify_hunters_target_moved
+
+        if travel_time <= 0:
+            schedule_notify_hunters_target_moved(
+                db, user["id"], location_state=destination, traveling_to=None
+            )
+        else:
+            origin = (user.get("current_state") or "").strip() or destination
+            schedule_notify_hunters_target_moved(
+                db, user["id"], location_state=origin, traveling_to=destination
+            )
+    except Exception:
+        pass
     out = {
         "message": f"Traveling to {destination} via {method_name}",
         "travel_time": travel_time,

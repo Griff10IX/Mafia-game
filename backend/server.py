@@ -1456,6 +1456,14 @@ async def get_current_user(
                             {"$set": {"current_state": destination}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}}
                         )
                         user = await db.users.find_one({"id": user_id}, {"_id": 0})
+                        try:
+                            from utils.hunt_location_pulse import schedule_notify_hunters_target_moved
+
+                            schedule_notify_hunters_target_moved(
+                                db, user_id, location_state=destination, traveling_to=None
+                            )
+                        except Exception:
+                            pass
             except Exception:
                 pass
     await apply_passive_health_regen(user_id, user)

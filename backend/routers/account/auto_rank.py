@@ -423,6 +423,16 @@ async def _apply_overdue_travel(db, user_id: str, user: dict, now: datetime) -> 
             )
             user = await db.users.find_one({"id": user_id}, {"_id": 0})
             if not user or not user.get("travel_arrives_at"):
+                try:
+                    from utils.hunt_location_pulse import schedule_notify_hunters_target_moved
+
+                    dest = (traveling_to or (user or {}).get("current_state") or "").strip()
+                    if dest:
+                        schedule_notify_hunters_target_moved(
+                            db, user_id, location_state=dest, traveling_to=None
+                        )
+                except Exception:
+                    pass
                 break
         except Exception as e:
             logger.warning("Auto rank: arrival update failed for %s: %s", user_id, e)
