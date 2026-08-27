@@ -49,9 +49,9 @@ MAX_TRAVELS_PER_HOUR = 15
 EXTRA_AIRMILES_COST = 25
 MAX_EXTRA_AIRMILES = 50
 
-# Travel token: car/custom travel time multiplier (airport stays instant; airport *points* discount is separate)
+# Travel token: car/custom travel time multiplier (airport stays instant; airport *points* discount is separate).
+# Never slower than the untokened car — a 2s Model SJ must not jump to 3s.
 TRAVEL_TOKEN_CAR_TIME_FACTOR = 0.9
-TRAVEL_TOKEN_CAR_TIME_MIN = 3
 # Travel must account for large garages so fastest options/custom aren't skipped.
 USER_CARS_FETCH_LIMIT = 5000
 TRAVEL_CUSTOM_ROWS_MAX = 20
@@ -198,6 +198,15 @@ def _travel_token_active(user: dict, now_utc: datetime) -> bool:
     return bool(until and now_utc < until)
 
 
+def apply_travel_token_to_car_seconds(base_seconds: int) -> int:
+    """10% off car travel; at least 1s; never slower than the untokened time."""
+    base = int(base_seconds)
+    if base <= 0:
+        return base
+    reduced = max(1, int(base * TRAVEL_TOKEN_CAR_TIME_FACTOR))
+    return min(base, reduced)
+
+
 def _effective_car_travel_seconds(
     base_seconds: int,
     user: dict,
@@ -212,7 +221,7 @@ def _effective_car_travel_seconds(
     except (TypeError, ValueError):
         red = 0
     if _travel_token_active(user, now_utc):
-        t = max(TRAVEL_TOKEN_CAR_TIME_MIN, int(base_seconds * TRAVEL_TOKEN_CAR_TIME_FACTOR))
+        t = apply_travel_token_to_car_seconds(base_seconds)
     else:
         t = base_seconds
     return max(0, t - red)

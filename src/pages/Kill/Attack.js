@@ -13,6 +13,7 @@ import { useAttackTurnstile } from '../../hooks/useAttackTurnstile';
 import { RARITY_GLOW_HEX, rarityRowStyle } from '../../constants/carRarityGlows';
 import { formatGameDateTime } from '../../utils/gameDateTime';
 import { warmProfilePrefetchFromUsername } from '../../utils/profileNavPrefetch';
+import { travelSecondsLeft } from '../../utils/travelSecondsLeft';
 
 const ATTACK_STYLES = `
   @keyframes atk-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -2027,7 +2028,7 @@ export default function Attack() {
 
     const tick = () => {
       if (cancelled || settled) return;
-      const remaining = Math.max(0, Math.ceil((endsAtMs - Date.now()) / 1000));
+      const remaining = travelSecondsLeft(endsAtMs);
       if (remaining <= 0) {
         setTravelCountdown(null);
         settleArrival();
@@ -2246,7 +2247,8 @@ export default function Attack() {
           ? arrivesRaw
           : new Date(endsAtMs).toISOString();
         setKillTravelTrip({ dest, endsAtMs });
-        setTravelCountdown(Math.max(1, Math.ceil((endsAtMs - Date.now()) / 1000)));
+        const left = travelSecondsLeft(endsAtMs);
+        setTravelCountdown(left > 0 ? left : Math.max(1, travelTime));
         refreshUser({ traveling_to: dest, travel_arrives_at: arrivesIso });
         refreshAttacks({ force: true });
       }

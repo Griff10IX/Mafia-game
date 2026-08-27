@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-27[/color][/b] — [b]Travel token: 2s cars[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] [b]Travel token[/b] was making the [b]2s Model SJ[/b] take 3–4 seconds. Fast cars stay fast. The travel countdown no longer shows an extra second.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-27[/color][/b] — [b]Game Pass season 5[/b][/size]
 [quote]
 [list]

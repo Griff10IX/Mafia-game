@@ -20,6 +20,7 @@ import { SLOTS_FEATURE_ENABLED } from '../config/gameFeatures';
 import { buildLayoutStaffNavItems } from '../pages/StaffRole/adminToolMap';
 import { preloadRoute, preloadRouteHandlers } from '../utils/routePreload';
 import { prefetchTravelPageData } from '../utils/travelPageWarm';
+import { travelSecondsLeft } from '../utils/travelSecondsLeft';
 import { prefetchStatsAndObjectivesData } from '../utils/statsObjectivesWarm';
 import { prefetchMissionsPageData } from '../utils/missionsPageWarm';
 import { prefetchJailPageData } from '../utils/jailPageWarm';
@@ -1149,7 +1150,7 @@ export default function Layout({ children }) {
         const dest = String(detail.traveling_to || '').trim();
         const arrivesMs = Date.parse(detail.travel_arrives_at);
         if (dest && Number.isFinite(arrivesMs)) {
-          const secs = Math.max(1, Math.ceil((arrivesMs - Date.now()) / 1000));
+          const secs = travelSecondsLeft(arrivesMs);
           setTravelStatus({ traveling: true, destination: dest, seconds_remaining: secs, arrives_at: arrivesMs });
         }
       }
@@ -1852,7 +1853,7 @@ export default function Layout({ children }) {
       setTravelStatus((prev) => {
         if (!prev?.traveling) return prev;
         const left = prev.arrives_at
-          ? Math.max(0, Math.ceil((prev.arrives_at - Date.now()) / 1000))
+          ? travelSecondsLeft(prev.arrives_at)
           : Math.max(0, (Number(prev.seconds_remaining) || 0) - 1);
         if (left <= 0) {
           arrived = true;
