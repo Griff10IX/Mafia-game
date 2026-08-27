@@ -103,7 +103,7 @@ async def _grant_redeem_code_cars(db: Any, *, user_id: str, car_ids: List[str]) 
     return labels
 
 
-async def apply_redeem_code(db: Any, user: dict, code: str) -> dict:
+async def apply_redeem_code(db: Any, user: dict, code: str, *, request_ip: str = "") -> dict:
     """Atomically claim and grant one redeem code for a user."""
     from routers.kill.armoury import TOKEN_CONFIG
     from utils.point_provenance import log_points_event
@@ -142,6 +142,26 @@ async def apply_redeem_code(db: Any, user: dict, code: str) -> dict:
     if max_uses is not None and used_count >= max_uses:
         raise RedeemCodeError("This code has no redemptions left.")
 
+    if (doc.get("source") or "") == "player":
+        from utils.player_redeem_codes import (
+            IP_USER_PROJECTION,
+            PlayerRedeemError,
+            assert_can_redeem_player_code,
+        )
+
+        live = await db.users.find_one({"id": user_id}, IP_USER_PROJECTION) or {}
+        redeemer = {**user, **live}
+        try:
+            await assert_can_redeem_player_code(
+                db,
+                code_doc=doc,
+                redeemer=redeemer,
+                request_ip=request_ip or "",
+            )
+        except PlayerRedeemError as exc:
+            raise RedeemCodeError(str(exc)) from exc
+        user = redeemer
+
     claim_filter = {
         "code": code_normalized,
         "active": True,
@@ -177,6 +197,10 @@ async def apply_redeem_code(db: Any, user: dict, code: str) -> dict:
             inc[cfg["count_field"]] = int(amount)
         elif token_type == "mission_skip" and amount:
             inc["mission_skip_tokens"] = int(amount)
+        elif token_type == "jail_bailout" and amount:
+            inc["jail_bailout_tokens"] = int(amount)
+        elif token_type == "robot_bodyguard_hire" and amount:
+            inc["robot_bodyguard_hire_tokens"] = int(amount)
     inc["redeem_stats_total_money"] = int(rewards.get("money") or 0)
     inc["redeem_stats_total_points"] = int(rewards.get("points") or 0)
     inc["redeem_stats_total_respect_points"] = int(rewards.get("respect_points") or 0)
@@ -233,6 +257,22 @@ async def apply_redeem_code(db: Any, user: dict, code: str) -> dict:
         if token_type != "rank_xp_pass" and amount:
             granted.append(f"{amount} {token_type.replace('_', ' ')} token(s)")
     granted.extend(car_granted_labels)
+
+    if (claimed.get("source") or doc.get("source") or "") == "player":
+        from datetime import datetime, timezone
+        from utils.player_redeem_codes import log_player_code_redeemed
+
+        await db.redeem_codes.update_one(
+            {"code": code_normalized},
+            {"$set": {
+                "active": False,
+                "redeemed_by_user_id": user_id,
+                "redeemed_by_username": user.get("username") or "",
+                "redeemed_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+        await log_player_code_redeemed(code_doc=claimed, redeemer=user, granted=granted)
+
     return {
         "message": "Code redeemed successfully",
         "code": code_normalized,
@@ -251,7 +291,10 @@ async def release_redeem_slots_for_deceased_user(db: Any, user_id: str) -> None:
     except Exception:
         logger.exception("on_lms_owner_death failed user_id=%s", user_id)
     try:
-        cursor = db.redeem_codes.find({"used_by": user_id}, {"_id": 0, "code": 1})
+        cursor = db.redeem_codes.find(
+            {"used_by": user_id, "source": {"$ne": "player"}},
+            {"_id": 0, "code": 1},
+        )
         code_list = [d["code"] async for d in cursor if d.get("code")]
         if not code_list:
             return
@@ -260,7 +303,7 @@ async def release_redeem_slots_for_deceased_user(db: Any, user_id: str) -> None:
             {"$addToSet": {"redeemed_codes": {"$each": code_list}}},
         )
         await db.redeem_codes.update_many(
-            {"used_by": user_id},
+            {"used_by": user_id, "source": {"$ne": "player"}},
             {"$pull": {"used_by": user_id}, "$inc": {"used_count": -1}},
         )
     except Exception:

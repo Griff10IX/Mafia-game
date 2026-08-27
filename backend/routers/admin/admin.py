@@ -8664,6 +8664,46 @@ def register(router):
             "username": uname,
         }
 
+    @router.get("/admin/dead-estates")
+    async def admin_dead_estates(
+        username: Optional[str] = Query(None),
+        current_user: dict = Depends(require_admin),
+    ):
+        """Living players with linked dead accounts that still hold points, cash, or Swiss."""
+        _ = current_user
+        from utils.dead_estate_audit import scan_dead_estates
+
+        seed = None
+        q = (username or "").strip()
+        if q:
+            seed = await db.users.find_one(
+                {"username": _username_pattern(q)},
+                {
+                    "_id": 0,
+                    "id": 1,
+                    "username": 1,
+                    "email": 1,
+                    "email_before_freed": 1,
+                    "is_dead": 1,
+                    "dead_at": 1,
+                    "created_at": 1,
+                    "registration_ip": 1,
+                    "last_login_ip": 1,
+                    "registration_freed_email_from_user_id": 1,
+                    "points": 1,
+                    "money_at_death": 1,
+                    "swiss_balance": 1,
+                    "swiss_retrieval_used": 1,
+                    "retrieval_used": 1,
+                    "is_npc": 1,
+                    "account_locked": 1,
+                },
+            )
+            if not seed:
+                raise HTTPException(status_code=404, detail="User not found")
+        cash_percent = float(getattr(srv, "DEAD_ALIVE_PERCENT", 0.9995) or 0.9995)
+        return await scan_dead_estates(db, seed_user=seed, cash_percent=cash_percent)
+
     @router.post("/admin/change-email")
     async def admin_change_email(
         target_username: str,
@@ -10979,6 +11019,7 @@ def register(router):
     async def admin_activity_log(
         limit: int = 100,
         username: Optional[str] = None,
+        action: Optional[str] = None,
         current_user: dict = Depends(get_current_user),
     ):
         if not _admin_or_mod(current_user):
@@ -10988,6 +11029,8 @@ def register(router):
         if username and username.strip():
             uname_pattern = re.compile("^" + re.escape(username.strip()) + "$", re.IGNORECASE)
             query["username"] = uname_pattern
+        if action and action.strip():
+            query["action"] = re.compile(re.escape(action.strip()), re.IGNORECASE)
         cursor = db.activity_log.find(query, {"_id": 0}).sort("created_at", -1).limit(limit)
         entries = await cursor.to_list(limit)
         return {"entries": entries, "count": len(entries)}
@@ -20608,7 +20651,7 @@ def register(router):
     async def admin_get_redeem_codes(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        cursor = db.redeem_codes.find({}, {"_id": 0, "used_by": 0})
+        cursor = db.redeem_codes.find({}, {"_id": 0, "used_by": 0, "creator_ips": 0})
         codes = []
         async for doc in cursor:
             codes.append({
@@ -20617,6 +20660,14 @@ def register(router):
                 "max_uses": doc.get("max_uses"),
                 "used_count": int(doc.get("used_count", 0)),
                 "active": bool(doc.get("active", True)),
+                "source": doc.get("source") or "staff",
+                "created_by_username": doc.get("created_by_username") or "",
+                "created_by_user_id": doc.get("created_by_user_id") or "",
+                "created_at": doc.get("created_at"),
+                "target_username": doc.get("target_username") or "",
+                "redeemed_by_username": doc.get("redeemed_by_username") or "",
+                "redeemed_at": doc.get("redeemed_at"),
+                "cancelled_at": doc.get("cancelled_at"),
             })
         return {"codes": codes}
 
@@ -20691,16 +20742,31 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         code_normalized = (code or "").strip().upper()
-        doc = await db.redeem_codes.find_one({"code": code_normalized}, {"_id": 0, "forum_topic_id": 1})
+        doc = await db.redeem_codes.find_one({"code": code_normalized}, {"_id": 0})
         if not doc:
             raise HTTPException(status_code=404, detail="Redeem code not found")
         if request.active is False:
             await remove_redeem_code_forum_topic(doc.get("forum_topic_id"))
-            await db.redeem_codes.update_one(
-                {"code": code_normalized},
-                {"$set": {"active": False}, "$unset": {"forum_topic_id": ""}},
-            )
-            return {"message": "Redeem code deactivated; forum topic removed", "code": code_normalized, "active": False}
+            refunded = False
+            if (doc.get("source") or "") == "player" and int(doc.get("used_count") or 0) == 0 and not doc.get("cancelled_at"):
+                from utils.player_redeem_codes import refund_unused_player_code_as_admin
+
+                refunded = await refund_unused_player_code_as_admin(
+                    db,
+                    code_doc=doc,
+                    admin_username=current_user.get("username") or "admin",
+                )
+            else:
+                await db.redeem_codes.update_one(
+                    {"code": code_normalized},
+                    {"$set": {"active": False}, "$unset": {"forum_topic_id": ""}},
+                )
+            msg = "Redeem code deactivated"
+            if refunded:
+                msg += "; creator refunded"
+            if doc.get("forum_topic_id"):
+                msg += "; forum topic removed"
+            return {"message": msg, "code": code_normalized, "active": False, "refunded": refunded}
         await db.redeem_codes.update_one({"code": code_normalized}, {"$set": {"active": True}})
         return {"message": "Redeem code activated (no forum topic recreated)", "code": code_normalized, "active": True}
 
@@ -20709,13 +20775,27 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         code_normalized = (code or "").strip().upper()
-        doc = await db.redeem_codes.find_one({"code": code_normalized}, {"_id": 0, "forum_topic_id": 1})
-        if doc:
+        doc = await db.redeem_codes.find_one({"code": code_normalized}, {"_id": 0})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Redeem code not found")
+        refunded = False
+        if (doc.get("source") or "") == "player" and int(doc.get("used_count") or 0) == 0 and not doc.get("cancelled_at"):
+            from utils.player_redeem_codes import refund_unused_player_code_as_admin
+
+            refunded = await refund_unused_player_code_as_admin(
+                db,
+                code_doc=doc,
+                admin_username=current_user.get("username") or "admin",
+            )
+        if doc.get("forum_topic_id"):
             await remove_redeem_code_forum_topic(doc.get("forum_topic_id"))
         result = await db.redeem_codes.delete_one({"code": code_normalized})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Redeem code not found")
-        return {"message": "Redeem code deleted", "code": code_normalized}
+        msg = "Redeem code deleted"
+        if refunded:
+            msg += "; creator refunded"
+        return {"message": msg, "code": code_normalized, "refunded": refunded}
 
     @router.get("/admin/beta-signup")
     async def admin_get_beta_signup(current_user: dict = Depends(get_current_user)):

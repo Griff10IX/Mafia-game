@@ -6,10 +6,30 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-27[/color][/b] — [b]Kill page: target travel[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] [b]My Searches[/b] now shows when a found target travels (plane + city) and picks up the new city within a few seconds — no page refresh.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-27[/color][/b] — [b]Travel token: 2s cars[/b][/size]
 [quote]
 [list]
 [*][color=#888888][b]Fixed:[/b] [b]Travel token[/b] was making the [b]2s Model SJ[/b] take 3–4 seconds. Fast cars stay fast. The travel countdown no longer shows an extra second.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-27[/color][/b] — [b]Dead inheritance list, redeem codes, profile views[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Dead Man's Inheritance[/b] has a [b]My Accounts[/b] tab. Dead characters on this email show leftover points, cash (after the 0.05% tithe), and Swiss. Claiming still needs that dead account's password.[/color]
+[*][color=#888888][b]New:[/b] [b]Tokens → Redeem code[/b] — make a one-use code from your cash, points, or tokens (taken when you create it). Someone else redeems it from Tokens or Referral. You cannot redeem your own code. Same IP / a living alt on the same IP is blocked. Cancel an unused code to get the items back. Game Pass cannot go on a code.[/color]
+[*][color=#888888][b]Changed:[/b] Profile views now go up [b]every time[/b] someone opens your dossier — including coming back later or refreshing. Your own visits still do not count. Turn the counter on in Edit Profile if you want it shown.[/color]
 [/list]
 [/quote]
 

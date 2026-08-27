@@ -50,6 +50,29 @@ function showExactFindClock(a, perkActive) {
   return !!(perkActive && a?.status === 'searching' && a?.found_at);
 }
 
+function FoundTargetCity({ attack, pinClassName = 'text-primary' }) {
+  if (attack?.status !== 'found' || !attack.location_state) return null;
+  const hop = String(attack.traveling_to || '').trim();
+  const showHop = hop && hop !== attack.location_state;
+  return (
+    <span className="inline-flex items-center gap-1 min-w-0">
+      <MapPin size={12} className={pinClassName} />
+      <span className="text-foreground">{attack.location_state}</span>
+      {showHop ? (
+        <span className="inline-flex items-center gap-0.5 text-cyan-300 font-bold" title={`Traveling to ${hop}`}>
+          <Plane size={11} />
+          {hop}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function targetTravelCity(attack) {
+  const hop = String(attack?.traveling_to || '').trim();
+  return hop || attack?.location_state || '';
+}
+
 function bodyguardFindTimePerkActive(untilIso, activeFlag) {
   if (activeFlag) return true;
   if (!untilIso) return false;
@@ -97,11 +120,11 @@ let attackResendCheckDoneThisLoad = false;
 const _ATTACK_LIST_CACHE_KEY = 'kill_attacks_cache_v1';
 const _ATTACK_LIST_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
 /** Idle list poll — searching rows use the faster interval below. */
-const ATTACK_LIST_POLL_IDLE_MS = 10000;
+const ATTACK_LIST_POLL_IDLE_MS = 3000;
 /** While any row is still "searching", poll a bit faster for found_at flips. */
-const ATTACK_LIST_POLL_SEARCHING_MS = 4000;
+const ATTACK_LIST_POLL_SEARCHING_MS = 3000;
 /** Coalesce bursts (focus + events + poll) so we don't stack GETs. */
-const ATTACK_LIST_MIN_GAP_MS = 2500;
+const ATTACK_LIST_MIN_GAP_MS = 1500;
 const ATTACK_LIST_REFRESH_AFTER_FOCUS_MS = 1500;
 function readCachedAttacks() {
   try {
@@ -824,7 +847,7 @@ const SearchesCard = ({
                           <button
                             type="button"
                             disabled={travelBusy}
-                            onClick={() => onTravel(a.location_state)}
+                            onClick={() => onTravel(targetTravelCity(a))}
                             className="inline-flex items-center gap-0.5 text-primary hover:text-primary/80 font-heading font-bold transition-colors disabled:opacity-50"
                             data-testid={`attack-travel-${a.attack_id}`}
                           >
@@ -849,10 +872,7 @@ const SearchesCard = ({
 
                     <div className="col-span-3 text-[10px] text-mutedForeground font-heading">
                       {a.status === 'found' && a.location_state ? (
-                        <span className="inline-flex items-center gap-1">
-                          <MapPin size={12} className="text-primary" />
-                          <span className="text-foreground">{a.location_state}</span>
-                        </span>
+                        <FoundTargetCity attack={a} />
                       ) : (
                         <span className="text-mutedForeground/60">Searching...</span>
                       )}
@@ -974,10 +994,7 @@ const SearchesCard = ({
                     </span>
                     
                     {a.status === 'found' && a.location_state && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] text-foreground font-heading">
-                        <MapPin size={12} className="text-primary" />
-                        {a.location_state}
-                      </span>
+                      <FoundTargetCity attack={a} />
                     )}
                   </div>
 
@@ -986,7 +1003,7 @@ const SearchesCard = ({
                       <button
                         type="button"
                         disabled={travelBusy}
-                        onClick={() => onTravel(a.location_state)}
+                        onClick={() => onTravel(targetTravelCity(a))}
                         className="flex-1 bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 rounded px-2 py-1 text-[10px] font-heading font-bold uppercase transition-all disabled:opacity-50 active:scale-95 touch-manipulation inline-flex items-center justify-center gap-1"
                       >
                         <Plane size={12} />

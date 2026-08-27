@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, Swords, Shield, Gift, Car, Building2, Zap, Target, ArrowLeftRight, Users, Clock, Minus, Plus } from 'lucide-react';
+import { Package, Swords, Shield, Gift, Car, Building2, Zap, Target, ArrowLeftRight, Users, Clock, Minus, Plus, Ticket } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import { useAuthUser } from '../../context/AuthContext';
 
 const INV_STYLES = `
   @keyframes inv-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -36,6 +37,7 @@ const GIFTABLE_TOKEN_TYPES = TOKEN_TYPES.filter((k) => !['rank_xp_pass', 'crew_o
 const NO_USE_ALL_TOKEN_TYPES = new Set(['cooldown_skip_crime', 'cooldown_skip_gta', 'cooldown_skip_booze', 'cooldown_skip_properties']);
 // Count-only tokens have no Use button here (spent from their own page).
 const COUNT_ONLY_TOKEN_TYPES = new Set(['jail_bailout', 'mission_skip', 'robot_bodyguard_hire']);
+const REDEEM_CODE_TOKEN_TYPES = TOKEN_TYPES.filter((k) => k !== 'rank_xp_pass');
 const TOKEN_GIFT_DAILY_DEFAULT = { sent: 0, limit: 20 };
 /** Keep in sync with backend armoury.TOKEN_MAX_STACK_HOURS (7 × 24 = 1 week). */
 const TOKEN_MAX_STACK_LABEL = '1 week';
@@ -154,6 +156,7 @@ const countdownLabel = (until) => {
 };
 
 export default function MyInventory() {
+  const authUser = useAuthUser();
   const [hasLoaded, setHasLoaded] = useState(Boolean(_cachedInventory));
   const [data, setData] = useState(_cachedInventory);
   const [activeTab, setActiveTab] = useState(() => {
@@ -177,6 +180,20 @@ export default function MyInventory() {
   const [speakeasyGifting, setSpeakeasyGifting] = useState(false);
   const [crewOcModal, setCrewOcModal] = useState(null);
   const [crewOcMaxFeeStr, setCrewOcMaxFeeStr] = useState('');
+  const [redeemOpen, setRedeemOpen] = useState(false);
+  const [redeemTab, setRedeemTab] = useState('create');
+  const [myRedeemCodes, setMyRedeemCodes] = useState([]);
+  const [redeemCodesLoading, setRedeemCodesLoading] = useState(false);
+  const [redeemCreating, setRedeemCreating] = useState(false);
+  const [redeemCancelling, setRedeemCancelling] = useState('');
+  const [redeemClaimInput, setRedeemClaimInput] = useState('');
+  const [redeemClaiming, setRedeemClaiming] = useState(false);
+  const [redeemTarget, setRedeemTarget] = useState('');
+  const [redeemMoney, setRedeemMoney] = useState('');
+  const [redeemPoints, setRedeemPoints] = useState('');
+  const [redeemTokenType, setRedeemTokenType] = useState('');
+  const [redeemTokenAmount, setRedeemTokenAmount] = useState('1');
+  const [redeemTokenRows, setRedeemTokenRows] = useState([]);
 
   const fetchInventory = (silent = false) => {
     api
@@ -461,6 +478,108 @@ export default function MyInventory() {
       toast.error(Array.isArray(d) ? d.map((x) => x.msg || JSON.stringify(x)).join(', ') : (d || 'Failed to send gift'));
     } finally {
       setGifting(false);
+    }
+  };
+
+  const applyRedeemBalances = (payload) => {
+    if (!payload) return;
+    setData((d) => (d ? {
+      ...d,
+      ...(payload.tokens ? { tokens: payload.tokens } : {}),
+      ...(payload.money != null ? { money: payload.money } : {}),
+      ...(payload.points != null ? { points: payload.points } : {}),
+    } : d));
+    if (Array.isArray(payload.codes)) setMyRedeemCodes(payload.codes);
+  };
+
+  const fetchMyRedeemCodes = () => {
+    setRedeemCodesLoading(true);
+    api.get('/inventory/redeem-codes')
+      .then((res) => {
+        setMyRedeemCodes(res?.data?.codes || []);
+      })
+      .catch(() => setMyRedeemCodes([]))
+      .finally(() => setRedeemCodesLoading(false));
+  };
+
+  const openRedeemModal = (tab = 'create') => {
+    setRedeemTab(tab);
+    setRedeemOpen(true);
+    fetchMyRedeemCodes();
+  };
+
+  const createPlayerRedeemCode = async () => {
+    const tokensPayload = {};
+    redeemTokenRows.forEach((row) => {
+      const n = parseInt(String(row.amount), 10) || 0;
+      if (row.type && n > 0) tokensPayload[row.type] = (tokensPayload[row.type] || 0) + n;
+    });
+    const money = parseInt(String(redeemMoney).replace(/,/g, ''), 10) || 0;
+    const points = parseInt(String(redeemPoints).replace(/,/g, ''), 10) || 0;
+    setRedeemCreating(true);
+    try {
+      const res = await api.post('/inventory/redeem-codes', {
+        money,
+        points,
+        tokens: tokensPayload,
+        target_username: redeemTarget.trim() || undefined,
+      });
+      applyRedeemBalances(res?.data);
+      toast.success(res?.data?.message || `Code ${res?.data?.code} created.`);
+      setRedeemMoney('');
+      setRedeemPoints('');
+      setRedeemTarget('');
+      setRedeemTokenRows([]);
+      refreshUser();
+      fetchInventory();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to create code');
+    } finally {
+      setRedeemCreating(false);
+    }
+  };
+
+  const cancelPlayerRedeemCode = async (code) => {
+    if (!code || redeemCancelling) return;
+    setRedeemCancelling(code);
+    try {
+      const res = await api.post('/inventory/redeem-codes/cancel', { code });
+      applyRedeemBalances(res?.data);
+      toast.success(res?.data?.message || 'Code cancelled.');
+      refreshUser();
+      fetchInventory();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to cancel code');
+    } finally {
+      setRedeemCancelling('');
+    }
+  };
+
+  const claimRedeemCode = async () => {
+    const code = redeemClaimInput.trim();
+    if (!code || redeemClaiming) return;
+    setRedeemClaiming(true);
+    try {
+      const res = await api.post('/account/redeem', { code });
+      const granted = (res?.data?.granted || []).join(', ') || 'rewards';
+      toast.success(res?.data?.message || `Redeemed: ${granted}`);
+      setRedeemClaimInput('');
+      refreshUser();
+      fetchInventory();
+      fetchMyRedeemCodes();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to redeem code');
+    } finally {
+      setRedeemClaiming(false);
+    }
+  };
+
+  const copyRedeemCode = async (code) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      toast.success('Code copied');
+    } catch (_) {
+      toast.error('Could not copy');
     }
   };
 
@@ -1018,6 +1137,14 @@ export default function MyInventory() {
               <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
                 <Zap size={14} className="text-primary" />
                 <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Consumables</h2>
+                <button
+                  type="button"
+                  onClick={() => openRedeemModal('create')}
+                  className="ml-auto inline-flex items-center gap-1 px-2 py-1 rounded text-[9px] font-heading font-bold uppercase tracking-wider border border-primary/50 bg-primary/15 text-primary hover:bg-primary/25 shrink-0"
+                >
+                  <Plus size={11} />
+                  Redeem code
+                </button>
               </div>
               {crewOcModalPanel}
               <div className="p-2.5 space-y-2">
@@ -1331,6 +1458,222 @@ export default function MyInventory() {
         )}
 
       </div>
+
+      {redeemOpen && (() => {
+        const cashHeld = Number(data?.money ?? authUser?.money ?? 0) || 0;
+        const pointsHeld = Number(data?.points ?? authUser?.points ?? 0) || 0;
+        const heldRedeemTypes = REDEEM_CODE_TOKEN_TYPES.filter((k) => (tokens[k]?.count ?? 0) > 0);
+        const pickType = redeemTokenType || heldRedeemTypes[0] || '';
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-3"
+            onClick={() => !redeemCreating && setRedeemOpen(false)}
+          >
+            <div
+              className={`${styles.panel} w-full max-w-lg max-h-[88vh] overflow-y-auto rounded-lg border border-primary/30`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
+                <Ticket size={14} className="text-primary shrink-0" />
+                <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Redeem code</h2>
+                <button
+                  type="button"
+                  onClick={() => setRedeemOpen(false)}
+                  className="ml-auto text-[10px] font-heading uppercase text-mutedForeground hover:text-foreground"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="flex border-b border-primary/15">
+                <button
+                  type="button"
+                  onClick={() => setRedeemTab('create')}
+                  className={`flex-1 px-2 py-1.5 text-[9px] font-heading font-bold uppercase tracking-wider ${redeemTab === 'create' ? 'text-primary border-b-2 border-primary' : 'text-mutedForeground'}`}
+                >
+                  Make a code
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRedeemTab('redeem')}
+                  className={`flex-1 px-2 py-1.5 text-[9px] font-heading font-bold uppercase tracking-wider ${redeemTab === 'redeem' ? 'text-primary border-b-2 border-primary' : 'text-mutedForeground'}`}
+                >
+                  Enter a code
+                </button>
+              </div>
+              <div className="p-3 space-y-3">
+                {redeemTab === 'create' ? (
+                  <>
+                    <p className="text-[8px] text-mutedForeground font-heading leading-snug">
+                      Items are taken from you when you create the code. Anyone with the code can redeem it once — except you, and not if you share an IP or a living account on the same IP. Optional: lock it to one username. Game Pass cannot be included. Cancel unused codes to get the items back.
+                    </p>
+                    <label className="flex flex-col gap-0.5">
+                      <span className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground">For username (optional)</span>
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        value={redeemTarget}
+                        onChange={(e) => setRedeemTarget(e.target.value)}
+                        placeholder="Leave blank for anyone"
+                        className="w-full rounded border border-primary/30 bg-background/80 px-2 py-1.5 text-[10px] font-heading text-foreground"
+                      />
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="flex flex-col gap-0.5">
+                        <span className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground">Cash (have ${cashHeld.toLocaleString()})</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={redeemMoney}
+                          onChange={(e) => setRedeemMoney(e.target.value.replace(/[^\d]/g, ''))}
+                          placeholder="0"
+                          className="w-full rounded border border-primary/30 bg-background/80 px-2 py-1.5 text-[10px] font-heading text-foreground"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-0.5">
+                        <span className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground">Points (have {pointsHeld.toLocaleString()})</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={redeemPoints}
+                          onChange={(e) => setRedeemPoints(e.target.value.replace(/[^\d]/g, ''))}
+                          placeholder="0"
+                          className="w-full rounded border border-primary/30 bg-background/80 px-2 py-1.5 text-[10px] font-heading text-foreground"
+                        />
+                      </label>
+                    </div>
+                    <div className="space-y-1.5">
+                      <span className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground">Tokens</span>
+                      {redeemTokenRows.map((row, i) => (
+                        <div key={`rc-row-${i}`} className="flex items-center gap-1.5">
+                          <select
+                            value={row.type}
+                            onChange={(e) => setRedeemTokenRows((rows) => rows.map((r, j) => (j === i ? { ...r, type: e.target.value } : r)))}
+                            className="flex-1 min-w-0 rounded border border-primary/30 bg-background/80 px-2 py-1.5 text-[10px] font-heading text-foreground"
+                          >
+                            {REDEEM_CODE_TOKEN_TYPES.map((k) => (
+                              <option key={k} value={k} disabled={(tokens[k]?.count ?? 0) < 1 && k !== row.type}>
+                                {tokenLabels[k]?.name || k} (×{tokens[k]?.count ?? 0})
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            min={1}
+                            value={row.amount}
+                            onChange={(e) => setRedeemTokenRows((rows) => rows.map((r, j) => (j === i ? { ...r, amount: e.target.value } : r)))}
+                            className="w-16 rounded border border-primary/30 bg-background/80 px-2 py-1.5 text-[10px] font-heading text-foreground"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setRedeemTokenRows((rows) => rows.filter((_, j) => j !== i))}
+                            className="text-[9px] font-heading uppercase text-red-400 px-1"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-1.5">
+                        <select
+                          value={pickType}
+                          onChange={(e) => setRedeemTokenType(e.target.value)}
+                          disabled={heldRedeemTypes.length === 0}
+                          className="flex-1 min-w-0 rounded border border-primary/30 bg-background/80 px-2 py-1.5 text-[10px] font-heading text-foreground disabled:opacity-50"
+                        >
+                          {heldRedeemTypes.length === 0 ? (
+                            <option value="">No tokens held</option>
+                          ) : (
+                            heldRedeemTypes.map((k) => (
+                              <option key={k} value={k}>{tokenLabels[k]?.name || k} (×{tokens[k]?.count ?? 0})</option>
+                            ))
+                          )}
+                        </select>
+                        <input
+                          type="number"
+                          min={1}
+                          value={redeemTokenAmount}
+                          onChange={(e) => setRedeemTokenAmount(e.target.value)}
+                          className="w-16 rounded border border-primary/30 bg-background/80 px-2 py-1.5 text-[10px] font-heading text-foreground"
+                        />
+                        <button
+                          type="button"
+                          disabled={!pickType}
+                          onClick={() => {
+                            const amt = Math.max(1, parseInt(String(redeemTokenAmount), 10) || 1);
+                            setRedeemTokenRows((rows) => [...rows, { type: pickType, amount: amt }]);
+                          }}
+                          className="px-2 py-1.5 rounded text-[9px] font-heading font-bold border border-primary/40 text-primary disabled:opacity-50"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={redeemCreating}
+                      onClick={createPlayerRedeemCode}
+                      className="w-full px-3 py-2 rounded text-[10px] font-heading font-bold uppercase tracking-wider border border-primary/50 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
+                    >
+                      {redeemCreating ? 'Creating…' : 'Create code'}
+                    </button>
+                    <div className="space-y-1.5 pt-1 border-t border-zinc-700/40">
+                      <p className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground">Your unused codes</p>
+                      {redeemCodesLoading ? (
+                        <p className="text-[9px] text-mutedForeground">Loading…</p>
+                      ) : myRedeemCodes.length === 0 ? (
+                        <p className="text-[9px] text-mutedForeground">None yet.</p>
+                      ) : (
+                        myRedeemCodes.map((c) => (
+                          <div key={c.code} className="rounded border border-zinc-700/40 bg-zinc-950/40 px-2 py-1.5 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-[11px] font-bold text-foreground">{c.code}</span>
+                              <button type="button" onClick={() => copyRedeemCode(c.code)} className="text-[8px] font-heading uppercase text-primary hover:underline">Copy</button>
+                              <button
+                                type="button"
+                                disabled={redeemCancelling === c.code}
+                                onClick={() => cancelPlayerRedeemCode(c.code)}
+                                className="ml-auto text-[8px] font-heading uppercase text-red-400 hover:underline disabled:opacity-50"
+                              >
+                                {redeemCancelling === c.code ? '…' : 'Cancel'}
+                              </button>
+                            </div>
+                            <p className="text-[8px] text-mutedForeground">
+                              {c.summary || '—'}
+                              {c.target_username ? ` · for ${c.target_username}` : ''}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[8px] text-mutedForeground font-heading leading-snug">
+                      Enter a code someone made for you. Same-IP and living alts on that IP cannot redeem each other&apos;s codes.
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={redeemClaimInput}
+                        onChange={(e) => setRedeemClaimInput(e.target.value)}
+                        placeholder="P-XXXXXXXX"
+                        className="flex-1 min-w-0 rounded border border-primary/30 bg-background/80 px-2 py-1.5 text-[11px] font-mono text-foreground"
+                      />
+                      <button
+                        type="button"
+                        disabled={redeemClaiming || !redeemClaimInput.trim()}
+                        onClick={claimRedeemCode}
+                        className="px-3 py-1.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/50 bg-primary/15 text-primary disabled:opacity-50"
+                      >
+                        {redeemClaiming ? '…' : 'Redeem'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

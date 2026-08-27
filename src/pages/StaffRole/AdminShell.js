@@ -31,6 +31,7 @@ const AdminAttackLogs = lazy(() => import('./AdminAttackLogs'));
 const AdminBodyguardHireLogs = lazy(() => import('./AdminBodyguardHireLogs'));
 const AdminIpHistory = lazy(() => import('./AdminIpHistory'));
 const AdminDeadAliveLog = lazy(() => import('./AdminDeadAliveLog'));
+const AdminDeadEstates = lazy(() => import('./AdminDeadEstates'));
 const AdminAccountCompare = lazy(() => import('./AdminAccountCompare'));
 const AdminExclusiveCars = lazy(() => import('./AdminExclusiveCars'));
 const AdminVipCars = lazy(() => import('./AdminVipCars'));
@@ -64,6 +65,7 @@ const STANDALONE_PAGE = {
   'bodyguard-hire-logs': AdminBodyguardHireLogs,
   'ip-history': AdminIpHistory,
   'dead-alive-log': AdminDeadAliveLog,
+  'dead-estates': AdminDeadEstates,
   'account-compare': AdminAccountCompare,
   'exclusive-cars': AdminExclusiveCars,
   'vip-cars': AdminVipCars,

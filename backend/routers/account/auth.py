@@ -2748,14 +2748,24 @@ def register(router):
         code: str
 
     @router.post("/account/redeem")
-    async def redeem_code(body: RedeemRequestBody, current_user: dict = Depends(get_current_user)):
+    async def redeem_code(
+        request: Request,
+        body: RedeemRequestBody,
+        current_user: dict = Depends(get_current_user),
+    ):
         """Redeem a code. One redemption per user id per code; respects max_uses.
 
         Support: if a *new* user id cannot redeem after the old character died, check redeem_codes.used_by / used_count
         (reconcile runs on each attempt). If the *same* character (same users.id) revived, redeemed_codes still blocks — by design.
+        Player-created codes also block same-IP / living-alt-on-same-IP redemptions.
         """
         try:
-            return await apply_redeem_code(db, current_user, body.code)
+            return await apply_redeem_code(
+                db,
+                current_user,
+                body.code,
+                request_ip=_client_ip(request) or "",
+            )
         except RedeemCodeError as exc:
             status_code = 401 if str(exc) == "Not authenticated" else 400
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc

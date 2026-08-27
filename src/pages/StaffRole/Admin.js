@@ -1379,6 +1379,7 @@ export default function Admin() {
   const [activityLog, setActivityLog] = useState({ entries: [] });
   const [activityLogLoading, setActivityLogLoading] = useState(false);
   const [activityLogUsername, setActivityLogUsername] = useState('');
+  const [activityLogAction, setActivityLogAction] = useState('');
   const [toastEvents, setToastEvents] = useState({ entries: [] });
   const [toastEventsLoading, setToastEventsLoading] = useState(false);
   const [toastEventsUsername, setToastEventsUsername] = useState('');
@@ -1768,6 +1769,7 @@ export default function Admin() {
   const [bulkValue, setBulkValue] = useState(100);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [redeemCodesList, setRedeemCodesList] = useState([]);
+  const [redeemCodesSourceFilter, setRedeemCodesSourceFilter] = useState('all');
   const [redeemCodesLoading, setRedeemCodesLoading] = useState(false);
   const [redeemCodeCreateLoading, setRedeemCodeCreateLoading] = useState(false);
   const [tokenTypes, setTokenTypes] = useState([]);
@@ -8045,6 +8047,7 @@ export default function Admin() {
     try {
       const params = { limit: 100 };
       if (activityLogUsername.trim()) params.username = activityLogUsername.trim();
+      if (activityLogAction.trim()) params.action = activityLogAction.trim();
       const res = await api.get('/admin/activity-log', { params });
       setActivityLog(res.data);
     } catch (e) {
@@ -13087,6 +13090,9 @@ export default function Admin() {
             </Link>
             <Link to="/tjjeujr3wa/weed-sell-audit" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-emerald-500/40 bg-emerald-500/10 text-[10px] font-heading font-bold uppercase tracking-wide text-emerald-200 hover:bg-emerald-500/20">
               <Leaf size={12} /> Weed sell audit →
+            </Link>
+            <Link to="/tjjeujr3wa/dead-estates" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-amber-500/40 bg-amber-500/10 text-[10px] font-heading font-bold uppercase tracking-wide text-amber-200 hover:bg-amber-500/20">
+              <Skull size={12} /> Dead estates →
             </Link>
             <Link to="/tjjeujr3wa/vip-cars" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-cyan-500/40 bg-cyan-500/10 text-[10px] font-heading font-bold uppercase tracking-wide text-cyan-200 hover:bg-cyan-500/20">
               <Car size={12} /> VIP Pass cars →
@@ -23819,6 +23825,13 @@ export default function Admin() {
                 placeholder="Filter by username"
                 className="flex-1 min-w-[120px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
               />
+              <input
+                type="text"
+                value={activityLogAction}
+                onChange={(e) => setActivityLogAction(e.target.value)}
+                placeholder="Action e.g. player_redeem_code_create"
+                className="flex-1 min-w-[160px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+              />
               <BtnPrimary onClick={fetchActivityLog} disabled={activityLogLoading}>
                 {activityLogLoading ? '...' : 'Load'}
               </BtnPrimary>
@@ -25524,7 +25537,7 @@ export default function Admin() {
         />
         {!collapsed.redeemCodes && (
           <div className="p-3 space-y-4">
-            <p className="text-[10px] text-mutedForeground leading-relaxed">Players redeem once per account on the Referral / Redeem page. Leave max uses empty for unlimited total redemptions.</p>
+            <p className="text-[10px] text-mutedForeground leading-relaxed">Players redeem once per account on Referral or Tokens → Redeem code. Staff codes can be unlimited. Player-created codes are one-use, deducted from the creator, and blocked on same IP / living alts. Create, redeem, and cancel also appear in Activity Log as <span className="font-mono text-foreground">player_redeem_code_*</span>.</p>
 
             <div className="rounded-md border border-primary/15 bg-black/25 p-3 space-y-3">
               <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Code &amp; limit</p>
@@ -25633,20 +25646,41 @@ export default function Admin() {
             <div className="rounded-md border border-primary/15 bg-black/25 p-3 space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-medium text-foreground">Existing codes</p>
-                <button type="button" onClick={() => fetchRedeemCodes()} disabled={redeemCodesLoading} className="text-[10px] font-heading uppercase text-primary hover:underline disabled:opacity-50">Refresh list</button>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={redeemCodesSourceFilter}
+                    onChange={(e) => setRedeemCodesSourceFilter(e.target.value)}
+                    className="px-2 py-1 rounded border border-input bg-zinc-900/80 text-foreground text-[10px] font-heading [color-scheme:dark]"
+                  >
+                    <option value="all">All</option>
+                    <option value="staff">Staff</option>
+                    <option value="player">Player</option>
+                  </select>
+                  <button type="button" onClick={() => fetchRedeemCodes()} disabled={redeemCodesLoading} className="text-[10px] font-heading uppercase text-primary hover:underline disabled:opacity-50">Refresh list</button>
+                </div>
               </div>
               {redeemCodesLoading ? <p className="text-[10px] text-mutedForeground">Loading…</p> : (
                 <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
-                  {redeemCodesList.length === 0 ? <p className="text-[10px] text-mutedForeground">No redeem codes yet.</p> : redeemCodesList.map((rc, i) => {
+                  {redeemCodesList.filter((rc) => {
+                    if (redeemCodesSourceFilter === 'all') return true;
+                    const src = (rc.source || 'staff') === 'player' ? 'player' : 'staff';
+                    return src === redeemCodesSourceFilter;
+                  }).length === 0 ? <p className="text-[10px] text-mutedForeground">No redeem codes yet.</p> : redeemCodesList.filter((rc) => {
+                    if (redeemCodesSourceFilter === 'all') return true;
+                    const src = (rc.source || 'staff') === 'player' ? 'player' : 'staff';
+                    return src === redeemCodesSourceFilter;
+                  }).map((rc, i) => {
                     const used = Number(rc.used_count) || 0;
                     const cap = rc.max_uses != null ? Number(rc.max_uses) : null;
                     const usesLabel = cap != null ? `${used} / ${cap} uses` : `${used} use${used === 1 ? '' : 's'} (no limit)`;
                     const exhausted = cap != null && used >= cap;
                     const rewardLine = summarizeRedeemRewardsForAdmin(rc.rewards);
+                    const isPlayer = (rc.source || '') === 'player';
                     return (
                       <div key={`${rc.code}-${i}`} className="rounded-md border border-input/50 bg-black/30 p-2.5 text-[10px] space-y-1.5">
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                           <span className="font-mono font-medium text-foreground">{rc.code}</span>
+                          {isPlayer ? <span className="text-sky-400 font-heading uppercase">Player</span> : <span className="text-zinc-400 font-heading uppercase">Staff</span>}
                           {rc.active ? <span className="text-emerald-400 font-heading uppercase">Active</span> : <span className="text-red-400 font-heading uppercase">Inactive</span>}
                           <span className={`tabular-nums ${exhausted ? 'text-amber-400' : 'text-mutedForeground'}`}>{usesLabel}{exhausted && rc.active ? ' · exhausted' : ''}</span>
                           <span className="flex flex-wrap gap-x-2 gap-y-0.5 sm:ml-auto">
@@ -25656,6 +25690,14 @@ export default function Admin() {
                             <button type="button" onClick={() => handleDeleteRedeemCode(rc.code)} className="text-red-400 hover:underline text-[10px] font-heading uppercase">Delete</button>
                           </span>
                         </div>
+                        {isPlayer && (
+                          <p className="text-[10px] text-mutedForeground leading-snug">
+                            From {rc.created_by_username || '—'}
+                            {rc.target_username ? ` · for ${rc.target_username}` : ''}
+                            {rc.redeemed_by_username ? ` · redeemed by ${rc.redeemed_by_username}` : ''}
+                            {rc.cancelled_at ? ' · cancelled' : ''}
+                          </p>
+                        )}
                         <p className="text-[10px] text-mutedForeground leading-snug break-words" title={JSON.stringify(rc.rewards || {})}>{rewardLine}</p>
                       </div>
                     );

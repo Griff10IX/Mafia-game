@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { KeyRound, AlertCircle, Skull, DollarSign, Info, Zap } from 'lucide-react';
+import { KeyRound, AlertCircle, Skull, DollarSign, Info, Zap, Users } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -38,6 +38,11 @@ export default function DeadAlive() {
   const [deadUsername, setDeadUsername] = useState('');
   const [deadPassword, setDeadPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [daTab, setDaTab] = useState('accounts');
+  const [myAccounts, setMyAccounts] = useState([]);
+  const [myAccountsLoading, setMyAccountsLoading] = useState(true);
+  const [accountPasswords, setAccountPasswords] = useState({});
+  const [claimingUsername, setClaimingUsername] = useState('');
 
   // Paint revive section immediately — never wait on eligibility GET.
   const [reviveEligibility, setReviveEligibility] = useState(REVIVE_ELIGIBILITY_BOOT);
@@ -49,6 +54,18 @@ export default function DeadAlive() {
 
   const priceGbp = reviveEligibility?.revive_price_gbp ?? REVIVE_PRICE_GBP_DEFAULT;
   const packageId = reviveEligibility?.revive_package_id || REVIVE_PACKAGE_ID;
+
+  const fetchMyAccounts = () => {
+    setMyAccountsLoading(true);
+    api.get('/dead-alive/my-accounts')
+      .then((r) => setMyAccounts(Array.isArray(r.data?.accounts) ? r.data.accounts : []))
+      .catch(() => setMyAccounts([]))
+      .finally(() => setMyAccountsLoading(false));
+  };
+
+  useEffect(() => {
+    fetchMyAccounts();
+  }, []);
 
   useEffect(() => {
     api.get('/dead-alive/revive-eligibility')
@@ -168,10 +185,37 @@ export default function DeadAlive() {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('app:refresh-user'));
       }
+      fetchMyAccounts();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Transfer failed — the books do not lie.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLinkedRetrieve = async (username) => {
+    const pw = (accountPasswords[username] || '').trim();
+    if (!username || !pw) {
+      toast.error('Enter that fallen account password to claim.');
+      return;
+    }
+    if (claimingUsername) return;
+    setClaimingUsername(username);
+    try {
+      const response = await api.post('/dead-alive/retrieve', {
+        dead_username: username,
+        dead_password: pw,
+      });
+      toast.success(response.data.message);
+      setAccountPasswords((prev) => ({ ...prev, [username]: '' }));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('app:refresh-user'));
+      }
+      fetchMyAccounts();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Transfer failed — the books do not lie.');
+    } finally {
+      setClaimingUsername('');
     }
   };
 
@@ -203,6 +247,103 @@ export default function DeadAlive() {
         </p>
       </div>
 
+      <div className="flex gap-1 max-w-3xl border-b border-primary/20">
+        <button
+          type="button"
+          onClick={() => setDaTab('accounts')}
+          className={`inline-flex items-center gap-1.5 px-3 py-2 text-[10px] font-heading font-bold uppercase tracking-[0.12em] ${daTab === 'accounts' ? 'text-primary border-b-2 border-primary' : 'text-mutedForeground'}`}
+        >
+          <Users size={12} />
+          My Accounts
+        </button>
+        <button
+          type="button"
+          onClick={() => setDaTab('claim')}
+          className={`inline-flex items-center gap-1.5 px-3 py-2 text-[10px] font-heading font-bold uppercase tracking-[0.12em] ${daTab === 'claim' ? 'text-primary border-b-2 border-primary' : 'text-mutedForeground'}`}
+        >
+          <KeyRound size={12} />
+          Claim Estate
+        </button>
+      </div>
+
+      {daTab === 'accounts' && (
+        <div className={`da-fade-in2 relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel max-w-3xl`}>
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-5 py-3 border-b border-primary/20 bg-primary/8">
+            <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+              Dead accounts on this email
+            </h2>
+          </div>
+          <div className="p-5 space-y-3">
+            <p className="text-[11px] font-heading leading-relaxed" style={{ color: 'var(--noir-muted)' }}>
+              Fallen characters still tied to this email. You can see leftover points and cash here — claiming still needs that account&apos;s password.
+            </p>
+            {myAccountsLoading ? (
+              <p className="text-[11px] font-heading" style={{ color: 'var(--noir-muted)' }}>Loading…</p>
+            ) : myAccounts.length === 0 ? (
+              <p className="text-[11px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                No dead accounts on this email. Use Claim Estate if you still know a username and password from a different email.
+              </p>
+            ) : (
+              myAccounts.map((acc) => {
+                const blockedLabel = {
+                  locked: 'Locked',
+                  revive_sacrifice: 'Already used in a revive',
+                  unavailable: 'Cannot retrieve',
+                  empty: acc.retrieval_used ? 'Already claimed' : 'Nothing left',
+                }[acc.blocked] || null;
+                return (
+                  <div key={acc.username} className="rounded-md border border-primary/20 bg-black/20 p-3 space-y-2">
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <span className="text-sm font-heading font-bold text-foreground">{acc.username}</span>
+                      {blockedLabel && (
+                        <span className="text-[9px] font-heading uppercase tracking-wider text-mutedForeground">{blockedLabel}</span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-[10px] font-heading">
+                      <div>
+                        <div className="uppercase tracking-wider text-mutedForeground">Points</div>
+                        <div className="text-foreground font-bold tabular-nums">{Number(acc.points || 0).toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <div className="uppercase tracking-wider text-mutedForeground">Cash</div>
+                        <div className="text-foreground font-bold tabular-nums">${Number(acc.cash || 0).toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <div className="uppercase tracking-wider text-mutedForeground">Swiss</div>
+                        <div className="text-foreground font-bold tabular-nums">${Number(acc.swiss || 0).toLocaleString()}</div>
+                      </div>
+                    </div>
+                    {acc.can_retrieve && (
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="password"
+                          value={accountPasswords[acc.username] || ''}
+                          onChange={(e) => setAccountPasswords((prev) => ({ ...prev, [acc.username]: e.target.value }))}
+                          placeholder="Fallen account password"
+                          autoComplete="new-password"
+                          className={`da-input flex-1 min-w-0 ${styles.input} px-3 py-2 text-sm rounded`}
+                          style={{ color: 'var(--noir-foreground)', fontFamily: 'inherit' }}
+                        />
+                        <button
+                          type="button"
+                          disabled={claimingUsername === acc.username}
+                          onClick={() => handleLinkedRetrieve(acc.username)}
+                          className="px-3 py-2 rounded border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary font-heading font-bold uppercase tracking-[0.12em] text-[10px] disabled:opacity-40"
+                        >
+                          {claimingUsername === acc.username ? 'Claiming…' : 'Claim'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {daTab === 'claim' && (
       <div className="grid gap-5 lg:grid-cols-2 max-w-3xl">
 
         {/* ── Transfer Form ── */}
@@ -314,6 +455,7 @@ export default function DeadAlive() {
           <div className="h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
         </div>
       </div>
+      )}
 
       {/* ── Revive a fallen account (£10 Stripe, same email, once per email) ── */}
       {reviveEligibility && (

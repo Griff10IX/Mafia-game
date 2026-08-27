@@ -57,6 +57,47 @@ async def clear_inheritance_retrieval_for_user(db, user_id: str) -> bool:
     return result.modified_count > 0
 
 
+def _norm_email(raw: Optional[str]) -> str:
+    return (raw or "").strip().lower()
+
+
+def _email_is_tombstone(email: str) -> bool:
+    return bool(email) and email.startswith("dead_") and email.endswith("@deleted")
+
+
+def dead_account_linked_by_email(current_email: Optional[str], dead_user: Optional[dict]) -> bool:
+    """True when the living player's email still owns this dead character (live email or email_before_freed)."""
+    cur = _norm_email(current_email)
+    if not cur or _email_is_tombstone(cur) or not dead_user:
+        return False
+    live = _norm_email(dead_user.get("email"))
+    before = _norm_email(dead_user.get("email_before_freed"))
+    return live == cur or before == cur
+
+
+def estate_retrievable(dead_user: Optional[dict], *, cash_percent: float = 0.9995) -> Dict[str, Any]:
+    """What Claim Inheritance will actually pay from this dead account right now."""
+    u = dead_user or {}
+    already = bool(u.get("retrieval_used"))
+    pts = max(0, int(u.get("points") or 0))
+    money_snap = max(0, int(u.get("money_at_death") or 0))
+    swiss = max(0, int(u.get("swiss_balance") or 0))
+    if u.get("swiss_retrieval_used"):
+        swiss = 0
+    cash = 0 if already else max(0, int(money_snap * float(cash_percent)))
+    if already:
+        money_snap = 0
+    can = pts > 0 or cash > 0 or swiss > 0
+    return {
+        "points": pts,
+        "cash": cash,
+        "cash_before_tithe": money_snap,
+        "swiss": swiss,
+        "retrieval_used": already,
+        "can_retrieve": can,
+    }
+
+
 def _parse_iso_utc(s):
     if not s:
         return None
@@ -597,7 +638,8 @@ def register(router):
                 status_code=400,
                 detail="That account cannot be used with Dead > Alive (£10) after a modkill wipe.",
             )
-        if not verify_password(request.dead_password, dead_user["password_hash"]):
+        pw = (request.dead_password or "").strip()
+        if not pw or not verify_password(pw, dead_user.get("password_hash") or ""):
             raise HTTPException(status_code=401, detail="Invalid password for that account")
         if dead_user.get("revive_sacrifice"):
             raise HTTPException(
@@ -1040,6 +1082,78 @@ def register(router):
             "vip_pass_cars_transferred": vip_cars_transferred,
             "game_pass_weed_strains_transferred": list(gp_weed_strains_transferred),
         }
+
+    @router.get("/dead-alive/my-accounts")
+    async def dead_alive_my_accounts(current_user: dict = Depends(get_current_user_verified)):
+        """Dead characters on this email (including email_before_freed) and what Claim Inheritance would pay."""
+        email = _norm_email(current_user.get("email"))
+        if current_user.get("is_dead"):
+            raise HTTPException(status_code=400, detail="You must be alive to claim from a fallen account.")
+        if not email or _email_is_tombstone(email):
+            return {"email_linked": False, "accounts": []}
+        uid = current_user.get("id")
+        cursor = db.users.find(
+            {
+                "is_dead": True,
+                "is_npc": {"$ne": True},
+                "id": {"$ne": uid},
+                "$or": [{"email": email}, {"email_before_freed": email}],
+            },
+            {
+                "_id": 0,
+                "id": 1,
+                "username": 1,
+                "email": 1,
+                "email_before_freed": 1,
+                "is_dead": 1,
+                "dead_at": 1,
+                "points": 1,
+                "money_at_death": 1,
+                "swiss_balance": 1,
+                "swiss_retrieval_used": 1,
+                "retrieval_used": 1,
+                "account_locked": 1,
+                "revive_sacrifice": 1,
+                "modkill_wipe": 1,
+                "registration_freed_email_from_user_id": 1,
+            },
+        )
+        rows = await cursor.to_list(50)
+        from utils.modkill_wipe import lineage_blocks_dead_alive_revive
+
+        accounts = []
+        for u in rows:
+            if not u.get("username"):
+                continue
+            if not dead_account_linked_by_email(email, u):
+                continue
+            estate = estate_retrievable(u, cash_percent=float(DEAD_ALIVE_PERCENT))
+            blocked = None
+            can = bool(estate["can_retrieve"])
+            if u.get("account_locked"):
+                blocked = "locked"
+                can = False
+            elif u.get("revive_sacrifice"):
+                blocked = "revive_sacrifice"
+                can = False
+            elif await lineage_blocks_dead_alive_revive(db, u):
+                blocked = "unavailable"
+                can = False
+            elif not can:
+                blocked = "empty" if estate["retrieval_used"] else "empty"
+            accounts.append({
+                "username": u.get("username"),
+                "dead_at": u.get("dead_at"),
+                "retrieval_used": bool(u.get("retrieval_used")),
+                "can_retrieve": can,
+                "blocked": blocked,
+                "points": int(estate["points"]),
+                "cash": int(estate["cash"]),
+                "cash_before_tithe": int(estate["cash_before_tithe"]),
+                "swiss": int(estate["swiss"]),
+            })
+        accounts.sort(key=lambda a: str(a.get("dead_at") or ""), reverse=True)
+        return {"email_linked": True, "accounts": accounts}
 
     @router.get("/dead-alive/revive-eligibility")
     async def revive_eligibility(current_user: dict = Depends(get_current_user_verified)):

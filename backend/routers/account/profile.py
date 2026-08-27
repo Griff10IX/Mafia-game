@@ -9,9 +9,6 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode, urlparse
 
-from pymongo import ReturnDocument
-from pymongo.errors import DuplicateKeyError
-
 from routers.casinos.slots import SLOTS_FEATURE_ENABLED
 
 _VALID_TOAST_POSITIONS = frozenset(
@@ -120,11 +117,6 @@ async def ensure_profile_indexes(db):
         # notifications: count by user_id + type (profile inbox/sent aggregation)
         await db.notifications.create_index("user_id")
         await db.notifications.create_index([("user_id", 1), ("notification_type", 1)])
-        await db.profile_view_dedup.create_index([("owner_id", 1), ("viewer_id", 1)], unique=True)
-        try:
-            await db.profile_view_dedup.create_index("last_at", expireAfterSeconds=12 * 3600)
-        except Exception as e:
-            logger.warning("profile_view_dedup TTL: %s", e)
         logger.info("Profile indexes ensured.")
     except Exception as e:
         logger.warning("ensure_profile_indexes: %s", e)
@@ -171,23 +163,8 @@ def register(router):
     CARS = srv.CARS
 
     async def _record_profile_view(owner_id: str, viewer_id: str) -> bool:
-        """Count one dossier open per viewer per owner within the TTL window. Returns True if incremented."""
+        """Count every dossier open from another player (including repeat visits and refresh)."""
         if not owner_id or not viewer_id or owner_id == viewer_id:
-            return False
-        now = datetime.now(timezone.utc)
-        try:
-            prev = await db.profile_view_dedup.find_one_and_update(
-                {"owner_id": owner_id, "viewer_id": viewer_id},
-                {"$set": {"last_at": now}, "$setOnInsert": {"owner_id": owner_id, "viewer_id": viewer_id}},
-                upsert=True,
-                return_document=ReturnDocument.BEFORE,
-            )
-        except DuplicateKeyError:
-            return False
-        except Exception:
-            logger.warning("profile view dedup failed", exc_info=True)
-            return False
-        if prev is not None:
             return False
         try:
             await db.users.update_one({"id": owner_id}, {"$inc": {"profile_view_count": 1}})

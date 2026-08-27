@@ -240,6 +240,16 @@ TOKEN_CONFIG = {
         "until_field": "mission_skip_dummy_until",
         "max_stack_hours": 1,
     },
+    "jail_bailout": {
+        "count_field": "jail_bailout_tokens",
+        "until_field": "jail_bailout_dummy_until",
+        "max_stack_hours": 1,
+    },
+    "robot_bodyguard_hire": {
+        "count_field": "robot_bodyguard_hire_tokens",
+        "until_field": "robot_bodyguard_hire_dummy_until",
+        "max_stack_hours": 1,
+    },
 }
 
 # My Inventory: exchange 1× Auto Rank (2h) token → 2 random distinct 1h tokens from pool (no cash/points).
@@ -575,6 +585,17 @@ class GiftTokenRequest(BaseModel):
     target_username: str
     token_type: str
     amount: int = Field(default=1, ge=1, le=TOKEN_GIFT_DAILY_UNITS_MAX)
+
+
+class PlayerRedeemCreateRequest(BaseModel):
+    money: int = Field(default=0, ge=0)
+    points: int = Field(default=0, ge=0)
+    tokens: Optional[Dict[str, int]] = None
+    target_username: Optional[str] = None
+
+
+class PlayerRedeemCancelRequest(BaseModel):
+    code: str
 
 
 class ShootingRangeTrainRequest(BaseModel):
@@ -3228,6 +3249,89 @@ async def gift_inventory_tokens(req: GiftTokenRequest, current_user: dict = Depe
     }
 
 
+def _player_redeem_http(exc) -> HTTPException:
+    from utils.player_redeem_codes import PlayerRedeemError
+
+    if isinstance(exc, PlayerRedeemError):
+        status = 401 if str(exc) == "Not authenticated" else 400
+        return HTTPException(status_code=status, detail=str(exc))
+    return HTTPException(status_code=400, detail=str(exc))
+
+
+async def list_player_redeem_codes(current_user: dict = Depends(get_current_user)):
+    from utils.player_redeem_codes import list_my_player_codes, transferable_token_types
+
+    uid = current_user.get("id") or ""
+    codes = await list_my_player_codes(db, uid)
+    return {
+        "codes": codes,
+        "token_types": list(transferable_token_types()),
+    }
+
+
+async def create_player_redeem_code_route(
+    request: Request,
+    req: PlayerRedeemCreateRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    from utils.ip_ban_check import client_ip_from_request
+    from utils.player_redeem_codes import (
+        IP_USER_PROJECTION,
+        PlayerRedeemError,
+        create_player_redeem_code,
+        list_my_player_codes,
+    )
+
+    uid = current_user.get("id")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    live = await db.users.find_one({"id": uid}, {**IP_USER_PROJECTION, "money": 1, "points": 1, "is_dead": 1, "is_npc": 1}) or {}
+    creator = {**current_user, **live}
+    try:
+        created = await create_player_redeem_code(
+            db,
+            creator=creator,
+            money=int(req.money or 0),
+            points=int(req.points or 0),
+            tokens=req.tokens or {},
+            target_username=req.target_username or "",
+            request_ip=client_ip_from_request(request) or "",
+        )
+    except PlayerRedeemError as exc:
+        raise _player_redeem_http(exc) from exc
+    fresh = await db.users.find_one({"id": uid}, {"_id": 0})
+    udoc = fresh or creator
+    return {
+        **created,
+        "tokens": _tokens_from_user(udoc),
+        "money": int(udoc.get("money") or 0),
+        "points": int(udoc.get("points") or 0),
+        "codes": await list_my_player_codes(db, uid),
+    }
+
+
+async def cancel_player_redeem_code_route(
+    req: PlayerRedeemCancelRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    from utils.player_redeem_codes import PlayerRedeemError, cancel_player_redeem_code, list_my_player_codes
+
+    try:
+        cancelled = await cancel_player_redeem_code(db, user=current_user, code=req.code)
+    except PlayerRedeemError as exc:
+        raise _player_redeem_http(exc) from exc
+    uid = current_user.get("id")
+    fresh = await db.users.find_one({"id": uid}, {"_id": 0}) if uid else None
+    udoc = fresh or current_user
+    return {
+        **cancelled,
+        "tokens": _tokens_from_user(udoc),
+        "money": int(udoc.get("money") or 0),
+        "points": int(udoc.get("points") or 0),
+        "codes": await list_my_player_codes(db, uid or ""),
+    }
+
+
 async def get_inventory(request: Request, current_user: dict = Depends(get_current_user)):
     """Aggregate weapons, armour, loot exclusives, and consumable tokens for the My Inventory page."""
     weapons = await get_weapons(request, current_user)
@@ -3305,6 +3409,8 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
         "auto_collect": auto_collect_info,
         "token_gift_daily": _token_gift_daily_from_user(udoc),
         "is_admin": _is_admin(current_user),
+        "money": int(udoc.get("money") or 0),
+        "points": int(udoc.get("points") or 0),
     }
 
 
@@ -3363,3 +3469,11 @@ def register(router):
     )
     router.add_api_route("/inventory/tokens/exchange-auto-rank", exchange_auto_rank_tokens, methods=["POST"])
     router.add_api_route("/inventory/tokens/gift", gift_inventory_tokens, methods=["POST"])
+    router.add_api_route(
+        "/inventory/redeem-codes",
+        list_player_redeem_codes,
+        methods=["GET"],
+        dependencies=_armoury_rl_u,
+    )
+    router.add_api_route("/inventory/redeem-codes", create_player_redeem_code_route, methods=["POST"])
+    router.add_api_route("/inventory/redeem-codes/cancel", cancel_player_redeem_code_route, methods=["POST"])
