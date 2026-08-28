@@ -187,6 +187,12 @@ Open [b]Kill → Bodyguards[/b]. Unlock slots, hire robots or invite human playe
 [*][color=#888888]Optional: buy [b]anti-hitman protection[/b] on the same page so others cannot hire against you for a few days.[/color]
 [/list]
 
+[color=#FFD700][b]Witness statements[/b][/color]
+[list]
+[*][color=#888888]Open [b]Kill → Witness statements[/b] to read lines you were sent, list them on the market, or buy others.[/color]
+[*][color=#888888]Admins and mods are not sent witness statements from kills.[/color]
+[/list]
+
 [color=#FFD700][b]Attempt log[/b][/color]
 [b]Kill → Attempts[/b] shows recent combat-related activity so you can see what happened.
 

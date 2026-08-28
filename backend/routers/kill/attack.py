@@ -111,6 +111,47 @@ def _attack_list_cache_invalidate(attacker_id: str) -> None:
         _attack_list_cache.pop(k, None)
 
 
+def _witness_recipient_query(
+    *,
+    killer_id: str,
+    five_iso: str,
+    now_iso: str,
+    staff_match: Optional[dict] = None,
+) -> dict:
+    """Online living players who can receive a kill witness statement — not staff, NPCs, bodyguards, or the killer."""
+    q: Dict[str, Any] = {
+        "is_dead": {"$ne": True},
+        "is_npc": {"$ne": True},
+        "is_bodyguard": {"$ne": True},
+        "is_moderator": {"$ne": True},
+        "$or": [
+            {"last_seen": {"$gte": five_iso}},
+            {"forced_online_until": {"$gt": now_iso}},
+        ],
+    }
+    nin: List[Any] = []
+    staff = dict(staff_match or {})
+    if staff.get("is_moderator") is not None:
+        q["is_moderator"] = staff["is_moderator"]
+    staff_id = staff.get("id")
+    if isinstance(staff_id, dict):
+        nin.extend(staff_id.get("$nin") or [])
+    if killer_id:
+        nin.append(killer_id)
+    seen = set()
+    uniq: List[Any] = []
+    for uid in nin:
+        if uid is None or uid in seen:
+            continue
+        seen.add(uid)
+        uniq.append(uid)
+    if uniq:
+        q["id"] = {"$nin": uniq}
+    elif killer_id:
+        q["id"] = {"$ne": killer_id}
+    return q
+
+
 def _attacker_has_find_clock(user_doc: Optional[dict]) -> bool:
     """True while Bodyguard Find Clock store perk is active (exact find time may be shown)."""
     if not user_doc:
@@ -176,6 +217,7 @@ from server import (
     _user_owns_sports_betting_book,
     log_activity,
     founding_member_income_mult,
+    staff_exclude_users_match,
 )
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.hitlist_resolution import resolve_user_hitlist_kill
@@ -4068,17 +4110,17 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 else:
                     _ammo_tail = f" Bullets used: {_kp_bullets_used:,}."
                 witness_msg = f"{_kp_killer_username} killed {victim_label}. Weapon: {_kp_best_weapon_name}.{_ammo_tail} Location: {location}. Time: {time_str}."
+                try:
+                    staff_match = await staff_exclude_users_match()
+                except Exception:
+                    staff_match = {"is_moderator": {"$ne": True}}
                 all_user_ids = await db.users.find(
-                    {
-                        "is_dead": {"$ne": True},
-                        "is_npc": {"$ne": True},
-                        "is_bodyguard": {"$ne": True},
-                        "id": {"$ne": _kp_killer_id},
-                        "$or": [
-                            {"last_seen": {"$gte": five_iso}},
-                            {"forced_online_until": {"$gt": now_iso}},
-                        ],
-                    },
+                    _witness_recipient_query(
+                        killer_id=_kp_killer_id,
+                        five_iso=five_iso,
+                        now_iso=now_iso,
+                        staff_match=staff_match,
+                    ),
                     {"_id": 0, "id": 1},
                 ).to_list(5000)
                 recipient_ids = [u["id"] for u in all_user_ids]

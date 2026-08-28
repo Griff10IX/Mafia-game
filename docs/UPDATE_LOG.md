@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-28[/color][/b] — [b]Witness statements: staff[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Admins[/b] and [b]mods[/b] no longer receive [b]witness statements[/b] from kills. Player market listings are unchanged.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-27[/color][/b] — [b]MDG money cap[/b][/size]
 [quote]
 [list]

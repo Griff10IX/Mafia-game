@@ -201,6 +201,7 @@ When you attack or kill someone, witnesses may see it happen.
 [list]
 [*][color=#888888]Random online players receive a notification of your attack[/color]
 [*][color=#888888]Witnesses see who attacked whom[/color]
+[*][color=#888888]Admins and mods do not receive witness statements[/color]
 [*][color=#888888]Buy a Silencer (150 pts) to reduce witness statements[/color]
 [*][color=#888888]Fewer witnesses = less attention on you[/color]
 [/list]
