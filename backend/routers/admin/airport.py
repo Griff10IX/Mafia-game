@@ -45,9 +45,14 @@ AIRPORT_PRICE_MIN = 10
 AIRPORT_PRICE_MAX = 30
 AIRPORT_SLOTS_PER_STATE = 1
 # Airport claim cost: utils.claim_costs (key airport)
-MAX_TRAVELS_PER_HOUR = 15
+MAX_TRAVELS_PER_HOUR = 10
 EXTRA_AIRMILES_COST = 25
-MAX_EXTRA_AIRMILES = 50
+MAX_EXTRA_AIRMILES = 10
+
+
+def _clamped_extra_airmiles(user: Optional[dict]) -> int:
+    raw = int((user or {}).get("extra_airmiles", 0) or 0)
+    return max(0, min(raw, MAX_EXTRA_AIRMILES))
 
 # Travel token: car/custom travel time multiplier (airport stays instant; airport *points* discount is separate).
 # Never slower than the untokened car — a 2s Model SJ must not jump to 3s.
@@ -468,7 +473,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
             "can_travel": custom_damage < 100,
         }
 
-    max_travels = MAX_TRAVELS_PER_HOUR + current_user.get("extra_airmiles", 0)
+    max_travels = MAX_TRAVELS_PER_HOUR + _clamped_extra_airmiles(current_user)
     current_state = current_user.get("current_state", STATES[0] if STATES else "")
     traveling_to = current_user.get("traveling_to")
     travel_arrives_at = current_user.get("travel_arrives_at")
@@ -545,7 +550,10 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         "family_airport_points_discount": family_crew_pts,
         "family_airport_travel_reduction_seconds": fam_time_red,
         "airports": airports,
+        "extra_airmiles": _clamped_extra_airmiles(current_user),
         "extra_airmiles_cost": EXTRA_AIRMILES_COST,
+        "max_extra_airmiles": MAX_EXTRA_AIRMILES,
+        "airport_base_travels": MAX_TRAVELS_PER_HOUR,
         "cars": cars_with_travel_times,
         "custom_car": custom_car,
         "user_points": current_user.get("points", 0),
@@ -638,7 +646,7 @@ async def _start_travel_impl(
     if travel_method == "airport":
         # Airport limit (travels per hour) applies only to airport; car travel is unlimited
         if not booze_run:
-            max_travels = MAX_TRAVELS_PER_HOUR + user.get("extra_airmiles", 0)
+            max_travels = MAX_TRAVELS_PER_HOUR + _clamped_extra_airmiles(user)
             if user.get("travels_this_hour", 0) >= max_travels:
                 raise HTTPException(status_code=400, detail="Travel limit reached. Buy extra airmiles or wait.")
         if _booze_user_carrying_total(user.get("booze_carrying") or {}) > 0:

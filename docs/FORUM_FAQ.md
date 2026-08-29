@@ -649,7 +649,7 @@ Based on your car rarity — full table under [b]GARAGE & VEHICLES → Travel Sp
 [color=#3498DB][b]Travel limits[/b][/color]
 [list]
 [*][color=#888888][b]Car travel[/b] — unlimited trips per hour[/color]
-[*][color=#888888][b]Airport[/b] — [b]15[/b] flights per hour, plus any [b]extra airmiles[/b] you bought. Buy more from Travel / Store: [b]25 points[/b] adds [b]5[/b] toward that airport cap per purchase, up to [b]50[/b] total extra airmiles. Cap resets each hour (timing on the Travel page)[/color]
+[*][color=#888888][b]Airport[/b] — [b]10[/b] flights per hour, plus any [b]extra airmiles[/b] you bought. Buy more from Travel / Store: [b]25 points[/b] adds [b]5[/b] toward that airport cap per purchase, up to [b]10[/b] total extra airmiles ([b]20[/b] flights max). Cap resets each hour (timing on the Travel page)[/color]
 [/list]
 
 [color=#3498DB][b]Why Travel?[/b][/color]

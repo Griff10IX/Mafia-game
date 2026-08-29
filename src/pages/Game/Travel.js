@@ -12,7 +12,8 @@ import {
 } from '../../utils/travelPageWarm';
 import { SAME_ROUTE_NAV_CLICK } from '../../constants/navigationEvents';
 
-const MAX_TRAVELS_PER_HOUR = 15;
+const AIRPORT_BASE_TRAVELS = 10;
+const MAX_EXTRA_AIRMILES = 10;
 
 /** Slug for location image path: "New York" -> "new-york". Images in public/images/travel/ to avoid /travel/ conflicting with SPA route. */
 function locationImageSlug(location) {
@@ -456,7 +457,9 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-mutedForeground">Airport limit</span>
-            <span className="text-foreground font-bold">{MAX_TRAVELS_PER_HOUR}/hour (car unlimited)</span>
+            <span className="text-foreground font-bold">
+              {travelInfo?.airport_base_travels ?? AIRPORT_BASE_TRAVELS} base / {(travelInfo?.airport_base_travels ?? AIRPORT_BASE_TRAVELS) + (travelInfo?.max_extra_airmiles ?? MAX_EXTRA_AIRMILES)} max (car unlimited)
+            </span>
           </div>
           <p className="text-[9px] text-mutedForeground/90 leading-snug pt-1 border-t border-border/40 mt-1">
             Hot/cold cities rotate every 3h (UTC). While you are in the hot city, crimes, GTA, and jail busts are slightly easier with a small rank XP bonus; the cold city is the opposite.
@@ -466,11 +469,16 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => {
         <button
           type="button"
           onClick={onBuyAirmiles}
-          disabled={travelInfo?.user_points < (travelInfo?.extra_airmiles_cost || 25)}
+          disabled={
+            (travelInfo?.extra_airmiles ?? 0) >= (travelInfo?.max_extra_airmiles ?? MAX_EXTRA_AIRMILES)
+            || travelInfo?.user_points < (travelInfo?.extra_airmiles_cost || 25)
+          }
           className={`${TRV_ACTION_BTN} w-full bg-primary/20 text-primary rounded-md px-2.5 py-2 font-heading font-bold uppercase tracking-wide text-[10px] border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 flex items-center justify-center gap-1`}
         >
           <ShoppingCart size={12} />
-          Buy +5 Airmiles ({travelInfo?.extra_airmiles_cost || 25} pts)
+          {(travelInfo?.extra_airmiles ?? 0) >= (travelInfo?.max_extra_airmiles ?? MAX_EXTRA_AIRMILES)
+            ? 'Airmiles maxed (10 extra)'
+            : `Buy +5 Airmiles (${travelInfo?.extra_airmiles_cost || 25} pts)`}
         </button>
       </div>
     </div>
