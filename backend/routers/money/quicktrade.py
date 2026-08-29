@@ -285,7 +285,7 @@ async def cancel_offers_on_death(user_id: str):
     """
     When a user dies: cancel all their active sell, buy, and token offers.
     Sell listings: refund points (same amounts as manual cancel — original_points, including fee).
-    Buy listings: refund escrowed cash (the ``offer`` field).
+    Buy listings: escrowed cash is burned (not Swiss, not pocket loot, not Dead > Alive).
     Token listings: return tokens to the user's inventory.
     Loot piece listings: return loot box pieces to the user's balance.
     """
@@ -340,8 +340,6 @@ async def cancel_offers_on_death(user_id: str):
         if not offer:
             break
         cash = int(offer.get("offer") or 0)
-        if cash != 0:
-            await db.users.update_one({"id": user_id}, {"$inc": {"money": cash}})
         try:
             await db.trade_events.insert_one(
                 {
@@ -351,6 +349,8 @@ async def cancel_offers_on_death(user_id: str):
                     "username": offer.get("username") or "?",
                     "points": offer.get("points", 0),
                     "fee": offer.get("fee", 0),
+                    "offer": cash,
+                    "cash_burned": cash,
                     "direction": "buy",
                     "reason": "death",
                     "at": now,

@@ -189,7 +189,8 @@ async def execute_paid_revive(
     default_health: int = 100,
 ) -> Dict[str, Any]:
     """
-    Fulfill a paid (£10 Stripe) revive intent: transfer balances, revive dead account, kill reviver.
+    Fulfill a paid (£10 Stripe) revive intent: transfer points (not pocket cash),
+    revive dead account, kill reviver. Sacrificing-alt cash is wiped (dead money).
     Idempotent on intent status / email revive slot.
     """
     intent = await db.revive_payment_intents.find_one({"id": intent_id}, {"_id": 0})
@@ -230,6 +231,8 @@ async def execute_paid_revive(
     email = (intent.get("reviver_email") or reviver.get("email") or "").strip().lower()
     points_balance = int(reviver.get("points") or 0)
     reviver_money = int(reviver.get("money") or 0)
+    # Pocket cash on the sacrificing alt is burned (dead money). Do not put it on the revived character.
+    revived_cash = 0
     # Full points transfer — fee was paid in GBP via Stripe.
     reviver_points_after = points_balance
     if dead_user.get("retrieval_used"):
@@ -276,7 +279,7 @@ async def execute_paid_revive(
                 "$set": {
                     "is_dead": False,
                     "dead_at": None,
-                    "money": reviver_money,
+                    "money": revived_cash,
                     "points": revived_points,
                     "health": default_health,
                     "health_regen_last_at": now_iso,
@@ -472,7 +475,8 @@ async def execute_paid_revive(
         notification_body = (
             f"This account was revived for £{REVIVE_PRICE_GBP:.0f}!\n\n"
             f"Balance before revive: $0 cash, 0 points\n"
-            f"Balance after revive: ${reviver_money:,} cash, {revived_points:,} points"
+            f"Balance after revive: ${revived_cash:,} cash, {revived_points:,} points"
+            f"\nPocket cash from the revive alt was wiped (${reviver_money:,} dead money)."
         )
         estate_text = (restore_summary or {}).get("summary_text") or ""
         if estate_text:
@@ -504,7 +508,8 @@ async def execute_paid_revive(
                     "reviver_points_before": points_balance,
                     "reviver_points_after_cost": reviver_points_after,
                     "reviver_points_after_death": 0,
-                    "reviver_money_transferred": reviver_money,
+                    "reviver_money_transferred": 0,
+                    "reviver_money_wiped": reviver_money,
                     "points_transferred": revived_points,
                     "dead_carry_points": dead_carry,
                     "retrieval_used_on_dead": bool(dead_user.get("retrieval_used")),
@@ -520,7 +525,8 @@ async def execute_paid_revive(
                     "status": "completed",
                     "completed_at": now_iso,
                     "revived_points": revived_points,
-                    "reviver_money_transferred": reviver_money,
+                    "reviver_money_transferred": 0,
+                    "reviver_money_wiped": reviver_money,
                 }
             },
         )
@@ -534,10 +540,12 @@ async def execute_paid_revive(
         "already_completed": False,
         "revived_username": revived_username,
         "revived_id": dead_user["id"],
-        "revived_balance_cash": reviver_money,
+        "revived_balance_cash": revived_cash,
         "revived_balance_points": revived_points,
+        "reviver_money_wiped": reviver_money,
         "message": (
-            f"{revived_username} has been revived with your money and points. "
+            f"{revived_username} has been revived with your points. "
+            f"Pocket cash from this account was wiped (dead money). "
             f"This account is now dead; log in as {revived_username} to continue."
         ),
     }
