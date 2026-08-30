@@ -58,66 +58,99 @@ export default function ServerUnavailableOverlay() {
       className="fixed inset-0 flex items-center justify-center p-5"
       style={{
         zIndex: 2147483646,
-        background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%)',
-        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+        background: '#0a0a0a',
+        fontFamily: "'Playfair Display', Georgia, serif",
+        color: '#f5f5f5',
       }}
     >
-      <div
-        className="text-center max-w-xl w-full px-8 py-14 rounded-[20px]"
-        style={{
-          background: 'rgba(26, 26, 26, 0.8)',
-          border: '2px solid #d4af37',
-          boxShadow: '0 20px 60px rgba(212, 175, 55, 0.3)',
-        }}
-      >
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap" />
+      <div className="text-center w-full" style={{ maxWidth: 480, padding: '2rem' }}>
         <div
           style={{
-            fontSize: 80,
-            marginBottom: 24,
+            fontSize: 48,
+            marginBottom: '1.5rem',
             lineHeight: 1,
             animation: 'mafia-maint-pulse 2s ease-in-out infinite',
           }}
         >
-          🛠️
+          &#9876;
         </div>
         <h1
           style={{
-            fontSize: 40,
             color: '#d4af37',
-            marginBottom: 16,
-            textShadow: '0 0 20px rgba(212, 175, 55, 0.5)',
+            fontSize: '1.8rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.15em',
+            marginBottom: '0.75rem',
             fontWeight: 700,
           }}
         >
-          Under Maintenance
+          Updating Game
         </h1>
-        <p style={{ fontSize: 18, lineHeight: 1.6, color: '#cccccc', marginBottom: 12 }}>
-          Mafia Wars is currently being updated with new features and improvements.
-        </p>
-        <p style={{ fontSize: 18, lineHeight: 1.6, color: '#cccccc', marginBottom: 24 }}>
-          We&apos;ll be back online shortly. Thank you for your patience!
-        </p>
         <div
           style={{
-            width: 50,
-            height: 50,
-            margin: '0 auto 24px',
-            border: '4px solid rgba(212, 175, 55, 0.2)',
-            borderTop: '4px solid #d4af37',
-            borderRadius: '50%',
-            animation: 'mafia-maint-spin 1s linear infinite',
+            width: 120,
+            height: 1,
+            margin: '1rem auto',
+            background: 'linear-gradient(to right, transparent, #d4af37, transparent)',
           }}
         />
-        <style>{`
-          @keyframes mafia-maint-spin { to { transform: rotate(360deg); } }
-          @keyframes mafia-maint-pulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.1); opacity: 0.8; }
-          }
-        `}</style>
-        <p style={{ fontSize: 14, color: '#888' }}>
+        <p style={{ color: '#a1a1aa', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: 8 }}>
+          We&apos;re pushing a fresh update to the streets.
+        </p>
+        <p style={{ color: '#a1a1aa', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: 8 }}>
+          Hang tight, the game will be back shortly.
+        </p>
+        <div style={{ color: '#d4af37', fontWeight: 700, fontSize: '1.1rem', marginTop: '1.5rem' }}>
+          ~ 30 seconds
+        </div>
+        <div
+          style={{
+            width: 200,
+            height: 4,
+            background: '#333',
+            borderRadius: 99,
+            margin: '1.5rem auto 0',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              height: '100%',
+              background: 'linear-gradient(to right, #d4af37, #ca8a04)',
+              borderRadius: 99,
+              animation: 'mafia-maint-bar 1.5s ease-in-out infinite',
+            }}
+          />
+        </div>
+        <div
+          style={{
+            marginTop: '2.5rem',
+            color: '#555',
+            fontSize: '0.75rem',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+          }}
+        >
+          The Commission will return
+        </div>
+        <p style={{ marginTop: '1.25rem', color: '#666', fontSize: '0.75rem' }}>
           This page will automatically refresh in 5 seconds...
         </p>
+        <style>{`
+          @keyframes mafia-maint-pulse {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+          }
+          @keyframes mafia-maint-bar {
+            0% { width: 0%; margin-left: 0; }
+            50% { width: 40%; margin-left: 30%; }
+            100% { width: 0%; margin-left: 100%; }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            * { animation: none !important; }
+          }
+        `}</style>
       </div>
     </div>
   );

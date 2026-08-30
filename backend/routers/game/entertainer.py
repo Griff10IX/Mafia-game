@@ -82,7 +82,7 @@ async def _issue_ent_join_token(uid: str, *, ready_immediately: bool = False) ->
         issued_at = (now - timedelta(seconds=ENT_JOIN_TOKEN_MIN_AGE_SECONDS + 0.05)).isoformat()
     else:
         issued_at = now.isoformat()
-    await db.ent_join_tokens.update_one(
+    await db.forum_game_seats.update_one(
         {"user_id": uid},
         {"$set": {"token": token, "issued_at": issued_at}},
         upsert=True,
@@ -99,7 +99,7 @@ async def _get_or_issue_ent_join_token(uid: str) -> Optional[str]:
     uid = str(uid or "").strip()
     if not uid:
         return None
-    row = await db.ent_join_tokens.find_one(
+    row = await db.forum_game_seats.find_one(
         {"user_id": uid},
         {"_id": 0, "token": 1, "issued_at": 1},
     )
@@ -1159,7 +1159,7 @@ async def list_games(
     except Exception:
         logger.exception("ent join token issue failed")
         join_token = None
-    return {"games": [_with_public_hangman(g, current_user.get("id")) for g in games], "join_token": join_token}
+    return {"games": [_with_public_hangman(g, current_user.get("id")) for g in games], "table_seat": join_token}
 
 
 async def games_history(current_user: dict = Depends(get_current_user)):
@@ -1452,8 +1452,8 @@ async def create_game(
 
 
 class EntJoinRequest(BaseModel):
-    join_token: Optional[str] = None
-    captcha_token: Optional[str] = None
+    table_seat: Optional[str] = None
+    cf_response: Optional[str] = None
 
 
 async def _require_ent_join_token(
@@ -1470,7 +1470,7 @@ async def _require_ent_join_token(
     if not token:
         fail_reason = "missing"
     else:
-        row = await db.ent_join_tokens.find_one({"user_id": uid}, {"_id": 0, "token": 1, "issued_at": 1})
+        row = await db.forum_game_seats.find_one({"user_id": uid}, {"_id": 0, "token": 1, "issued_at": 1})
         stored = str((row or {}).get("token") or "")
         if not stored or not secrets.compare_digest(stored, token):
             fail_reason = "invalid"
@@ -1482,7 +1482,7 @@ async def _require_ent_join_token(
             elif age < ENT_JOIN_TOKEN_MIN_AGE_SECONDS:
                 fail_reason = "too_fresh"
             else:
-                consumed = await db.ent_join_tokens.delete_one({"user_id": uid, "token": token})
+                consumed = await db.forum_game_seats.delete_one({"user_id": uid, "token": token})
                 if consumed.deleted_count == 0:
                     fail_reason = "invalid"
     if not fail_reason:
@@ -1513,8 +1513,8 @@ async def _require_ent_join_token(
     except Exception:
         logger.exception("ent join token staff alert failed")
     if fail_reason == "too_fresh":
-        raise HTTPException(status_code=400, detail="Too fast — wait a moment and tap Join again.")
-    raise HTTPException(status_code=400, detail="Join check failed — refresh the games list and try again. No bots.")
+        raise HTTPException(status_code=400, detail="Please wait briefly before joining.")
+    raise HTTPException(status_code=400, detail="Could not verify join — reload the table and try again.")
 
 
 async def join_game(
@@ -1531,14 +1531,14 @@ async def join_game(
     if game.get("status") != "open":
         raise HTTPException(status_code=400, detail="Game is not open to join")
     uid = current_user["id"]
-    await _require_ent_join_token(http_request, current_user, game_id, (body.join_token if body else None))
+    await _require_ent_join_token(http_request, current_user, game_id, (body.table_seat if body else None))
     from utils.minigame_captcha_gate import require_turnstile_for_ent_join
 
     await require_turnstile_for_ent_join(
         db,
         request=http_request,
         current_user=current_user,
-        captcha_token=(body.captcha_token if body else None),
+        captcha_token=(body.cf_response if body else None),
         is_admin=_is_admin(current_user),
     )
     max_players = game.get("max_players", 10)
@@ -1585,7 +1585,7 @@ async def join_game(
     return {
         "message": "Joined game" + (" — rewards rolled!" if is_full else ""),
         "game": _with_public_hangman(updated, current_user.get("id")),
-        "join_token": next_join_token,
+        "table_seat": next_join_token,
     }
 
 

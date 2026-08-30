@@ -339,7 +339,7 @@ export default function MDGPage() {
   const fetchGames = useCallback(() => {
     api.get('/casino/mdg/games').then((r) => {
       setGames(r.data?.games || []);
-      if (r.data?.join_token) joinTokenRef.current = r.data.join_token;
+      if (r.data?.table_seat) joinTokenRef.current = r.data.table_seat;
     }).catch(() => setGames([])).finally(() => setLoading(false));
   }, []);
 
@@ -371,8 +371,8 @@ export default function MDGPage() {
       }
       const res = await api.post('/casino/mdg/join', {
         game_id: gameId,
-        join_token: tokenUsed,
-        captcha_token: captchaToken,
+        table_seat: tokenUsed,
+        cf_response: captchaToken,
       });
       // Token was consumed on success — clear so the next list fetch issues/returns a fresh one.
       joinTokenRef.current = null;
@@ -386,10 +386,10 @@ export default function MDGPage() {
     } catch (e) {
       const detail = e.response?.data?.detail || '';
       // Anti-bot join token expired/stale/invalid: clear local token, refresh list, require another tap.
-      if (typeof detail === 'string' && (detail.includes('refresh the games list') || detail.includes('Too fast') || detail.includes('Join check failed'))) {
+      if (typeof detail === 'string' && (detail.includes('reload the table') || detail.includes('Please wait briefly') || detail.includes('Could not verify join'))) {
         joinTokenRef.current = null;
         fetchGames();
-        toast.warning(detail.includes('Too fast') ? 'Too fast — tap Join again.' : 'Join check failed — tap Join again.');
+        toast.warning(detail.includes('Please wait briefly') ? 'Please wait briefly — tap Join again.' : 'Could not verify join — tap Join again.');
       } else {
         toast.error(getApiErrorMessage(e) || 'Could not join');
       }

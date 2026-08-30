@@ -27,6 +27,20 @@ const NOTIFICATION_ICONS = {
   staff_bot_client: Bot,
 };
 
+const NOTIFICATION_TYPE_STYLES = {
+  staff_bot_client: { icon: 'text-red-400', bg: 'bg-red-500/20', border: 'border-red-500/25' },
+  system: { icon: 'text-amber-400', bg: 'bg-amber-500/20', border: 'border-amber-500/25' },
+  user_message: { icon: 'text-primary', bg: 'bg-primary/20', border: 'border-primary/20' },
+  rank_up: { icon: 'text-yellow-400', bg: 'bg-yellow-500/15', border: 'border-yellow-500/20' },
+  reward: { icon: 'text-emerald-400', bg: 'bg-emerald-500/15', border: 'border-emerald-500/20' },
+  bodyguard: { icon: 'text-sky-400', bg: 'bg-sky-500/15', border: 'border-sky-500/20' },
+  attack: { icon: 'text-rose-400', bg: 'bg-rose-500/15', border: 'border-rose-500/20' },
+};
+
+function notificationTypeStyle(type) {
+  return NOTIFICATION_TYPE_STYLES[type] || { icon: 'text-primary', bg: 'bg-primary/20', border: 'border-primary/20' };
+}
+
 const VALID_FILTERS = ['all', 'unread', 'sent', 'rank_up', 'reward', 'bodyguard', 'attack', 'system', 'user_message', 'staff_bot_client'];
 
 function getTimeAgo(dateString) {
@@ -133,12 +147,12 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, isSent }) =
       }`}
     >
       <div className={`p-1 rounded shrink-0 ${
-        isSent ? 'bg-primary/20' : notification.read ? 'bg-secondary' : 'bg-primary/20'
+        isSent ? 'bg-primary/20' : notificationTypeStyle(notification.notification_type).bg
       }`}>
         {isSent ? (
           <Send size={12} className="text-primary" />
         ) : (
-          <Icon size={12} className={notification.read ? 'text-mutedForeground' : 'text-primary'} />
+          <Icon size={12} className={notification.read ? 'text-mutedForeground' : notificationTypeStyle(notification.notification_type).icon} />
         )}
       </div>
 
@@ -205,8 +219,8 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
       <div className="px-2.5 py-2 border-b border-primary/20 bg-primary/8">
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex items-start gap-2">
-            <div className="p-1.5 rounded-md bg-primary/10 border border-primary/20">
-              <Icon size={16} className="text-primary" />
+            <div className={`p-1.5 rounded-md ${isSent ? 'bg-primary/10 border border-primary/20' : `${notificationTypeStyle(notification.notification_type).bg} border ${notificationTypeStyle(notification.notification_type).border}`}`}>
+              <Icon size={16} className={isSent ? 'text-primary' : notificationTypeStyle(notification.notification_type).icon} />
             </div>
             <div>
               <h2 className="text-xs font-heading font-bold text-foreground mb-0.5">

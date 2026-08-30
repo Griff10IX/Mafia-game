@@ -182,8 +182,8 @@ class MDGCreateRequest(BaseModel):
 
 class MDGJoinRequest(BaseModel):
     game_id: str
-    join_token: Optional[str] = None
-    captcha_token: Optional[str] = None
+    table_seat: Optional[str] = None
+    cf_response: Optional[str] = None
 
 
 class MDGRollRequest(BaseModel):
@@ -655,7 +655,7 @@ async def _mdg_issue_join_token(uid: str, *, ready_immediately: bool = False) ->
         issued_at = (now - timedelta(seconds=MDG_JOIN_TOKEN_MIN_AGE_SECONDS + 0.05)).isoformat()
     else:
         issued_at = now.isoformat()
-    await db.mdg_join_tokens.update_one(
+    await db.mdg_table_seats.update_one(
         {"user_id": uid},
         {"$set": {"token": token, "issued_at": issued_at}},
         upsert=True,
@@ -672,7 +672,7 @@ async def _mdg_get_or_issue_join_token(uid: str) -> Optional[str]:
     uid = str(uid or "").strip()
     if not uid:
         return None
-    row = await db.mdg_join_tokens.find_one(
+    row = await db.mdg_table_seats.find_one(
         {"user_id": uid},
         {"_id": 0, "token": 1, "issued_at": 1},
     )
@@ -701,7 +701,7 @@ async def _require_mdg_join_token(
     if not token:
         fail_reason = "missing"
     else:
-        row = await db.mdg_join_tokens.find_one({"user_id": uid}, {"_id": 0, "token": 1, "issued_at": 1})
+        row = await db.mdg_table_seats.find_one({"user_id": uid}, {"_id": 0, "token": 1, "issued_at": 1})
         stored = str((row or {}).get("token") or "")
         # compare_digest requires equal length — treat mismatch as invalid (not 500).
         if not stored or len(stored) != len(token) or not secrets.compare_digest(stored, token):
@@ -715,7 +715,7 @@ async def _require_mdg_join_token(
                 fail_reason = "too_fresh"
             else:
                 # Atomic consume: only one concurrent join can win this token.
-                consumed = await db.mdg_join_tokens.find_one_and_delete(
+                consumed = await db.mdg_table_seats.find_one_and_delete(
                     {"user_id": uid, "token": token},
                     projection={"_id": 1},
                 )
@@ -752,8 +752,8 @@ async def _require_mdg_join_token(
     except Exception:
         _logger.exception("mdg join token staff alert failed")
     if fail_reason == "too_fresh":
-        raise HTTPException(status_code=400, detail="Too fast — wait a moment and tap Join again.")
-    raise HTTPException(status_code=400, detail="Join check failed — refresh the games list and try again. No bots.")
+        raise HTTPException(status_code=400, detail="Please wait briefly before joining.")
+    raise HTTPException(status_code=400, detail="Could not verify join — reload the table and try again.")
 
 
 # ── Automated MDG helpers (module-level so ticker can call them) ──
@@ -1014,7 +1014,7 @@ def register(router):
         except Exception:
             _logger.exception("mdg join token issue failed")
             join_token = None
-        return {"games": [_mdg_sanitize_for_json(g) for g in games], "join_token": join_token}
+        return {"games": [_mdg_sanitize_for_json(g) for g in games], "table_seat": join_token}
 
     @router.get("/casino/mdg/admin-prize-options")
     async def mdg_admin_prize_options(current_user: dict = Depends(get_current_user_verified)):
@@ -1262,14 +1262,14 @@ def register(router):
             raise HTTPException(status_code=404, detail="Game not found or already closed")
         uid = current_user["id"]
         await _mdg_raise_if_blocked_from_asset_prize_game(uid, current_user, list(game.get("admin_prizes") or []))
-        await _require_mdg_join_token(http_request, current_user, request.game_id, request.join_token)
+        await _require_mdg_join_token(http_request, current_user, request.game_id, request.table_seat)
         from utils.minigame_captcha_gate import require_turnstile_for_ent_join
 
         await require_turnstile_for_ent_join(
             db,
             request=http_request,
             current_user=current_user,
-            captcha_token=request.captcha_token,
+            captcha_token=request.cf_response,
             is_admin=_is_admin(current_user),
         )
         if any(e.get("user_id") == uid for e in game.get("entries") or []):

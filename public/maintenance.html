@@ -83,7 +83,18 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
   }
+  .status {
+    margin-top: 1.25rem;
+    color: #666;
+    font-size: 0.75rem;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .icon, .bar-fill { animation: none; }
+  }
 </style>
+<script>
+  setTimeout(function () { window.location.reload(); }, 5000);
+</script>
 </head>
 <body>
   <div class="container">
@@ -95,6 +106,7 @@
     <div class="estimate">~ 30 seconds</div>
     <div class="bar-track"><div class="bar-fill"></div></div>
     <div class="footer">The Commission will return</div>
+    <div class="status">This page will automatically refresh in 5 seconds...</div>
   </div>
 </body>
 </html>

@@ -1314,7 +1314,7 @@ export default function Forum() {
     try {
       const res = await api.get('/forum/entertainer/games');
       setEntertainerGames(res.data?.games ?? []);
-      if (res.data?.join_token) entJoinTokenRef.current = res.data.join_token;
+      if (res.data?.table_seat) entJoinTokenRef.current = res.data.table_seat;
     } catch {
       setEntertainerGames([]);
     }
@@ -1703,10 +1703,10 @@ export default function Forum() {
         return; // captcha cancelled/failed — user can tap Join again
       }
       const res = await api.post(`/forum/entertainer/games/${gameId}/join`, {
-        join_token: entJoinTokenRef.current,
-        captcha_token: captchaToken,
+        table_seat: entJoinTokenRef.current,
+        cf_response: captchaToken,
       });
-      if (res.data?.join_token) entJoinTokenRef.current = res.data.join_token;
+      if (res.data?.table_seat) entJoinTokenRef.current = res.data.table_seat;
       toast.success('Joined');
       fetchEntertainerGames();
       fetchEntertainerHistory();
@@ -1714,9 +1714,9 @@ export default function Forum() {
     } catch (err) {
       const detail = err.response?.data?.detail || '';
       // Anti-bot join token expired/stale: silently refresh the list (issues a fresh token) and ask for another tap.
-      if (typeof detail === 'string' && (detail.includes('refresh the games list') || detail.includes('Too fast'))) {
+      if (typeof detail === 'string' && (detail.includes('reload the table') || detail.includes('Please wait briefly'))) {
         fetchEntertainerGames();
-        toast.warning(detail.includes('Too fast') ? 'Too fast — tap Join again.' : 'Session refreshed — tap Join again.');
+        toast.warning(detail.includes('Please wait briefly') ? 'Please wait briefly — tap Join again.' : 'Session refreshed — tap Join again.');
       } else if (err.response?.status === 429) {
         toast.warning(typeof detail === 'string' && detail ? detail : 'Please wait a moment before joining again.');
       } else {

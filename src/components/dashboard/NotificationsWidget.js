@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, ChevronRight, Bell, Trophy, Shield, Skull, Gift, MessageCircle } from 'lucide-react';
+import { Mail, ChevronRight, Bell, Trophy, Shield, Skull, Gift, MessageCircle, Bot } from 'lucide-react';
 import api from '../../utils/api';
 import { getDashboardWidget, setDashboardWidget } from '../../utils/dashboardWidgetCache';
 import { NotificationMessage } from '../NotificationMessage';
@@ -15,6 +15,17 @@ const NOTIFICATION_ICONS = {
   attack: Skull,
   system: Bell,
   user_message: MessageCircle,
+  staff_bot_client: Bot,
+};
+
+const NOTIFICATION_TYPE_ICON = {
+  staff_bot_client: 'text-red-400',
+  system: 'text-amber-400',
+  user_message: 'text-primary',
+  rank_up: 'text-yellow-400',
+  reward: 'text-emerald-400',
+  bodyguard: 'text-sky-400',
+  attack: 'text-rose-400',
 };
 
 function getTimeAgo(dateString) {
@@ -154,7 +165,7 @@ export default function NotificationsWidget({ onRefresh, userId }) {
                   }
                 }}
               >
-                <Icon size={12} className={`shrink-0 mt-0.5 ${n.read ? 'text-mutedForeground' : 'text-primary'}`} />
+                <Icon size={12} className={`shrink-0 mt-0.5 ${n.read ? 'text-mutedForeground' : (NOTIFICATION_TYPE_ICON[n.notification_type] || 'text-primary')}`} />
                 <div className="min-w-0 flex-1">
                   <p className={`text-[10px] font-heading truncate ${n.read ? 'text-mutedForeground' : 'text-foreground font-medium'}`}>
                     {n.title}

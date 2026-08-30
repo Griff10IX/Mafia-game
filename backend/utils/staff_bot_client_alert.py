@@ -671,8 +671,8 @@ async def maybe_notify_staff_ent_join_token_fail(
     )
 
     lines = [
-        f"— {context_label} join: invalid / missing join token (anti-bot) —",
-        f"The client POSTed {endpoint_desc} without a valid join_token "
+        f"— {context_label} join: invalid / missing table seat (anti-bot) —",
+        f"The client POSTed {endpoint_desc} without a valid table_seat "
         f"(failure: {reason}).",
         "Legitimate clients receive this token from the games list and need a human-speed delay before joining; "
         "scripts that fetch-then-join instantly fail.",
