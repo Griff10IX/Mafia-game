@@ -2093,7 +2093,7 @@ export default function Layout({ children }) {
   const isPocketDeck = isMobileViewport && mobileLayoutId === 'pocket_deck';
   const sidebarBgStyle = isOldSchool
     ? { backgroundColor: 'rgba(58,58,58,0.96)', borderColor: '#c8c8c8' }
-    : { borderColor: 'var(--noir-border-mid)' };
+    : { backgroundColor: 'var(--noir-content)' };
   const sidebarActiveStyle = isOldSchool
     ? { background: '#2a3a55', backgroundImage: 'none', borderLeft: 'none', color: '#ffffff', borderRadius: 0 }
     : { background: 'var(--noir-raised)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
@@ -3119,8 +3119,7 @@ export default function Layout({ children }) {
                             role="switch"
                             aria-checked={gameChatVisible}
                             onClick={() => setGameChatVisiblePersist(!gameChatVisible)}
-                            className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 transition-colors touch-manipulation ${gameChatVisible ? 'bg-primary border-primary/50' : ''}`}
-                            style={gameChatVisible ? undefined : { backgroundColor: 'var(--noir-raised)', borderColor: 'rgba(var(--noir-primary-rgb), 0.3)' }}
+                            className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 transition-colors touch-manipulation ${gameChatVisible ? 'bg-primary border-primary/50' : 'bg-zinc-800 border-zinc-600'}`}
                           >
                             <span className={`pointer-events-none inline-block h-6 w-6 rounded-full bg-background shadow transition-transform ${gameChatVisible ? 'translate-x-5' : 'translate-x-0'}`} />
                           </button>
@@ -3294,8 +3293,7 @@ export default function Layout({ children }) {
                       {portalUnlockOpen && (
                         <form
                           onSubmit={submitSidebarStaffPortalUnlock}
-                          className="absolute left-0 top-full mt-1 z-50 w-52 rounded-md border border-primary/30 p-2 shadow-xl"
-                          style={{ backgroundColor: 'var(--noir-content)' }}
+                          className="absolute left-0 top-full mt-1 z-50 w-52 rounded-md border border-primary/30 bg-zinc-950 p-2 shadow-xl"
                         >
                           <input
                             type="password"
@@ -3304,8 +3302,7 @@ export default function Layout({ children }) {
                             placeholder="Portal password"
                             autoComplete="current-password"
                             autoFocus
-                            className="w-full rounded border px-2 py-1.5 text-[16px] lg:text-[11px] text-foreground min-h-9"
-                            style={{ borderColor: 'var(--noir-border-mid)', backgroundColor: 'var(--noir-surface)' }}
+                            className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-[16px] lg:text-[11px] text-foreground min-h-9"
                             disabled={portalUnlockBusy}
                             aria-label="Staff portal password"
                           />
@@ -3470,7 +3467,7 @@ export default function Layout({ children }) {
               </button>
               <button type="button" onClick={() => setGameChatVisiblePersist(!gameChatVisible)}
                 className="w-full flex justify-between items-center gap-1 text-[10px] font-heading py-1 px-1 rounded-sm"
-                style={{ color: gameChatVisible ? 'var(--noir-muted)' : 'var(--noir-primary)' }}>
+                style={{ color: gameChatVisible ? 'var(--noir-muted)' : '#22d3ee' }}>
                 <span className="flex items-center gap-1.5"><MessageSquare size={12} /> Game Chat</span>
                 <span>{gameChatVisible ? 'Hide' : 'Show'}</span>
               </button>
@@ -3994,7 +3991,7 @@ export default function Layout({ children }) {
                       return (
                         <button key="toggleGameChat" type="button" onClick={() => { setGameChatVisiblePersist(!gameChatVisible); setMobileBottomMenuOpen(null); }} role="menuitem"
                           className="tap-feedback flex items-center justify-center px-2 py-3 min-h-[44px] rounded-md border font-heading text-[10px] uppercase tracking-wider transition-colors"
-                          style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.35)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.08)', color: 'var(--noir-primary)' }}>
+                          style={{ borderColor: 'rgba(34,211,238,0.35)', backgroundColor: 'rgba(34,211,238,0.08)', color: '#22d3ee' }}>
                           {sub.label}
                         </button>
                       );
