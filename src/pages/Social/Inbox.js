@@ -8,6 +8,7 @@ import styles from '../../styles/noir.module.css';
 import { NotificationMessage } from '../../components/NotificationMessage';
 import { StaffBotAlertMessage, staffBotAlertPreview } from '../../components/StaffBotAlertMessage';
 import { RewardInboxMessage, parseRewardInboxMessage, rewardInboxPreview } from '../../components/RewardInboxMessage';
+import { StructuredInboxMessage, structuredInboxPreview } from '../../components/StructuredInboxMessage';
 import {
   INBOX_STYLES,
   IB_ACTION_GO,
@@ -99,7 +100,8 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, isSent }) =
   const recipient = isSent ? sentRecipient(notification) : null;
   const listPreview =
     (notification.notification_type === 'staff_bot_client' && staffBotAlertPreview(notification.message))
-    || rewardInboxPreview(notification.message);
+    || rewardInboxPreview(notification.message)
+    || structuredInboxPreview(notification.message);
 
   const handleMouseEnter = () => {
     if (!isSent && !notification.read && onMarkRead) {
@@ -119,13 +121,17 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, isSent }) =
         }
       }}
       onMouseEnter={handleMouseEnter}
-      className={`ib-row ib-tinted group relative flex items-center gap-2 mx-1.5 my-1 px-2.5 py-1.5 min-h-11 text-left rounded-md cursor-pointer transition-all touch-manipulation ${
-        isSent
-          ? 'bg-primary/8 border border-primary/20 hover:bg-primary/14'
-          : vis.row
-      } ${isSelected ? 'ring-1 ring-inset ring-primary/55' : ''}`}
+      className={`ib-row group relative flex w-full items-center gap-2 px-2.5 py-1.5 min-h-11 text-left border-b border-border/60 cursor-pointer transition-all touch-manipulation ${
+        isSelected
+          ? 'bg-primary/12 border-l-2 border-l-primary'
+          : isSent
+          ? 'bg-transparent hover:bg-secondary/40 border-l-2 border-l-transparent'
+          : notification.read
+          ? 'bg-transparent hover:bg-secondary/40 border-l-2 border-l-transparent'
+          : 'bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary/50'
+      }`}
     >
-      <div className={`p-1 rounded shrink-0 ${isSent ? 'bg-primary/20 border border-primary/30' : vis.chip}`}>
+      <div className={`p-1 rounded shrink-0 ${isSent ? 'bg-primary/20' : 'bg-secondary/50'}`}>
         {isSent ? (
           <Send size={12} className="text-primary" />
         ) : (
@@ -135,7 +141,7 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, isSent }) =
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-1 mb-0.5">
-          <h3 className={`text-xs font-heading font-bold truncate ${isSent ? 'text-foreground' : vis.title}`}>
+          <h3 className="text-xs font-heading font-bold text-foreground truncate">
             {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
           </h3>
           <span className="text-[9px] text-mutedForeground whitespace-nowrap">
@@ -196,14 +202,14 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
 
   return (
     <div className={`flex-1 flex flex-col ${styles.panel}`}>
-      <div className={`px-2.5 py-2 ${isSent ? 'bg-primary/8 border-b border-primary/20' : vis.header}`}>
+      <div className="px-2.5 py-2 border-b border-primary/20 bg-primary/8">
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex items-start gap-2">
-            <div className={`p-1.5 rounded-md ${isSent ? 'bg-primary/10 border border-primary/20' : vis.chip}`}>
+            <div className={`p-1.5 rounded-md ${isSent ? 'bg-primary/10 border border-primary/20' : 'bg-secondary/50'}`}>
               <Icon size={16} className={isSent ? 'text-primary' : vis.icon} />
             </div>
             <div>
-              <h2 className={`text-xs font-heading font-bold mb-0.5 ${isSent ? 'text-foreground' : vis.title}`}>
+              <h2 className="text-xs font-heading font-bold text-foreground mb-0.5">
                 {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
               </h2>
               <p className="text-[10px] text-mutedForeground">
@@ -262,20 +268,7 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
           ) : parseRewardInboxMessage(notification.message) ? (
             <RewardInboxMessage message={notification.message} visual={vis} />
           ) : (
-            <div className={`${vis.card} px-3 py-2.5`}>
-              <p className="text-[11px] sm:text-sm text-foreground leading-snug whitespace-pre-wrap">
-                <NotificationMessage
-                  message={notification.message}
-                  actorUsername={notification.actor_username}
-                  topicId={notification.topic_id}
-                  topicTitle={notification.topic_title}
-                  commentId={notification.comment_id}
-                  messageLinkTo={notification.message_link_to}
-                  messageLinkLabel={notification.message_link_label}
-                  className="text-inherit"
-                />
-              </p>
-            </div>
+            <StructuredInboxMessage notification={notification} visual={vis} />
           )}
 
           {notification.gif_url && (

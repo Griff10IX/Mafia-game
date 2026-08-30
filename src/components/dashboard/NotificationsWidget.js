@@ -6,6 +6,7 @@ import { getDashboardWidget, setDashboardWidget } from '../../utils/dashboardWid
 import { NotificationMessage } from '../NotificationMessage';
 import { staffBotAlertPreview } from '../StaffBotAlertMessage';
 import { rewardInboxPreview } from '../RewardInboxMessage';
+import { structuredInboxPreview } from '../StructuredInboxMessage';
 import { notificationIcon, notificationVisual } from '../../pages/Social/notificationTypeChrome';
 import { toast } from 'sonner';
 import dash from '../../styles/dashboard.module.css';
@@ -139,8 +140,8 @@ export default function NotificationsWidget({ onRefresh, userId }) {
                 key={n.id}
                 role="button"
                 tabIndex={0}
-                className={`flex items-start gap-2 rounded-md px-2 py-1.5 ${vis.row}`}
-                style={{ cursor: n.read ? 'default' : 'pointer' }}
+                className={n.read ? dash.rowMuted : dash.rowActive}
+                style={{ cursor: n.read ? 'default' : 'pointer', alignItems: 'flex-start' }}
                 onClick={() => !n.read && handleMarkRead(n.id)}
                 onKeyDown={(e) => {
                   if (!n.read && (e.key === 'Enter' || e.key === ' ')) {
@@ -149,17 +150,16 @@ export default function NotificationsWidget({ onRefresh, userId }) {
                   }
                 }}
               >
-                <div className={`p-0.5 rounded shrink-0 ${vis.chip}`}>
-                  <Icon size={12} className={n.read ? 'text-mutedForeground' : vis.icon} />
-                </div>
+                <Icon size={12} className={`shrink-0 mt-0.5 ${n.read ? 'text-mutedForeground' : vis.icon}`} />
                 <div className="min-w-0 flex-1">
-                  <p className={`text-[10px] font-heading truncate ${n.read ? 'text-mutedForeground' : `${vis.title} font-medium`}`}>
+                  <p className={`text-[10px] font-heading truncate ${n.read ? 'text-mutedForeground' : 'text-foreground font-medium'}`}>
                     {n.title}
                   </p>
                   <div className="text-[9px] text-mutedForeground line-clamp-2">
                     {n.notification_type === 'staff_bot_client' && staffBotAlertPreview(n.message)
                       ? staffBotAlertPreview(n.message)
-                      : rewardInboxPreview(n.message) || (
+                      : rewardInboxPreview(n.message)
+                        || structuredInboxPreview(n.message) || (
                         <NotificationMessage
                           message={n.message}
                           actorUsername={n.actor_username}

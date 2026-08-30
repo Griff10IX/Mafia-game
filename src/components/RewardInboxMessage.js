@@ -89,9 +89,9 @@ export function RewardInboxMessage({ message, visual, className = '' }) {
   const parsed = parseRewardInboxMessage(message);
   if (!parsed) return null;
 
-  const card = visual?.card || 'rounded-md border border-emerald-500/30 bg-emerald-500/10';
-  const title = visual?.title || 'text-emerald-200';
-  const chip = visual?.chip || 'bg-emerald-500/25 border-emerald-500/40 text-emerald-200';
+  const card = 'rounded-md border border-border/50 bg-secondary/25';
+  const title = 'text-foreground';
+  const chip = 'bg-secondary/60 border-border/60 text-foreground';
 
   return (
     <div className={`space-y-2.5 ${className}`}>
@@ -109,7 +109,7 @@ export function RewardInboxMessage({ message, visual, className = '' }) {
       </div>
 
       <div className="rounded-md border border-border/50 bg-secondary/25 px-3 py-2.5">
-        <p className="text-[9px] font-heading font-bold uppercase tracking-wider text-primary mb-1.5">
+        <p className="text-[9px] font-heading font-bold uppercase tracking-wider text-foreground mb-1.5">
           {parsed.nextMax
             ? 'Next reward'
             : parsed.nextTier

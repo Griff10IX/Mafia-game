@@ -134,7 +134,7 @@ function AlertSection({ title, items, prose, defaultOpen = false }) {
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between gap-2 px-2.5 py-2 text-left hover:bg-secondary/40 transition-colors"
       >
-        <span className="text-[9px] font-heading font-bold uppercase tracking-wider text-primary">
+        <span className="text-[9px] font-heading font-bold uppercase tracking-wider text-foreground">
           {title}
           {!open && items.length > 0 ? (
             <span className="ml-1.5 text-mutedForeground font-normal normal-case tracking-normal">
@@ -170,8 +170,8 @@ export function StaffBotAlertMessage({ message, className = '' }) {
 
   return (
     <div className={`space-y-2.5 ${className}`}>
-      <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2.5">
-        <p className="text-[11px] font-heading font-bold text-red-300 leading-snug">{parsed.summary}</p>
+      <div className="rounded-md border border-border/50 bg-secondary/25 px-3 py-2.5">
+        <p className="text-[11px] font-heading font-bold text-foreground leading-snug">{parsed.summary}</p>
         {parsed.description.map((p) => (
           <p key={p} className="mt-1.5 text-[10px] text-mutedForeground leading-relaxed">{p}</p>
         ))}
