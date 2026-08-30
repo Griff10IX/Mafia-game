@@ -3,11 +3,12 @@ REM Double-click to push updates and deploy live
 REM Optional: push-live.bat "Your commit message"
 REM Optional: push-live.bat --restart
 REM Optional: push-live.bat --restart "Your commit message"
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0.."
 
-REM SSH Password (change this after first use!)
 set "SSH_PASSWORD=Ka?dz5Z6MK?h#4t"
+set "UI=%~dp0_deploy-ui.bat"
+call "%UI%" INIT
 
 set "NEED_RESTART=0"
 set "msg=Update"
@@ -18,22 +19,23 @@ if /i "%~1"=="--restart" (
     set "msg=%~1"
 )
 
-echo ============================================
-echo     MAFIA GAME - COMMIT, PUSH GIT, DEPLOY
-echo ============================================
-echo/
+call "%UI%" HEADER "MAFIA WARS — COMMIT · PUSH · DEPLOY" "Branch MAfiaGame2 → live server"
 
-echo [1/6] Staging all changes...
+call "%UI%" STEP 1 6 "Stage all changes"
 git add -A
-echo/
+if errorlevel 1 (call "%UI%" FAIL "git add failed" & goto END)
+call "%UI%" OK "Staged"
 
-echo [2/6] Committing: %msg%
-git commit -m "%msg%" 2>nul || echo No new changes to commit
-echo/
+call "%UI%" STEP 2 6 "Commit locally"
+git commit -m "%msg%" 2>nul
+if errorlevel 1 (
+    call "%UI%" WARN "Nothing new to commit (continuing with existing commits)"
+) else (
+    call "%UI%" OK "Committed: %msg%"
+)
 
 if "%NEED_RESTART%"=="0" (
-    echo      Checking live server commit...
-    plink -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && git rev-parse HEAD" > "%TEMP%\mafia-server-sha.txt" 2>nul
+    plink -batch -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && git rev-parse HEAD" > "%TEMP%\mafia-server-sha.txt" 2>nul
 )
 set "SERVER_SHA="
 if exist "%TEMP%\mafia-server-sha.txt" (
@@ -53,39 +55,48 @@ if "%NEED_RESTART%"=="0" (
 
 if "%NEED_RESTART%"=="1" (
     set "DEPLOY_SH=bash scripts/deploy-after-pull.sh --restart-backend"
-    echo      API restart: YES - backend Python changed vs live, or --restart
+    call "%UI%" WARN "API restart: YES (Python changed or --restart)"
 ) else (
     set "DEPLOY_SH=bash scripts/deploy-after-pull.sh"
-    echo      API restart: NO - no backend Python changes vs live server
+    call "%UI%" INFO "API restart: no (frontend-only unless server detects .py)"
 )
-echo/
+call "%UI%" BLANK
 
-echo [3/6] Push to Git: origin (Mafia-game)...
+call "%UI%" STEP 3 6 "Push to origin (Mafia-game)"
 git push origin MAfiaGame2
-echo/
+if errorlevel 1 (call "%UI%" FAIL "git push origin failed" & goto END)
+call "%UI%" OK "origin updated"
 
-echo [4/6] Push to Git: mafia2 (Mafia-Game-2)...
+call "%UI%" STEP 4 6 "Push to mafia2 (Mafia-Game-2)"
 git push mafia2 MAfiaGame2
-echo/
+if errorlevel 1 (call "%UI%" FAIL "git push mafia2 failed" & goto END)
+call "%UI%" OK "mafia2 updated"
 
-echo [5/6] Deploying on server (SSH)...
-echo      - Fetching latest from origin (Mafia-Game-2)
-echo      - Atomic frontend build then nginx reload
+call "%UI%" STEP 5 6 "Deploy on live server (SSH)"
+call "%UI%" INFO "Fetch + reset to origin/MAfiaGame2"
+call "%UI%" INFO "Atomic frontend build, then nginx reload"
 if "%NEED_RESTART%"=="1" (
-    echo      - Maintenance page while API restarts, then restore
+    call "%UI%" INFO "Maintenance page while API restarts"
 ) else (
-    echo      - Backend left running unless server sees Python changes
+    call "%UI%" INFO "Backend stays up unless server sees Python changes"
 )
-plink -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; %DEPLOY_SH%"
-echo/
-echo [6/6] Pushed and deployed.
-echo/
+echo.
+plink -batch -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && export TERM=xterm-256color && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; %DEPLOY_SH%"
+if errorlevel 1 (call "%UI%" FAIL "Remote deploy failed" & goto END)
+call "%UI%" OK "Server deploy finished"
 
-echo ============================================
+call "%UI%" STEP 6 6 "Verify"
+for /f "delims=" %%H in ('git rev-parse --short HEAD 2^>nul') do set "LOCAL_SHA=%%H"
+call "%UI%" INFO "Local HEAD: !LOCAL_SHA!"
 if "%NEED_RESTART%"=="1" (
-    echo     ALL DONE - LIVE - API was restarted
+    call "%UI%" FOOTER "ALL DONE — LIVE — API restarted"
 ) else (
-    echo     ALL DONE - LIVE - API not restarted
+    call "%UI%" FOOTER "ALL DONE — LIVE — API not restarted"
 )
-echo ============================================
+goto DONE
+
+:END
+call "%UI%" FOOTER "DEPLOY FAILED — check output above"
+:DONE
 pause
+endlocal

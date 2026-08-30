@@ -110,7 +110,7 @@ body[data-theme-variant="modern"][data-busy-animations="1"] .app-toaster .app-to
 
 body[data-theme-variant="modern"] [data-death-screen],
 body[data-theme-variant="modern"] [data-death-screen].ds-root {
-  background-color: #0a0a0c !important;
+  background-color: #050506 !important;
   background-image: none !important;
 }
 

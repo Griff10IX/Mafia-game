@@ -17,7 +17,7 @@ const DEATH_STYLES = `
     align-items: center;
     justify-content: flex-start;
     padding: max(8px, env(safe-area-inset-top)) 12px max(28px, env(safe-area-inset-bottom));
-    background: #0a0a0c;
+    background: #050506;
     color: #ebe6d8;
   }
 
@@ -25,26 +25,24 @@ const DEATH_STYLES = `
   @keyframes ds-fog { from { transform: translateX(-8%) } to { transform: translateX(8%) } }
   @keyframes ds-rain { from { transform: translate3d(0,-80px,0) } to { transform: translate3d(-18px,110vh,0) } }
   @keyframes ds-glow { from { opacity: .35 } to { opacity: .85 } }
-  @keyframes ds-flash { 0%,88%,92%,96%,100% { opacity: 0 } 90%,94% { opacity: .11 } }
   @keyframes ds-smoke { 0% { transform: translateY(0) scaleX(1); opacity: .28 } 100% { transform: translateY(-46px) scaleX(1.5); opacity: 0 } }
   @keyframes ds-mist { from { opacity: .18 } to { opacity: .42 } }
 
-  .ds-world { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; background: #0a0a0c }
+  .ds-world { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; background: #050506 }
   .ds-world-photo {
     position: absolute; inset: -6%;
     width: 112%; height: 112%;
     object-fit: cover; object-position: center 42%;
-    filter: brightness(.34) saturate(.62) contrast(1.06);
+    filter: brightness(.2) saturate(.5) contrast(1.1);
   }
   .ds-world-scrim {
     position: absolute; inset: 0;
     background:
-      radial-gradient(ellipse 130% 90% at 50% 38%, rgba(0,0,0,.08) 0%, rgba(0,0,0,.42) 58%, rgba(0,0,0,.72) 100%),
-      linear-gradient(180deg, rgba(0,0,0,.18) 0%, rgba(0,0,0,.28) 45%, rgba(0,0,0,.48) 100%);
+      linear-gradient(180deg, rgba(0,0,0,.78) 0%, rgba(0,0,0,.72) 42%, rgba(0,0,0,.8) 100%);
   }
   .ds-vignette {
     position: absolute; inset: 0;
-    box-shadow: inset 0 0 100px 24px rgba(0,0,0,.55);
+    box-shadow: inset 0 0 140px 48px rgba(0,0,0,.78);
   }
   .ds-raindrop {
     position: absolute; top: -12%; width: 1.2px;
@@ -52,23 +50,13 @@ const DEATH_STYLES = `
     animation: ds-rain linear infinite;
     transform: rotate(8deg);
   }
-  .ds-flash {
-    position: absolute; inset: 0;
-    background: rgba(228,226,245,.14);
-    animation: ds-flash 18s 4s infinite;
-  }
   .ds-fog {
     position: absolute; left: -20%; right: -20%; pointer-events: none;
     animation: ds-fog 16s ease-in-out infinite alternate;
   }
   .ds-fog-lo {
-    bottom: 0; height: 34%;
-    background: radial-gradient(ellipse at 50% 110%, rgba(88,84,72,.5) 0%, transparent 70%);
-  }
-  .ds-fog-mid {
-    bottom: 10%; height: 26%; opacity: .7;
-    background: radial-gradient(ellipse at 38% 100%, rgba(50,48,42,.38) 0%, transparent 72%);
-    animation-duration: 22s;
+    bottom: 0; height: 22%; opacity: .45;
+    background: radial-gradient(ellipse at 50% 110%, rgba(8,8,10,.55) 0%, transparent 72%);
   }
 
   .ds-col {
@@ -95,8 +83,8 @@ const DEATH_STYLES = `
   }
   .ds-monument::after {
     content: '';
-    position: absolute; left: 8%; right: 8%; bottom: 0; height: 28%;
-    background: linear-gradient(180deg, transparent, rgba(10,10,12,.85));
+    position: absolute; left: 4%; right: 4%; bottom: -4%; height: 38%;
+    background: linear-gradient(180deg, transparent 0%, rgba(5,5,6,.45) 35%, rgba(5,5,6,.98) 100%);
     pointer-events: none;
   }
   .ds-carve {
@@ -156,20 +144,6 @@ const DEATH_STYLES = `
   }
   .ds-glow-l { left: 8%; top: 58%; }
   .ds-glow-r { right: 8%; top: 60%; animation-duration: 1.35s }
-
-  .ds-skull {
-    position: absolute;
-    left: 50%;
-    bottom: 1.5%;
-    transform: translateX(-50%);
-    width: 19%;
-    min-width: 52px;
-    max-width: 78px;
-    z-index: 6;
-    pointer-events: none;
-    filter: drop-shadow(0 8px 14px rgba(0,0,0,.75)) brightness(.92) contrast(1.05);
-    opacity: .94;
-  }
 
   .ds-plaque {
     width: 100%;
@@ -304,8 +278,8 @@ const DEATH_STYLES = `
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ds-monument, .ds-plaque, .ds-raindrop, .ds-fog, .ds-flash, .ds-smoke, .ds-glow-pool { animation: none !important }
-    .ds-flash, .ds-raindrop, .ds-smoke { display: none !important }
+    .ds-monument, .ds-plaque, .ds-raindrop, .ds-fog, .ds-smoke, .ds-glow-pool { animation: none !important }
+    .ds-raindrop, .ds-smoke { display: none !important }
   }
 `;
 
@@ -423,8 +397,6 @@ export default function DeathScreen({ user, onLogout }) {
             style={{ left, height, animationDuration: dur, animationDelay: delay }}
           />
         ))}
-        {!reduceMotion && <div className="ds-flash" />}
-        <div className="ds-fog ds-fog-mid" />
         <div className="ds-fog ds-fog-lo" />
       </div>
 
@@ -462,12 +434,6 @@ export default function DeathScreen({ user, onLogout }) {
               <span className="ds-smoke ds-smoke-r" />
             </>
           )}
-          <img
-            className="ds-skull"
-            src="/images/death/skull.png"
-            alt=""
-            aria-hidden
-          />
         </div>
 
         <Plaque>

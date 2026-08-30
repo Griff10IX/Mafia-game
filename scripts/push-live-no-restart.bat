@@ -1,50 +1,48 @@
 @echo off
 REM Double-click to push updates and deploy live WITHOUT restarting the backend
-REM (rebuilds frontend, reloads nginx — running API process keeps old code until you restart manually)
 REM Optional: push-live-no-restart.bat "Your commit message"
-cd /d "%~dp0"
+setlocal EnableExtensions EnableDelayedExpansion
+cd /d "%~dp0.."
 
-REM SSH Password (change this after first use!)
 set "SSH_PASSWORD=Ka?dz5Z6MK?h#4t"
+set "UI=%~dp0_deploy-ui.bat"
+call "%UI%" INIT
 
-if "%~1"=="" (
-    set "msg=Update"
-) else (
-    set "msg=%~1"
-)
+if "%~1"=="" (set "msg=Update") else (set "msg=%~1")
 
-echo ============================================
-echo   MAFIA GAME - COMMIT, PUSH, DEPLOY (no API restart)
-echo ============================================
-echo.
+call "%UI%" HEADER "MAFIA WARS — DEPLOY (NO API RESTART)" "Frontend rebuild only — backend process unchanged"
 
-echo [1/6] Staging all changes...
+call "%UI%" STEP 1 6 "Stage all changes"
 git add -A
-echo.
+call "%UI%" OK "Staged"
 
-echo [2/6] Committing: %msg%
-git commit -m "%msg%" 2>nul || echo (no changes to commit)
-echo.
+call "%UI%" STEP 2 6 "Commit locally"
+git commit -m "%msg%" 2>nul
+if errorlevel 1 (call "%UI%" WARN "Nothing new to commit") else (call "%UI%" OK "Committed: %msg%")
 
-echo [3/6] Push to Git: origin (Mafia-game)...
+call "%UI%" STEP 3 6 "Push to origin (Mafia-game)"
 git push origin MAfiaGame2
-echo.
+if errorlevel 1 (call "%UI%" FAIL "git push origin failed" & goto END)
+call "%UI%" OK "origin updated"
 
-echo [4/6] Push to Git: mafia2 (Mafia-Game-2)...
+call "%UI%" STEP 4 6 "Push to mafia2 (Mafia-Game-2)"
 git push mafia2 MAfiaGame2
-echo.
+if errorlevel 1 (call "%UI%" FAIL "git push mafia2 failed" & goto END)
+call "%UI%" OK "mafia2 updated"
 
-echo [5/6] Deploying on server (SSH)...
-echo      - Fetching latest from origin (Mafia-Game-2)
-echo      - Atomic frontend build: keep old site until new bundle is ready, then nginx reload
-echo      - Backend service NOT restarted
-echo      - Uploading maintenance page
-plink -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; bash scripts/deploy-after-pull.sh"
+call "%UI%" STEP 5 6 "Deploy on live server (SSH)"
+call "%UI%" INFO "Atomic frontend build — backend NOT restarted"
 echo.
-echo [6/6] Pushed and deployed (backend still running previous process).
-echo.
+plink -batch -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && export TERM=xterm-256color && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; bash scripts/deploy-after-pull.sh"
+if errorlevel 1 (call "%UI%" FAIL "Remote deploy failed" & goto END)
+call "%UI%" OK "Server deploy finished"
 
-echo ============================================
-echo    DONE - Live frontend; restart API when ready
-echo ============================================
+call "%UI%" STEP 6 6 "Verify"
+call "%UI%" FOOTER "DONE — frontend live; restart API manually when ready"
+goto DONE
+
+:END
+call "%UI%" FOOTER "DEPLOY FAILED — check output above"
+:DONE
 pause
+endlocal
