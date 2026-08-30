@@ -983,7 +983,7 @@ const ProfileInfoCard = ({
                 <Car size={12} className="text-primary shrink-0" />
                 <span className="text-[10px] md:text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Cars</span>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
                 {topCars.map((car) => {
                   const label = RARITY_LABELS[car.rarity] || car.rarity || '';
                   const badgeClass = RARITY_BADGE_CLASSES[car.rarity] || RARITY_BADGE_CLASSES.common;
@@ -993,10 +993,11 @@ const ProfileInfoCard = ({
                       to={`/cars/view?id=${encodeURIComponent(car.id)}`}
                       onMouseEnter={() => prefetchViewCarPage(car.id)}
                       onFocus={() => prefetchViewCarPage(car.id)}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 min-h-8 rounded-md border bg-background/80 hover:bg-primary/10 transition-colors prof-row text-[11px] md:text-xs font-heading leading-tight ${badgeClass}`}
+                      title={`${label}: ${censorProfanity ? filterProfanity(car.name) : car.name}`}
+                      className={`flex items-start gap-1 px-2 py-1.5 min-h-8 w-full min-w-0 rounded-md border bg-background/80 hover:bg-primary/10 transition-colors prof-row text-[10px] md:text-[11px] font-heading leading-snug ${badgeClass}`}
                     >
                       <span className="shrink-0 uppercase font-bold tracking-wide">{label}:</span>
-                      <span className="text-foreground font-semibold whitespace-normal break-words">{censorProfanity ? filterProfanity(car.name) : car.name}</span>
+                      <span className="min-w-0 text-foreground font-semibold break-words">{censorProfanity ? filterProfanity(car.name) : car.name}</span>
                     </Link>
                   );
                 })}

@@ -26,7 +26,7 @@ import { prefetchMissionsPageData } from '../utils/missionsPageWarm';
 import { prefetchJailPageData } from '../utils/jailPageWarm';
 import { scheduleMobileLightPrewarm } from '../utils/mobileLightPrewarm';
 import { AuthContext } from '../context/AuthContext';
-import { isClientJailed, setClientJailed } from '../utils/jailBlockedRoutes';
+import { isJailBlockedFrontendPath, isClientJailed, setClientJailed, jailBlockedPathFromHref } from '../utils/jailBlockedRoutes';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
 import { setCrimesPrefetch, getCrimesPrefetch, clearProfileSessionLastMeUsername, setProfileSessionLastMeUsername } from '../utils/prefetchCache';
 import { GAME_CHAT_VISIBILITY_EVENT, getGameChatVisible, setGameChatVisible } from '../utils/gameChatVisibility';
@@ -409,12 +409,14 @@ function RightStatRow({ row, closeOnMobile }) {
 function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown, onTouchStart, ...rest }) {
   const location = useLocation();
   const requestedPath = typeof to === 'string' ? to : (to.pathname || '/');
-  const path = requestedPath;
+  const jailRedirect = !!(isClientJailed() && isJailBlockedFrontendPath(requestedPath));
+  const dest = jailRedirect ? '/crime/jail' : to;
+  const path = typeof dest === 'string' ? dest : (dest.pathname || '/');
   const preload = preloadRouteHandlers(path);
   const warmTravel = path === '/game/travel' || path === '/travel';
   const warmMyStats = path === '/account/stats' || path === '/my-stats';
   const warmMissions = path === '/account/missions' || path === '/missions';
-  const warmCrimes = requestedPath === '/crime/crimes';
+  const warmCrimes = !jailRedirect && requestedPath === '/crime/crimes';
   const warmJail = path === '/crime/jail';
   const warmPointer = () => {
     preload.onPointerDown();
@@ -427,7 +429,7 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown,
     }
   };
   const mergeClick = (e) => {
-    const search = typeof to === 'string' ? '' : (to.search || '');
+    const search = jailRedirect ? '' : (typeof to === 'string' ? '' : (to.search || ''));
     preloadRoute(path);
     if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
     if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
@@ -440,7 +442,7 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown,
   };
   return (
     <Link
-      to={to}
+      to={dest}
       {...rest}
       onClick={mergeClick}
       onPointerDown={(e) => {
@@ -1141,12 +1143,31 @@ export default function Layout({ children }) {
 
   // When jailed, warm Jail chunk + bootstrap so opening /crime/jail does not flash Free layout.
   useEffect(() => {
-    if (user?.in_jail) setClientJailed(true, user.jail_until);
+    setClientJailed(!!user?.in_jail, user?.jail_until);
     if (!user?.in_jail) return undefined;
     preloadRoute('/crime/jail');
     prefetchJailPageData({ force: false }).catch(() => {});
     return undefined;
   }, [user?.in_jail, user?.jail_until]);
+
+  useEffect(() => {
+    const onClickCapture = (e) => {
+      if (!isClientJailed()) return;
+      if (e.defaultPrevented || e.button !== 0) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target?.closest?.('a[href]');
+      if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+      const blocked = jailBlockedPathFromHref(a.getAttribute('href') || a.href);
+      if (!blocked) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (location.pathname !== '/crime/jail') {
+        navigate('/crime/jail', { replace: true });
+      }
+    };
+    document.addEventListener('click', onClickCapture, true);
+    return () => document.removeEventListener('click', onClickCapture, true);
+  }, [navigate, location.pathname]);
 
   const refreshUserDebounceRef = useRef(null);
   useEffect(() => {

@@ -9,7 +9,7 @@ import {
 import { clearProfileSessionLastMeUsername } from './prefetchCache';
 import { inFlightGet, clearInFlightGets } from './inFlightGet';
 import { parseIpBanFromError } from './ipBan';
-import { setClientJailed } from './jailBlockedRoutes';
+import { setClientJailed, isJailBlockedFrontendPath } from './jailBlockedRoutes';
 
 // Empty or unset = same origin (e.g. Linode: Nginx serves app and proxies /api)
 const raw = (process.env.REACT_APP_BACKEND_URL && process.env.REACT_APP_BACKEND_URL.trim())
@@ -433,7 +433,7 @@ api.interceptors.response.use(
       }
     }
 
-    // ── 403 In jail → mark jailed everywhere (stops crime/GTA/booze retries in other tabs)
+    // ── 403 In jail → mark jailed and bounce off crime/GTA/OC/booze
     if (error.response?.status === 403 && typeof window !== 'undefined') {
       const detail = error.response?.data?.detail;
       if (typeof detail === 'string' && detail.toLowerCase().includes('while in jail')) {
@@ -445,6 +445,9 @@ api.interceptors.response.use(
             }),
           );
         } catch (_) { /* ignore */ }
+        if (isJailBlockedFrontendPath(window.location.pathname)) {
+          navigateApp('/crime/jail', { replace: true });
+        }
         return Promise.reject(error);
       }
     }

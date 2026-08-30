@@ -849,7 +849,8 @@ CARS = [
     # VIP Game Pass tier 100 (once per account; custom image; survives death)
     {"id": "car22", "name": "VIP Pass Car", "rarity": "vip_exclusive", "min_difficulty": 5, "value": 71875, "travel_bonus": 55, "image": gta_car_image("car22.png")},
     # Loot-exclusive: Rare 5% / Ultra Rare 10% loot boxes only; 1 game-wide; 2s travel
-    {"id": "car23", "name": "Duesenberg Model SJ", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 143750000, "travel_bonus": 75, "image": gta_car_image("car23.png"), "travel_seconds": 2},
+    # Appraised 50% above the slower loot exclusive (car21 Cadillac).
+    {"id": "car23", "name": "Duesenberg Model SJ", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 215625000, "travel_bonus": 75, "image": gta_car_image("car23.png"), "travel_seconds": 2},
 ]
 
 # Models (UserRegister, UserLogin, PasswordResetRequest, PasswordResetConfirm moved to routers/auth.py)
@@ -3924,6 +3925,24 @@ async def startup_db():
                 if "travel_bonus" in vals:
                     car["travel_bonus"] = int(vals["travel_bonus"])
                 logging.info("Loaded car override for %s: value=%s travel=%s", car_id, car.get("value"), car.get("travel_bonus"))
+        # 2s Model SJ (car23) is 50% above the slower loot exclusive (car21).
+        # Bump leftover catalog/override copies that still match the old equal value.
+        car21 = next((c for c in CARS if c["id"] == "car21"), None)
+        car23 = next((c for c in CARS if c["id"] == "car23"), None)
+        if car21 and car23:
+            target_sj = int(int(car21.get("value") or 0) * 3 // 2)
+            if target_sj > 0 and int(car23.get("value") or 0) in (143750000, int(car21.get("value") or 0)):
+                car23["value"] = target_sj
+                await db.game_config.update_one(
+                    {"id": "car_override_car23"},
+                    {"$set": {"car_id": "car23", "overrides": {"value": target_sj, "travel_bonus": int(car23.get("travel_bonus") or 75)}}},
+                    upsert=True,
+                )
+                logging.info("Bumped car23 value to %s (50%% above car21)", target_sj)
+            await db.user_cars.update_many(
+                {"car_id": "car23", "value": {"$ne": int(car23.get("value") or 0)}},
+                {"$set": {"value": int(car23.get("value") or 0)}},
+            )
     except Exception as e:
         logging.warning("Failed to load car overrides: %s", e)
     try:

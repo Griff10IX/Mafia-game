@@ -16,6 +16,8 @@
 [*][color=#888888][b]Changed:[/b] Cars on your [b]dossier[/b] only show if you pin them from [b]Garage → View Car[/b] (up to 5). Exclusive / VIP cars are not added automatically.[/color]
 [*][color=#888888][b]Fixed:[/b] Your chosen [b]theme[/b] no longer flashes Classic/gold for a moment when you refresh.[/color]
 [*][color=#888888][b]Changed:[/b] [b]Bank[/b], [b]IP Rules[/b], and [b]View Car[/b] follow your selected theme. The car photo fills the box; pinned cars on the dossier are larger and easier to read.[/color]
+[*][color=#888888][b]Fixed:[/b] Pinned [b]cars[/b] on the dossier sit in an even two-column grid so long exclusive names no longer stretch one chip across the row.[/color]
+[*][color=#888888][b]Changed:[/b] The [b]2s Duesenberg Model SJ[/b] is now worth [b]50% more[/b] than the Cadillac loot exclusive below it ($215,625,000 vs $143,750,000).[/color]
 [/list]
 [/quote]
 

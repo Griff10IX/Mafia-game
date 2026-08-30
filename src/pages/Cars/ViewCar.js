@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { Car, ArrowLeft, Clock, DollarSign, Sparkles, User, Wrench, UserCircle, Image as ImageIcon } from 'lucide-react';
+import { Car, ArrowLeft, Clock, DollarSign, Sparkles, User, Wrench, UserCircle, Image as ImageIcon, X, ZoomIn } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -51,8 +51,28 @@ const VIEW_CAR_STYLES = `
     object-fit: cover; object-position: center;
     transform: scale(1.08);
   }
+  .vc-photo-zoom {
+    position: absolute; inset: 0;
+    border: 0; padding: 0; margin: 0;
+    background: transparent;
+    cursor: zoom-in;
+  }
+  .vc-photo-zoom:focus-visible {
+    outline: 2px solid var(--noir-primary);
+    outline-offset: -2px;
+  }
+  .vc-photo-hint {
+    position: absolute; top: 8px; right: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px;
+    border-radius: 999px;
+    border: 1px solid rgba(var(--noir-primary-rgb), 0.4);
+    background: rgba(0, 0, 0, 0.55);
+    color: var(--noir-primary);
+    pointer-events: none;
+  }
   .vc-photo-change {
-    position: absolute; inset-inline: 0; bottom: 0;
+    position: absolute; inset-inline: 0; bottom: 0; z-index: 2;
     display: flex; align-items: center; justify-content: center; gap: 6px;
     padding: 8px 10px;
     border: 0; border-top: 1px solid rgba(var(--noir-primary-rgb), 0.35);
@@ -160,6 +180,16 @@ export default function ViewCar() {
   const [customPicOpen, setCustomPicOpen] = useState(false);
   const [customPicUrl, setCustomPicUrl] = useState('');
   const [savingCustomPic, setSavingCustomPic] = useState(false);
+  const [photoOpen, setPhotoOpen] = useState(false);
+
+  useEffect(() => {
+    if (!photoOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setPhotoOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [photoOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -386,7 +416,17 @@ export default function ViewCar() {
             <div className="vc-photo-col">
               <div className="vc-photo">
                 {car.image ? (
-                  <img src={car.image} alt={car.name} decoding="async" fetchPriority="high" />
+                  <button
+                    type="button"
+                    className="vc-photo-zoom"
+                    onClick={() => setPhotoOpen(true)}
+                    aria-label={`Enlarge ${car.name}`}
+                  >
+                    <img src={car.image} alt={car.name} decoding="async" fetchPriority="high" />
+                    <span className="vc-photo-hint" aria-hidden>
+                      <ZoomIn size={14} />
+                    </span>
+                  </button>
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <Car className="text-primary/25" size={56} />
@@ -479,6 +519,40 @@ export default function ViewCar() {
           </div>
         </div>
       </section>
+
+      {photoOpen && car.image && (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/85"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${car.name} photo`}
+          onClick={() => setPhotoOpen(false)}
+        >
+          <div
+            className={`relative w-full max-w-4xl ${styles.panel} rounded-xl border border-primary/30 shadow-2xl overflow-hidden`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
+              <p className="text-sm font-heading font-bold text-foreground truncate min-w-0">{car.name}</p>
+              <button
+                type="button"
+                onClick={() => setPhotoOpen(false)}
+                className="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/80 bg-secondary text-mutedForeground hover:text-foreground hover:border-primary/40 transition-colors"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-3 bg-black/40">
+              <img
+                src={car.image}
+                alt={car.name}
+                className="w-full h-auto max-h-[min(80vh,720px)] object-contain mx-auto"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {customPicOpen && (
         <CustomCarImageModal

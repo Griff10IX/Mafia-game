@@ -33,6 +33,7 @@ import { prefetchDashboardData } from "./utils/dashboardSessionCache";
 import { preloadRoute } from "./utils/routePreload";
 import { SLOTS_FEATURE_ENABLED } from "./config/gameFeatures";
 import { USE_LANDING_CLASSIC } from "./config/landing";
+import { isClientJailed, isJailBlockedFrontendPath } from "./utils/jailBlockedRoutes";
 
 /** Flip `USE_LANDING_CLASSIC` in `src/config/landing.js` to restore the previous login UI. */
 const Landing = USE_LANDING_CLASSIC ? LandingClassic : LandingRedesign;
@@ -198,6 +199,10 @@ const PageLoader = () => (
 
 
 function JailBlockedOutlet() {
+  const location = useLocation();
+  if (isClientJailed() && isJailBlockedFrontendPath(location.pathname)) {
+    return <Navigate to="/crime/jail" replace />;
+  }
   return (
     <Suspense fallback={<PageLoader />}>
       <Outlet />
