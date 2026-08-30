@@ -152,17 +152,14 @@ def _blackjack_is_blackjack(hand):
     return len(hand) == 2 and _blackjack_hand_total(hand) == 21
 
 
-def _blackjack_dealer_play(dealer_hand: list, deck: list, player_total: int) -> int:
-    """Hit while under 17, except stand immediately if already beating a standing player.
+def _blackjack_dealer_play(dealer_hand: list, deck: list) -> int:
+    """Hit while under 17 (stand on all 17+). Mutates dealer_hand and deck. Returns final total.
 
-    Mutates dealer_hand and deck. Returns final total.
     Client never sees a near-bust: a busting forced hit is sometimes replaced with a real
     remaining-deck card that lands 19/20/21. If no such card exists, the bust stands.
     """
     dealer_total = _blackjack_hand_total(dealer_hand)
     while dealer_total < 17 and deck:
-        if player_total <= 21 and dealer_total > player_total:
-            break
         card = deck.pop()
         trial = _blackjack_hand_total(dealer_hand + [card])
         if trial > 21 and _rng.random() < BLACKJACK_DEALER_BUST_SAVE_CHANCE:
@@ -301,7 +298,7 @@ def _blackjack_game_is_stale(game: dict) -> bool:
 
 
 async def _blackjack_auto_finish_game(game: dict, current_user: dict):
-    """Settle an in-progress game as if player stood (dealer play, result, pay/collect, history, remove game)."""
+    """Settle an in-progress game as if player stood (dealer to 17, result, pay/collect, history, remove game)."""
     claimed = await db.blackjack_games.find_one_and_delete({"user_id": current_user.get("id") or ""})
     if not claimed:
         return
@@ -312,8 +309,8 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
     dealer_hand = list(game.get("dealer_hand") or [])
     bet = game.get("bet", 0)
     owner_id = game.get("owner_id")
+    dealer_total = _blackjack_dealer_play(dealer_hand, deck)
     player_total = _blackjack_hand_total(player_hand)
-    dealer_total = _blackjack_dealer_play(dealer_hand, deck, player_total)
     if dealer_total > 21:
         result = "dealer_bust"
         payout = bet * 2
@@ -1205,8 +1202,8 @@ def register(router):
         dealer_hand = list(game.get("dealer_hand") or [])
         bet = game.get("bet", 0)
         owner_id = game.get("owner_id")
+        dealer_total = _blackjack_dealer_play(dealer_hand, deck)
         player_total = _blackjack_hand_total(player_hand)
-        dealer_total = _blackjack_dealer_play(dealer_hand, deck, player_total)
         if dealer_total > 21:
             result = "dealer_bust"
             payout = bet * 2

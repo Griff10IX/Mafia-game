@@ -162,7 +162,7 @@ async def create_revive_payment_intent(
                 detail="That account is not linked to this email (it may have been freed when you used the same email elsewhere). Enter the dead account's password to revive it.",
             )
         if not verify_password_fn(str(dead_password).strip(), dead_user.get("password_hash") or ""):
-            raise HTTPException(status_code=401, detail="Invalid password for that account.")
+            raise HTTPException(status_code=400, detail="Invalid password for that account.")
 
     intent_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
@@ -658,7 +658,7 @@ def register(router):
             )
         pw = (request.dead_password or "").strip()
         if not pw or not verify_password(pw, dead_user.get("password_hash") or ""):
-            raise HTTPException(status_code=401, detail="Invalid password for that account")
+            raise HTTPException(status_code=400, detail="Invalid password for that account")
         if dead_user.get("revive_sacrifice"):
             raise HTTPException(
                 status_code=400,

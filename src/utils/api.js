@@ -498,18 +498,22 @@ api.interceptors.response.use(
     }
 
     if ((error.response?.status === 401 || error.response?.status === 403) && !hasRedirectedOnAuthFailure && !isPublicPath()) {
-      const isAuthMe = error.config?.url?.includes('/auth/me');
-      if (error.response?.status === 401 || (error.response?.status === 403 && isAuthMe)) {
-        hasRedirectedOnAuthFailure = true;
-        const detail = error.response?.data?.detail;
-        const msg = typeof detail === 'string' ? detail : (error.response?.status === 403 ? 'Access denied.' : 'Your session expired due to inactivity or the login time limit. Please log in again.');
-        try {
-          sessionStorage.setItem(AUTH_ERROR_KEY, msg);
-        } catch (_) {}
-        localStorage.removeItem('token');
-        clearProfileSessionLastMeUsername();
-        clearStaffPortalSession();
-        window.location.replace('/');
+      const reqUrl = String(error.config?.url || '').toLowerCase();
+      // Wrong dead-account password is not a session failure — stay logged in.
+      if (!reqUrl.includes('/dead-alive/')) {
+        const isAuthMe = error.config?.url?.includes('/auth/me');
+        if (error.response?.status === 401 || (error.response?.status === 403 && isAuthMe)) {
+          hasRedirectedOnAuthFailure = true;
+          const detail = error.response?.data?.detail;
+          const msg = typeof detail === 'string' ? detail : (error.response?.status === 403 ? 'Access denied.' : 'Your session expired due to inactivity or the login time limit. Please log in again.');
+          try {
+            sessionStorage.setItem(AUTH_ERROR_KEY, msg);
+          } catch (_) {}
+          localStorage.removeItem('token');
+          clearProfileSessionLastMeUsername();
+          clearStaffPortalSession();
+          window.location.replace('/');
+        }
       }
     }
     // Normalize 502/503/504 and network errors so pages can show a friendly message instead of breaking
