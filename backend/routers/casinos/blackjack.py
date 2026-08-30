@@ -81,10 +81,6 @@ BLACKJACK_ABSOLUTE_MAX_BET = 500_000_000
 BLACKJACK_HOUSE_EDGE = 0.0005  # 0.05% of bet to owner when player loses
 BLACKJACK_HISTORY_MAX = 10
 BLACKJACK_GAME_TIMEOUT_SECONDS = 600  # Unfinished game auto-stands and finishes after this
-# Secret owner-favor (same idea as video poker miss): when the dealer must hit and that
-# card would bust, this fraction of those busts are swapped to a 19/20/21 if the shoe allows.
-BLACKJACK_DEALER_BUST_SAVE_CHANCE = 0.40
-BLACKJACK_DEALER_SAVE_TOTALS = (19, 20, 21)
 
 BLACKJACK_SUITS = ["H", "D", "C", "S"]
 BLACKJACK_VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
@@ -156,23 +152,12 @@ def _blackjack_dealer_play(dealer_hand: list, deck: list, player_total: int) -> 
     """Hit while under 17, except stand immediately if already beating a standing player.
 
     Mutates dealer_hand and deck. Returns final total.
-    Client never sees a near-bust: a busting forced hit is sometimes replaced with a real
-    remaining-deck card that lands 19/20/21. If no such card exists, the bust stands.
     """
     dealer_total = _blackjack_hand_total(dealer_hand)
     while dealer_total < 17 and deck:
         if player_total <= 21 and dealer_total > player_total:
             break
-        card = deck.pop()
-        trial = _blackjack_hand_total(dealer_hand + [card])
-        if trial > 21 and _rng.random() < BLACKJACK_DEALER_BUST_SAVE_CHANCE:
-            save_idxs = [
-                i for i, c in enumerate(deck)
-                if _blackjack_hand_total(dealer_hand + [c]) in BLACKJACK_DEALER_SAVE_TOTALS
-            ]
-            if save_idxs:
-                card = deck.pop(_rng.choice(save_idxs))
-        dealer_hand.append(card)
+        dealer_hand.append(deck.pop())
         dealer_total = _blackjack_hand_total(dealer_hand)
     return dealer_total
 
