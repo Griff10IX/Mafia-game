@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { parseForumContent } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
 import { NotificationMessage } from '../../components/NotificationMessage';
+import { StaffBotAlertMessage, staffBotAlertPreview } from '../../components/StaffBotAlertMessage';
 import {
   INBOX_STYLES,
   IB_ACTION_GO,
@@ -166,16 +167,20 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, isSent }) =
           </span>
         </div>
         <p className="text-[10px] text-mutedForeground truncate">
-          <NotificationMessage
-            message={notification.message}
-            actorUsername={notification.actor_username}
-            topicId={notification.topic_id}
-            topicTitle={notification.topic_title}
-            commentId={notification.comment_id}
-            messageLinkTo={notification.message_link_to}
-            messageLinkLabel={notification.message_link_label}
-            className="text-inherit"
-          />
+          {notification.notification_type === 'staff_bot_client' && staffBotAlertPreview(notification.message) ? (
+            staffBotAlertPreview(notification.message)
+          ) : (
+            <NotificationMessage
+              message={notification.message}
+              actorUsername={notification.actor_username}
+              topicId={notification.topic_id}
+              topicTitle={notification.topic_title}
+              commentId={notification.comment_id}
+              messageLinkTo={notification.message_link_to}
+              messageLinkLabel={notification.message_link_label}
+              className="text-inherit"
+            />
+          )}
         </p>
       </div>
 
@@ -277,6 +282,8 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
                 }),
               }}
             />
+          ) : notification.notification_type === 'staff_bot_client' ? (
+            <StaffBotAlertMessage message={notification.message} />
           ) : (
             <p className="text-[11px] sm:text-sm text-foreground leading-snug whitespace-pre-wrap">
               <NotificationMessage

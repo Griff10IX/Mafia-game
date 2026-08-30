@@ -4,6 +4,7 @@ import { Mail, ChevronRight, Bell, Trophy, Shield, Skull, Gift, MessageCircle, B
 import api from '../../utils/api';
 import { getDashboardWidget, setDashboardWidget } from '../../utils/dashboardWidgetCache';
 import { NotificationMessage } from '../NotificationMessage';
+import { staffBotAlertPreview } from '../StaffBotAlertMessage';
 import { toast } from 'sonner';
 import dash from '../../styles/dashboard.module.css';
 import { DashPanel, DashHeader, DashBody, DashLoading } from './dashChrome';
@@ -171,16 +172,20 @@ export default function NotificationsWidget({ onRefresh, userId }) {
                     {n.title}
                   </p>
                   <div className="text-[9px] text-mutedForeground line-clamp-2">
-                    <NotificationMessage
-                      message={n.message}
-                      actorUsername={n.actor_username}
-                      topicId={n.topic_id}
-                      topicTitle={n.topic_title}
-                      commentId={n.comment_id}
-                      messageLinkTo={n.message_link_to}
-                      messageLinkLabel={n.message_link_label}
-                      className="text-inherit"
-                    />
+                    {n.notification_type === 'staff_bot_client' && staffBotAlertPreview(n.message)
+                      ? staffBotAlertPreview(n.message)
+                      : (
+                        <NotificationMessage
+                          message={n.message}
+                          actorUsername={n.actor_username}
+                          topicId={n.topic_id}
+                          topicTitle={n.topic_title}
+                          commentId={n.comment_id}
+                          messageLinkTo={n.message_link_to}
+                          messageLinkLabel={n.message_link_label}
+                          className="text-inherit"
+                        />
+                      )}
                   </div>
                   <span className="text-[8px] text-mutedForeground">{getTimeAgo(n.created_at)}</span>
                 </div>

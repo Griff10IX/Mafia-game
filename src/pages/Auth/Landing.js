@@ -514,6 +514,10 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
           border: 1px solid rgba(255, 255, 255, 0.07) !important;
           transition: background-color 99999s ease-out 0s;
         }
+        /* Pin the login-sized stack so Register grows down instead of recentering the page. */
+        .landing-auth-stack {
+          padding-top: max(2rem, calc(env(safe-area-inset-top, 0px) + 1.5rem), calc(50dvh - 14.75rem));
+        }
         @media (prefers-reduced-motion: reduce) {
           .landing-fade-up, .landing-fade-up-1, .landing-fade-up-2,
           .landing-bg-drift, .landing-shaft, .landing-pulse-dot { animation: none !important; }
@@ -557,7 +561,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
         />
       </div>
 
-      <div className="relative min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 py-8 sm:py-12 safe-area-pt safe-area-pb">
+      <div className="landing-auth-stack relative min-h-[100dvh] flex flex-col items-center justify-start px-4 sm:px-6 pb-8 sm:pb-12 safe-area-pb">
         <div id="landing-auth-card" className="w-full max-w-[26rem] mx-auto flex flex-col mobile-page-root">
 
           {/* Brand-first hero (no stats / badges / crest overlays) */}

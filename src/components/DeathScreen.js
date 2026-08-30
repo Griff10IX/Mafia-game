@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { formatGameTimeWeekday } from '../utils/gameDateTime';
-import styles from '../styles/noir.module.css';
 
 const DEATH_STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&display=swap');
+
   [data-death-screen].ds-root {
     position: fixed;
     inset: 0;
@@ -14,252 +15,278 @@ const DEATH_STYLES = `
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding: max(20px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+    justify-content: flex-start;
+    padding: max(8px, env(safe-area-inset-top)) 12px max(28px, env(safe-area-inset-bottom));
+    background: #05060a;
+    color: #ebe6d8;
+  }
+
+  @keyframes ds-rise { from { transform: translateY(36px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+  @keyframes ds-fog { from { transform: translateX(-8%) } to { transform: translateX(8%) } }
+  @keyframes ds-rain { from { transform: translate3d(0,-80px,0) } to { transform: translate3d(-18px,110vh,0) } }
+  @keyframes ds-glow { from { opacity: .35 } to { opacity: .85 } }
+  @keyframes ds-flash { 0%,88%,92%,96%,100% { opacity: 0 } 90%,94% { opacity: .11 } }
+  @keyframes ds-smoke { 0% { transform: translateY(0) scaleX(1); opacity: .28 } 100% { transform: translateY(-46px) scaleX(1.5); opacity: 0 } }
+  @keyframes ds-mist { from { opacity: .18 } to { opacity: .42 } }
+
+  .ds-world { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden }
+  .ds-world-photo {
+    width: 100%; height: 100%; object-fit: cover; object-position: 52% 28%;
+    filter: brightness(.42) saturate(.72) contrast(1.12);
+  }
+  .ds-world-scrim {
+    position: absolute; inset: 0;
     background:
-      radial-gradient(ellipse 100% 55% at 50% 0%, rgba(var(--noir-primary-rgb, 184, 145, 68), 0.07) 0%, transparent 58%),
-      radial-gradient(ellipse 80% 45% at 50% 100%, rgba(var(--noir-primary-rgb, 184, 145, 68), 0.04) 0%, transparent 52%),
-      linear-gradient(180deg, #0f0e13 0%, #13121a 100%);
-    color: var(--noir-foreground, #e8e4dc);
+      radial-gradient(ellipse 70% 55% at 50% 28%, transparent 0%, rgba(5,6,10,.35) 62%, rgba(5,6,10,.78) 100%),
+      linear-gradient(180deg, rgba(6,8,14,.15) 0%, transparent 28%, rgba(4,5,8,.55) 62%, #05060a 88%);
   }
-
-  @keyframes ds-fadeIn    { from { transform: translateY(4px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
-  @keyframes ds-fadeUp    { from { transform: translateY(12px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
-  @keyframes ds-stoneRise { from { transform: translateY(24px) } to { transform: translateY(0) } }
-  @keyframes ds-expandX   { from { transform: scaleX(0); opacity: 0 } to { transform: scaleX(1); opacity: 1 } }
-  @keyframes ds-twinkle   { from { opacity: 0.12 } to { opacity: 0.85 } }
-  @keyframes ds-flicker   { 0% { opacity: .88 } 50% { opacity: 1 } 100% { opacity: .82 } }
-  @keyframes ds-emberRise { 0% { transform: translateY(0); opacity: 0 } 10% { opacity: .7 } 100% { transform: translateY(-90vh); opacity: 0 } }
-  @keyframes ds-fogDrift  { from { transform: translateX(-3%) } to { transform: translateX(3%) } }
-  @keyframes ds-crossGlow { from { filter: drop-shadow(0 0 3px rgba(var(--noir-primary-rgb, 184, 145, 68), .22)) } to { filter: drop-shadow(0 0 14px rgba(var(--noir-primary-rgb, 184, 145, 68), .65)) } }
-  @keyframes ds-lightFlash { 0%,91%,93%,95%,100% { opacity: 0 } 92%,94% { opacity: 1 } }
-  @keyframes ds-ravenFly  { from { transform: translateX(-40px); opacity: 0 } 12% { opacity: .3 } 88% { opacity: .3 } to { transform: translateX(110vw); opacity: 0 } }
-
-  .ds-fade-in  { animation: ds-fadeIn .4s ease-out both }
-  .ds-fade-in2 { animation: ds-fadeIn .4s .05s ease-out both }
-  .ds-fade-in3 { animation: ds-fadeIn .4s .1s ease-out both }
-  .ds-stone-rise { animation: ds-stoneRise 1s cubic-bezier(0.16,1,0.3,1) }
-  .ds-actions  { animation: ds-fadeUp .45s .15s ease-out both }
-  .ds-expand   { animation: ds-expandX .7s .12s both }
-  .ds-cross    { animation: ds-crossGlow 2.8s 1.4s ease-in-out infinite alternate }
-  .ds-flicker  { animation: ds-flicker 1s ease-in-out infinite alternate }
-  .ds-flicker2 { animation: ds-flicker .8s .25s ease-in-out infinite alternate }
-
-  .ds-sky { position: absolute; inset: 0; pointer-events: none; overflow: hidden }
-  .ds-star {
-    position: absolute; width: 2px; height: 2px; border-radius: 50%;
-    background: rgba(255,255,255,.7);
-    animation: ds-twinkle 2.8s ease-in-out infinite alternate;
+  .ds-vignette {
+    position: absolute; inset: 0;
+    box-shadow: inset 0 0 140px 40px rgba(0,0,0,.72);
   }
-  .ds-ember {
-    position: absolute; bottom: 4%; width: 2px; height: 2px; border-radius: 50%;
-    background: rgba(var(--noir-primary-rgb, 184, 145, 68), .65);
-    box-shadow: 0 0 6px rgba(var(--noir-primary-rgb, 184, 145, 68), .4);
-    animation: ds-emberRise linear infinite;
+  .ds-raindrop {
+    position: absolute; top: -12%; width: 1.2px;
+    background: linear-gradient(180deg, transparent, rgba(220,226,236,.34) 40%, rgba(220,226,236,.05));
+    animation: ds-rain linear infinite;
+    transform: rotate(8deg);
   }
   .ds-flash {
-    position: fixed; inset: 0; pointer-events: none; z-index: 4;
-    background: rgba(210,205,240,0.03);
-    animation: ds-lightFlash 14s 5s infinite;
-  }
-  .ds-moon {
-    position: absolute; top: 36px; right: 12%; width: 48px; height: 48px; border-radius: 50%;
-    background: radial-gradient(circle at 38% 35%, #f0ead8 55%, #bca880 100%);
-    box-shadow: 0 0 28px rgba(240,234,216,.12);
-  }
-  .ds-raven {
-    position: absolute; top: 18%; width: 26px; height: 9px;
-    animation: ds-ravenFly linear 18s 5s both;
+    position: absolute; inset: 0;
+    background: rgba(228,226,245,.14);
+    animation: ds-flash 18s 4s infinite;
   }
   .ds-fog {
-    position: absolute; bottom: 0; left: -20%; right: -20%; height: 140px;
-    background: radial-gradient(ellipse at 50% 100%, rgba(var(--noir-primary-rgb, 184, 145, 68), .05) 0%, transparent 70%);
-    animation: ds-fogDrift 10s ease-in-out infinite alternate;
+    position: absolute; left: -20%; right: -20%; pointer-events: none;
+    animation: ds-fog 16s ease-in-out infinite alternate;
+  }
+  .ds-fog-lo {
+    bottom: 0; height: 34%;
+    background: radial-gradient(ellipse at 50% 110%, rgba(88,84,72,.5) 0%, transparent 70%);
+  }
+  .ds-fog-mid {
+    bottom: 10%; height: 26%; opacity: .7;
+    background: radial-gradient(ellipse at 38% 100%, rgba(50,48,42,.38) 0%, transparent 72%);
+    animation-duration: 22s;
   }
 
   .ds-col {
-    position: relative; z-index: 10; width: 100%; max-width: 480px;
+    position: relative; z-index: 10; width: 100%; max-width: 440px;
     display: flex; flex-direction: column; align-items: center;
   }
 
-  .ds-stone {
-    width: 100%; max-width: 380px;
-    background: linear-gradient(158deg, #2c2a32 0%, #1c1a22 42%, #111019 100%);
-    border: 1px solid rgba(var(--noir-primary-rgb, 184, 145, 68), 0.18);
-    box-shadow:
-      0 0 0 1px rgba(0,0,0,.95),
-      0 40px 90px rgba(0,0,0,.7),
-      inset 0 1px 0 rgba(255,255,255,.04);
-    padding: 32px 28px 28px;
-    clip-path: polygon(0% 8%, 4% 0%, 96% 0%, 100% 8%, 100% 100%, 0% 100%);
-    position: relative;
+  .ds-monument {
+    position: relative; width: min(100%, 400px);
+    margin-top: 4px;
+    animation: ds-rise 1.2s cubic-bezier(.16,1,.3,1) both;
+    filter: drop-shadow(0 28px 36px rgba(0,0,0,.78));
   }
-  .ds-stone-bar {
-    position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, transparent, rgba(var(--noir-primary-rgb, 184, 145, 68), .55), transparent);
+  .ds-headstone-img {
+    width: 100%; display: block; user-select: none; pointer-events: none;
   }
-  .ds-rip {
-    font-family: var(--font-heading, inherit);
-    font-size: 10px; letter-spacing: .55em; text-transform: uppercase; text-align: center;
-    color: rgba(var(--noir-primary-rgb, 184, 145, 68), .5); margin-bottom: 8px;
+  .ds-carve {
+    position: absolute;
+    left: 23%; right: 23%; top: 27%; height: 30%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; pointer-events: none;
   }
-  .ds-name {
-    font-family: serif;
-    font-size: clamp(26px, 6vw, 36px); font-weight: 700; text-align: center;
-    letter-spacing: .04em; color: rgba(232, 228, 220, .94);
-    text-shadow: 0 2px 24px rgba(0,0,0,.9); margin-bottom: 4px;
-    overflow-wrap: anywhere;
+  .ds-carve-rip {
+    font-family: 'Cinzel', 'Times New Roman', serif;
+    font-size: 10px; font-weight: 700; letter-spacing: .42em;
+    color: #b7ae93; margin-bottom: 5px;
+    text-shadow: 0 1px 0 rgba(255,255,255,.08), 0 -1px 0 rgba(0,0,0,.65);
   }
-  .ds-sub {
-    font-family: var(--font-heading, inherit);
-    font-size: 12px; text-align: center;
-    color: rgba(var(--noir-primary-rgb, 184, 145, 68), .62); margin-bottom: 16px;
+  .ds-carve-name {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 700; line-height: .95; letter-spacing: .02em;
+    color: #efe6cc;
+    text-shadow:
+      0 1px 0 rgba(255,248,220,.16),
+      0 -1px 1px rgba(0,0,0,.7),
+      0 8px 18px rgba(0,0,0,.35);
   }
-  .ds-rule {
-    border: none; height: 1px; margin: 0 0 16px;
-    background: linear-gradient(90deg, transparent, rgba(var(--noir-primary-rgb, 184, 145, 68), .28), transparent);
+  .ds-carve-rank {
+    font-family: 'Cinzel', serif;
+    font-size: 10px; letter-spacing: .2em; text-transform: uppercase;
+    color: #c4b48a; margin-top: 6px;
+    text-shadow: 0 1px 0 rgba(0,0,0,.7);
   }
-  .ds-epitaph {
-    font-family: serif; font-size: 14px; font-style: italic; text-align: center;
-    line-height: 1.75; color: rgba(232, 228, 220, .38); margin-bottom: 8px;
+  .ds-carve-epitaph {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-style: italic; font-size: 11px; line-height: 1.25;
+    color: #9c937c; margin-top: 7px; max-width: 92%;
+    text-shadow: 0 1px 0 rgba(0,0,0,.55);
   }
-  .ds-dates {
-    font-family: var(--font-heading, inherit);
-    font-size: 10px; letter-spacing: .14em; text-transform: uppercase; text-align: center;
-    color: rgba(232, 228, 220, .28);
-  }
-  .ds-time {
-    font-family: var(--font-heading, inherit);
-    font-size: 10px; letter-spacing: .16em; text-transform: uppercase; text-align: center;
-    color: rgba(232, 228, 220, .2); margin-top: 8px;
-  }
-  .ds-plinth {
-    width: 100%;
-    background: linear-gradient(180deg, #1c1a22, #0d0c12);
-    border: 1px solid rgba(var(--noir-primary-rgb, 184, 145, 68), .08);
-    border-top: none;
+  .ds-carve-dates {
+    font-family: 'Cinzel', serif;
+    font-size: 7.5px; letter-spacing: .16em; text-transform: uppercase;
+    color: #8f866e; margin-top: 6px;
+    text-shadow: 0 1px 0 rgba(0,0,0,.6);
   }
 
-  .ds-card {
-    width: 100%;
-    margin-top: 18px;
-    padding: 16px 16px 14px;
-    background: rgba(12, 11, 16, .72);
-    border: 1px solid rgba(var(--noir-primary-rgb, 184, 145, 68), .16);
-    border-radius: 6px;
+  .ds-smoke {
+    position: absolute; width: 18px; height: 40px; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 100%, rgba(210,200,180,.22), transparent 70%);
+    animation: ds-smoke 2.8s ease-out infinite;
+    filter: blur(3px);
   }
-  .ds-card-label {
-    font-family: var(--font-heading, inherit);
-    font-size: 10px; letter-spacing: .2em; text-transform: uppercase;
-    color: rgba(var(--noir-primary-rgb, 184, 145, 68), .55); margin-bottom: 10px;
+  .ds-smoke-l { left: 16%; top: 58%; }
+  .ds-smoke-r { right: 16%; top: 60%; animation-delay: .7s }
+
+  .ds-glow-pool {
+    position: absolute; width: 72px; height: 54px; pointer-events: none;
+    background: radial-gradient(circle, rgba(255,150,50,.22) 0%, transparent 70%);
+    animation: ds-glow 1.1s ease-in-out infinite alternate;
+    mix-blend-mode: screen;
+  }
+  .ds-glow-l { left: 8%; top: 58%; }
+  .ds-glow-r { right: 8%; top: 60%; animation-duration: 1.35s }
+
+  .ds-plaque {
+    width: 100%;
+    margin-top: 14px;
+    padding: 16px 16px 15px;
+    position: relative;
+    border: 1px solid rgba(196, 164, 88, .32);
+    background-image:
+      linear-gradient(180deg, rgba(16, 13, 8, .86) 0%, rgba(8, 7, 5, .9) 100%),
+      url('/images/death/brass-plaque.jpg');
+    background-size: cover;
+    background-position: center;
+    box-shadow:
+      inset 0 1px 0 rgba(230, 210, 150, .16),
+      inset 0 0 40px rgba(0,0,0,.45),
+      0 18px 36px rgba(0,0,0,.55);
+    animation: ds-rise .75s ease-out both;
+  }
+  .ds-plaque::before {
+    content: '';
+    position: absolute; inset: 6px;
+    border: 1px solid rgba(196, 164, 88, .14);
+    pointer-events: none;
+  }
+  .ds-corner {
+    position: absolute; width: 11px; height: 11px; border-color: rgba(214, 180, 92, .55);
+  }
+  .ds-corner-tl { top: 3px; left: 3px; border-top: 2px solid; border-left: 2px solid }
+  .ds-corner-tr { top: 3px; right: 3px; border-top: 2px solid; border-right: 2px solid }
+  .ds-corner-bl { bottom: 3px; left: 3px; border-bottom: 2px solid; border-left: 2px solid }
+  .ds-corner-br { bottom: 3px; right: 3px; border-bottom: 2px solid; border-right: 2px solid }
+
+  .ds-plaque-label {
+    font-family: 'Cinzel', serif;
+    font-size: 10px; letter-spacing: .3em; text-transform: uppercase;
+    color: #d4b56a; margin-bottom: 12px; text-align: center;
+    text-shadow: 0 1px 0 rgba(0,0,0,.7);
   }
   .ds-killer {
-    text-align: center; padding: 10px 12px;
-    background: rgba(130, 25, 25, .1);
-    border: 1px solid rgba(170, 45, 45, .28);
-    margin-bottom: 12px;
+    text-align: center; padding: 13px 12px 11px; margin-bottom: 12px;
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(140, 18, 18, .38) 0%, transparent 70%),
+      rgba(28, 8, 8, .62);
+    border: 1px solid rgba(168, 48, 48, .42);
+    box-shadow: inset 0 0 22px rgba(0,0,0,.45);
+  }
+  .ds-killer-mark {
+    font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: .26em;
+    color: #c07070; text-transform: uppercase; margin-bottom: 6px;
   }
   .ds-killer button {
-    font-family: var(--font-heading, inherit);
-    font-size: 16px; font-weight: 700; letter-spacing: .03em;
-    color: rgba(230, 110, 110, .92); background: none; border: none; cursor: pointer; padding: 0;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 28px; font-weight: 700; letter-spacing: .03em;
+    color: #e87878; background: none; border: none; cursor: pointer; padding: 0;
+    text-shadow: 0 0 20px rgba(160, 20, 20, .5);
   }
-  .ds-killer button:hover { color: #fca5a5; }
+  .ds-killer button:hover { color: #f6b0b0; }
   .ds-killer-fam {
-    font-family: var(--font-heading, inherit);
-    font-size: 11px; color: rgba(232, 228, 220, .35); margin-top: 4px;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 14px; font-style: italic; color: #c2b8a6; margin-top: 4px;
   }
   .ds-reveal {
     width: 100%;
-    font-family: var(--font-heading, inherit);
-    font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
-    padding: 10px 12px; cursor: pointer;
-    background: rgba(18, 16, 22, .85);
-    border: 1px solid rgba(var(--noir-primary-rgb, 184, 145, 68), .28);
-    color: rgba(var(--noir-primary-rgb, 184, 145, 68), .85);
+    font-family: 'Cinzel', serif;
+    font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+    padding: 12px 12px; cursor: pointer;
+    background:
+      linear-gradient(180deg, rgba(52, 42, 24, .95), rgba(22, 18, 12, .96)),
+      url('/images/death/brass-plaque.jpg');
+    background-size: cover;
+    border: 1px solid rgba(196, 164, 88, .45);
+    color: #e0c27a;
+    box-shadow: inset 0 1px 0 rgba(255,230,160,.1);
   }
-  .ds-reveal:hover:not(:disabled) { border-color: rgba(var(--noir-primary-rgb, 184, 145, 68), .5); }
-  .ds-reveal:disabled { opacity: .55; cursor: default; }
+  .ds-reveal:hover:not(:disabled) { border-color: rgba(230, 198, 110, .75); color: #f0d48a }
+  .ds-reveal:disabled { opacity: .55; cursor: default }
   .ds-err {
-    font-family: var(--font-heading, inherit);
-    font-size: 11px; color: rgba(220, 80, 80, .85); text-align: center; margin-bottom: 8px;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 13px; color: #d07070; text-align: center; margin-bottom: 8px;
   }
-  .ds-stats {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
-    background: rgba(var(--noir-primary-rgb, 184, 145, 68), .1);
-    border: 1px solid rgba(var(--noir-primary-rgb, 184, 145, 68), .1);
-  }
+  .ds-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px }
   .ds-stat {
-    background: rgba(10, 9, 14, .8); padding: 10px 6px; text-align: center;
+    text-align: center; padding: 10px 4px 9px;
+    background: rgba(0,0,0,.38);
+    border: 1px solid rgba(196, 164, 88, .16);
   }
   .ds-stat span {
-    display: block; font-family: var(--font-heading, inherit);
-    font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
-    color: rgba(var(--noir-primary-rgb, 184, 145, 68), .4); margin-bottom: 4px;
+    display: block; font-family: 'Cinzel', serif;
+    font-size: 8px; letter-spacing: .18em; text-transform: uppercase;
+    color: #9a8a62; margin-bottom: 5px;
   }
   .ds-stat strong {
-    font-family: var(--font-heading, inherit); font-size: 12px; font-weight: 600;
-    color: rgba(232, 228, 220, .7);
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 17px; font-weight: 700; color: #efe6cc;
   }
-  .ds-stat strong.ds-stat-red { color: rgba(200, 80, 80, .75); }
+  .ds-stat strong.ds-stat-red { color: #d07070 }
 
-  .ds-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .ds-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px }
   .ds-steps li {
-    display: flex; gap: 10px; align-items: flex-start;
-    font-family: var(--font-heading, inherit); font-size: 13px; line-height: 1.4;
-    color: rgba(232, 228, 220, .72);
+    display: flex; gap: 11px; align-items: center;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 16px; color: #e4dcc8;
   }
   .ds-num {
-    flex: 0 0 20px; height: 20px; border-radius: 50%;
+    flex: 0 0 22px; height: 22px; border-radius: 50%;
     display: inline-flex; align-items: center; justify-content: center;
-    font-size: 10px; font-weight: 700;
-    color: var(--noir-button-foreground, #111);
-    background: rgb(var(--noir-primary-rgb, 184, 145, 68));
+    font-family: 'Cinzel', serif; font-size: 10px; font-weight: 700;
+    color: #1a140c;
+    background: radial-gradient(circle at 35% 30%, #f0d88e, #b8923a 72%);
+    box-shadow: 0 0 10px rgba(180, 140, 50, .3);
   }
   .ds-note {
-    font-family: var(--font-heading, inherit);
-    font-size: 11px; line-height: 1.45; color: rgba(232, 228, 220, .4); margin: 12px 0 0;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 13px; font-style: italic; line-height: 1.45; color: #9a917c; margin: 14px 0 0; text-align: center;
   }
   .ds-cta {
-    width: 100%; margin-top: 14px; padding: 12px 16px;
-    font-family: var(--font-heading, inherit);
-    font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+    width: 100%; margin-top: 15px; padding: 14px 16px;
+    font-family: 'Cinzel', serif;
+    font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase;
+    color: #1a140c;
+    cursor: pointer;
+    border: 1px solid #c4a24a;
+    background:
+      linear-gradient(180deg, #f0d78a 0%, #c9a24a 46%, #8e7028 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,244,200,.55),
+      0 10px 24px rgba(0,0,0,.45);
   }
-
-  .ds-candles { display: flex; justify-content: center; gap: 88px; margin-bottom: 12px; }
-  .ds-candle { display: flex; flex-direction: column; align-items: center; }
-  .ds-flame {
-    width: 8px; height: 13px; border-radius: 50% 50% 30% 30%;
-    background: radial-gradient(ellipse at 50% 78%, #fff 0%, #ffe566 20%, #ff8c00 62%, transparent 100%);
-  }
-  .ds-wax { width: 6px; background: linear-gradient(180deg, #ddd0bc, #aa9878); }
-  .ds-base { width: 10px; height: 4px; background: linear-gradient(180deg, #988870, #787058); border-radius: 0 0 2px 2px; }
+  .ds-cta:hover { filter: brightness(1.06) }
 
   @media (max-width: 480px) {
-    .ds-stone { padding: 26px 20px 22px; clip-path: none; border-radius: 4px 4px 0 0; }
-    .ds-candles { gap: 64px; }
-    .ds-moon { top: 16px; right: 16px; width: 36px; height: 36px; }
+    .ds-killer button { font-size: 24px }
+    .ds-carve-epitaph { font-size: 10px }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ds-fade-in, .ds-fade-in2, .ds-fade-in3, .ds-stone-rise, .ds-actions, .ds-expand, .ds-cross,
-    .ds-flicker, .ds-flicker2, .ds-star, .ds-ember, .ds-flash, .ds-fog, .ds-raven {
-      animation: none !important;
-    }
-    .ds-flash, .ds-ember, .ds-raven { display: none !important; }
+    .ds-monument, .ds-plaque, .ds-raindrop, .ds-fog, .ds-flash, .ds-smoke, .ds-glow-pool { animation: none !important }
+    .ds-flash, .ds-raindrop, .ds-smoke { display: none !important }
   }
 `;
 
-const STAR_SPOTS = [
-  ['8%', '12%', '0s'], ['22%', '28%', '0.6s'], ['41%', '9%', '1.1s'], ['63%', '18%', '0.3s'],
-  ['78%', '7%', '1.8s'], ['91%', '22%', '0.9s'], ['14%', '41%', '1.4s'], ['33%', '52%', '0.2s'],
-  ['55%', '36%', '2s'], ['71%', '48%', '0.7s'], ['86%', '39%', '1.5s'], ['5%', '61%', '1.2s'],
-  ['47%', '14%', '0.4s'], ['96%', '55%', '1.7s'],
-];
-
-const EMBER_SPOTS = [
-  ['12%', '11s', '0s'], ['28%', '14s', '3s'], ['46%', '10s', '6s'], ['61%', '16s', '1s'],
-  ['74%', '12s', '8s'], ['88%', '15s', '4s'],
+const RAIN = [
+  ['6%', '88px', '1.05s', '0s'], ['14%', '64px', '.88s', '.25s'], ['22%', '76px', '1.2s', '.1s'],
+  ['31%', '52px', '.95s', '.55s'], ['39%', '90px', '1.15s', '.05s'], ['48%', '70px', '.82s', '.4s'],
+  ['57%', '84px', '1.08s', '.2s'], ['66%', '58px', '.9s', '.65s'], ['74%', '78px', '1.22s', '.15s'],
+  ['83%', '66px', '.98s', '.45s'], ['91%', '80px', '1.12s', '.3s'], ['11%', '48px', '1.35s', '.8s'],
+  ['44%', '94px', '1.28s', '.7s'], ['69%', '54px', '.86s', '.9s'],
 ];
 
 function formatMoney(n) {
@@ -275,16 +302,32 @@ function formatDate(iso) {
   try { return new Date(iso).getFullYear(); } catch { return '—'; }
 }
 
-function formatTime(iso) {
-  return formatGameTimeWeekday(iso);
-}
-
 function prefersReducedMotion() {
   try {
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   } catch {
     return false;
   }
+}
+
+function wrapName(name) {
+  const s = String(name || '—');
+  if (s.length <= 14) return [s];
+  const mid = Math.ceil(s.length / 2);
+  const cut = s.lastIndexOf(' ', mid) > 4 ? s.lastIndexOf(' ', mid) : mid;
+  return [s.slice(0, cut).trim(), s.slice(cut).trim()].filter(Boolean);
+}
+
+function Plaque({ children, className = '' }) {
+  return (
+    <div className={`ds-plaque ${className}`}>
+      <span className="ds-corner ds-corner-tl" />
+      <span className="ds-corner ds-corner-tr" />
+      <span className="ds-corner ds-corner-bl" />
+      <span className="ds-corner ds-corner-br" />
+      {children}
+    </div>
+  );
 }
 
 export default function DeathScreen({ user, onLogout }) {
@@ -309,6 +352,12 @@ export default function DeathScreen({ user, onLogout }) {
   const deadAt = user?.dead_at;
   const createdAt = user?.created_at;
   const username = user?.username || '—';
+  const nameLines = wrapName(username);
+  const nameSize = username.length > 16 ? 26 : username.length > 11 ? 32 : 40;
+  const epitaph = cashLost > 0
+    ? ['Struck down in the shadows.', 'Everything on hand was taken.']
+    : ['He came. He fell.', 'The streets swallowed him whole.'];
+  const stoneSub = [rankName, familyName].filter(Boolean).join('  ·  ');
 
   const handleNewLife = async () => {
     try { await api.post('/auth/logout'); } catch {}
@@ -332,74 +381,67 @@ export default function DeathScreen({ user, onLogout }) {
   };
 
   return (
-    <div data-app-shell="1" data-death-screen data-testid="death-screen" className={`ds-root ${styles.themeGangsterModern}`}>
+    <div data-app-shell="1" data-death-screen data-testid="death-screen" className="ds-root">
       <style>{DEATH_STYLES}</style>
 
-      {!reduceMotion && <div className="ds-flash" />}
-
-      <div className="ds-sky" aria-hidden>
-        {STAR_SPOTS.map(([left, top, delay], i) => (
-          <span key={i} className="ds-star" style={{ left, top, animationDelay: delay }} />
+      <div className="ds-world" aria-hidden>
+        <img className="ds-world-photo" src="/images/death/cemetery-night.jpg" alt="" />
+        <div className="ds-world-scrim" />
+        <div className="ds-vignette" />
+        {!reduceMotion && RAIN.map(([left, height, dur, delay], i) => (
+          <span
+            key={i}
+            className="ds-raindrop"
+            style={{ left, height, animationDuration: dur, animationDelay: delay }}
+          />
         ))}
-        {!reduceMotion && EMBER_SPOTS.map(([left, dur, delay], i) => (
-          <span key={`e${i}`} className="ds-ember" style={{ left, animationDuration: dur, animationDelay: delay }} />
-        ))}
-        <div className="ds-moon" />
-        {!reduceMotion && (
-          <svg className="ds-raven" viewBox="0 0 26 9">
-            <path d="M0,5 Q6,0 13,4 Q19,0 26,4" stroke="rgba(220,216,230,0.2)" strokeWidth="1" fill="none" />
-          </svg>
-        )}
-        <div className="ds-fog" />
+        {!reduceMotion && <div className="ds-flash" />}
+        <div className="ds-fog ds-fog-mid" />
+        <div className="ds-fog ds-fog-lo" />
       </div>
 
       <div className="ds-col">
-        <div className="ds-stone-rise" style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div className="ds-stone">
-            <div className="ds-stone-bar" />
-            <div className="ds-cross" style={{ textAlign: 'center', marginBottom: 10 }}>
-              <svg width="40" height="50" viewBox="0 0 44 54" aria-hidden>
-                <circle cx="22" cy="18" r="10" fill="none" stroke="rgba(var(--noir-primary-rgb, 184, 145, 68), .12)" strokeWidth=".8" />
-                <line x1="22" y1="2" x2="22" y2="52" stroke="rgba(var(--noir-primary-rgb, 184, 145, 68), .32)" strokeWidth="1.5" />
-                <line x1="8" y1="18" x2="36" y2="18" stroke="rgba(var(--noir-primary-rgb, 184, 145, 68), .32)" strokeWidth="1.5" />
-              </svg>
-            </div>
-            <div className="ds-candles ds-fade-in">
-              {[30, 20].map((h, i) => (
-                <div key={i} className="ds-candle" style={{ marginTop: i === 1 ? 8 : 0 }}>
-                  <div className={`ds-flame ${i === 0 ? 'ds-flicker' : 'ds-flicker2'}`} />
-                  <div className="ds-wax" style={{ height: h }} />
-                  <div className="ds-base" />
-                </div>
+        <div className="ds-monument">
+          <img
+            className="ds-headstone-img"
+            src="/images/death/headstone.jpg"
+            alt={`Headstone for ${username}`}
+          />
+          <div className="ds-carve">
+            <div className="ds-carve-rip">R · I · P</div>
+            {nameLines.map((line) => (
+              <div key={line} className="ds-carve-name" style={{ fontSize: nameSize }}>
+                {line}
+              </div>
+            ))}
+            <div className="ds-carve-rank">{stoneSub}</div>
+            <div className="ds-carve-epitaph">
+              {epitaph.map((line) => (
+                <div key={line}>{line}</div>
               ))}
             </div>
-            <div className="ds-rip">R · I · P</div>
-            <div className="ds-name">{username}</div>
-            <div className="ds-sub">{rankName}{familyName ? ` · ${familyName}` : ''}</div>
-            <hr className="ds-rule ds-expand" />
-            <div className="ds-epitaph ds-fade-in2">
-              {cashLost > 0
-                ? <>Struck down in the shadows.<br />Everything on hand was taken.</>
-                : <>He came. He fell.<br />The streets swallowed him whole.</>
-              }
+            <div className="ds-carve-dates">
+              {`Joined ${formatDate(createdAt)}  —  Killed ${formatDate(deadAt)}`}
+              <br />
+              {formatGameTimeWeekday(deadAt)}
             </div>
-            <div className="ds-dates ds-fade-in2">
-              Joined {formatDate(createdAt)} — Killed {formatDate(deadAt)}
-            </div>
-            <div className="ds-time">{formatTime(deadAt)}</div>
           </div>
-          <div className="ds-plinth" style={{ maxWidth: 410, height: 16 }} />
-          <div className="ds-plinth" style={{ maxWidth: 448, height: 10 }} />
+          {!reduceMotion && (
+            <>
+              <span className="ds-glow-pool ds-glow-l" />
+              <span className="ds-glow-pool ds-glow-r" />
+              <span className="ds-smoke ds-smoke-l" />
+              <span className="ds-smoke ds-smoke-r" />
+            </>
+          )}
         </div>
 
-        <div className="ds-card ds-fade-in3">
-          <div className="ds-card-label">How you fell</div>
+        <Plaque>
+          <div className="ds-plaque-label">How you fell</div>
           {killer ? (
             <div className="ds-killer">
-              <button
-                type="button"
-                onClick={() => navigate(`/profile/${encodeURIComponent(killer.username)}`)}
-              >
+              <div className="ds-killer-mark">Struck down by</div>
+              <button type="button" onClick={() => navigate(`/profile/${encodeURIComponent(killer.username)}`)}>
                 {killer.username}
               </button>
               {killer.family && <div className="ds-killer-fam">of {killer.family}</div>}
@@ -407,12 +449,7 @@ export default function DeathScreen({ user, onLogout }) {
           ) : (
             <div style={{ marginBottom: 12 }}>
               {revealError && <div className="ds-err">{revealError}</div>}
-              <button
-                type="button"
-                className="ds-reveal"
-                onClick={handleRevealKiller}
-                disabled={revealing}
-              >
+              <button type="button" className="ds-reveal" onClick={handleRevealKiller} disabled={revealing}>
                 {revealing ? 'Revealing…' : 'Reveal killer — 1,000 pts'}
               </button>
             </div>
@@ -422,10 +459,10 @@ export default function DeathScreen({ user, onLogout }) {
             <div className="ds-stat"><span>Rank</span><strong>{rankName}</strong></div>
             <div className="ds-stat"><span>Cash taken</span><strong className="ds-stat-red">{formatMoney(cashLost)}</strong></div>
           </div>
-        </div>
+        </Plaque>
 
-        <div className="ds-card ds-actions">
-          <div className="ds-card-label">What happens next</div>
+        <Plaque className="ds-actions">
+          <div className="ds-plaque-label">What happens next</div>
           <ol className="ds-steps">
             <li><span className="ds-num">1</span><span>Create a new account</span></li>
             <li><span className="ds-num">2</span><span>Log in on that living account</span></li>
@@ -434,14 +471,10 @@ export default function DeathScreen({ user, onLogout }) {
           <p className="ds-note">
             Pocket cash is gone. Points and Swiss stay for Dead &gt; Alive on the living account.
           </p>
-          <button
-            type="button"
-            className={`${styles.btnPrimary} ds-cta`}
-            onClick={handleNewLife}
-          >
+          <button type="button" className="ds-cta" onClick={handleNewLife}>
             Start a new life
           </button>
-        </div>
+        </Plaque>
       </div>
     </div>
   );

@@ -110,7 +110,8 @@ body[data-theme-variant="modern"][data-busy-animations="1"] .app-toaster .app-to
 
 body[data-theme-variant="modern"] [data-death-screen],
 body[data-theme-variant="modern"] [data-death-screen].ds-root {
-  background: radial-gradient(ellipse 100% 55% at 50% 0%, rgba(var(--noir-primary-rgb), 0.06) 0%, transparent 58%), radial-gradient(ellipse 80% 45% at 50% 100%, rgba(var(--noir-primary-rgb), 0.03) 0%, transparent 52%), linear-gradient(180deg, var(--noir-bg) 0%, var(--noir-content) 100%) !important;
+  background-color: #05060a !important;
+  background-image: none !important;
 }
 
 /* WhackACopper: override hardcoded gradient for Modern theme */
