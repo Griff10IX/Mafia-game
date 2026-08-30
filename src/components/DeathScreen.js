@@ -17,7 +17,7 @@ const DEATH_STYLES = `
     align-items: center;
     justify-content: flex-start;
     padding: max(8px, env(safe-area-inset-top)) 12px max(28px, env(safe-area-inset-bottom));
-    background: #05060a;
+    background: #0a0a0c;
     color: #ebe6d8;
   }
 
@@ -29,20 +29,22 @@ const DEATH_STYLES = `
   @keyframes ds-smoke { 0% { transform: translateY(0) scaleX(1); opacity: .28 } 100% { transform: translateY(-46px) scaleX(1.5); opacity: 0 } }
   @keyframes ds-mist { from { opacity: .18 } to { opacity: .42 } }
 
-  .ds-world { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden }
+  .ds-world { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; background: #0a0a0c }
   .ds-world-photo {
-    width: 100%; height: 100%; object-fit: cover; object-position: 52% 28%;
-    filter: brightness(.42) saturate(.72) contrast(1.12);
+    position: absolute; inset: -6%;
+    width: 112%; height: 112%;
+    object-fit: cover; object-position: center 42%;
+    filter: brightness(.34) saturate(.62) contrast(1.06);
   }
   .ds-world-scrim {
     position: absolute; inset: 0;
     background:
-      radial-gradient(ellipse 70% 55% at 50% 28%, transparent 0%, rgba(5,6,10,.35) 62%, rgba(5,6,10,.78) 100%),
-      linear-gradient(180deg, rgba(6,8,14,.15) 0%, transparent 28%, rgba(4,5,8,.55) 62%, #05060a 88%);
+      radial-gradient(ellipse 130% 90% at 50% 38%, rgba(0,0,0,.08) 0%, rgba(0,0,0,.42) 58%, rgba(0,0,0,.72) 100%),
+      linear-gradient(180deg, rgba(0,0,0,.18) 0%, rgba(0,0,0,.28) 45%, rgba(0,0,0,.48) 100%);
   }
   .ds-vignette {
     position: absolute; inset: 0;
-    box-shadow: inset 0 0 140px 40px rgba(0,0,0,.72);
+    box-shadow: inset 0 0 100px 24px rgba(0,0,0,.55);
   }
   .ds-raindrop {
     position: absolute; top: -12%; width: 1.2px;
@@ -78,10 +80,24 @@ const DEATH_STYLES = `
     position: relative; width: min(100%, 400px);
     margin-top: 4px;
     animation: ds-rise 1.2s cubic-bezier(.16,1,.3,1) both;
-    filter: drop-shadow(0 28px 36px rgba(0,0,0,.78));
+    filter: drop-shadow(0 24px 32px rgba(0,0,0,.65));
   }
   .ds-headstone-img {
     width: 100%; display: block; user-select: none; pointer-events: none;
+    -webkit-mask-image:
+      linear-gradient(180deg, #000 0%, #000 68%, transparent 96%),
+      linear-gradient(90deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
+    mask-image:
+      linear-gradient(180deg, #000 0%, #000 68%, transparent 96%),
+      linear-gradient(90deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
+    -webkit-mask-composite: source-in;
+    mask-composite: intersect;
+  }
+  .ds-monument::after {
+    content: '';
+    position: absolute; left: 8%; right: 8%; bottom: 0; height: 28%;
+    background: linear-gradient(180deg, transparent, rgba(10,10,12,.85));
+    pointer-events: none;
   }
   .ds-carve {
     position: absolute;
@@ -141,31 +157,44 @@ const DEATH_STYLES = `
   .ds-glow-l { left: 8%; top: 58%; }
   .ds-glow-r { right: 8%; top: 60%; animation-duration: 1.35s }
 
+  .ds-skull {
+    position: absolute;
+    left: 50%;
+    bottom: 1.5%;
+    transform: translateX(-50%);
+    width: 19%;
+    min-width: 52px;
+    max-width: 78px;
+    z-index: 6;
+    pointer-events: none;
+    filter: drop-shadow(0 8px 14px rgba(0,0,0,.75)) brightness(.92) contrast(1.05);
+    opacity: .94;
+  }
+
   .ds-plaque {
     width: 100%;
     margin-top: 14px;
     padding: 16px 16px 15px;
     position: relative;
-    border: 1px solid rgba(196, 164, 88, .32);
-    background-image:
-      linear-gradient(180deg, rgba(16, 13, 8, .86) 0%, rgba(8, 7, 5, .9) 100%),
-      url('/images/death/brass-plaque.jpg');
-    background-size: cover;
-    background-position: center;
+    border: 1px solid rgba(148, 144, 136, .28);
+    background:
+      linear-gradient(175deg, rgba(88, 86, 80, .94) 0%, rgba(52, 50, 48, .96) 42%, rgba(38, 36, 34, .97) 100%),
+      repeating-linear-gradient(93deg, transparent, transparent 3px, rgba(255,255,255,.018) 3px, rgba(255,255,255,.018) 4px),
+      repeating-linear-gradient(3deg, transparent, transparent 4px, rgba(0,0,0,.035) 4px, rgba(0,0,0,.035) 5px);
     box-shadow:
-      inset 0 1px 0 rgba(230, 210, 150, .16),
-      inset 0 0 40px rgba(0,0,0,.45),
+      inset 0 1px 0 rgba(255,255,255,.07),
+      inset 0 -3px 12px rgba(0,0,0,.35),
       0 18px 36px rgba(0,0,0,.55);
     animation: ds-rise .75s ease-out both;
   }
   .ds-plaque::before {
     content: '';
     position: absolute; inset: 6px;
-    border: 1px solid rgba(196, 164, 88, .14);
+    border: 1px solid rgba(200, 196, 186, .1);
     pointer-events: none;
   }
   .ds-corner {
-    position: absolute; width: 11px; height: 11px; border-color: rgba(214, 180, 92, .55);
+    position: absolute; width: 11px; height: 11px; border-color: rgba(196, 192, 182, .32);
   }
   .ds-corner-tl { top: 3px; left: 3px; border-top: 2px solid; border-left: 2px solid }
   .ds-corner-tr { top: 3px; right: 3px; border-top: 2px solid; border-right: 2px solid }
@@ -175,8 +204,8 @@ const DEATH_STYLES = `
   .ds-plaque-label {
     font-family: 'Cinzel', serif;
     font-size: 10px; letter-spacing: .3em; text-transform: uppercase;
-    color: #d4b56a; margin-bottom: 12px; text-align: center;
-    text-shadow: 0 1px 0 rgba(0,0,0,.7);
+    color: #c4bdb0; margin-bottom: 12px; text-align: center;
+    text-shadow: 0 1px 0 rgba(0,0,0,.65), 0 -1px 0 rgba(255,255,255,.04);
   }
   .ds-killer {
     text-align: center; padding: 13px 12px 11px; margin-bottom: 12px;
@@ -206,15 +235,12 @@ const DEATH_STYLES = `
     font-family: 'Cinzel', serif;
     font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
     padding: 12px 12px; cursor: pointer;
-    background:
-      linear-gradient(180deg, rgba(52, 42, 24, .95), rgba(22, 18, 12, .96)),
-      url('/images/death/brass-plaque.jpg');
-    background-size: cover;
-    border: 1px solid rgba(196, 164, 88, .45);
-    color: #e0c27a;
-    box-shadow: inset 0 1px 0 rgba(255,230,160,.1);
+    background: linear-gradient(180deg, rgba(72, 70, 66, .95), rgba(42, 40, 38, .98));
+    border: 1px solid rgba(160, 156, 148, .35);
+    color: #d8d0c0;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
   }
-  .ds-reveal:hover:not(:disabled) { border-color: rgba(230, 198, 110, .75); color: #f0d48a }
+  .ds-reveal:hover:not(:disabled) { border-color: rgba(200, 196, 186, .5); color: #efe8dc }
   .ds-reveal:disabled { opacity: .55; cursor: default }
   .ds-err {
     font-family: 'Cormorant Garamond', Georgia, serif;
@@ -223,13 +249,13 @@ const DEATH_STYLES = `
   .ds-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px }
   .ds-stat {
     text-align: center; padding: 10px 4px 9px;
-    background: rgba(0,0,0,.38);
-    border: 1px solid rgba(196, 164, 88, .16);
+    background: rgba(0,0,0,.22);
+    border: 1px solid rgba(160, 156, 148, .16);
   }
   .ds-stat span {
     display: block; font-family: 'Cinzel', serif;
     font-size: 8px; letter-spacing: .18em; text-transform: uppercase;
-    color: #9a8a62; margin-bottom: 5px;
+    color: #8a8578; margin-bottom: 5px;
   }
   .ds-stat strong {
     font-family: 'Cormorant Garamond', Georgia, serif;
@@ -247,28 +273,30 @@ const DEATH_STYLES = `
     flex: 0 0 22px; height: 22px; border-radius: 50%;
     display: inline-flex; align-items: center; justify-content: center;
     font-family: 'Cinzel', serif; font-size: 10px; font-weight: 700;
-    color: #1a140c;
-    background: radial-gradient(circle at 35% 30%, #f0d88e, #b8923a 72%);
-    box-shadow: 0 0 10px rgba(180, 140, 50, .3);
+    color: #2a2824;
+    background: radial-gradient(circle at 35% 30%, #d4cdc0, #8a8478 72%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 2px 6px rgba(0,0,0,.35);
   }
   .ds-note {
     font-family: 'Cormorant Garamond', Georgia, serif;
-    font-size: 13px; font-style: italic; line-height: 1.45; color: #9a917c; margin: 14px 0 0; text-align: center;
+    font-size: 13px; font-style: italic; line-height: 1.45; color: #9a958a; margin: 14px 0 0; text-align: center;
   }
   .ds-cta {
     width: 100%; margin-top: 15px; padding: 14px 16px;
     font-family: 'Cinzel', serif;
     font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase;
-    color: #1a140c;
+    color: #ece6d8;
     cursor: pointer;
-    border: 1px solid #c4a24a;
+    border: 1px solid rgba(180, 176, 166, .35);
     background:
-      linear-gradient(180deg, #f0d78a 0%, #c9a24a 46%, #8e7028 100%);
+      linear-gradient(180deg, rgba(96, 94, 88, .98) 0%, rgba(58, 56, 52, .99) 55%, rgba(42, 40, 38, 1) 100%);
     box-shadow:
-      inset 0 1px 0 rgba(255,244,200,.55),
+      inset 0 1px 0 rgba(255,255,255,.12),
+      inset 0 -2px 0 rgba(0,0,0,.35),
       0 10px 24px rgba(0,0,0,.45);
+    text-shadow: 0 1px 0 rgba(0,0,0,.5);
   }
-  .ds-cta:hover { filter: brightness(1.06) }
+  .ds-cta:hover { filter: brightness(1.08) }
 
   @media (max-width: 480px) {
     .ds-killer button { font-size: 24px }
@@ -434,6 +462,12 @@ export default function DeathScreen({ user, onLogout }) {
               <span className="ds-smoke ds-smoke-r" />
             </>
           )}
+          <img
+            className="ds-skull"
+            src="/images/death/skull.png"
+            alt=""
+            aria-hidden
+          />
         </div>
 
         <Plaque>
