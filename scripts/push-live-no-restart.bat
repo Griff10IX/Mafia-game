@@ -10,7 +10,7 @@ call "%UI%" INIT
 
 if "%~1"=="" (set "msg=Update") else (set "msg=%~1")
 
-call "%UI%" HEADER "MAFIA WARS — DEPLOY (NO API RESTART)" "Frontend rebuild only — backend process unchanged"
+call "%UI%" HEADER "MAFIA WARS - DEPLOY (NO API RESTART)" "Frontend rebuild only - backend process unchanged"
 
 call "%UI%" STEP 1 6 "Stage all changes"
 git add -A
@@ -31,18 +31,18 @@ if errorlevel 1 (call "%UI%" FAIL "git push mafia2 failed" & goto END)
 call "%UI%" OK "mafia2 updated"
 
 call "%UI%" STEP 5 6 "Deploy on live server (SSH)"
-call "%UI%" INFO "Atomic frontend build — backend NOT restarted"
+call "%UI%" INFO "Atomic frontend build - backend NOT restarted"
 echo.
-plink -batch -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && export TERM=xterm-256color && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; bash scripts/deploy-after-pull.sh"
+plink -batch -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && export MAFIA_DEPLOY_ASCII=1 && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; bash scripts/deploy-after-pull.sh"
 if errorlevel 1 (call "%UI%" FAIL "Remote deploy failed" & goto END)
 call "%UI%" OK "Server deploy finished"
 
 call "%UI%" STEP 6 6 "Verify"
-call "%UI%" FOOTER "DONE — frontend live; restart API manually when ready"
+call "%UI%" FOOTER "DONE - frontend live; restart API manually when ready"
 goto DONE
 
 :END
-call "%UI%" FOOTER "DEPLOY FAILED — check output above"
+call "%UI%" FOOTER "DEPLOY FAILED - check output above"
 :DONE
 pause
 endlocal

@@ -19,7 +19,7 @@ if /i "%~1"=="--restart" (
     set "msg=%~1"
 )
 
-call "%UI%" HEADER "MAFIA WARS — COMMIT · PUSH · DEPLOY" "Branch MAfiaGame2 → live server"
+call "%UI%" HEADER "MAFIA WARS - COMMIT / PUSH / DEPLOY" "Branch MAfiaGame2 -> live server"
 
 call "%UI%" STEP 1 6 "Stage all changes"
 git add -A
@@ -81,7 +81,7 @@ if "%NEED_RESTART%"=="1" (
     call "%UI%" INFO "Backend stays up unless server sees Python changes"
 )
 echo.
-plink -batch -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && export TERM=xterm-256color && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; %DEPLOY_SH%"
+plink -batch -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && export MAFIA_DEPLOY_ASCII=1 && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; %DEPLOY_SH%"
 if errorlevel 1 (call "%UI%" FAIL "Remote deploy failed" & goto END)
 call "%UI%" OK "Server deploy finished"
 
@@ -89,14 +89,14 @@ call "%UI%" STEP 6 6 "Verify"
 for /f "delims=" %%H in ('git rev-parse --short HEAD 2^>nul') do set "LOCAL_SHA=%%H"
 call "%UI%" INFO "Local HEAD: !LOCAL_SHA!"
 if "%NEED_RESTART%"=="1" (
-    call "%UI%" FOOTER "ALL DONE — LIVE — API restarted"
+    call "%UI%" FOOTER "ALL DONE - LIVE - API restarted"
 ) else (
-    call "%UI%" FOOTER "ALL DONE — LIVE — API not restarted"
+    call "%UI%" FOOTER "ALL DONE - LIVE - API not restarted"
 )
 goto DONE
 
 :END
-call "%UI%" FOOTER "DEPLOY FAILED — check output above"
+call "%UI%" FOOTER "DEPLOY FAILED - check output above"
 :DONE
 pause
 endlocal

@@ -10,7 +10,7 @@ call "%UI%" INIT
 
 if "%~1"=="" (set "msg=Backend Python update") else (set "msg=%~1")
 
-call "%UI%" HEADER "MAFIA WARS — BACKEND QUICK PUSH" "Python only — no frontend build"
+call "%UI%" HEADER "MAFIA WARS - BACKEND QUICK PUSH" "Python only - no frontend build"
 
 call "%UI%" STEP 1 6 "Stage backend Python"
 git add -- "backend/*.py" "backend/**/*.py"
@@ -31,7 +31,7 @@ if errorlevel 1 (call "%UI%" FAIL "git push mafia2 failed" & goto END)
 call "%UI%" OK "mafia2 updated"
 
 call "%UI%" STEP 5 6 "Restart API on server (SSH)"
-call "%UI%" INFO "Fetch + reset — preserves backend/.env"
+call "%UI%" INFO "Fetch + reset - preserves backend/.env"
 call "%UI%" INFO "systemctl restart mafia-backend"
 echo.
 plink -batch -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); sudo systemctl restart mafia-backend && sudo systemctl status mafia-backend --no-pager -l"
@@ -39,11 +39,11 @@ if errorlevel 1 (call "%UI%" FAIL "Remote restart failed" & goto END)
 call "%UI%" OK "API restarted"
 
 call "%UI%" STEP 6 6 "Verify"
-call "%UI%" FOOTER "DONE — BACKEND QUICK LIVE"
+call "%UI%" FOOTER "DONE - BACKEND QUICK LIVE"
 goto DONE
 
 :END
-call "%UI%" FOOTER "DEPLOY FAILED — check output above"
+call "%UI%" FOOTER "DEPLOY FAILED - check output above"
 :DONE
 pause
 endlocal
