@@ -549,6 +549,16 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
     last_10_wins = list(current_user.get("loot_box_recent") or [])[-10:]
     last_10_wins.reverse()  # newest first for display
     rarity = await _get_loot_rarity_config()
+    exclusive_car_weekly = {"pieces": 0, "cap": 25, "cars": []}
+    try:
+        from utils.exclusive_car_weekly_loot import weekly_loot_breakdown_for_user
+
+        exclusive_car_weekly = await weekly_loot_breakdown_for_user(db, current_user.get("id") or "")
+        exclusive_car_weekly["credited_this_week"] = (
+            str(current_user.get("exclusive_car_loot_week") or "") == str(exclusive_car_weekly.get("week") or "")
+        )
+    except Exception:
+        pass
     return {
         "loot_box_pieces": pieces,
         "loot_box_free_rare_opens": int(current_user.get("loot_box_free_rare_opens") or 0),
@@ -576,6 +586,7 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
             "model_sj_rare_pct": 5,
             "model_sj_ultra_rare_pct": 10,
         },
+        "exclusive_car_weekly_loot": exclusive_car_weekly,
     }
 
 

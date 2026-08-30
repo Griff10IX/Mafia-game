@@ -1142,6 +1142,16 @@ export default function LootBox() {
                 Earn pieces from <Link to="/account/missions" className="text-primary underline">the Consigliere&apos;s Ledger</Link>.
                 Pick a vault tier below (50–1,000 pieces). Better tiers and jackpots mean bigger reveals.
               </p>
+              {Number(status?.exclusive_car_weekly_loot?.pieces) > 0 && (
+                <p className="text-[9px] text-violet-300/90 font-heading mt-1">
+                  Exclusive cars: +{Number(status.exclusive_car_weekly_loot.pieces).toLocaleString()} loot pieces / week
+                  {status.exclusive_car_weekly_loot.capped ? ` (cap ${Number(status.exclusive_car_weekly_loot.cap || 25)})` : ''}
+                  {(status.exclusive_car_weekly_loot.cars || []).length > 0
+                    ? ` — ${(status.exclusive_car_weekly_loot.cars || []).map((c) => `${c.name} +${c.pieces}`).join(', ')}`
+                    : ''}
+                  . Credits Monday UTC.
+                </p>
+              )}
               {(tutorialLoot || freeRareOpens > 0) ? (
                 <div
                   className="mt-2 rounded-md border px-2.5 py-2"

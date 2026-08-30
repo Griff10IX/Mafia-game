@@ -1600,7 +1600,7 @@ export default function Admin() {
   const [sportsOpenStakeCapText, setSportsOpenStakeCapText] = useState(String(SPORTS_OPEN_STAKE_CAP_DEFAULT));
   const [sportsOpenStakeCapSaving, setSportsOpenStakeCapSaving] = useState(false);
   const [bankSwissDefaultLimit, setBankSwissDefaultLimit] = useState(50_000_000);
-  const [bankInterestMaxUnclaimed, setBankInterestMaxUnclaimed] = useState(50_000_000);
+  const [bankInterestMaxUnclaimed, setBankInterestMaxUnclaimed] = useState(5_000_000_000);
   const [bankInterestOptionsRows, setBankInterestOptionsRows] = useState([]);
   const [bankCodeDefaultInterestOptions, setBankCodeDefaultInterestOptions] = useState([]);
   const [bankPreviewCustomPrincipal, setBankPreviewCustomPrincipal] = useState(10_000_000);
@@ -2539,7 +2539,7 @@ export default function Admin() {
         String(Math.max(1, parseInt(res.data?.sports_bet_max_total_open_stake, 10) || SPORTS_OPEN_STAKE_CAP_DEFAULT)),
       );
       setBankSwissDefaultLimit(Math.max(1000, parseInt(res.data?.bank_swiss_default_limit, 10) || 50_000_000));
-      setBankInterestMaxUnclaimed(Math.max(1, parseInt(res.data?.bank_interest_max_unclaimed_principal, 10) || 50_000_000));
+      setBankInterestMaxUnclaimed(Math.max(1, parseInt(res.data?.bank_interest_max_unclaimed_principal, 10) || 5_000_000_000));
       if (Array.isArray(res.data?.bank_interest_options) && res.data.bank_interest_options.length > 0) {
         setBankInterestOptionsRows(
           res.data.bank_interest_options.map((o) => ({
@@ -2686,7 +2686,7 @@ export default function Admin() {
     try {
       const res = await api.patch('/admin/settings', {
         bank_swiss_default_limit: Math.max(1000, parseAdminInt(bankSwissDefaultLimit, 50_000_000)),
-        bank_interest_max_unclaimed_principal: Math.max(1, parseAdminInt(bankInterestMaxUnclaimed, 50_000_000)),
+        bank_interest_max_unclaimed_principal: Math.max(1, parseAdminInt(bankInterestMaxUnclaimed, 5_000_000_000)),
         bank_interest_options: (bankInterestOptionsRows || [])
           .map((r) => ({
             hours: Math.max(1, parseInt(r.hours, 10) || 0),
@@ -2698,7 +2698,7 @@ export default function Admin() {
         setBankSwissDefaultLimit(Math.max(1000, Number(res.data.bank_swiss_default_limit) || 50_000_000));
       }
       if (res.data?.bank_interest_max_unclaimed_principal != null) {
-        setBankInterestMaxUnclaimed(Math.max(1, Number(res.data.bank_interest_max_unclaimed_principal) || 50_000_000));
+        setBankInterestMaxUnclaimed(Math.max(1, Number(res.data.bank_interest_max_unclaimed_principal) || 5_000_000_000));
       }
       if (Array.isArray(res.data?.bank_interest_options)) {
         setBankInterestOptionsRows(
@@ -2781,7 +2781,7 @@ export default function Admin() {
         stock_market_max_points: Math.max(1, parseInt(stockMarketMaxPoints, 10) || 3000),
         sports_bet_max_total_open_stake: Math.max(1, parseAdminInt(sportsOpenStakeCapText, SPORTS_OPEN_STAKE_CAP_DEFAULT)),
         bank_swiss_default_limit: Math.max(1000, parseAdminInt(bankSwissDefaultLimit, 50_000_000)),
-        bank_interest_max_unclaimed_principal: Math.max(1, parseAdminInt(bankInterestMaxUnclaimed, 50_000_000)),
+        bank_interest_max_unclaimed_principal: Math.max(1, parseAdminInt(bankInterestMaxUnclaimed, 5_000_000_000)),
         bank_interest_options: (bankInterestOptionsRows || [])
           .map((r) => ({
             hours: Math.max(1, parseInt(r.hours, 10) || 0),
@@ -2854,7 +2854,7 @@ export default function Admin() {
         setBankSwissDefaultLimit(Math.max(1000, Number(res.data.bank_swiss_default_limit) || 50_000_000));
       }
       if (res.data?.bank_interest_max_unclaimed_principal != null) {
-        setBankInterestMaxUnclaimed(Math.max(1, Number(res.data.bank_interest_max_unclaimed_principal) || 50_000_000));
+        setBankInterestMaxUnclaimed(Math.max(1, Number(res.data.bank_interest_max_unclaimed_principal) || 5_000_000_000));
       }
       if (Array.isArray(res.data?.bank_interest_options)) {
         setBankInterestOptionsRows(
@@ -16463,7 +16463,8 @@ export default function Admin() {
               Swiss deposit cap: each player has <span className="text-foreground/90">swiss_limit</span> on their account. This field is the
               server-wide default (also used for new signups and if a user record is missing a cap). Saving does not change existing players until
               you use <span className="text-foreground/90">Apply Swiss default to all users</span> below. Interest terms: hours and rate as a decimal
-              (e.g. 0.025 = 2.5%). Max unclaimed principal limits how much can remain in the interest bank before players must claim.
+              (e.g. 0.025 = 2.5%). Starting unclaimed principal is how much a player can keep in interest before buying cap upgrades
+              (1,000 points per +$2.5B, hard max $50B).
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground">
@@ -16478,20 +16479,14 @@ export default function Admin() {
                 />
               </label>
               <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground">
-                Max unclaimed interest principal
+                Starting interest cap (before point upgrades)
                 <input
                   type="text"
                   inputMode="numeric"
                   value={bankInterestMaxUnclaimed ? Number(bankInterestMaxUnclaimed).toLocaleString() : ''}
                   onChange={(e) => setBankInterestMaxUnclaimed(parseAdminInt(e.target.value, 0))}
                   className="mt-1 w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono font-heading"
-                  placeholder="50,000,000"
-                />
-              </label>
-            </div>
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Interest terms</p>
+                  placeholder="5,000,000,000"
                 <span className="text-[10px] text-mutedForeground">One row per duration; rate 0–10 (fraction of principal)</span>
               </div>
               <div className="overflow-x-auto rounded border border-primary/15">

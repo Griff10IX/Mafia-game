@@ -7,6 +7,14 @@ KEY_SWISS_DEFAULT = "bank_swiss_default_limit"
 KEY_INTEREST_MAX = "bank_interest_max_unclaimed_principal"
 KEY_INTEREST_OPTIONS = "bank_interest_options"
 
+# Personal interest cap: start $5B, 1000 points per +$2.5B, hard max $50B.
+INTEREST_LIMIT_START = 5_000_000_000
+INTEREST_LIMIT_STEP = 2_500_000_000
+INTEREST_LIMIT_HARD_MAX = 50_000_000_000
+INTEREST_LIMIT_UPGRADE_COST = 1000
+INTEREST_LIMIT_UPGRADES_FIELD = "interest_limit_upgrades"
+_LEGACY_INTEREST_MAX = 50_000_000
+
 
 def normalize_interest_options(raw: Any, fallback: List[dict]) -> List[dict]:
     """Return sorted list of {hours, rate}; invalid entries dropped. fallback used if raw unusable."""
@@ -58,9 +66,13 @@ async def get_bank_economy_config(
     raw_mx = by_k.get(KEY_INTEREST_MAX)
     if raw_mx is not None:
         try:
-            mx = max(1, min(int(raw_mx), 10**15))
+            mx = max(1, min(int(raw_mx), INTEREST_LIMIT_HARD_MAX))
         except (TypeError, ValueError):
             mx = interest_max_fallback
+
+    mx = max(1, min(int(mx), INTEREST_LIMIT_HARD_MAX))
+    if mx == _LEGACY_INTEREST_MAX:
+        mx = INTEREST_LIMIT_START
 
     opts = normalize_interest_options(by_k.get(KEY_INTEREST_OPTIONS), interest_options_fallback)
 
@@ -68,6 +80,48 @@ async def get_bank_economy_config(
         "swiss_limit_start": swiss,
         "interest_max_unclaimed_principal": mx,
         "interest_options": opts,
+        "interest_limit_step": INTEREST_LIMIT_STEP,
+        "interest_limit_hard_max": INTEREST_LIMIT_HARD_MAX,
+        "interest_limit_upgrade_cost": INTEREST_LIMIT_UPGRADE_COST,
+    }
+
+
+def personal_interest_limit(user: Optional[dict], start: int) -> int:
+    start_n = max(1, min(int(start or 0), INTEREST_LIMIT_HARD_MAX))
+    try:
+        n = max(0, int((user or {}).get(INTEREST_LIMIT_UPGRADES_FIELD) or 0))
+    except (TypeError, ValueError):
+        n = 0
+    return min(INTEREST_LIMIT_HARD_MAX, start_n + n * INTEREST_LIMIT_STEP)
+
+
+def interest_limit_upgrade_add(current: int) -> int:
+    current_n = max(0, int(current or 0))
+    if current_n >= INTEREST_LIMIT_HARD_MAX:
+        return 0
+    return min(INTEREST_LIMIT_STEP, INTEREST_LIMIT_HARD_MAX - current_n)
+
+
+def interest_limit_max_upgrades(start: int) -> int:
+    start_n = max(1, min(int(start or 0), INTEREST_LIMIT_HARD_MAX))
+    if start_n >= INTEREST_LIMIT_HARD_MAX:
+        return 0
+    remaining = INTEREST_LIMIT_HARD_MAX - start_n
+    return (remaining + INTEREST_LIMIT_STEP - 1) // INTEREST_LIMIT_STEP
+
+
+def interest_limit_public(user: Optional[dict], start: int, *, principal: int = 0, points: int = 0) -> Dict[str, Any]:
+    limit = personal_interest_limit(user, start)
+    add = interest_limit_upgrade_add(limit)
+    return {
+        "interest_limit": limit,
+        "interest_principal": max(0, int(principal or 0)),
+        "interest_limit_max": INTEREST_LIMIT_HARD_MAX,
+        "interest_limit_step": INTEREST_LIMIT_STEP,
+        "interest_limit_upgrade_cost": INTEREST_LIMIT_UPGRADE_COST,
+        "interest_limit_upgrade_add": add,
+        "interest_limit_at_max": add <= 0,
+        "points": max(0, int(points or 0)),
     }
 
 

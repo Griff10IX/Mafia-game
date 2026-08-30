@@ -941,12 +941,12 @@ def register(router):
                             referral_tokens[count_field] = n
                         user_doc["referral_tokens"] = referral_tokens
 
-            from utils.bank_economy_settings import get_bank_economy_config
+            from utils.bank_economy_settings import get_bank_economy_config, INTEREST_LIMIT_START
 
             _bank_cfg = await get_bank_economy_config(
                 db,
                 swiss_fallback=int(SWISS_BANK_LIMIT_START),
-                interest_max_fallback=50_000_000,
+                interest_max_fallback=INTEREST_LIMIT_START,
                 interest_options_fallback=list(getattr(srv, "BANK_INTEREST_OPTIONS", []) or []),
             )
             user_doc["swiss_limit"] = int(_bank_cfg["swiss_limit_start"])

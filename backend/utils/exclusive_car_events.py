@@ -25,6 +25,7 @@ EVENT_LABELS = {
     "game_pass_tier_100": "Game Pass tier 100 reward",
     "dead_alive_transfer": "Dead → Alive transfer",
     "admin_transfer": "Admin transfer",
+    "weekly_id_rotate": "Weekly instance id rotate",
     "scraped": "Scrapped",
     "melted": "Melted",
 }
@@ -498,6 +499,7 @@ async def build_exclusive_car_intel(
     notes = [
         "Timelines merge exclusive_car_events (new), economy_events, activity_log, gta_events, attack_attempts, and family_wars.",
         "PvP kills and war wipes assign a new user_car_id — older marketplace links may not chain automatically.",
+        "Exclusive and loot-exclusive instance ids also rotate each UTC ISO week (owner unchanged).",
         "War lock shows current family war status only (exclusive cars cannot be listed/scrapped/melted while at war).",
     ]
 

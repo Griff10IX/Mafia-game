@@ -83,6 +83,8 @@ from utils.bank_economy_settings import (
     KEY_SWISS_DEFAULT,
     KEY_INTEREST_MAX,
     KEY_INTEREST_OPTIONS,
+    INTEREST_LIMIT_HARD_MAX,
+    INTEREST_LIMIT_START,
 )
 from utils.store_points_cash import (
     POINTS_CASH_MONTHLY_LIMIT,
@@ -9876,7 +9878,7 @@ def register(router):
         cfg = await get_bank_economy_config(
             db,
             swiss_fallback=fb_sw,
-            interest_max_fallback=50_000_000,
+            interest_max_fallback=INTEREST_LIMIT_START,
             interest_options_fallback=fb_opts,
         )
         principals = [1_000_000, 10_000_000, 50_000_000]
@@ -10608,7 +10610,7 @@ def register(router):
                 upsert=True,
             )
         if body.bank_interest_max_unclaimed_principal is not None:
-            mv = max(1, min(int(body.bank_interest_max_unclaimed_principal), 10**15))
+            mv = max(1, min(int(body.bank_interest_max_unclaimed_principal), INTEREST_LIMIT_HARD_MAX))
             await db.game_settings.update_one(
                 {"key": KEY_INTEREST_MAX},
                 {"$set": {"key": KEY_INTEREST_MAX, "value": mv}},
@@ -10835,7 +10837,7 @@ def register(router):
         cfg = await get_bank_economy_config(
             db,
             swiss_fallback=fb_sw,
-            interest_max_fallback=50_000_000,
+            interest_max_fallback=INTEREST_LIMIT_START,
             interest_options_fallback=fb_opts,
         )
         lim = int(cfg["swiss_limit_start"])

@@ -457,6 +457,11 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
           </button>
         )}
       </div>
+      {Number(car.weekly_loot_pieces) > 0 && (
+        <div className="text-[8px] text-violet-400 font-heading font-bold mt-0.5">
+          +{Number(car.weekly_loot_pieces)} loot / week
+        </div>
+      )}
       {damage > 0 && !isListed && (
         <div className="flex items-center justify-between gap-1 mt-1">
           <span

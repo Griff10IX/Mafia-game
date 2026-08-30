@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { Car, ArrowLeft, Clock, DollarSign, Sparkles, User, Wrench, UserCircle, Image as ImageIcon, X, ZoomIn } from 'lucide-react';
+import { Car, ArrowLeft, Clock, DollarSign, Sparkles, User, Wrench, UserCircle, Image as ImageIcon, X, ZoomIn, Puzzle } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -467,6 +467,19 @@ export default function ViewCar() {
                   <div className={`vc-stat-val capitalize ${rarityColor}`}>{rarityLabel}</div>
                 </div>
               </div>
+
+              {Number(car.weekly_loot_pieces) > 0 && (
+                <div className="vc-stat">
+                  <div className="vc-stat-label"><Puzzle size={13} /> Weekly loot</div>
+                  <div className="vc-stat-val accent">+{Number(car.weekly_loot_pieces).toLocaleString()}</div>
+                  <p className="text-[9px] text-mutedForeground font-heading mt-1 leading-snug">
+                    Loot box pieces each week from this car.
+                    {Number(car.weekly_loot_pieces_total) > Number(car.weekly_loot_pieces)
+                      ? ` Your exclusive cars total ${Number(car.weekly_loot_pieces_total).toLocaleString()}/${Number(car.weekly_loot_pieces_cap || 25)}.`
+                      : ''}
+                  </p>
+                </div>
+              )}
 
               {car.listed_for_sale && car.sale_price != null && (
                 <div className="vc-stat" style={{ borderColor: 'rgba(245, 158, 11, 0.4)' }}>

@@ -183,14 +183,42 @@ function BankSection({ id, title, icon, meta, collapsed, onToggle, headerRef, ch
 
 const InterestBankCard = ({
   meta,
+  overview,
   depositAmount,
   onDepositAmountChange,
   durationHours,
   onDurationChange,
   preview,
   onDeposit,
-}) => (
+  onUpgradeLimit,
+  upgrading = false,
+}) => {
+  const limit = Number(overview?.interest_limit ?? meta?.interest_max_unclaimed_principal ?? 0);
+  const principal = Number(overview?.interest_principal ?? 0);
+  const hardMax = Number(overview?.interest_limit_max ?? meta?.interest_limit_max ?? 50_000_000_000);
+  const add = Number(overview?.interest_limit_upgrade_add ?? 0);
+  const cost = Number(overview?.interest_limit_upgrade_cost ?? meta?.interest_limit_upgrade_cost ?? 1000);
+  const atMax = !!overview?.interest_limit_at_max || limit >= hardMax;
+  const pts = Number(overview?.points ?? 0);
+  const remaining = Math.max(0, limit - principal);
+  const pct = limit > 0 ? Math.min(100, (principal / limit) * 100) : 0;
+  return (
   <div className="bk-body">
+    <div className="bk-inset bk-vault">
+      <div className="bk-vault-label">Interest cap</div>
+      <div className="bk-vault-amt">{formatMoney(limit)}</div>
+      <div className="bk-note mt-1">
+        In use: <strong style={{ color: 'var(--noir-foreground)' }}>{formatMoney(principal)}</strong>
+        {' · '}
+        Room: <strong style={{ color: 'var(--noir-foreground)' }}>{formatMoney(remaining)}</strong>
+        {' · '}
+        Max {formatMoney(hardMax)}
+      </div>
+      <div className="bk-vault-bar" aria-hidden>
+        <i style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
       <div>
         <label className="bk-label">Amount</label>
@@ -240,8 +268,21 @@ const InterestBankCard = ({
       <Lock size={13} />
       Deposit
     </button>
+    <button
+      type="button"
+      onClick={onUpgradeLimit}
+      disabled={upgrading || atMax || pts < cost}
+      className={`${styles.surface} bk-btn`}
+    >
+      {atMax
+        ? `Interest cap maxed (${formatMoney(hardMax)})`
+        : upgrading
+          ? 'Raising…'
+          : `Raise cap +${formatMoney(add)} (${formatNumber(cost)} pts)`}
+    </button>
   </div>
-);
+  );
+};
 
 const SwissBankCard = ({
   overview,
@@ -473,6 +514,7 @@ export default function Bank() {
   const sendMoneyRef = useRef(null);
   const [transferAmount, setTransferAmount] = useState('');
   const [sending, setSending] = useState(false);
+  const [upgradingLimit, setUpgradingLimit] = useState(false);
 
   const COLLAPSED_KEY = 'mafia_bank_collapsed';
   const [collapsedSections, setCollapsedSections] = useState(() => {
@@ -564,6 +606,21 @@ export default function Bank() {
     }
   };
 
+  const upgradeInterestLimit = async () => {
+    if (upgradingLimit) return;
+    setUpgradingLimit(true);
+    try {
+      const res = await api.post('/bank/interest/upgrade-limit');
+      toast.success(res.data?.message || 'Interest limit raised');
+      refreshUser();
+      await fetchAll();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to raise interest limit');
+    } finally {
+      setUpgradingLimit(false);
+    }
+  };
+
   const claimDeposit = async (depositId) => {
     try {
       const res = await api.post('/bank/interest/claim', { deposit_id: depositId });
@@ -651,18 +708,21 @@ export default function Bank() {
         id="interestBank"
         title="Interest Bank"
         icon={<Landmark size={14} />}
-        meta={<>Cash: <strong>{formatMoney(overview?.cash_on_hand)}</strong></>}
+        meta={<>Cap: <strong>{formatMoney(overview?.interest_limit ?? meta?.interest_max_unclaimed_principal)}</strong> · Cash: <strong>{formatMoney(overview?.cash_on_hand)}</strong></>}
         collapsed={isCollapsed('interestBank')}
         onToggle={toggleSection}
       >
         <InterestBankCard
           meta={meta}
+          overview={overview}
           depositAmount={depositAmount}
           onDepositAmountChange={setDepositAmount}
           durationHours={durationHours}
           onDurationChange={setDurationHours}
           preview={preview}
           onDeposit={doDeposit}
+          onUpgradeLimit={upgradeInterestLimit}
+          upgrading={upgradingLimit}
         />
       </BankSection>
 

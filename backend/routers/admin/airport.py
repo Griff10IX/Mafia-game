@@ -1,6 +1,6 @@
 # Travel (info, travel, buy-airmiles) and Airports (list, claim, set-price, transfer, sell-on-trade)
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional, Set, Tuple
 import asyncio
 import hashlib
 import hmac
@@ -53,6 +53,58 @@ MAX_EXTRA_AIRMILES = 10
 def _clamped_extra_airmiles(user: Optional[dict]) -> int:
     raw = int((user or {}).get("extra_airmiles", 0) or 0)
     return max(0, min(raw, MAX_EXTRA_AIRMILES))
+
+
+_EXCLUSIVE_AIRMILE_RARITIES = frozenset(("exclusive", "loot_exclusive", "vip_exclusive"))
+# Catalog seconds (fastest first): SJ 2s +7, loot exclusive 5s +5, exclusive 7s +2, VIP 9s +1.
+_AIRMILE_BONUS_BY_MAX_SECONDS = (
+    (2, 7),
+    (5, 5),
+    (7, 2),
+    (9, 1),
+)
+
+
+def extra_airmiles_car_bonus(user_cars: Optional[list]) -> Tuple[int, Optional[str]]:
+    """Free extra airmiles from the fastest exclusive / loot exclusive / VIP car. Does not stack."""
+    best_secs: Optional[int] = None
+    best_bonus = 0
+    best_label: Optional[str] = None
+    for uc in user_cars or []:
+        car_id = (uc or {}).get("car_id")
+        car_info = next((c for c in (CARS or []) if c.get("id") == car_id), None)
+        if not car_info or car_info.get("rarity") not in _EXCLUSIVE_AIRMILE_RARITIES:
+            continue
+        secs = int(travel_seconds_for_car(car_info.get("id"), car_info.get("rarity"), 45))
+        bonus = 0
+        for max_secs, b in _AIRMILE_BONUS_BY_MAX_SECONDS:
+            if secs <= max_secs:
+                bonus = int(b)
+                break
+        if bonus <= 0:
+            continue
+        if best_secs is None or secs < best_secs:
+            best_secs = secs
+            best_bonus = bonus
+            name = car_info.get("name") or ""
+            if car_info.get("id") == "car22" or car_info.get("rarity") == "vip_exclusive":
+                name = ((uc or {}).get("custom_name") or "").strip() or name
+            best_label = name
+    return best_bonus, best_label
+
+
+def _max_airport_travels(user: Optional[dict], user_cars: Optional[list] = None) -> int:
+    bonus, _ = extra_airmiles_car_bonus(user_cars)
+    return MAX_TRAVELS_PER_HOUR + _clamped_extra_airmiles(user) + int(bonus or 0)
+
+
+async def _fetch_airmile_bonus_cars(user_id: str) -> list:
+    immune_ids = list(_TRAVEL_ALWAYS_INCLUDE_CAR_IDS)
+    if not immune_ids or not user_id:
+        return []
+    return await db.user_cars.find(
+        {"user_id": user_id, "car_id": {"$in": immune_ids}},
+    ).to_list(TRAVEL_IMMUNE_ROWS_MAX)
 
 # Travel token: car/custom travel time multiplier (airport stays instant; airport *points* discount is separate).
 # Never slower than the untokened car — a 2s Model SJ must not jump to 3s.
@@ -473,7 +525,8 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
             "can_travel": custom_damage < 100,
         }
 
-    max_travels = MAX_TRAVELS_PER_HOUR + _clamped_extra_airmiles(current_user)
+    airmiles_car_bonus, airmiles_car_bonus_label = extra_airmiles_car_bonus(user_cars)
+    max_travels = MAX_TRAVELS_PER_HOUR + _clamped_extra_airmiles(current_user) + int(airmiles_car_bonus or 0)
     current_state = current_user.get("current_state", STATES[0] if STATES else "")
     traveling_to = current_user.get("traveling_to")
     travel_arrives_at = current_user.get("travel_arrives_at")
@@ -554,6 +607,9 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         "extra_airmiles_cost": EXTRA_AIRMILES_COST,
         "max_extra_airmiles": MAX_EXTRA_AIRMILES,
         "airport_base_travels": MAX_TRAVELS_PER_HOUR,
+        "airmiles_car_bonus": int(airmiles_car_bonus or 0),
+        "airmiles_car_bonus_label": airmiles_car_bonus_label,
+        "max_airport_travels": max_travels,
         "cars": cars_with_travel_times,
         "custom_car": custom_car,
         "user_points": current_user.get("points", 0),
@@ -646,7 +702,8 @@ async def _start_travel_impl(
     if travel_method == "airport":
         # Airport limit (travels per hour) applies only to airport; car travel is unlimited
         if not booze_run:
-            max_travels = MAX_TRAVELS_PER_HOUR + _clamped_extra_airmiles(user)
+            bonus_cars = await _fetch_airmile_bonus_cars(user.get("id") or "")
+            max_travels = _max_airport_travels(user, bonus_cars)
             if user.get("travels_this_hour", 0) >= max_travels:
                 raise HTTPException(status_code=400, detail="Travel limit reached. Buy extra airmiles or wait.")
         if _booze_user_carrying_total(user.get("booze_carrying") or {}) > 0:

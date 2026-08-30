@@ -8,10 +8,22 @@ import os
 import sys
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException, Request
+from pymongo import ReturnDocument
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, get_current_user_verified, log_activity, send_notification
-from utils.bank_economy_settings import get_bank_economy_config, interest_option_for_hours
+from utils.bank_economy_settings import (
+    get_bank_economy_config,
+    interest_option_for_hours,
+    personal_interest_limit,
+    interest_limit_upgrade_add,
+    interest_limit_max_upgrades,
+    interest_limit_public,
+    INTEREST_LIMIT_HARD_MAX,
+    INTEREST_LIMIT_START,
+    INTEREST_LIMIT_UPGRADE_COST,
+    INTEREST_LIMIT_UPGRADES_FIELD,
+)
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_BANK
 from utils.transfer_display import redact_quicktrade_party_names
 
@@ -58,6 +70,16 @@ def _interest_option(duration_hours: int, options: list) -> dict | None:
     return interest_option_for_hours(options or [], duration_hours)
 
 
+async def _unclaimed_interest_principal(user_id: str) -> int:
+    rows = await db.bank_deposits.aggregate(
+        [
+            {"$match": {"user_id": user_id, "claimed_at": None}},
+            {"$group": {"_id": None, "total_principal": {"$sum": "$principal"}}},
+        ]
+    ).to_list(1)
+    return int(rows[0].get("total_principal", 0) or 0) if rows else 0
+
+
 def _parse_matures_at(matures_at: str | None) -> datetime | None:
     """Parse deposit matures_at to timezone-aware UTC datetime. Returns None if missing/invalid."""
     if not matures_at:
@@ -80,13 +102,16 @@ async def bank_meta(current_user: dict = Depends(get_current_user_verified)):
     cfg = await get_bank_economy_config(
         db,
         swiss_fallback=int(SWISS_BANK_LIMIT_START or 50_000_000),
-        interest_max_fallback=50_000_000,
+        interest_max_fallback=INTEREST_LIMIT_START,
         interest_options_fallback=list(BANK_INTEREST_OPTIONS or []),
     )
     return {
         "swiss_limit_start": cfg["swiss_limit_start"],
         "interest_options": cfg["interest_options"],
         "interest_max_unclaimed_principal": cfg["interest_max_unclaimed_principal"],
+        "interest_limit_max": cfg["interest_limit_hard_max"],
+        "interest_limit_step": cfg["interest_limit_step"],
+        "interest_limit_upgrade_cost": cfg["interest_limit_upgrade_cost"],
     }
 
 
@@ -98,29 +123,39 @@ async def bank_overview(current_user: dict = Depends(get_current_user_verified))
         return entry[0]
 
     now = datetime.now(timezone.utc)
-    user = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1, "swiss_balance": 1, "swiss_limit": 1})
+    user = await db.users.find_one(
+        {"id": uid},
+        {"_id": 0, "money": 1, "swiss_balance": 1, "swiss_limit": 1, "points": 1, INTEREST_LIMIT_UPGRADES_FIELD: 1},
+    )
     money = int(user.get("money", 0) or 0) if user else 0
     swiss_balance = int((user or {}).get("swiss_balance", 0) or 0)
     cfg_sw = await get_bank_economy_config(
         db,
         swiss_fallback=int(SWISS_BANK_LIMIT_START or 50_000_000),
-        interest_max_fallback=50_000_000,
+        interest_max_fallback=INTEREST_LIMIT_START,
         interest_options_fallback=list(BANK_INTEREST_OPTIONS or []),
     )
     default_swiss = cfg_sw["swiss_limit_start"]
     swiss_limit = int((user or {}).get("swiss_limit", default_swiss) or default_swiss)
 
-    deposits_raw, transfers_raw = await asyncio.gather(
+    deposits_raw, transfers_raw, unclaimed_principal = await asyncio.gather(
         db.bank_deposits.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(50),
         db.money_transfers.find(
             {"$or": [{"from_user_id": uid}, {"to_user_id": uid}]},
             {"_id": 0}
         ).sort("created_at", -1).to_list(50),
+        _unclaimed_interest_principal(uid),
     )
     deposits = list(deposits_raw)
     for d in deposits:
         mat = _parse_matures_at(d.get("matures_at"))
         d["matured"] = bool(mat is not None and now >= mat)
+    interest_pub = interest_limit_public(
+        user,
+        cfg_sw["interest_max_unclaimed_principal"],
+        principal=int(unclaimed_principal or 0),
+        points=int((user or {}).get("points") or 0),
+    )
     transfers = list(transfers_raw)
     for t in transfers:
         t["direction"] = "sent" if t.get("from_user_id") == uid else "received"
@@ -136,6 +171,7 @@ async def bank_overview(current_user: dict = Depends(get_current_user_verified))
         "swiss_limit": swiss_limit,
         "deposits": deposits,
         "transfers": transfers,
+        **interest_pub,
     }
     if len(_overview_cache) >= _OVERVIEW_CACHE_MAX_ENTRIES:
         _overview_cache.clear()
@@ -150,7 +186,7 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     cfg = await get_bank_economy_config(
         db,
         swiss_fallback=int(SWISS_BANK_LIMIT_START or 50_000_000),
-        interest_max_fallback=50_000_000,
+        interest_max_fallback=INTEREST_LIMIT_START,
         interest_options_fallback=list(BANK_INTEREST_OPTIONS or []),
     )
     opt = _interest_option(request.duration_hours, cfg["interest_options"])
@@ -158,13 +194,11 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
         raise HTTPException(status_code=400, detail="Invalid duration")
     rate = float(opt["rate"])
     hours = int(opt["hours"])
+    uid = current_user.get("id") or ""
 
-    MAX_INTEREST_DEPOSITS = int(cfg["interest_max_unclaimed_principal"])
-    existing_deposits = await db.bank_deposits.aggregate([
-        {"$match": {"user_id": current_user.get("id") or "", "claimed_at": None}},
-        {"$group": {"_id": None, "total_principal": {"$sum": "$principal"}}}
-    ]).to_list(1)
-    current_total = int(existing_deposits[0].get("total_principal", 0)) if existing_deposits else 0
+    owner = await db.users.find_one({"id": uid}, {"_id": 0, INTEREST_LIMIT_UPGRADES_FIELD: 1})
+    MAX_INTEREST_DEPOSITS = personal_interest_limit(owner, cfg["interest_max_unclaimed_principal"])
+    current_total = await _unclaimed_interest_principal(uid)
     
     if current_total + amount > MAX_INTEREST_DEPOSITS:
         remaining = max(0, MAX_INTEREST_DEPOSITS - current_total)
@@ -172,7 +206,8 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
             status_code=400,
             detail=(
                 f"Maximum ${MAX_INTEREST_DEPOSITS:,} in active interest deposits allowed. "
-                f"You have ${current_total:,} deposited. You can deposit up to ${remaining:,} more."
+                f"You have ${current_total:,} deposited. You can deposit up to ${remaining:,} more. "
+                f"Raise the limit with points (1,000 pts per $2.5B, max $50,000,000,000)."
             ),
         )
 
@@ -254,6 +289,64 @@ async def bank_interest_claim(request: BankDepositClaimRequest, current_user: di
     return {"message": f"Claimed ${total:,} (${principal:,} + ${interest:,} interest)", "total": total}
 
 
+async def bank_interest_upgrade_limit(current_user: dict = Depends(get_current_user_verified)):
+    """Spend 1,000 points to raise the interest deposit cap by $2.5B, up to $50B."""
+    from utils.point_provenance import log_points_event
+
+    uid = current_user.get("id") or ""
+    cfg = await get_bank_economy_config(
+        db,
+        swiss_fallback=int(SWISS_BANK_LIMIT_START or 50_000_000),
+        interest_max_fallback=INTEREST_LIMIT_START,
+        interest_options_fallback=list(BANK_INTEREST_OPTIONS or []),
+    )
+    start = int(cfg["interest_max_unclaimed_principal"])
+    max_upgrades = interest_limit_max_upgrades(start)
+    if max_upgrades <= 0:
+        raise HTTPException(status_code=400, detail="Interest limit is already at the $50,000,000,000 maximum")
+
+    user = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1, INTEREST_LIMIT_UPGRADES_FIELD: 1})
+    current_limit = personal_interest_limit(user, start)
+    add = interest_limit_upgrade_add(current_limit)
+    if add <= 0:
+        raise HTTPException(status_code=400, detail="Interest limit is already at the $50,000,000,000 maximum")
+    cost = int(INTEREST_LIMIT_UPGRADE_COST)
+    if int((user or {}).get("points") or 0) < cost:
+        raise HTTPException(status_code=400, detail=f"Not enough points (need {cost:,})")
+
+    after = await db.users.find_one_and_update(
+        {
+            "id": uid,
+            "points": {"$gte": cost},
+            "$or": [
+                {INTEREST_LIMIT_UPGRADES_FIELD: {"$exists": False}},
+                {INTEREST_LIMIT_UPGRADES_FIELD: {"$lt": max_upgrades}},
+            ],
+        },
+        {"$inc": {"points": -cost, INTEREST_LIMIT_UPGRADES_FIELD: 1}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not after:
+        raise HTTPException(status_code=400, detail="Could not raise interest limit. Check points and try again.")
+
+    new_limit = personal_interest_limit(after, start)
+    await log_points_event(
+        db,
+        user_id=uid,
+        points=-cost,
+        event_type="bank_interest_limit",
+        event_ref=f"interest_limit:{new_limit}",
+        meta={"added": add, "new_limit": new_limit},
+    )
+    _invalidate_overview_cache(uid)
+    return {
+        "message": f"Interest limit raised to ${new_limit:,} for {cost:,} points",
+        "interest_limit": new_limit,
+        "added": add,
+        "points": int(after.get("points") or 0),
+    }
+
+
 async def bank_swiss_deposit(request: BankSwissMoveRequest, current_user: dict = Depends(get_current_user_verified)):
     amount = int(request.amount or 0)
     if amount <= 0:
@@ -261,7 +354,7 @@ async def bank_swiss_deposit(request: BankSwissMoveRequest, current_user: dict =
     cfg = await get_bank_economy_config(
         db,
         swiss_fallback=int(SWISS_BANK_LIMIT_START or 50_000_000),
-        interest_max_fallback=50_000_000,
+        interest_max_fallback=INTEREST_LIMIT_START,
         interest_options_fallback=list(BANK_INTEREST_OPTIONS or []),
     )
     default_swiss = cfg["swiss_limit_start"]
@@ -427,6 +520,7 @@ def register(router):
     router.add_api_route("/bank/overview", bank_overview, methods=["GET"], dependencies=_bank_rl_u)
     router.add_api_route("/bank/interest/deposit", bank_interest_deposit, methods=["POST"])
     router.add_api_route("/bank/interest/claim", bank_interest_claim, methods=["POST"])
+    router.add_api_route("/bank/interest/upgrade-limit", bank_interest_upgrade_limit, methods=["POST"])
     router.add_api_route("/bank/swiss/deposit", bank_swiss_deposit, methods=["POST"])
     router.add_api_route("/bank/swiss/withdraw", bank_swiss_withdraw, methods=["POST"])
     router.add_api_route("/bank/transfer", bank_transfer, methods=["POST"])

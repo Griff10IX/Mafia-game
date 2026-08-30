@@ -460,8 +460,15 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => {
             <span className="text-foreground font-bold text-right leading-snug">
               {travelInfo?.airport_base_travels ?? AIRPORT_BASE_TRAVELS} included
               <span className="block text-[9px] font-heading font-normal text-mutedForeground">
-                Up to {(travelInfo?.airport_base_travels ?? AIRPORT_BASE_TRAVELS) + (travelInfo?.max_extra_airmiles ?? MAX_EXTRA_AIRMILES)} with airmiles
+                Up to {(travelInfo?.airport_base_travels ?? AIRPORT_BASE_TRAVELS)
+                  + (travelInfo?.max_extra_airmiles ?? MAX_EXTRA_AIRMILES)
+                  + (travelInfo?.airmiles_car_bonus ?? 0)} with airmiles
               </span>
+              {Number(travelInfo?.airmiles_car_bonus || 0) > 0 && (
+                <span className="block text-[9px] font-heading font-normal text-mutedForeground">
+                  {travelInfo.airmiles_car_bonus_label || 'Exclusive car'}: +{travelInfo.airmiles_car_bonus} extra airmiles
+                </span>
+              )}
             </span>
           </div>
           <div className="flex items-center justify-between">
@@ -484,7 +491,7 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => {
         >
           <ShoppingCart size={12} />
           {(travelInfo?.extra_airmiles ?? 0) >= (travelInfo?.max_extra_airmiles ?? MAX_EXTRA_AIRMILES)
-            ? 'Airmiles maxed (10 extra)'
+            ? `Airmiles maxed (${travelInfo?.max_extra_airmiles ?? MAX_EXTRA_AIRMILES} extra)`
             : `Buy +5 Airmiles (${travelInfo?.extra_airmiles_cost || 25} pts)`}
         </button>
       </div>

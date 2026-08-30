@@ -1381,6 +1381,14 @@ def _garage_entry_from_user_car(user_car: Dict[str, Any]) -> Optional[dict]:
             entry["listed_for_sale"] = True
             entry["sale_price"] = user_car.get("sale_price")
             entry["listed_at"] = user_car.get("listed_at")
+        try:
+            from utils.exclusive_car_weekly_loot import weekly_loot_pieces_for_car
+
+            weekly_loot = weekly_loot_pieces_for_car(car_id, car_info.get("rarity"))
+            if weekly_loot > 0:
+                entry["weekly_loot_pieces"] = weekly_loot
+        except Exception:
+            pass
         return entry
     display_name = user_car.get("car_name") or user_car.get("custom_name") or str(car_id)
     rarity = _normalize_garage_rarity_str(user_car.get("rarity"))
@@ -3204,6 +3212,19 @@ async def get_view_car(
         "travel_time": travel_time,
         "value": car_info.get("value", 0),
     }
+    try:
+        from utils.exclusive_car_weekly_loot import weekly_loot_pieces_for_car, weekly_loot_breakdown_for_user
+
+        weekly_loot = weekly_loot_pieces_for_car(car_id, rarity)
+        if weekly_loot > 0:
+            out["weekly_loot_pieces"] = weekly_loot
+        if owner_id == (current_user.get("id") or ""):
+            breakdown = await weekly_loot_breakdown_for_user(db, owner_id)
+            if int(breakdown.get("pieces") or 0) > 0:
+                out["weekly_loot_pieces_total"] = int(breakdown["pieces"])
+                out["weekly_loot_pieces_cap"] = int(breakdown.get("cap") or 25)
+    except Exception:
+        pass
     if owner_id == current_user.get("id") or "":
         out["owner"] = "you"
         out["listed_for_sale"] = bool(user_car.get("listed_for_sale"))

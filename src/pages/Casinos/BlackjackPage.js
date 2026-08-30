@@ -57,14 +57,35 @@ function outcomeColor(result) {
   return '#a1a1aa';
 }
 
-function formatHistoryDate(iso) {
+function formatHistoryTime(iso) {
   if (!iso) return '—';
   try {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
-  } catch { return iso; }
+    const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+    const today = new Date();
+    if (d.toDateString() === today.toDateString()) return time;
+    return `${d.getDate()}/${String(d.getMonth() + 1).padStart(2, '0')} ${time}`;
+  } catch {
+    return iso;
+  }
 }
+
+function formatProfit(n) {
+  const num = Math.trunc(Number(n ?? 0));
+  if (num > 0) return `+${formatMoney(num)}`;
+  if (num < 0) return `−${formatMoney(Math.abs(num))}`;
+  return '$0';
+}
+
+function profitColor(n) {
+  const num = Number(n ?? 0);
+  if (num > 0) return '#34d399';
+  if (num < 0) return '#f87171';
+  return '#a1a1aa';
+}
+
+const HISTORY_GRID = 'grid grid-cols-[4.25rem_minmax(5.5rem,1fr)_3.75rem_minmax(4.25rem,auto)_minmax(4.75rem,auto)] gap-x-2 items-center';
 
 /* ═══════════════════════════════════════════════════════
    Playing Card — realistic with shadow, suit, value
@@ -765,21 +786,41 @@ export default function Blackjack() {
         <div className={`${styles.panel} mobile-panel rounded-md overflow-hidden border border-primary/20`}>
           <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
             <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">History</span>
-            <span className="text-[10px] text-mutedForeground">{history.length} games</span>
+            <span className="text-[10px] font-heading text-mutedForeground tabular-nums">{history.length} / 10</span>
           </div>
           {history.length === 0 ? (
-            <div className="p-4 text-center text-xs text-mutedForeground">No games yet</div>
+            <div className="p-4 text-center text-xs text-mutedForeground font-heading">No games yet</div>
           ) : (
-            <div className="p-2 space-y-1 max-h-48 overflow-y-auto">
+            <div className="max-h-56 overflow-y-auto">
+              <div className={`${HISTORY_GRID} px-3 py-1.5 border-b border-primary/15 text-[9px] font-heading font-bold uppercase tracking-wider text-mutedForeground`}>
+                <span>Time</span>
+                <span>Result</span>
+                <span className="text-right">Hands</span>
+                <span className="text-right">Bet</span>
+                <span className="text-right">Net</span>
+              </div>
               {history.map((item, i) => {
                 const profit = (item.payout || 0) - (item.bet || 0);
+                const you = item.player_total;
+                const dealer = item.dealer_total;
+                const hands = (you == null && dealer == null) ? '—' : `${you ?? '—'}–${dealer ?? '—'}`;
+                const oc = outcomeColor(item.result);
                 return (
-                  <div key={item.created_at || i} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-zinc-800/30 text-xs font-heading">
-                    <span className="text-mutedForeground truncate">{formatHistoryDate(item.created_at)}</span>
-                    <span style={{ color: outcomeColor(item.result) }}>{outcomeLabel(item.result)}</span>
-                    <span className="text-mutedForeground">{formatMoney(item.bet)}</span>
-                    <span className="font-bold tabular-nums" style={{ color: profit >= 0 ? '#34d399' : '#f87171' }}>
-                      {profit >= 0 ? '+' : ''}{formatMoney(profit)}
+                  <div
+                    key={item.created_at || i}
+                    className={`${HISTORY_GRID} px-3 py-1.5 text-[11px] font-heading border-b border-white/[0.04] last:border-0 ${i % 2 === 0 ? 'bg-black/25' : 'bg-white/[0.02]'}`}
+                  >
+                    <span className="text-mutedForeground tabular-nums">{formatHistoryTime(item.created_at)}</span>
+                    <span
+                      className="justify-self-start inline-flex max-w-full truncate rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                      style={{ color: oc, background: `${oc}22` }}
+                    >
+                      {outcomeLabel(item.result)}
+                    </span>
+                    <span className="text-right text-zinc-300 tabular-nums">{hands}</span>
+                    <span className="text-right text-mutedForeground tabular-nums">{formatMoney(item.bet)}</span>
+                    <span className="text-right font-bold tabular-nums" style={{ color: profitColor(profit) }}>
+                      {formatProfit(profit)}
                     </span>
                   </div>
                 );
