@@ -206,7 +206,10 @@ export default function MyInventory() {
         }
       })
       .catch(() => {
-        if (!silent) setData({ weapons: [], armour: { options: [] }, loot_exclusives: {}, tokens: {} });
+        if (!silent) {
+          if (!_cachedInventory) setData(null);
+          toast.error('Failed to load inventory');
+        }
       })
       .finally(() => { setHasLoaded(true); });
   };

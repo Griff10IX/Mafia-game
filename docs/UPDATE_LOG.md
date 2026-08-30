@@ -9,6 +9,7 @@
 [size=1.5][b][color=#2ECC71]2026-08-30[/color][/b] — [b]Armoury, jail, travel, profile[/b][/size]
 [quote]
 [list]
+[*][color=#888888][b]Fixed:[/b] [b]Armoury[/b] failed to load after the 300–600 bullets/hour change (hourly stock tick crashed). Inventory tokens and perk stats were empty for the same reason — both work again.[/color]
 [*][color=#888888][b]Changed:[/b] [b]Bullet factories[/b] now produce [b]300–600[/b] bullets [b]per hour[/b], rolled randomly each hour (was a flat ~208/hour, 5,000/day). Stock still caps at 24 hours (up to 14,400).[/color]
 [*][color=#888888][b]Changed:[/b] Busting [b]your own[/b] private-cell NPCs (the [b]YOURS[/b] rows) has [b]no wait[/b] between attempts. Other prisoners and public NPCs still have the short wait.[/color]
 [*][color=#888888][b]Fixed:[/b] While you are in [b]jail[/b], tapping [b]GTA[/b], [b]Crimes[/b], [b]OC[/b], or [b]Booze[/b] goes straight to Jail — the other page no longer flashes first.[/color]

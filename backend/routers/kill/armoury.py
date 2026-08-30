@@ -2,6 +2,7 @@
 # Owner can claim (pay), set bullet price; produces 300–600 bullets per hour (rolled each hour) and can produce armour & weapons (pay per hour, stock accumulates).
 # Bullets sold from factory stock; armour/weapons from armoury stock. Others buy at owner's price (or unowned price).
 from datetime import datetime, timezone, timedelta
+import logging
 import os
 import sys
 import random
@@ -12,6 +13,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Request, Body
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from bson.objectid import ObjectId
+from pymongo import ReturnDocument
+
+logger = logging.getLogger(__name__)
 
 from server import (
     db,
@@ -3423,9 +3427,20 @@ async def cancel_player_redeem_code_route(
 
 async def get_inventory(request: Request, current_user: dict = Depends(get_current_user)):
     """Aggregate weapons, armour, loot exclusives, and consumable tokens for the My Inventory page."""
-    weapons = await get_weapons(request, current_user)
-    armour = await get_armour_options(request, current_user)
     uid = current_user["id"]
+    weapons = []
+    armour = {"options": []}
+    # Weapons/armour tick the state factory. A factory-tick error must not wipe tokens/perks.
+    try:
+        weapons = await get_weapons(request, current_user)
+    except Exception:
+        logger.exception("inventory weapons failed")
+        weapons = []
+    try:
+        armour = await get_armour_options(request, current_user)
+    except Exception:
+        logger.exception("inventory armour failed")
+        armour = {"options": []}
     exclusive_cars = []
     cars = await db.user_cars.find({"user_id": uid}, {"_id": 0, "car_id": 1, "id": 1}).to_list(100)
     cars_list = CARS or []
