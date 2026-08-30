@@ -16487,6 +16487,12 @@ export default function Admin() {
                   onChange={(e) => setBankInterestMaxUnclaimed(parseAdminInt(e.target.value, 0))}
                   className="mt-1 w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono font-heading"
                   placeholder="5,000,000,000"
+                />
+              </label>
+            </div>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Interest terms</p>
                 <span className="text-[10px] text-mutedForeground">One row per duration; rate 0–10 (fraction of principal)</span>
               </div>
               <div className="overflow-x-auto rounded border border-primary/15">
