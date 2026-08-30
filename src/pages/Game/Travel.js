@@ -455,11 +455,18 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => {
             <span className="text-mutedForeground">Airport</span>
             <span className="text-foreground font-bold">Instant · {travelInfo?.airport_cost}pts</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-mutedForeground">Airport limit</span>
-            <span className="text-foreground font-bold">
-              {travelInfo?.airport_base_travels ?? AIRPORT_BASE_TRAVELS} base / {(travelInfo?.airport_base_travels ?? AIRPORT_BASE_TRAVELS) + (travelInfo?.max_extra_airmiles ?? MAX_EXTRA_AIRMILES)} max (car unlimited)
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-mutedForeground shrink-0">Airport trips / hour</span>
+            <span className="text-foreground font-bold text-right leading-snug">
+              {travelInfo?.airport_base_travels ?? AIRPORT_BASE_TRAVELS} included
+              <span className="block text-[9px] font-heading font-normal text-mutedForeground">
+                Up to {(travelInfo?.airport_base_travels ?? AIRPORT_BASE_TRAVELS) + (travelInfo?.max_extra_airmiles ?? MAX_EXTRA_AIRMILES)} with airmiles
+              </span>
             </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-mutedForeground">Car travel</span>
+            <span className="text-foreground font-bold">Unlimited</span>
           </div>
           <p className="text-[9px] text-mutedForeground/90 leading-snug pt-1 border-t border-border/40 mt-1">
             Hot/cold cities rotate every 3h (UTC). While you are in the hot city, crimes, GTA, and jail busts are slightly easier with a small rank XP bonus; the cold city is the opposite.

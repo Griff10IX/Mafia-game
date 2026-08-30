@@ -354,10 +354,26 @@ def register(router):
             custom = (uc.get("custom_name") or "").strip()
             if custom:
                 return custom
-        return (info or {}).get("name") or "?"
+        return (info or {}).get("name") or uc.get("car_name") or uc.get("custom_name") or "?"
+
+    def _profile_car_row(uc: dict, info: Optional[dict]) -> Optional[dict]:
+        cid = uc.get("id")
+        if not cid:
+            return None
+        rarity = (info or {}).get("rarity") or uc.get("rarity") or "common"
+        try:
+            value = int((info or {}).get("value") or uc.get("value") or 0)
+        except (TypeError, ValueError):
+            value = 0
+        return {
+            "id": cid,
+            "name": _profile_car_display_name(uc, info),
+            "value": value,
+            "rarity": rarity,
+        }
 
     async def _top_cars_for_profile(user_id: str, limit: int = 5, show_cars: bool = False, profile_car_ids: Optional[list] = None):
-        """Return only the explicitly chosen cars for the profile (up to 5). Preserves selection order."""
+        """Return only cars the player pinned on their profile (up to 5). Preserves selection order."""
         if not show_cars or not profile_car_ids:
             return []
         car_ids = [cid for cid in (profile_car_ids or []) if cid][:limit]
@@ -367,7 +383,7 @@ def register(router):
         owned_map = {}
         cursor = db.user_cars.find(
             {"user_id": user_id, "id": {"$in": car_ids}},
-            {"_id": 0, "id": 1, "car_id": 1, "custom_name": 1},
+            {"_id": 0, "id": 1, "car_id": 1, "custom_name": 1, "car_name": 1, "rarity": 1, "value": 1},
         )
         async for uc in cursor:
             owned_map[uc["id"]] = uc
@@ -377,14 +393,10 @@ def register(router):
             if not uc:
                 continue
             info = cars_catalog.get(uc.get("car_id")) if uc.get("car_id") else None
-            if not info:
+            row = _profile_car_row(uc, info)
+            if not row:
                 continue
-            result.append({
-                "id": uc.get("id"),
-                "name": _profile_car_display_name(uc, info),
-                "value": int(info.get("value") or 0),
-                "rarity": info.get("rarity") or "common",
-            })
+            result.append(row)
         return result
 
     async def _find_user_by_profile_username(username: str, projection: dict):
@@ -1064,16 +1076,12 @@ def register(router):
         if not is_own_profile:
             for key in (
                 "last_seen",
-                "top_cars",
-                "show_cars_on_profile",
                 "youtube_url",
                 "hide_kills_on_profile",
                 "hide_jailbusts_on_profile",
                 "hide_leaderboard_username",
             ):
-                if key in ("top_cars",):
-                    out[key] = []
-                elif key in ("prestige_level",):
+                if key in ("prestige_level",):
                     out[key] = 0
                 elif key == "prestige_name":
                     out[key] = ""

@@ -975,10 +975,14 @@ const ProfileInfoCard = ({
               <p className="text-[8px] text-mutedForeground font-heading">No ranking badges unlocked yet</p>
             )}
           </div>
-          {/* Compact Cars row under Honours/Properties (no label) */}
-          {showCarsOnProfile !== false && topCars?.length > 0 && (
-            <div className="border-t border-zinc-700/30 px-2 py-0.5 md:px-3">
-              <div className="flex flex-wrap gap-0.5">
+          {/* Compact Cars row under Honours/Properties — pinned cars only */}
+          {topCars?.length > 0 && (
+            <div className="border-t border-zinc-700/30 px-2 py-1.5 md:px-3 md:py-1">
+              <div className="flex items-center gap-0.5 mb-1">
+                <Car size={9} className="text-primary shrink-0" />
+                <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider">Cars</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
                 {topCars.map((car) => {
                   const label = RARITY_LABELS[car.rarity] || car.rarity || '';
                   const badgeClass = RARITY_BADGE_CLASSES[car.rarity] || RARITY_BADGE_CLASSES.common;
@@ -986,7 +990,7 @@ const ProfileInfoCard = ({
                     <Link
                       key={car.id}
                       to={`/view-car?id=${encodeURIComponent(car.id)}`}
-                      className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border bg-zinc-900/90 hover:bg-zinc-800/90 transition-colors prof-row text-[7px] font-heading leading-tight ${badgeClass}`}
+                      className={`inline-flex items-center gap-0.5 px-1.5 py-1 min-h-[28px] md:min-h-0 md:px-1 md:py-0.5 rounded border bg-zinc-900/90 hover:bg-zinc-800/90 transition-colors prof-row text-[10px] md:text-[7px] font-heading leading-tight ${badgeClass}`}
                     >
                       <span className="shrink-0 uppercase">{label}:</span>
                       <span className="text-foreground whitespace-normal break-words">{censorProfanity ? filterProfanity(car.name) : car.name}</span>
@@ -1292,7 +1296,7 @@ const SpotifyCard = ({ spotifyEmbedUrl, spotifyUrl }) => {
 };
 
 const TopCarsCard = ({ topCars, showCars }) => {
-  if (showCars === false || !topCars?.length) return null;
+  if (!topCars?.length) return null;
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`} style={{ animationDelay: '0.06s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

@@ -1,5 +1,5 @@
 # Armoury: one per state (bullet factory + armour + weapons). Single ownership entity (db.bullet_factory).
-# Owner can claim (pay), set bullet price; produces up to 5k bullets per day and can produce armour & weapons (pay per hour, stock accumulates).
+# Owner can claim (pay), set bullet price; produces 300–600 bullets per hour (rolled each hour) and can produce armour & weapons (pay per hour, stock accumulates).
 # Bullets sold from factory stock; armour/weapons from armoury stock. Others buy at owner's price (or unowned price).
 from datetime import datetime, timezone, timedelta
 import os
@@ -78,12 +78,15 @@ async def _armoury_sustained_rl_user(current_user: dict = Depends(get_current_us
 
 _armoury_rl_u = [Depends(_armoury_sustained_rl_user)]
 
-# 5k bullets per 24h, effectively delivered every 20 mins (72 ticks per day)
-BULLET_FACTORY_TOTAL_PER_24H = 5000
-BULLET_FACTORY_UNOWNED_TOTAL_PER_24H = 1000  # unclaimed armoury: lower bullet stock cap
-BULLET_FACTORY_TICK_MINUTES = 20
-BULLET_FACTORY_PRODUCTION_PER_HOUR = BULLET_FACTORY_TOTAL_PER_24H / 24  # ~208.33
-BULLET_FACTORY_MAX_HOURS_CAP = 24  # cap accumulated at 24h of production (5000 total)
+# 300–600 bullets per hour, rolled independently each hour the factory produces.
+BULLET_FACTORY_PROD_PER_HOUR_MIN = 300
+BULLET_FACTORY_PROD_PER_HOUR_MAX = 600
+BULLET_FACTORY_TICK_MINUTES = 60
+BULLET_FACTORY_MAX_HOURS_CAP = 24
+BULLET_FACTORY_STOCK_CAP = BULLET_FACTORY_PROD_PER_HOUR_MAX * BULLET_FACTORY_MAX_HOURS_CAP  # 14,400
+BULLET_FACTORY_TOTAL_PER_24H = BULLET_FACTORY_STOCK_CAP
+BULLET_FACTORY_UNOWNED_TOTAL_PER_24H = BULLET_FACTORY_STOCK_CAP
+BULLET_FACTORY_PRODUCTION_PER_HOUR = (BULLET_FACTORY_PROD_PER_HOUR_MIN + BULLET_FACTORY_PROD_PER_HOUR_MAX) / 2
 BULLET_FACTORY_BUY_MAX_PER_PURCHASE = 5000  # max bullets per single purchase
 BULLET_FACTORY_BUY_COOLDOWN_MINUTES = 15  # must wait this long between purchases
 # Armoury claim cost: utils.claim_costs (key armoury)
@@ -635,7 +638,7 @@ async def _get_or_create_factory(state: str):
         await maybe_auto_relinquish_below_capo(db.bullet_factory, {"state": state})
     doc = await db.bullet_factory.find_one({"state": state}, {"_id": 0})
     if doc:
-        return doc
+        return await _tick_bullet_stock(state, doc)
     # When unowned, production runs from now; price varies $2,500–$4,000
     unowned_price = random.randint(BULLET_FACTORY_UNOWNED_PRICE_MIN, BULLET_FACTORY_UNOWNED_PRICE_MAX)
     now = datetime.now(timezone.utc).isoformat()
@@ -644,6 +647,8 @@ async def _get_or_create_factory(state: str):
         "owner_id": None,
         "owner_username": None,
         "last_collected_at": now,
+        "last_bullet_tick_at": now,
+        "bullet_stock": 0,
         "price_per_bullet": None,
         "unowned_price": unowned_price,
     })
@@ -780,26 +785,100 @@ async def _tick_armoury_production(state: str, factory: dict) -> dict:
 
 
 def _bullet_cap_24h(factory: dict) -> int:
-    return BULLET_FACTORY_TOTAL_PER_24H if factory.get("owner_id") else BULLET_FACTORY_UNOWNED_TOTAL_PER_24H
+    return BULLET_FACTORY_STOCK_CAP
 
 
 def _bullet_production_per_hour(factory: dict) -> float:
-    return _bullet_cap_24h(factory) / 24
+    return float(BULLET_FACTORY_PRODUCTION_PER_HOUR)
 
 
-def _accumulated_bullets(factory: dict) -> int:
+def _legacy_accumulated_bullets(factory: dict) -> int:
+    """Pre-random-tick stock from last_collected_at (used once to seed bullet_stock)."""
     last = factory.get("last_collected_at")
     if not last:
         return 0
     last_dt = _parse_utc(last)
     if last_dt is None:
         return 0
+    hours = (datetime.now(timezone.utc) - last_dt).total_seconds() / 3600
+    # Old owned cap was 5000/24h; unowned 1000/24h.
+    old_cap = 5000 if factory.get("owner_id") else 1000
+    raw = int(hours * (old_cap / 24))
+    return min(max(0, raw), old_cap)
+
+
+def _accumulated_bullets(factory: dict) -> int:
+    if factory.get("bullet_stock") is not None:
+        try:
+            return max(0, int(factory.get("bullet_stock") or 0))
+        except (TypeError, ValueError):
+            return 0
+    return _legacy_accumulated_bullets(factory)
+
+
+async def _tick_bullet_stock(state: str, factory: dict) -> dict:
+    """Credit 300–600 bullets for each completed hour since the last roll. Caps at 24h of stock."""
+    if not factory:
+        return factory
     now = datetime.now(timezone.utc)
-    hours = (now - last_dt).total_seconds() / 3600
-    cap = _bullet_cap_24h(factory)
-    rate = cap / 24
-    raw = int(hours * rate)
-    return min(raw, cap)
+    stock_raw = factory.get("bullet_stock")
+    last_tick = _parse_utc(factory.get("last_bullet_tick_at")) or _parse_utc(factory.get("last_collected_at"))
+
+    if stock_raw is None:
+        stock = _legacy_accumulated_bullets(factory)
+        now_iso = now.isoformat()
+        await db.bullet_factory.update_one(
+            {"state": state, "$or": [{"bullet_stock": {"$exists": False}}, {"bullet_stock": None}]},
+            {"$set": {"bullet_stock": stock, "last_bullet_tick_at": now_iso, "last_collected_at": now_iso}},
+        )
+        factory = {**factory, "bullet_stock": stock, "last_bullet_tick_at": now_iso, "last_collected_at": now_iso}
+        last_tick = now
+
+    try:
+        stock = max(0, int(factory.get("bullet_stock") or 0))
+    except (TypeError, ValueError):
+        stock = 0
+    if last_tick is None:
+        last_tick = now
+
+    elapsed_hours = int((now - last_tick).total_seconds() // 3600)
+    if elapsed_hours <= 0:
+        factory["bullet_stock"] = stock
+        return factory
+    hours_to_process = min(elapsed_hours, BULLET_FACTORY_MAX_HOURS_CAP)
+
+    added = 0
+    processed = 0
+    while processed < hours_to_process and stock < BULLET_FACTORY_STOCK_CAP:
+        roll = random.randint(BULLET_FACTORY_PROD_PER_HOUR_MIN, BULLET_FACTORY_PROD_PER_HOUR_MAX)
+        stock = min(BULLET_FACTORY_STOCK_CAP, stock + roll)
+        added += roll
+        processed += 1
+    if processed <= 0:
+        factory["bullet_stock"] = stock
+        return factory
+
+    new_tick = last_tick + timedelta(hours=processed)
+    new_iso = new_tick.isoformat()
+    prev_tick = factory.get("last_bullet_tick_at")
+    filt = {"state": state}
+    if prev_tick is not None:
+        filt["last_bullet_tick_at"] = prev_tick
+    else:
+        filt["$or"] = [
+            {"last_bullet_tick_at": {"$exists": False}},
+            {"last_bullet_tick_at": None},
+        ]
+    updated = await db.bullet_factory.find_one_and_update(
+        filt,
+        {"$set": {"bullet_stock": stock, "last_bullet_tick_at": new_iso, "last_collected_at": new_iso}},
+        return_document=ReturnDocument.AFTER,
+        projection={"_id": 0},
+    )
+    if updated:
+        return updated
+    fresh = await db.bullet_factory.find_one({"state": state}, {"_id": 0})
+    return fresh or {**factory, "bullet_stock": stock, "last_bullet_tick_at": new_iso}
 
 
 async def get_bullet_factory(
@@ -849,7 +928,11 @@ async def get_bullet_factory(
     out = {
         "state": state,
         "production_per_hour": prod_per_hour,
+        "production_per_hour_min": BULLET_FACTORY_PROD_PER_HOUR_MIN,
+        "production_per_hour_max": BULLET_FACTORY_PROD_PER_HOUR_MAX,
         "production_per_24h": cap_24,
+        "production_per_24h_min": BULLET_FACTORY_PROD_PER_HOUR_MIN * BULLET_FACTORY_MAX_HOURS_CAP,
+        "production_per_24h_max": BULLET_FACTORY_STOCK_CAP,
         "production_tick_minutes": BULLET_FACTORY_TICK_MINUTES,
         "claim_cost": cc["armoury"],
         "owner_id": economy_owner_id,
@@ -983,10 +1066,16 @@ async def claim_bullet_factory(
         )
     await db.bullet_factory.update_one(
         {"state": state},
-        {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "last_collected_at": now}},
+        {"$set": {
+            "owner_id": current_user["id"],
+            "owner_username": current_user.get("username"),
+            "last_collected_at": now,
+            "last_bullet_tick_at": now,
+            "bullet_stock": 0,
+        }},
     )
     return {
-        "message": f"You now own the armoury in {state} (bullets, armour & weapons). It produces up to 5,000 bullets per day.",
+        "message": f"You now own the armoury in {state} (bullets, armour & weapons). It produces {BULLET_FACTORY_PROD_PER_HOUR_MIN}–{BULLET_FACTORY_PROD_PER_HOUR_MAX} bullets per hour.",
         "state": state,
         "owner_id": current_user["id"],
     }
@@ -1481,16 +1570,16 @@ async def buy_bullets(
             status_code=400,
             detail=f"You need ${total_cost:,} (${price:,} × {amount:,})",
         )
-    last = _parse_utc(factory.get("last_collected_at"))
-    if last is None:
-        last = datetime.now(timezone.utc)
-    prod_h = _bullet_production_per_hour(factory)
-    hours_consumed = amount / prod_h if prod_h > 0 else 0
-    new_last = last + timedelta(seconds=hours_consumed * 3600)
-    await db.bullet_factory.update_one(
-        {"state": state},
-        {"$set": {"last_collected_at": new_last.isoformat()}},
+    stock_res = await db.bullet_factory.update_one(
+        {"state": state, "bullet_stock": {"$gte": amount}},
+        {"$inc": {"bullet_stock": -amount}},
     )
+    if stock_res.modified_count == 0:
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$inc": {"money": total_cost, "bullets": -amount, "bullets_purchased_from_armoury": -amount}},
+        )
+        raise HTTPException(status_code=400, detail="Factory no longer has that many bullets")
     if owner_id:
         await db.bullet_factory.update_one(
             {"state": state},

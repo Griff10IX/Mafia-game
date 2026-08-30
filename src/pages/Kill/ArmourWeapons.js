@@ -670,9 +670,9 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
   const isOwner = data?.is_owner ?? false;
   const canBuy = data?.can_buy ?? false;
   const accumulated = data?.accumulated_bullets ?? 0;
-  const productionPer24h = data?.production_per_24h ?? 5000;
-  const productionTickMins = data?.production_tick_minutes ?? 20;
-  const production = data?.production_per_hour ?? productionPer24h / 24;
+  const productionPerHourMin = data?.production_per_hour_min ?? 300;
+  const productionPerHourMax = data?.production_per_hour_max ?? 600;
+  const production = data?.production_per_hour ?? (productionPerHourMin + productionPerHourMax) / 2;
   const claimCost = Number(data?.claim_cost ?? 0);
   const pricePerBullet = data?.price_per_bullet ?? null;
   const priceMin = data?.price_min ?? 1;
@@ -775,7 +775,8 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                 <div className="rounded-lg px-3 py-2.5 bg-amber-500/10 border border-amber-500/30">
                   <p className="text-[11px] text-amber-100/90 font-heading leading-relaxed">
                     <strong className="text-amber-300">Unclaimed armoury:</strong> bullet stock caps at{' '}
-                    <strong className="text-primary">{(data?.production_per_24h ?? 1000).toLocaleString()}</strong>/24h.
+                    <strong className="text-primary">{productionPerHourMin}–{productionPerHourMax}</strong> per hour
+                    (max {(data?.production_per_24h_max ?? 14400).toLocaleString()}/24h).
                     Only basic armour (L1) and Brass Knuckles sell here — claim ownership for higher tiers.
                   </p>
                 </div>
@@ -1122,14 +1123,14 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                           <Crosshair size={10} />
                           Bullets
                         </div>
-                        <ProductionGauge production={production} maxProduction={productionPer24h / 24} />
+                        <ProductionGauge production={production} maxProduction={productionPerHourMax} />
                       </div>
                       <div className="text-center space-y-0.5">
                         <p className="text-sm font-heading font-bold text-primary tabular-nums">
                           <AnimatedCounter target={accumulated} />
                         </p>
                         <p className="text-[10px] text-mutedForeground font-heading">in stock</p>
-                        <p className="text-[10px] text-emerald-400 font-heading">{production.toFixed(0)}/hr</p>
+                        <p className="text-[10px] text-emerald-400 font-heading">{productionPerHourMin}–{productionPerHourMax}/hr</p>
                       </div>
                     </div>
 
@@ -1442,14 +1443,14 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
               )}
 
               {!hasOwner && (
-                <ArmSection icon={Gauge} title="Claim this armoury" subtitle={`${productionPer24h.toLocaleString()} bullets / 24h`}>
+                <ArmSection icon={Gauge} title="Claim this armoury" subtitle={`${productionPerHourMin}–${productionPerHourMax} bullets / hour`}>
                   <div className="relative overflow-hidden rounded-lg">
                     <div className="absolute -bottom-8 -right-8 w-28 h-28 rounded-full bg-orange-500/15 animate-furnace pointer-events-none" />
                     <div className="relative z-10 flex flex-col sm:flex-row sm:items-center gap-4">
-                      <ProductionGauge production={production} />
+                      <ProductionGauge production={production} maxProduction={productionPerHourMax} />
                       <div className="flex-1 space-y-3">
                         <p className="text-[12px] text-mutedForeground font-heading leading-relaxed">
-                          Produces <strong className="text-primary">{productionPer24h.toLocaleString()}</strong> bullets per 24h (every {productionTickMins} min).
+                          Produces <strong className="text-primary">{productionPerHourMin}–{productionPerHourMax}</strong> bullets per hour (random each hour).
                           {claimCost > 0 && (
                             <span className="block mt-1">
                               Pay <strong className="text-primary">{formatMoney(claimCost)}</strong> to claim ownership.

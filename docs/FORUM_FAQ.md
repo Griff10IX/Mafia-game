@@ -328,7 +328,7 @@ Your [b]wealth tier[/b] is separate from your [b]rank[/b] (the rank-points ladde
 When enabled, the game runs a [b]game-wide daily modifier[/b] (examples: double rank points, kill cash, cheaper bodyguards, racket payouts — the exact mix rotates). Check the [b]dashboard banner / flash news ticker[/b] for today’s message; bonuses apply only while that event is active.
 
 [color=#2ECC71][b]Armoury & bullet factory (per city)[/b][/color]
-Each city has one [b]bullet factory + armoury[/b]: the owner sets bullet prices, collects production, and can run armour/weapon production. [b]Unowned[/b] factories use default pricing; [b]claiming[/b] costs cash (shown on the Armoury screen). Like airports, ownership is competitive — use the Armoury / factory UI for how to take or defend the slot in your city.
+Each city has one [b]bullet factory + armoury[/b]: the owner sets bullet prices, collects production, and can run armour/weapon production. Factories produce [b]300–600 bullets per hour[/b] (random each hour). [b]Unowned[/b] factories use default pricing; [b]claiming[/b] costs cash (shown on the Armoury screen). Like airports, ownership is competitive — use the Armoury / factory UI for how to take or defend the slot in your city.
 
 [b]Quick Trade:[/b]
 [list]

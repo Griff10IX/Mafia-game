@@ -132,7 +132,7 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         db.horseracing_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(states_count),
         db.videopoker_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(states_count),
         db.slots_ownership.find({}, {"_id": 0, "state": 1, "owner_id": 1, "owner_username": 1, "max_bet": 1, "buy_back_reward": 1, "expires_at": 1, "next_draw_at": 1}).to_list(states_count) if SLOTS_FEATURE_ENABLED else _empty_doc_list(),
-        db.bullet_factory.find({}, {"_id": 0, "state": 1, "owner_id": 1, "owner_username": 1, "last_collected_at": 1, "price_per_bullet": 1, "unowned_price": 1}).to_list(states_count),
+        db.bullet_factory.find({}, {"_id": 0, "state": 1, "owner_id": 1, "owner_username": 1, "last_collected_at": 1, "last_bullet_tick_at": 1, "bullet_stock": 1, "price_per_bullet": 1, "unowned_price": 1}).to_list(states_count),
         db.airport_ownership.find({"slot": 1}, {"_id": 0, "state": 1, "slot": 1, "owner_username": 1, "price_per_travel": 1}).to_list(states_count),
         load_claim_costs(db),
         get_state_heads(),

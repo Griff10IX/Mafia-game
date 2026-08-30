@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-30[/color][/b] — [b]Armoury bullets[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Bullet factories[/b] now produce [b]300–600[/b] bullets [b]per hour[/b], rolled randomly each hour (was a flat ~208/hour, 5,000/day). Stock still caps at 24 hours (up to 14,400).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-28[/color][/b] — [b]Witness statements: staff[/b][/size]
 [quote]
 [list]
