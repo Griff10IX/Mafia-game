@@ -28,6 +28,7 @@ import {
   setProfileSessionLastMeUsername,
 } from '../../utils/prefetchCache';
 import { getProfileEditWarm } from '../../utils/profilePageWarm';
+import { prefetchViewCarPage } from '../../utils/viewCarWarm';
 import { TOAST_MUTEABLE_PAGES, setToastMutedPages, normalizeToastMutedPages, getToastMutedPages } from '../../utils/toastPageMutes';
 import { fileToAvatarDataUrl, fileToCustomBadgeDataUrl, validateSafeImageFile, AVATAR_RAW_UPLOAD_MAX_BYTES } from '../../utils/fileToCompressedDataUrl';
 import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
@@ -989,7 +990,9 @@ const ProfileInfoCard = ({
                   return (
                     <Link
                       key={car.id}
-                      to={`/view-car?id=${encodeURIComponent(car.id)}`}
+                      to={`/cars/view?id=${encodeURIComponent(car.id)}`}
+                      onMouseEnter={() => prefetchViewCarPage(car.id)}
+                      onFocus={() => prefetchViewCarPage(car.id)}
                       className={`inline-flex items-center gap-1 px-2.5 py-1.5 min-h-8 rounded-md border bg-background/80 hover:bg-primary/10 transition-colors prof-row text-[11px] md:text-xs font-heading leading-tight ${badgeClass}`}
                     >
                       <span className="shrink-0 uppercase font-bold tracking-wide">{label}:</span>
@@ -1313,7 +1316,9 @@ const TopCarsCard = ({ topCars, showCars }) => {
           return (
             <Link
               key={car.id}
-              to={`/view-car?id=${encodeURIComponent(car.id)}`}
+              to={`/cars/view?id=${encodeURIComponent(car.id)}`}
+              onMouseEnter={() => prefetchViewCarPage(car.id)}
+              onFocus={() => prefetchViewCarPage(car.id)}
               className={`inline-flex items-center gap-1 px-2.5 py-1.5 min-h-8 rounded-md border bg-background/80 hover:bg-primary/10 transition-colors prof-row text-[11px] md:text-xs ${badgeClass}`}
             >
               <span className="font-heading uppercase tracking-wide shrink-0 font-bold">{label}:</span>

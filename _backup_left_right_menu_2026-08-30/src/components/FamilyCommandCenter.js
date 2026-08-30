@@ -74,7 +74,7 @@ function cooldownRemaining(untilIso) {
 
 function StatRow({ icon, label, value, tone }) {
   return (
-    <div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-sm" style={{ background: 'rgba(var(--noir-primary-rgb), 0.08)' }}>
+    <div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-sm" style={{ background: 'rgba(0,0,0,0.25)' }}>
       <span className="flex items-center gap-1.5 min-w-0 text-[9px] font-heading uppercase tracking-wide truncate" style={{ color: 'var(--noir-muted)' }}>
         {icon}
         {label}
@@ -232,7 +232,7 @@ export default function FamilyCommandCenter({ onCloseSidebar, hasFamily }) {
           {loading && !family ? (
             <p className="text-[10px] font-heading px-1 py-2" style={{ color: 'var(--noir-muted)' }}>Loading crew intel…</p>
           ) : !family ? (
-            <div className="rounded-md border px-2.5 py-3 space-y-2" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.15)', background: 'rgba(var(--noir-primary-rgb), 0.06)' }}>
+            <div className="rounded-md border px-2.5 py-3 space-y-2" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.15)', background: 'rgba(0,0,0,0.35)' }}>
               <p className="text-[10px] font-heading leading-relaxed" style={{ color: 'var(--noir-muted)' }}>
                 You are not in a family yet. Join or create a crew to unlock vault, rackets, and crew OC.
               </p>
@@ -297,14 +297,14 @@ export default function FamilyCommandCenter({ onCloseSidebar, hasFamily }) {
                   <Link
                     to="/families"
                     onClick={handleOpenFamily}
-                    className={`flex items-center justify-between gap-2 py-2 px-2 rounded-sm border transition-colors hover:opacity-90 ${dailyComplete ? 'border-emerald-500/25 bg-emerald-500/8' : 'border-primary/15 bg-primary/10'}`}
+                    className={`flex items-center justify-between gap-2 py-2 px-2 rounded-sm border transition-colors hover:opacity-90 ${dailyComplete ? 'border-emerald-500/25 bg-emerald-500/8' : 'border-primary/15 bg-black/25'}`}
                     title={dailyTitle}
                   >
                     <span className="flex items-center gap-1.5 min-w-0">
                       <ListChecks size={10} className={dailyComplete ? 'text-emerald-400' : 'text-primary'} />
                       <span className="min-w-0">
-                        <span className="block text-[9px] font-heading uppercase tracking-wide" style={{ color: 'var(--noir-muted)' }}>Daily objective</span>
-                        <span className="block text-[9px] font-heading truncate" style={{ color: 'var(--noir-foreground)' }}>{dailyTitle}</span>
+                        <span className="block text-[9px] font-heading uppercase tracking-wide text-zinc-500">Daily objective</span>
+                        <span className="block text-[9px] font-heading text-zinc-300 truncate">{dailyTitle}</span>
                       </span>
                     </span>
                     <span className={`text-[9px] font-heading font-bold tabular-nums shrink-0 ${dailyComplete ? 'text-emerald-400' : 'text-primary'}`}>

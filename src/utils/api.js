@@ -9,7 +9,7 @@ import {
 import { clearProfileSessionLastMeUsername } from './prefetchCache';
 import { inFlightGet, clearInFlightGets } from './inFlightGet';
 import { parseIpBanFromError } from './ipBan';
-import { isJailBlockedFrontendPath, setClientJailed } from './jailBlockedRoutes';
+import { setClientJailed } from './jailBlockedRoutes';
 
 // Empty or unset = same origin (e.g. Linode: Nginx serves app and proxies /api)
 const raw = (process.env.REACT_APP_BACKEND_URL && process.env.REACT_APP_BACKEND_URL.trim())
@@ -330,24 +330,6 @@ if (typeof window !== 'undefined') {
   }
 }
 
-/** Booze run: 403 jail on follow-up requests (e.g. /booze-run/config) used to replace location immediately and hide the prohibition toast. Defer once. */
-let _boozeJailRedirectTimer = null;
-function _scheduleBoozeRunJailRedirect() {
-  if (typeof window === 'undefined' || _boozeJailRedirectTimer) return;
-  _boozeJailRedirectTimer = setTimeout(() => {
-    _boozeJailRedirectTimer = null;
-    try {
-      const cur = (window.location.pathname || '').replace(/\/+/g, '/');
-      const onBooze =
-        cur === '/money/booze-run' ||
-        cur.startsWith('/money/booze-run/') ||
-        cur === '/booze-run' ||
-        cur.startsWith('/booze-run/');
-      if (onBooze) navigateApp('/crime/jail', { replace: true });
-    } catch (_) { /* ignore */ }
-  }, 4000);
-}
-
 function isRequestCanceled(error) {
   if (!error) return false;
   if (axios.isCancel?.(error)) return true;
@@ -452,7 +434,6 @@ api.interceptors.response.use(
     }
 
     // ── 403 In jail → mark jailed everywhere (stops crime/GTA/booze retries in other tabs)
-    //     then redirect only if this tab is on a blocked page ──
     if (error.response?.status === 403 && typeof window !== 'undefined') {
       const detail = error.response?.data?.detail;
       if (typeof detail === 'string' && detail.toLowerCase().includes('while in jail')) {
@@ -464,19 +445,6 @@ api.interceptors.response.use(
             }),
           );
         } catch (_) { /* ignore */ }
-        const p = window.location.pathname;
-        if (isJailBlockedFrontendPath(p)) {
-          const onBooze =
-            p === '/money/booze-run' ||
-            p.startsWith('/money/booze-run/') ||
-            p === '/booze-run' ||
-            p.startsWith('/booze-run/');
-          if (onBooze) {
-            _scheduleBoozeRunJailRedirect();
-          } else {
-            navigateApp('/crime/jail', { replace: true });
-          }
-        }
         return Promise.reject(error);
       }
     }

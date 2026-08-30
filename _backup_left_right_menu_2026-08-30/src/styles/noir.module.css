@@ -359,15 +359,9 @@
   letter-spacing: 0.02em;
 }
 
-/* Sidebar: content surface + theme colour wash so gold/crimson/sky show on chrome */
+/* Sidebar: same as content area (noir theme) */
 .themeGangsterModern .sidebar {
   background-color: var(--noir-content) !important;
-  background-image: linear-gradient(
-    180deg,
-    rgba(var(--noir-primary-rgb), 0.12) 0%,
-    rgba(var(--noir-primary-rgb), 0.04) 42%,
-    transparent 100%
-  ) !important;
   border-right: 1px solid var(--noir-border-mid);
   color: var(--noir-foreground);
 }
@@ -453,11 +447,6 @@
 
 .themeGangsterModern .topBar {
   background-color: var(--noir-content);
-  background-image: linear-gradient(
-    180deg,
-    rgba(var(--noir-primary-rgb), 0.1) 0%,
-    transparent 100%
-  );
   border-bottom-color: var(--noir-border-mid);
 }
 
@@ -556,11 +545,11 @@ body[data-theme-variant="modern"] .themeGangsterModern .raisedHover {
 
 /* Modern variant: futuristic neutral-gray shell, accent from theme (no blue wash) */
 body[data-theme-variant="modern"] .themeGangsterModern {
-  --gm-bg: var(--noir-bg);
-  --gm-bg-top: var(--noir-surface);
+  --gm-bg: #121214;
+  --gm-bg-top: #18181b;
   --gm-card: var(--modern-surface-2, #1e1e22);
   --gm-card-hover: #28282e;
-  --gm-border: var(--modern-border-soft, rgba(var(--noir-primary-rgb), 0.22));
+  --gm-border: var(--modern-border-soft, rgba(161, 161, 170, 0.18));
   --gm-text: #e4e4e7;
   --gm-muted: rgba(161, 161, 170, 0.9);
   --gm-gold: var(--noir-primary);
@@ -569,25 +558,19 @@ body[data-theme-variant="modern"] .themeGangsterModern {
 body[data-theme-variant="modern"] .themeGangsterModern .topBar,
 body[data-theme-variant="modern"] .themeGangsterModern .sidebar {
   backdrop-filter: blur(10px);
-  background:
-    linear-gradient(180deg, rgba(var(--noir-primary-rgb), 0.14) 0%, rgba(var(--noir-primary-rgb), 0.04) 42%, transparent 100%),
-    var(--noir-content) !important;
-  border-color: rgba(var(--noir-primary-rgb), 0.28);
-  box-shadow: inset 0 1px 0 rgba(var(--noir-primary-rgb), 0.12);
+  background: linear-gradient(180deg, rgba(30, 30, 36, 0.98) 0%, rgba(16, 16, 20, 0.97) 100%);
+  border-color: var(--modern-divider, rgba(161, 161, 170, 0.22));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
   transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 body[data-theme-variant="modern"] .themeGangsterModern .topBar {
-  background:
-    linear-gradient(180deg, rgba(var(--noir-primary-rgb), 0.16) 0%, rgba(var(--noir-primary-rgb), 0.04) 55%, transparent 100%),
-    var(--noir-surface) !important;
-  border-bottom-color: rgba(var(--noir-primary-rgb), 0.28);
+  background: linear-gradient(180deg, rgba(32, 32, 38, 0.98) 0%, rgba(20, 20, 24, 0.96) 100%);
+  border-bottom-color: rgba(var(--noir-primary-rgb), 0.16);
 }
 
 body[data-theme-variant="modern"] .themeGangsterModern .sidebar {
-  background:
-    linear-gradient(180deg, rgba(var(--noir-primary-rgb), 0.12) 0%, rgba(var(--noir-primary-rgb), 0.04) 45%, transparent 100%),
-    var(--noir-content) !important;
+  background: linear-gradient(180deg, #121216 0%, #0c0c10 55%, #0a0a0e 100%);
 }
 
 body[data-theme-variant="modern"][data-modern-perf="on"] .themeGangsterModern .topBar,
@@ -622,7 +605,7 @@ body[data-theme-variant="modern"] .themeGangsterModern .input:focus {
 
 body[data-theme-variant="modern"] [data-layout="sidebar"] {
   width: 15rem !important;
-  box-shadow: inset -1px 0 0 rgba(var(--noir-primary-rgb), 0.22);
+  box-shadow: inset -1px 0 0 var(--modern-divider, rgba(161, 161, 170, 0.14));
 }
 
 body[data-theme-variant="modern"] [data-layout="topbar"] {
@@ -632,23 +615,21 @@ body[data-theme-variant="modern"] [data-layout="topbar"] {
   padding-top: 0.45rem !important;
   padding-bottom: 0.45rem !important;
   gap: 0.65rem !important;
-  box-shadow: inset 0 -1px 0 rgba(var(--noir-primary-rgb), 0.22);
+  box-shadow: inset 0 -1px 0 var(--modern-divider, rgba(161, 161, 170, 0.14));
 }
 
 body[data-theme-variant="modern"] [data-layout="main"] {
   margin-top: 3.75rem !important;
   padding: 1.2rem !important;
   background:
-    radial-gradient(1200px 580px at 82% -22%, rgba(var(--noir-primary-rgb), 0.12), transparent 66%),
-    linear-gradient(180deg, var(--noir-content) 0%, var(--noir-bg) 100%) !important;
+    radial-gradient(1200px 580px at 82% -22%, rgba(var(--noir-primary-rgb), 0.07), transparent 66%),
+    linear-gradient(180deg, rgba(20, 20, 24, 0.98) 0%, rgba(16, 16, 19, 1) 100%);
 }
 
 body[data-theme-variant="modern"] [data-layout="right-sidebar"] {
   width: 15rem !important;
-  border-left: 1px solid rgba(var(--noir-primary-rgb), 0.28);
-  background:
-    linear-gradient(180deg, rgba(var(--noir-primary-rgb), 0.12) 0%, rgba(var(--noir-primary-rgb), 0.04) 45%, transparent 100%),
-    var(--noir-content) !important;
+  border-left: 1px solid var(--modern-divider, rgba(161, 161, 170, 0.14));
+  background: linear-gradient(180deg, rgba(30, 30, 34, 0.95) 0%, rgba(24, 24, 28, 0.96) 100%);
 }
 
 body[data-theme-variant="modern"] [data-layout="sidebar"] .sidebarNavLink {
@@ -751,14 +732,12 @@ body[data-theme-variant="modern"] [data-chat-part="aux-btn"] {
 
 /* Modern: bottom nav – frosted glass, soft shadow */
 body[data-theme-variant="modern"] [data-layout="bottom-nav"] nav {
-  background:
-    linear-gradient(180deg, rgba(var(--noir-primary-rgb), 0.12) 0%, rgba(var(--noir-primary-rgb), 0.04) 50%, transparent 100%),
-    var(--noir-content) !important;
+  background: linear-gradient(180deg, rgba(28, 28, 32, 0.94) 0%, rgba(22, 22, 26, 0.97) 100%) !important;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-top: 1px solid rgba(var(--noir-primary-rgb), 0.28);
+  border-top: 1px solid var(--modern-divider, rgba(161, 161, 170, 0.14));
   box-shadow:
-    0 0 0 1px rgba(var(--noir-primary-rgb), 0.1) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
     0 -8px 24px rgba(0, 0, 0, 0.35);
 }
 body[data-theme-variant="modern"][data-modern-perf="on"] [data-layout="bottom-nav"] nav {
@@ -767,13 +746,11 @@ body[data-theme-variant="modern"][data-modern-perf="on"] [data-layout="bottom-na
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
 }
 body[data-theme-variant="modern"] [data-layout="bottom-nav-submenu"] {
-  border-color: rgba(var(--noir-primary-rgb), 0.22);
+  border-color: var(--modern-divider, rgba(161, 161, 170, 0.14));
 }
 /* Modern: futuristic touch ball – frosted glass, soft glow, orbital feel */
 body[data-theme-variant="modern"] [data-layout="touch-ball"] button {
-  background:
-    linear-gradient(145deg, rgba(var(--noir-primary-rgb), 0.18) 0%, rgba(var(--noir-primary-rgb), 0.05) 100%),
-    var(--noir-surface) !important;
+  background: linear-gradient(145deg, rgba(28, 28, 32, 0.92) 0%, rgba(22, 22, 26, 0.95) 100%) !important;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(var(--noir-primary-rgb), 0.35) !important;
@@ -796,9 +773,7 @@ body[data-theme-variant="modern"] [data-layout="touch-ball"] button:active {
     0 4px 16px rgba(0, 0, 0, 0.5) !important;
 }
 body[data-theme-variant="modern"] [data-layout="touch-ball-panel"] {
-  background:
-    linear-gradient(180deg, rgba(var(--noir-primary-rgb), 0.14) 0%, rgba(var(--noir-primary-rgb), 0.04) 50%, transparent 100%),
-    var(--noir-content) !important;
+  background: linear-gradient(180deg, rgba(28, 28, 32, 0.96) 0%, rgba(22, 22, 26, 0.98) 100%) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(var(--noir-primary-rgb), 0.2) !important;
@@ -905,25 +880,19 @@ body[data-theme-variant="dark_mafia"] .themeGangsterModern .topBar,
 body[data-theme-variant="dark_mafia"] .themeGangsterModern .sidebar {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background:
-    linear-gradient(180deg, rgba(var(--noir-primary-rgb), 0.1) 0%, rgba(var(--noir-primary-rgb), 0.03) 40%, transparent 100%),
-    var(--noir-bg) !important;
-  border-color: rgba(var(--noir-primary-rgb), 0.28);
+  background: #050505;
+  border-color: rgba(var(--noir-primary-rgb), 0.2);
   box-shadow: none;
 }
 
 body[data-theme-variant="dark_mafia"] .themeGangsterModern .topBar {
   border-bottom: 1px solid rgba(var(--noir-primary-rgb), 0.28);
-  background:
-    linear-gradient(180deg, rgba(var(--noir-primary-rgb), 0.12) 0%, transparent 70%),
-    var(--noir-bg) !important;
+  background: #050505;
 }
 
 body[data-theme-variant="dark_mafia"] .themeGangsterModern .sidebar {
-  background:
-    linear-gradient(180deg, rgba(var(--noir-primary-rgb), 0.1) 0%, rgba(var(--noir-primary-rgb), 0.03) 40%, transparent 100%),
-    var(--noir-bg) !important;
-  border-right: 1px solid rgba(var(--noir-primary-rgb), 0.28);
+  background: #050505;
+  border-right: 1px solid rgba(var(--noir-primary-rgb), 0.2);
 }
 
 body[data-theme-variant="dark_mafia"][data-modern-perf="on"] .themeGangsterModern .topBar,
@@ -1003,10 +972,8 @@ body[data-theme-variant="dark_mafia"] .themeGangsterModern .input:focus {
 
 body[data-theme-variant="dark_mafia"] [data-layout="sidebar"] {
   width: 15rem !important;
-  box-shadow: inset -1px 0 0 rgba(var(--noir-primary-rgb), 0.22);
-  background:
-    linear-gradient(180deg, rgba(var(--noir-primary-rgb), 0.1) 0%, transparent 50%),
-    var(--noir-bg) !important;
+  box-shadow: inset -1px 0 0 rgba(var(--noir-primary-rgb), 0.16);
+  background: #050505 !important;
 }
 
 body[data-theme-variant="dark_mafia"] [data-layout="topbar"] {
@@ -1017,25 +984,21 @@ body[data-theme-variant="dark_mafia"] [data-layout="topbar"] {
   padding-bottom: 0.45rem !important;
   gap: 0.65rem !important;
   box-shadow: inset 0 -1px 0 rgba(var(--noir-primary-rgb), 0.2);
-  background:
-    linear-gradient(180deg, rgba(var(--noir-primary-rgb), 0.12) 0%, transparent 70%),
-    var(--noir-bg) !important;
+  background: #050505 !important;
 }
 
 body[data-theme-variant="dark_mafia"] [data-layout="main"] {
   margin-top: 3.75rem !important;
   padding: 0.85rem !important;
   background:
-    radial-gradient(ellipse 70% 55% at 50% -5%, rgba(var(--noir-primary-rgb), 0.12) 0%, transparent 60%),
-    var(--noir-bg) !important;
+    radial-gradient(ellipse 70% 55% at 50% -5%, rgba(var(--noir-primary-rgb), 0.1) 0%, transparent 60%),
+    #050505 !important;
 }
 
 body[data-theme-variant="dark_mafia"] [data-layout="right-sidebar"] {
   width: 15rem !important;
-  border-left: 1px solid rgba(var(--noir-primary-rgb), 0.28);
-  background:
-    linear-gradient(180deg, rgba(var(--noir-primary-rgb), 0.1) 0%, transparent 50%),
-    var(--noir-bg) !important;
+  border-left: 1px solid rgba(var(--noir-primary-rgb), 0.2);
+  background: #050505 !important;
 }
 
 body[data-theme-variant="dark_mafia"] [data-layout="sidebar"] .sidebarNavLink {

@@ -73,6 +73,8 @@ const ROUTE_PRELOADERS = {
   '/cars/garage': () => import('../pages/Cars/Garage'),
   '/cars/buy': () => import('../pages/Cars/BuyCars'),
   '/cars/sell': () => import('../pages/Cars/SellCars'),
+  '/cars/view': () => import('../pages/Cars/ViewCar'),
+  '/view-car': () => import('../pages/Cars/ViewCar'),
   '/game/stats': () => import('../pages/Game/Stats'),
   '/game/users-online': () =>
     Promise.all([

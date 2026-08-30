@@ -7,6 +7,7 @@ import { parseForumContent } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
 import { NotificationMessage } from '../../components/NotificationMessage';
 import { StaffBotAlertMessage, staffBotAlertPreview } from '../../components/StaffBotAlertMessage';
+import { RewardInboxMessage, parseRewardInboxMessage, rewardInboxPreview } from '../../components/RewardInboxMessage';
 import {
   INBOX_STYLES,
   IB_ACTION_GO,
@@ -96,6 +97,9 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, isSent }) =
   const vis = notificationVisual(notification);
   const timeAgo = getTimeAgo(notification.created_at);
   const recipient = isSent ? sentRecipient(notification) : null;
+  const listPreview =
+    (notification.notification_type === 'staff_bot_client' && staffBotAlertPreview(notification.message))
+    || rewardInboxPreview(notification.message);
 
   const handleMouseEnter = () => {
     if (!isSent && !notification.read && onMarkRead) {
@@ -139,9 +143,7 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, isSent }) =
           </span>
         </div>
         <p className="text-[10px] text-mutedForeground truncate">
-          {notification.notification_type === 'staff_bot_client' && staffBotAlertPreview(notification.message) ? (
-            staffBotAlertPreview(notification.message)
-          ) : (
+          {listPreview || (
             <NotificationMessage
               message={notification.message}
               actorUsername={notification.actor_username}
@@ -257,6 +259,8 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
             />
           ) : notification.notification_type === 'staff_bot_client' ? (
             <StaffBotAlertMessage message={notification.message} />
+          ) : parseRewardInboxMessage(notification.message) ? (
+            <RewardInboxMessage message={notification.message} visual={vis} />
           ) : (
             <div className={`${vis.card} px-3 py-2.5`}>
               <p className="text-[11px] sm:text-sm text-foreground leading-snug whitespace-pre-wrap">

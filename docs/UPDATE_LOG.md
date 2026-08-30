@@ -16,6 +16,7 @@
 [*][color=#888888][b]Changed:[/b] Cars on your [b]dossier[/b] only show if you pin them from [b]Garage → View Car[/b] (up to 5). Exclusive / VIP cars are not added automatically.[/color]
 [*][color=#888888][b]Fixed:[/b] Your chosen [b]theme[/b] no longer flashes Classic/gold for a moment when you refresh.[/color]
 [*][color=#888888][b]Changed:[/b] [b]Bank[/b], [b]IP Rules[/b], and [b]View Car[/b] follow your selected theme. The car photo fills the box; pinned cars on the dossier are larger and easier to read.[/color]
+[*][color=#888888][b]Changed:[/b] The [b]left menu[/b], [b]right stats[/b], [b]top bar[/b], and [b]bottom nav[/b] now follow your selected theme colour — they are no longer locked to dark + cyan.[/color]
 [/list]
 [/quote]
 

@@ -5,6 +5,7 @@ import api from '../../utils/api';
 import { getDashboardWidget, setDashboardWidget } from '../../utils/dashboardWidgetCache';
 import { NotificationMessage } from '../NotificationMessage';
 import { staffBotAlertPreview } from '../StaffBotAlertMessage';
+import { rewardInboxPreview } from '../RewardInboxMessage';
 import { notificationIcon, notificationVisual } from '../../pages/Social/notificationTypeChrome';
 import { toast } from 'sonner';
 import dash from '../../styles/dashboard.module.css';
@@ -158,7 +159,7 @@ export default function NotificationsWidget({ onRefresh, userId }) {
                   <div className="text-[9px] text-mutedForeground line-clamp-2">
                     {n.notification_type === 'staff_bot_client' && staffBotAlertPreview(n.message)
                       ? staffBotAlertPreview(n.message)
-                      : (
+                      : rewardInboxPreview(n.message) || (
                         <NotificationMessage
                           message={n.message}
                           actorUsername={n.actor_username}

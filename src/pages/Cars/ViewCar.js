@@ -5,6 +5,7 @@ import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import CustomCarImageModal from '../../components/CustomCarImageModal';
+import { readViewCarCache, writeViewCarCache } from '../../utils/viewCarWarm';
 
 const VIEW_CAR_STYLES = `
   @keyframes vc-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
@@ -118,6 +119,10 @@ const VIEW_CAR_STYLES = `
   }
   .vc-btn:disabled { opacity: 0.45; cursor: not-allowed; }
   .vc-empty { font-size: 12px; color: var(--noir-muted); }
+  .vc-skel {
+    background: rgba(var(--noir-primary-rgb), 0.08);
+    border-radius: 4px;
+  }
   body[data-theme-variant="old_school"] .vc-photo,
   body[data-theme-variant="old_school"] .vc-stat,
   body[data-theme-variant="old_school"] .vc-appraised {
@@ -148,8 +153,8 @@ const RARITY_COLORS = {
 export default function ViewCar() {
   const [searchParams] = useSearchParams();
   const id = searchParams.get('id');
-  const [car, setCar] = useState(null);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [car, setCar] = useState(() => (id ? readViewCarCache(id) : null));
+  const [hasLoaded, setHasLoaded] = useState(() => !!(id && readViewCarCache(id)));
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileCarIds, setProfileCarIds] = useState([]);
   const [customPicOpen, setCustomPicOpen] = useState(false);
@@ -159,21 +164,28 @@ export default function ViewCar() {
   useEffect(() => {
     let cancelled = false;
     if (!id) {
-      if (!cancelled) setHasLoaded(true);
-      return;
+      setCar(null);
+      setHasLoaded(true);
+      return undefined;
+    }
+    const cached = readViewCarCache(id);
+    if (cached) {
+      setCar(cached);
+      setHasLoaded(true);
     }
     const fetchCar = async () => {
       try {
         const [carRes, prefsRes] = await Promise.all([
           api.get('/gta/view-car', { params: { id } }),
-          api.get('/profile/cars-preferences'),
+          api.get('/profile/cars-preferences').catch(() => ({ data: {} })),
         ]);
         if (!cancelled) {
           setCar(carRes.data);
+          writeViewCarCache(id, carRes.data);
           setProfileCarIds(prefsRes.data?.profile_car_ids || []);
         }
       } catch (e) {
-        if (!cancelled) {
+        if (!cancelled && !cached) {
           toast.error(e.response?.status === 404 ? 'Car not found' : 'Failed to load car');
         }
       } finally {
@@ -207,8 +219,46 @@ export default function ViewCar() {
     return (
       <div className={`${styles.pageContent} vc-page mobile-page-root`}>
         <style>{VIEW_CAR_STYLES}</style>
-        <div className={`${styles.panel} vc-section`} style={{ minHeight: 88 }} />
-        <div className={`${styles.panel} vc-section`} style={{ minHeight: 240 }} />
+        <section className={`${styles.panel} vc-section mobile-panel`}>
+          <div className="vc-hero-row">
+            <div className="flex items-start gap-2.5 min-w-0 flex-1">
+              <div className={`${styles.surface} vc-back`} aria-hidden />
+              <div className="min-w-0 flex-1">
+                <div className="vc-skel h-2 w-24 mb-2" />
+                <div className="vc-skel h-6 w-48 max-w-full" />
+              </div>
+            </div>
+            <div className="vc-appraised">
+              <div className="vc-skel h-2 w-16 mb-2 ml-auto" />
+              <div className="vc-skel h-6 w-24 ml-auto" />
+            </div>
+          </div>
+        </section>
+        <section className={`${styles.panel} vc-section mobile-panel`}>
+          <div className="vc-section-head">
+            <span className="vc-section-title">
+              <Car size={13} />
+              Vehicle dossier
+            </span>
+          </div>
+          <div className="vc-body">
+            <div className="vc-layout">
+              <div className="vc-photo-col">
+                <div className="vc-photo" />
+              </div>
+              <div className="vc-stats">
+                <div className="vc-stat-grid">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="vc-stat">
+                      <div className="vc-skel h-2 w-14 mb-2" />
+                      <div className="vc-skel h-5 w-20" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     );
   }
@@ -247,6 +297,7 @@ export default function ViewCar() {
       toast.success('Picture updated');
       const carRes = await api.get('/gta/view-car', { params: { id } });
       setCar(carRes.data);
+      writeViewCarCache(id, carRes.data);
       setCustomPicOpen(false);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to update picture');

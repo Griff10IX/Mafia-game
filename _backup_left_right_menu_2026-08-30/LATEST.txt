@@ -1,0 +1,5 @@
+LATEST left/right menu backup: 2026-08-30
+
+This folder is the current restore point for left sidebar, right sidebar,
+top bar, bottom nav, and Family HQ chrome. Older _backup_pre_sidebar_* and
+_backup_pre_crimes_chrome_* folders are not the latest.

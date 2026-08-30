@@ -1,6 +1,5 @@
 import { useState, useEffect, Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useParams, useLocation } from "react-router-dom";
-import { isClientJailed, isJailBlockedFrontendPath } from "./utils/jailBlockedRoutes";
 
 /** Legacy `/store?...` links keep query string when redirecting to `/game/store`. */
 function RedirectStoreToGameStore() {
@@ -199,10 +198,6 @@ const PageLoader = () => (
 
 
 function JailBlockedOutlet() {
-  const location = useLocation();
-  if (isClientJailed() && isJailBlockedFrontendPath(location.pathname)) {
-    return <Navigate to="/crime/jail" replace />;
-  }
   return (
     <Suspense fallback={<PageLoader />}>
       <Outlet />

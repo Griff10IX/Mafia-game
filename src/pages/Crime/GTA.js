@@ -670,6 +670,10 @@ export default function GTA() {
   const tick = useCooldownTicker(options, () => fetchData({ silent: true, includeStats: !!autoRankGtaDisabled }));
 
   const attemptGTA = async (optionId, isRetry = false) => {
+    if (authUser?.in_jail) {
+      toast.error("You can't do that while in jail.");
+      return;
+    }
     if (attemptingOptionId) return;
     setAttemptingOptionId(optionId);
     let willRetry = false;

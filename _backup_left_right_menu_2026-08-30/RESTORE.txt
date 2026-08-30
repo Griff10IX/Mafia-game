@@ -1,0 +1,15 @@
+LEFT / RIGHT MENU BACKUP — 2026-08-30 (LATEST)
+
+This is the latest left/right menu (and chrome) restore point as of 2026-08-30.
+Use this folder — not older sidebar/crimes chrome backups — if you need to undo
+theme-aware left nav, right stats sidebar, top bar, and bottom nav styling.
+
+Copy these files back over the working tree:
+
+  xcopy /E /Y _backup_left_right_menu_2026-08-30\* .
+
+Files snapshotted:
+- src/components/Layout.js
+- src/components/FamilyCommandCenter.js
+- src/styles/noir.module.css
+- src/index.css
