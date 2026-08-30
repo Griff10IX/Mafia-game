@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-import { Mail, MailOpen, Send, X, ChevronRight, Bot, MessageCircle, Trophy, Skull, Bell } from 'lucide-react';
+import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, MessageCircle, Send, X, ChevronRight, Bot } from 'lucide-react';
 import api, { apiGetWithResumeRetries } from '../../utils/api';
 import { toast } from 'sonner';
 import { parseForumContent } from '../../utils/forumContent';
@@ -15,9 +15,32 @@ import {
   InboxArtLine,
   InboxBar,
 } from './inboxChrome';
-import { notificationIcon, notificationVisual } from './notificationTypeChrome';
 import MessageComposer from './MessageComposer';
 import UserToField from './UserToField';
+
+const NOTIFICATION_ICONS = {
+  rank_up: Trophy,
+  reward: Gift,
+  bodyguard: Shield,
+  attack: Skull,
+  system: Bell,
+  user_message: MessageCircle,
+  staff_bot_client: Bot,
+};
+
+const NOTIFICATION_TYPE_STYLES = {
+  staff_bot_client: { icon: 'text-red-400', bg: 'bg-red-500/20', border: 'border-red-500/25' },
+  system: { icon: 'text-amber-400', bg: 'bg-amber-500/20', border: 'border-amber-500/25' },
+  user_message: { icon: 'text-primary', bg: 'bg-primary/20', border: 'border-primary/20' },
+  rank_up: { icon: 'text-yellow-400', bg: 'bg-yellow-500/15', border: 'border-yellow-500/20' },
+  reward: { icon: 'text-emerald-400', bg: 'bg-emerald-500/15', border: 'border-emerald-500/20' },
+  bodyguard: { icon: 'text-sky-400', bg: 'bg-sky-500/15', border: 'border-sky-500/20' },
+  attack: { icon: 'text-rose-400', bg: 'bg-rose-500/15', border: 'border-rose-500/20' },
+};
+
+function notificationTypeStyle(type) {
+  return NOTIFICATION_TYPE_STYLES[type] || { icon: 'text-primary', bg: 'bg-primary/20', border: 'border-primary/20' };
+}
 
 const VALID_FILTERS = ['all', 'unread', 'sent', 'rank_up', 'reward', 'bodyguard', 'attack', 'system', 'user_message', 'staff_bot_client'];
 
@@ -92,8 +115,7 @@ function ComposePanel({
 }
 
 const MessageRow = ({ notification, isSelected, onClick, onMarkRead, isSent }) => {
-  const Icon = notificationIcon(notification);
-  const vis = notificationVisual(notification);
+  const Icon = NOTIFICATION_ICONS[notification.notification_type] || Bell;
   const timeAgo = getTimeAgo(notification.created_at);
   const recipient = isSent ? sentRecipient(notification) : null;
 
@@ -115,23 +137,29 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, isSent }) =
         }
       }}
       onMouseEnter={handleMouseEnter}
-      className={`ib-row ib-tinted group relative flex items-center gap-2 mx-1.5 my-1 px-2.5 py-1.5 min-h-11 text-left rounded-md cursor-pointer transition-all touch-manipulation ${
-        isSent
-          ? 'bg-primary/8 border border-primary/20 hover:bg-primary/14'
-          : vis.row
-      } ${isSelected ? 'ring-1 ring-inset ring-primary/55' : ''}`}
+      className={`ib-row group relative flex w-full items-center gap-2 px-2.5 py-1.5 min-h-11 text-left border-b border-border/60 cursor-pointer transition-all touch-manipulation ${
+        isSelected
+          ? 'bg-primary/12 border-l-2 border-l-primary'
+          : isSent
+          ? 'bg-transparent hover:bg-secondary/40 border-l-2 border-l-transparent'
+          : notification.read
+          ? 'bg-transparent hover:bg-secondary/40 border-l-2 border-l-transparent'
+          : 'bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary/50'
+      }`}
     >
-      <div className={`p-1 rounded shrink-0 ${isSent ? 'bg-primary/20 border border-primary/30' : vis.chip}`}>
+      <div className={`p-1 rounded shrink-0 ${
+        isSent ? 'bg-primary/20' : notificationTypeStyle(notification.notification_type).bg
+      }`}>
         {isSent ? (
           <Send size={12} className="text-primary" />
         ) : (
-          <Icon size={12} className={notification.read ? 'text-mutedForeground' : vis.icon} />
+          <Icon size={12} className={notification.read ? 'text-mutedForeground' : notificationTypeStyle(notification.notification_type).icon} />
         )}
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-1 mb-0.5">
-          <h3 className={`text-xs font-heading font-bold truncate ${isSent ? 'text-foreground' : vis.title}`}>
+          <h3 className="text-xs font-heading font-bold text-foreground truncate">
             {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
           </h3>
           <span className="text-[9px] text-mutedForeground whitespace-nowrap">
@@ -183,8 +211,7 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
     );
   }
 
-  const Icon = isSent ? Send : notificationIcon(notification);
-  const vis = notificationVisual(notification);
+  const Icon = isSent ? Send : (NOTIFICATION_ICONS[notification.notification_type] || Bell);
   const isOcInvite = !!notification.oc_invite_id;
   const isUserMessage = notification.notification_type === 'user_message' && notification.sender_id;
   const isBbDirectMessage =
@@ -194,14 +221,14 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
 
   return (
     <div className={`flex-1 flex flex-col ${styles.panel}`}>
-      <div className={`px-2.5 py-2 ${isSent ? 'bg-primary/8 border-b border-primary/20' : vis.header}`}>
+      <div className="px-2.5 py-2 border-b border-primary/20 bg-primary/8">
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex items-start gap-2">
-            <div className={`p-1.5 rounded-md ${isSent ? 'bg-primary/10 border border-primary/20' : vis.chip}`}>
-              <Icon size={16} className={isSent ? 'text-primary' : vis.icon} />
+            <div className={`p-1.5 rounded-md ${isSent ? 'bg-primary/10 border border-primary/20' : `${notificationTypeStyle(notification.notification_type).bg} border ${notificationTypeStyle(notification.notification_type).border}`}`}>
+              <Icon size={16} className={isSent ? 'text-primary' : notificationTypeStyle(notification.notification_type).icon} />
             </div>
             <div>
-              <h2 className={`text-xs font-heading font-bold mb-0.5 ${isSent ? 'text-foreground' : vis.title}`}>
+              <h2 className="text-xs font-heading font-bold text-foreground mb-0.5">
                 {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
               </h2>
               <p className="text-[10px] text-mutedForeground">
@@ -258,20 +285,18 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
           ) : notification.notification_type === 'staff_bot_client' ? (
             <StaffBotAlertMessage message={notification.message} />
           ) : (
-            <div className={`${vis.card} px-3 py-2.5`}>
-              <p className="text-[11px] sm:text-sm text-foreground leading-snug whitespace-pre-wrap">
-                <NotificationMessage
-                  message={notification.message}
-                  actorUsername={notification.actor_username}
-                  topicId={notification.topic_id}
-                  topicTitle={notification.topic_title}
-                  commentId={notification.comment_id}
-                  messageLinkTo={notification.message_link_to}
-                  messageLinkLabel={notification.message_link_label}
-                  className="text-inherit"
-                />
-              </p>
-            </div>
+            <p className="text-[11px] sm:text-sm text-foreground leading-snug whitespace-pre-wrap">
+              <NotificationMessage
+                message={notification.message}
+                actorUsername={notification.actor_username}
+                topicId={notification.topic_id}
+                topicTitle={notification.topic_title}
+                commentId={notification.comment_id}
+                messageLinkTo={notification.message_link_to}
+                messageLinkLabel={notification.message_link_label}
+                className="text-inherit"
+              />
+            </p>
           )}
 
           {notification.gif_url && (

@@ -1,6 +1,5 @@
 export const INBOX_STYLES = `
   .ib-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
-  .ib-row.ib-tinted:hover { background-color: unset; }
   .ib-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
   .ib-filters { -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   .ib-filters::-webkit-scrollbar { display: none; }

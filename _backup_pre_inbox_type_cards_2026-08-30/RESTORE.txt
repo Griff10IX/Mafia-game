@@ -1,0 +1,11 @@
+﻿Inbox type-card visual restore point — 2026-08-30
+
+Copy these files back over the working tree to undo the tinted notification cards.
+
+  xcopy /E /Y _backup_pre_inbox_type_cards_2026-08-30\* .
+
+Files snapshotted:
+- src/pages/Social/Inbox.js
+- src/pages/Social/inboxChrome.js
+- src/components/dashboard/NotificationsWidget.js
+- src/components/StaffBotAlertMessage.js

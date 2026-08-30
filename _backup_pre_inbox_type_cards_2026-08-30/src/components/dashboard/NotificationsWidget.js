@@ -1,14 +1,33 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, ChevronRight } from 'lucide-react';
+import { Mail, ChevronRight, Bell, Trophy, Shield, Skull, Gift, MessageCircle, Bot } from 'lucide-react';
 import api from '../../utils/api';
 import { getDashboardWidget, setDashboardWidget } from '../../utils/dashboardWidgetCache';
 import { NotificationMessage } from '../NotificationMessage';
 import { staffBotAlertPreview } from '../StaffBotAlertMessage';
-import { notificationIcon, notificationVisual } from '../../pages/Social/notificationTypeChrome';
 import { toast } from 'sonner';
 import dash from '../../styles/dashboard.module.css';
 import { DashPanel, DashHeader, DashBody, DashLoading } from './dashChrome';
+
+const NOTIFICATION_ICONS = {
+  rank_up: Trophy,
+  reward: Gift,
+  bodyguard: Shield,
+  attack: Skull,
+  system: Bell,
+  user_message: MessageCircle,
+  staff_bot_client: Bot,
+};
+
+const NOTIFICATION_TYPE_ICON = {
+  staff_bot_client: 'text-red-400',
+  system: 'text-amber-400',
+  user_message: 'text-primary',
+  rank_up: 'text-yellow-400',
+  reward: 'text-emerald-400',
+  bodyguard: 'text-sky-400',
+  attack: 'text-rose-400',
+};
 
 function getTimeAgo(dateString) {
   const date = new Date(dateString);
@@ -131,15 +150,14 @@ export default function NotificationsWidget({ onRefresh, userId }) {
           <p className="text-[10px] font-heading text-mutedForeground">No notifications</p>
         ) : (
           preview.map((n) => {
-            const Icon = notificationIcon(n);
-            const vis = notificationVisual(n);
+            const Icon = NOTIFICATION_ICONS[n.notification_type] || Bell;
             return (
               <div
                 key={n.id}
                 role="button"
                 tabIndex={0}
-                className={`flex items-start gap-2 rounded-md px-2 py-1.5 ${vis.row}`}
-                style={{ cursor: n.read ? 'default' : 'pointer' }}
+                className={n.read ? dash.rowMuted : dash.rowActive}
+                style={{ cursor: n.read ? 'default' : 'pointer', alignItems: 'flex-start' }}
                 onClick={() => !n.read && handleMarkRead(n.id)}
                 onKeyDown={(e) => {
                   if (!n.read && (e.key === 'Enter' || e.key === ' ')) {
@@ -148,11 +166,9 @@ export default function NotificationsWidget({ onRefresh, userId }) {
                   }
                 }}
               >
-                <div className={`p-0.5 rounded shrink-0 ${vis.chip}`}>
-                  <Icon size={12} className={n.read ? 'text-mutedForeground' : vis.icon} />
-                </div>
+                <Icon size={12} className={`shrink-0 mt-0.5 ${n.read ? 'text-mutedForeground' : (NOTIFICATION_TYPE_ICON[n.notification_type] || 'text-primary')}`} />
                 <div className="min-w-0 flex-1">
-                  <p className={`text-[10px] font-heading truncate ${n.read ? 'text-mutedForeground' : `${vis.title} font-medium`}`}>
+                  <p className={`text-[10px] font-heading truncate ${n.read ? 'text-mutedForeground' : 'text-foreground font-medium'}`}>
                     {n.title}
                   </p>
                   <div className="text-[9px] text-mutedForeground line-clamp-2">
