@@ -13,6 +13,7 @@ import {
   readJailBootstrap,
   writeJailBootstrap,
 } from '../../utils/jailPageWarm';
+import { setClientJailed } from '../../utils/jailBlockedRoutes';
 const DEFAULT_MOD_COLOR = '#1e3a5f';
 
 const JAIL_STYLES = `
@@ -370,14 +371,14 @@ const JailedPlayerRow = ({
       <div className="j-row-action shrink-0 w-[60px] flex justify-end">
         {player.is_self ? (
           <span className="text-[9px] text-mutedForeground">—</span>
-        ) : player.unbustable || bustCooldownActive ? (
+        ) : player.unbustable || (bustCooldownActive && !player.private_cell_npc) ? (
           <button type="button" disabled className={JAIL_ACTION_IDLE}>Wait</button>
         ) : manualPlayDisabled ? (
           <button type="button" disabled className={JAIL_ACTION_IDLE}>Locked</button>
         ) : (
           <button
             type="button"
-            onClick={() => onBust(player.username)}
+            onClick={() => onBust(player)}
             disabled={loading || userInJail}
             className={JAIL_ACTION_BUST}
             data-testid={`bust-out-${index}`}
@@ -481,6 +482,7 @@ export default function Jail() {
 
   useEffect(() => {
     jailStatusRef.current = jailStatus;
+    setClientJailed(!!jailStatus?.in_jail, jailStatus?.jail_until);
   }, [jailStatus]);
 
   const applyJailBootstrap = (boot) => {
@@ -680,14 +682,19 @@ export default function Jail() {
     }
   };
 
-  const bustOut = async (username) => {
-    if (loading || bustInFlightRef.current || bustCooldownRemaining > 0 || jailStatus.in_jail) return;
+  const bustOut = async (playerOrUsername) => {
+    const username = typeof playerOrUsername === 'string'
+      ? playerOrUsername
+      : (playerOrUsername?.username || '');
+    const ownPrivateCell = !!(typeof playerOrUsername === 'object' && playerOrUsername?.private_cell_npc);
+    if (loading || bustInFlightRef.current || jailStatus.in_jail) return;
+    if (!ownPrivateCell && bustCooldownRemaining > 0) return;
     bustInFlightRef.current = true;
     setLoading(true);
     try {
       const response = await api.post('/jail/bust', { target_username: username });
       const data = response.data || {};
-      if (response.status === 200) {
+      if (response.status === 200 && !ownPrivateCell) {
         startBustCooldown(JAIL_BUST_MIN_INTERVAL_SEC);
       }
       if (data.success) {
@@ -735,7 +742,9 @@ export default function Jail() {
     } catch (error) {
       const detail = error.response?.data?.detail;
       const waitSec = parseBustWaitSecondsFromDetail(detail);
-      startBustCooldown(waitSec ?? JAIL_BUST_MIN_INTERVAL_SEC);
+      if (!ownPrivateCell) {
+        startBustCooldown(waitSec ?? JAIL_BUST_MIN_INTERVAL_SEC);
+      }
       const msg =
         typeof detail === 'string'
           ? detail

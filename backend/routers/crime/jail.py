@@ -422,6 +422,17 @@ async def _count_personal_jail_npcs(user_id: str) -> int:
     return await db.jail_npcs.count_documents({"owner_user_id": user_id})
 
 
+async def _is_own_private_cell_npc(user_id: str, username_ci) -> bool:
+    """True when the target is this user's private-cell NPC (no bust spacing)."""
+    if not user_id or username_ci is None:
+        return False
+    npc = await db.jail_npcs.find_one(
+        {"username": username_ci, "owner_user_id": user_id},
+        {"_id": 0, "username": 1},
+    )
+    return bool(npc)
+
+
 async def _get_visible_jail_npcs(user_id: str) -> List[dict]:
     """Global jail NPCs plus this user's private-cell NPCs only."""
     cached = _jail_cache_get(_jail_visible_npcs_cache, user_id)
@@ -741,41 +752,43 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
 
     uid = current_user.get("id") or ""
     now = datetime.now(timezone.utc)
-    cutoff_iso = (now - timedelta(seconds=JAIL_BUST_MIN_INTERVAL_SEC)).isoformat()
-    cd_res = await db.users.update_one(
-        {
-            "id": uid,
-            "$or": [
-                {"jail_last_bust_attempt_at": {"$exists": False}},
-                {"jail_last_bust_attempt_at": None},
-                {"jail_last_bust_attempt_at": {"$lt": cutoff_iso}},
-            ],
-        },
-        {"$set": {"jail_last_bust_attempt_at": now.isoformat()}},
-    )
-    if cd_res.modified_count == 0:
-        u = await db.users.find_one({"id": uid}, {"jail_last_bust_attempt_at": 1})
-        raw_last = (u or {}).get("jail_last_bust_attempt_at")
-        remaining = JAIL_BUST_MIN_INTERVAL_SEC
-        if raw_last:
-            try:
-                last_dt = datetime.fromisoformat(str(raw_last).replace("Z", "+00:00"))
-                if last_dt.tzinfo is None:
-                    last_dt = last_dt.replace(tzinfo=timezone.utc)
-                last_dt = last_dt.astimezone(timezone.utc)
-                elapsed = (now - last_dt).total_seconds()
-                remaining = max(0, math.ceil(JAIL_BUST_MIN_INTERVAL_SEC - elapsed))
-            except (ValueError, TypeError, OSError):
-                pass
-        if remaining < 1:
-            remaining = 1
-        # Use 400 (not 429): game spacing rule only — avoids global "rate limit" overlay in api.js.
-        return {
-            "success": False,
-            "error": f"Wait {remaining}s before another bust attempt.",
-            "error_code": 400,
-            "bust_cooldown": True,
-        }
+    skip_bust_interval = await _is_own_private_cell_npc(uid, username_ci)
+    if not skip_bust_interval:
+        cutoff_iso = (now - timedelta(seconds=JAIL_BUST_MIN_INTERVAL_SEC)).isoformat()
+        cd_res = await db.users.update_one(
+            {
+                "id": uid,
+                "$or": [
+                    {"jail_last_bust_attempt_at": {"$exists": False}},
+                    {"jail_last_bust_attempt_at": None},
+                    {"jail_last_bust_attempt_at": {"$lt": cutoff_iso}},
+                ],
+            },
+            {"$set": {"jail_last_bust_attempt_at": now.isoformat()}},
+        )
+        if cd_res.modified_count == 0:
+            u = await db.users.find_one({"id": uid}, {"jail_last_bust_attempt_at": 1})
+            raw_last = (u or {}).get("jail_last_bust_attempt_at")
+            remaining = JAIL_BUST_MIN_INTERVAL_SEC
+            if raw_last:
+                try:
+                    last_dt = datetime.fromisoformat(str(raw_last).replace("Z", "+00:00"))
+                    if last_dt.tzinfo is None:
+                        last_dt = last_dt.replace(tzinfo=timezone.utc)
+                    last_dt = last_dt.astimezone(timezone.utc)
+                    elapsed = (now - last_dt).total_seconds()
+                    remaining = max(0, math.ceil(JAIL_BUST_MIN_INTERVAL_SEC - elapsed))
+                except (ValueError, TypeError, OSError):
+                    pass
+            if remaining < 1:
+                remaining = 1
+            # Use 400 (not 429): game spacing rule only — avoids global "rate limit" overlay in api.js.
+            return {
+                "success": False,
+                "error": f"Wait {remaining}s before another bust attempt.",
+                "error_code": 400,
+                "bust_cooldown": True,
+            }
 
     total_attempts = _safe_int(current_user.get("jail_bust_attempts"), 0)
     total_successes = _safe_int(current_user.get("jail_busts"), 0)

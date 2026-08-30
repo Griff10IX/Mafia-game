@@ -18,78 +18,48 @@ const BANK_STYLES = `
 
   .bk-page { display: flex; flex-direction: column; gap: 10px; }
 
-  .bk-section {
-    position: relative;
-    overflow: hidden;
-    border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.06);
-    background:
-      linear-gradient(180deg, rgba(28,28,32,0.96) 0%, rgba(12,12,14,0.98) 100%);
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.05),
-      0 10px 28px rgba(0,0,0,0.38);
-  }
-  .bk-section::before {
-    content: '';
-    position: absolute; inset: 0 auto 0 0; width: 3px;
-    background: linear-gradient(180deg, rgba(var(--noir-primary-rgb),0.75), rgba(var(--noir-primary-rgb),0.12));
-    pointer-events: none;
-  }
+  .bk-section { position: relative; overflow: hidden; }
 
   .bk-section-head {
     width: 100%;
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     padding: 10px 12px 10px 14px;
     text-align: left;
-    background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent);
+    background: transparent;
     border: 0;
+    border-bottom: 1px solid var(--gm-border, var(--noir-border));
     cursor: pointer;
   }
-  .bk-section-head:hover { background: linear-gradient(180deg, rgba(var(--noir-primary-rgb),0.08), transparent); }
+  .bk-section-head:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
   .bk-section-title {
     display: flex; align-items: center; gap: 8px; min-width: 0;
     font-family: inherit;
     font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-    color: rgba(236,236,240,0.92);
+    color: var(--noir-primary);
   }
-  .bk-section-title svg { color: rgb(var(--noir-primary-rgb)); flex-shrink: 0; }
+  .bk-section-title svg { color: var(--noir-primary); flex-shrink: 0; }
   .bk-section-meta {
     font-size: 10px; color: var(--noir-muted);
     white-space: nowrap;
   }
-  .bk-section-meta strong { color: rgba(236,236,240,0.88); font-weight: 700; }
-  .bk-chevron { color: rgba(var(--noir-primary-rgb),0.7); flex-shrink: 0; }
+  .bk-section-meta strong { color: var(--noir-foreground); font-weight: 700; }
+  .bk-chevron { color: var(--noir-primary); opacity: 0.75; flex-shrink: 0; }
 
   .bk-body { padding: 12px 12px 12px 14px; display: flex; flex-direction: column; gap: 10px; }
 
   .bk-label {
     display: block;
     font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
-    color: rgba(var(--noir-primary-rgb),0.72);
+    color: var(--noir-primary);
     margin-bottom: 5px;
   }
-  .bk-field {
-    width: 100%;
-    height: 36px;
-    padding: 0 10px;
-    border-radius: 6px;
-    background: rgba(0,0,0,0.42);
-    border: 1px solid rgba(255,255,255,0.06);
-    box-shadow: inset 0 2px 6px rgba(0,0,0,0.4);
-    color: var(--noir-foreground);
-    font-size: 12px;
-  }
-  .bk-field:focus {
-    outline: none;
-    border-color: rgba(var(--noir-primary-rgb),0.45);
-    box-shadow: inset 0 2px 6px rgba(0,0,0,0.4), 0 0 0 1px rgba(var(--noir-primary-rgb),0.18);
-  }
+  .bk-field { width: 100%; height: 36px; padding: 0 10px; font-size: 12px; }
 
-  .bk-ledger {
-    border-radius: 7px;
+  .bk-inset {
     padding: 10px 11px;
-    background: rgba(0,0,0,0.28);
-    border: 1px solid rgba(255,255,255,0.05);
+    background: var(--gm-card-hover, var(--noir-surface));
+    border: 1px solid var(--gm-border, var(--noir-border));
+    border-radius: var(--app-surface-radius, 8px);
   }
   .bk-ledger-row {
     display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
@@ -97,55 +67,40 @@ const BANK_STYLES = `
     padding: 3px 0;
   }
   .bk-ledger-row span { color: var(--noir-muted); }
-  .bk-ledger-row strong { color: rgba(236,236,240,0.9); font-weight: 700; }
+  .bk-ledger-row strong { color: var(--noir-foreground); font-weight: 700; }
   .bk-ledger-row.bk-total {
     margin-top: 6px; padding-top: 7px;
-    border-top: 1px solid rgba(255,255,255,0.06);
+    border-top: 1px solid var(--gm-border, var(--noir-border));
   }
-  .bk-ledger-row.bk-total strong { color: rgb(var(--noir-primary-rgb)); font-size: 13px; }
+  .bk-ledger-row.bk-total strong { color: var(--noir-primary); font-size: 13px; }
 
-  .bk-vault {
-    position: relative;
-    border-radius: 8px;
-    padding: 12px 12px 11px;
-    background:
-      radial-gradient(ellipse at 20% 0%, rgba(var(--noir-primary-rgb),0.16), transparent 55%),
-      rgba(0,0,0,0.35);
-    border: 1px solid rgba(255,255,255,0.06);
-  }
+  .bk-vault { position: relative; }
   .bk-vault-label {
     font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
     color: var(--noir-muted); margin-bottom: 4px;
   }
   .bk-vault-amt {
     font-size: 20px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1;
-    color: rgb(var(--noir-primary-rgb));
-    text-shadow: 0 0 18px rgba(var(--noir-primary-rgb),0.25);
+    color: var(--noir-primary);
   }
   .bk-vault-bar {
-    margin-top: 10px; height: 4px; border-radius: 99px; overflow: hidden;
-    background: rgba(255,255,255,0.06);
+    margin-top: 10px; height: 4px; border-radius: var(--app-surface-radius, 8px); overflow: hidden;
+    background: var(--noir-content);
+    border: 1px solid var(--gm-border, var(--noir-border));
   }
   .bk-vault-bar > i {
-    display: block; height: 100%; border-radius: inherit;
-    background: linear-gradient(90deg, rgba(var(--noir-primary-rgb),0.45), rgb(var(--noir-primary-rgb)));
+    display: block; height: 100%;
+    background: var(--noir-primary);
   }
 
   .bk-btn {
     width: 100%;
     display: inline-flex; align-items: center; justify-content: center; gap: 7px;
     height: 38px;
-    border: 0; border-radius: 6px;
     font-size: 11px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
     cursor: pointer;
   }
   .bk-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-  .bk-btn-ghost {
-    background: rgba(255,255,255,0.04);
-    color: rgba(236,236,240,0.88);
-    border: 1px solid rgba(255,255,255,0.08);
-  }
-  .bk-btn-ghost:hover:not(:disabled) { background: rgba(255,255,255,0.07); }
 
   .bk-note { font-size: 10px; color: var(--noir-muted); line-height: 1.4; }
   .bk-empty {
@@ -155,13 +110,23 @@ const BANK_STYLES = `
     color: var(--noir-muted);
   }
 
-  .bk-row {
-    border-radius: 7px;
-    padding: 10px 11px;
-    background: rgba(0,0,0,0.22);
-    border: 1px solid rgba(255,255,255,0.04);
-  }
+  .bk-row { padding: 10px 11px; }
   .bk-row + .bk-row { margin-top: 7px; }
+
+  body[data-theme-variant="old_school"] .bk-section-head {
+    background: var(--os-metal-face);
+    border-bottom-color: var(--os-chrome);
+    box-shadow: inset 1px 1px 0 var(--os-chrome-bright);
+  }
+  body[data-theme-variant="old_school"] .bk-inset,
+  body[data-theme-variant="old_school"] .bk-row {
+    border-radius: 0;
+    box-shadow: var(--os-bevel);
+  }
+  body[data-theme-variant="old_school"] .bk-vault-bar,
+  body[data-theme-variant="old_school"] .bk-vault-bar > i {
+    border-radius: 0;
+  }
 
   @media (prefers-reduced-motion: reduce) {
     .bank-fade-in { animation: none !important; }
@@ -197,7 +162,7 @@ function timeLeft(iso) {
 
 function BankSection({ id, title, icon, meta, collapsed, onToggle, headerRef, children, delay }) {
   return (
-    <section className="bk-section bank-fade-in mobile-panel" style={delay ? { animationDelay: delay } : undefined}>
+    <section className={`${styles.panel} bk-section bank-fade-in mobile-panel`} style={delay ? { animationDelay: delay } : undefined}>
       <button
         type="button"
         ref={headerRef}
@@ -233,7 +198,7 @@ const InterestBankCard = ({
           value={depositAmount}
           onChange={onDepositAmountChange}
           placeholder="e.g. 250,000"
-          className="bk-field"
+          className={`${styles.input} bk-field`}
         />
       </div>
       <div>
@@ -241,7 +206,7 @@ const InterestBankCard = ({
         <select
           value={String(durationHours)}
           onChange={(e) => onDurationChange(parseInt(e.target.value, 10))}
-          className="bk-field"
+          className={`${styles.input} bk-field`}
         >
           {(Array.isArray(meta?.interest_options) ? meta.interest_options : []).map((o) => (
             <option key={o.hours} value={String(o.hours)}>
@@ -252,8 +217,8 @@ const InterestBankCard = ({
       </div>
     </div>
 
-    <div className="bk-ledger">
-      <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.16em] mb-1.5" style={{ color: 'rgba(var(--noir-primary-rgb),0.8)' }}>
+    <div className="bk-inset">
+      <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.16em] mb-1.5" style={{ color: 'var(--noir-primary)' }}>
         <Clock size={12} />
         Preview
       </div>
@@ -290,7 +255,7 @@ const SwissBankCard = ({
   const pct = limit > 0 ? Math.min(100, (bal / limit) * 100) : 0;
   return (
     <div className="bk-body">
-      <div className="bk-vault">
+      <div className="bk-inset bk-vault">
         <div className="bk-vault-label">Swiss balance</div>
         <div className="bk-vault-amt">{formatMoney(overview?.swiss_balance)}</div>
         <div className="bk-vault-bar" aria-hidden>
@@ -304,7 +269,7 @@ const SwissBankCard = ({
           value={swissAmount}
           onChange={onSwissAmountChange}
           placeholder="e.g. 100,000"
-          className="bk-field"
+          className={`${styles.input} bk-field`}
         />
       </div>
 
@@ -312,7 +277,7 @@ const SwissBankCard = ({
         <button type="button" onClick={onDeposit} className={`${styles.btnPrimary} bk-btn`}>
           Deposit
         </button>
-        <button type="button" onClick={onWithdraw} className="bk-btn bk-btn-ghost">
+        <button type="button" onClick={onWithdraw} className={`${styles.surface} bk-btn`}>
           Withdraw
         </button>
       </div>
@@ -327,7 +292,7 @@ const DepositCard = ({ deposit, onClaim }) => {
   const canClaim = matured && !claimed;
 
   return (
-    <div className="bk-row">
+    <div className="bk-inset bk-row">
       <div className="space-y-1.5 md:space-y-0 md:flex md:items-center md:justify-between md:gap-3">
         <div className="flex-1 space-y-1">
           <div className="flex items-center justify-between">
@@ -389,7 +354,7 @@ const SendMoneyCard = ({
           value={transferTo}
           onChange={(e) => onTransferToChange(e.target.value)}
           placeholder="username..."
-          className="bk-field"
+          className={`${styles.input} bk-field`}
         />
       </div>
       <div>
@@ -398,12 +363,12 @@ const SendMoneyCard = ({
           value={transferAmount}
           onChange={onTransferAmountChange}
           placeholder="e.g. 50,000"
-          className="bk-field"
+          className={`${styles.input} bk-field`}
         />
         <div className="bk-note mt-1.5">
-          Available: <strong style={{ color: 'rgba(236,236,240,0.88)' }}>{formatMoney(cash)}</strong>
+          Available: <strong style={{ color: 'var(--noir-foreground)' }}>{formatMoney(cash)}</strong>
           {' · '}
-          You will send: <strong style={{ color: 'rgba(236,236,240,0.88)' }}>{formatMoney(transferNum)}</strong>
+          You will send: <strong style={{ color: 'var(--noir-foreground)' }}>{formatMoney(transferNum)}</strong>
         </div>
         {insufficient && (
           <p className="text-[10px] text-amber-500 mt-1">Not enough cash on hand for this amount.</p>
@@ -458,7 +423,7 @@ const TransferCard = ({ transfer }) => {
   };
 
   return (
-    <div className="bk-row">
+    <div className="bk-inset bk-row">
       <div className="flex items-center justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className={`text-[11px] font-bold mb-0.5 ${
@@ -674,7 +639,7 @@ export default function Bank() {
   const transfers = Array.isArray(overview?.transfers) ? overview.transfers : [];
 
   return (
-    <div className={`bk-page ${styles.pageContent} mobile-page-root`} data-testid="bank-page">
+    <div className={`bk-page ${styles.pageContent} mobile-page-root`} data-testid="bank-page" data-page="bank">
       <style>{BANK_STYLES}</style>
 
       <p className="text-[10px] italic" style={{ color: 'var(--noir-muted)' }}>

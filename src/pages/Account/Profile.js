@@ -977,12 +977,12 @@ const ProfileInfoCard = ({
           </div>
           {/* Compact Cars row under Honours/Properties — pinned cars only */}
           {topCars?.length > 0 && (
-            <div className="border-t border-zinc-700/30 px-2 py-1.5 md:px-3 md:py-1">
-              <div className="flex items-center gap-0.5 mb-1">
-                <Car size={9} className="text-primary shrink-0" />
-                <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider">Cars</span>
+            <div className="border-t border-primary/15 px-2.5 py-2 md:px-3 md:py-2">
+              <div className="flex items-center gap-1 mb-1.5">
+                <Car size={12} className="text-primary shrink-0" />
+                <span className="text-[10px] md:text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Cars</span>
               </div>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-1.5">
                 {topCars.map((car) => {
                   const label = RARITY_LABELS[car.rarity] || car.rarity || '';
                   const badgeClass = RARITY_BADGE_CLASSES[car.rarity] || RARITY_BADGE_CLASSES.common;
@@ -990,10 +990,10 @@ const ProfileInfoCard = ({
                     <Link
                       key={car.id}
                       to={`/view-car?id=${encodeURIComponent(car.id)}`}
-                      className={`inline-flex items-center gap-0.5 px-1.5 py-1 min-h-[28px] md:min-h-0 md:px-1 md:py-0.5 rounded border bg-zinc-900/90 hover:bg-zinc-800/90 transition-colors prof-row text-[10px] md:text-[7px] font-heading leading-tight ${badgeClass}`}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 min-h-8 rounded-md border bg-background/80 hover:bg-primary/10 transition-colors prof-row text-[11px] md:text-xs font-heading leading-tight ${badgeClass}`}
                     >
-                      <span className="shrink-0 uppercase">{label}:</span>
-                      <span className="text-foreground whitespace-normal break-words">{censorProfanity ? filterProfanity(car.name) : car.name}</span>
+                      <span className="shrink-0 uppercase font-bold tracking-wide">{label}:</span>
+                      <span className="text-foreground font-semibold whitespace-normal break-words">{censorProfanity ? filterProfanity(car.name) : car.name}</span>
                     </Link>
                   );
                 })}
@@ -1215,7 +1215,7 @@ const RARITY_BADGE_CLASSES = {
   custom: 'border-primary/70 text-primary',
   loot_exclusive: 'border-rose-400/70 text-rose-400 bg-rose-950/30',
   exclusive: 'border-rose-400/70 text-rose-400',
-  vip_exclusive: 'border-cyan-700/80 text-cyan-500 bg-cyan-950/25',
+  vip_exclusive: 'border-cyan-400/80 text-cyan-300 bg-cyan-950/35',
 };
 
 /** Extract YouTube video ID from watch URL, youtu.be, or embed URL. */
@@ -1300,13 +1300,13 @@ const TopCarsCard = ({ topCars, showCars }) => {
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`} style={{ animationDelay: '0.06s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-0.5">
-        <Car size={10} className="text-primary" />
-        <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1">
+        <Car size={12} className="text-primary" />
+        <h3 className="text-[10px] md:text-[11px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
           Cars
         </h3>
       </div>
-      <div className="p-1.5 flex flex-wrap gap-1">
+      <div className="p-2 flex flex-wrap gap-1.5">
         {topCars.map((car) => {
           const label = RARITY_LABELS[car.rarity] || car.rarity;
           const badgeClass = RARITY_BADGE_CLASSES[car.rarity] || RARITY_BADGE_CLASSES.common;
@@ -1314,10 +1314,10 @@ const TopCarsCard = ({ topCars, showCars }) => {
             <Link
               key={car.id}
               to={`/view-car?id=${encodeURIComponent(car.id)}`}
-              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border bg-zinc-900/90 hover:bg-zinc-800/90 transition-colors prof-row text-[9px] ${badgeClass}`}
+              className={`inline-flex items-center gap-1 px-2.5 py-1.5 min-h-8 rounded-md border bg-background/80 hover:bg-primary/10 transition-colors prof-row text-[11px] md:text-xs ${badgeClass}`}
             >
-              <span className="font-heading uppercase tracking-wide shrink-0">{label}:</span>
-              <span className="font-heading font-semibold text-white whitespace-normal break-words">{car.name}</span>
+              <span className="font-heading uppercase tracking-wide shrink-0 font-bold">{label}:</span>
+              <span className="font-heading font-semibold text-foreground whitespace-normal break-words">{car.name}</span>
             </Link>
           );
         })}

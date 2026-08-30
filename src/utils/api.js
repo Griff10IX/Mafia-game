@@ -9,6 +9,7 @@ import {
 import { clearProfileSessionLastMeUsername } from './prefetchCache';
 import { inFlightGet, clearInFlightGets } from './inFlightGet';
 import { parseIpBanFromError } from './ipBan';
+import { isJailBlockedFrontendPath, setClientJailed } from './jailBlockedRoutes';
 
 // Empty or unset = same origin (e.g. Linode: Nginx serves app and proxies /api)
 const raw = (process.env.REACT_APP_BACKEND_URL && process.env.REACT_APP_BACKEND_URL.trim())
@@ -456,6 +457,7 @@ api.interceptors.response.use(
       const detail = error.response?.data?.detail;
       if (typeof detail === 'string' && detail.toLowerCase().includes('while in jail')) {
         try {
+          setClientJailed(true);
           window.dispatchEvent(
             new CustomEvent('app:refresh-user', {
               detail: { in_jail: true },
@@ -463,13 +465,7 @@ api.interceptors.response.use(
           );
         } catch (_) { /* ignore */ }
         const p = window.location.pathname;
-        const jailBlocked = [
-          '/crime/crimes', '/crimes',
-          '/crime/gta', '/gta',
-          '/organised-crime', '/oc',
-          '/money/booze-run', '/booze-run',
-        ];
-        if (jailBlocked.some((prefix) => p === prefix || p.startsWith(`${prefix}/`))) {
+        if (isJailBlockedFrontendPath(p)) {
           const onBooze =
             p === '/money/booze-run' ||
             p.startsWith('/money/booze-run/') ||

@@ -6,10 +6,16 @@
 
 [hr]
 
-[size=1.5][b][color=#2ECC71]2026-08-30[/color][/b] — [b]Armoury bullets[/b][/size]
+[size=1.5][b][color=#2ECC71]2026-08-30[/color][/b] — [b]Armoury, jail, travel, profile[/b][/size]
 [quote]
 [list]
 [*][color=#888888][b]Changed:[/b] [b]Bullet factories[/b] now produce [b]300–600[/b] bullets [b]per hour[/b], rolled randomly each hour (was a flat ~208/hour, 5,000/day). Stock still caps at 24 hours (up to 14,400).[/color]
+[*][color=#888888][b]Changed:[/b] Busting [b]your own[/b] private-cell NPCs (the [b]YOURS[/b] rows) has [b]no wait[/b] between attempts. Other prisoners and public NPCs still have the short wait.[/color]
+[*][color=#888888][b]Fixed:[/b] While you are in [b]jail[/b], tapping [b]GTA[/b], [b]Crimes[/b], [b]OC[/b], or [b]Booze[/b] goes straight to Jail — the other page no longer flashes first.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Travel[/b] now shows airport trips as [b]10 included[/b] / up to [b]20 with airmiles[/b], and car travel as [b]unlimited[/b] — it no longer looks like a 10/20 counter.[/color]
+[*][color=#888888][b]Changed:[/b] Cars on your [b]dossier[/b] only show if you pin them from [b]Garage → View Car[/b] (up to 5). Exclusive / VIP cars are not added automatically.[/color]
+[*][color=#888888][b]Fixed:[/b] Your chosen [b]theme[/b] no longer flashes Classic/gold for a moment when you refresh.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Bank[/b], [b]IP Rules[/b], and [b]View Car[/b] follow your selected theme. The car photo fills the box; pinned cars on the dossier are larger and easier to read.[/color]
 [/list]
 [/quote]
 
