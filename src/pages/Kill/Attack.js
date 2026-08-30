@@ -52,25 +52,16 @@ function showExactFindClock(a, perkActive) {
 
 function FoundTargetCity({ attack, pinClassName = 'text-primary' }) {
   if (attack?.status !== 'found' || !attack.location_state) return null;
-  const hop = String(attack.traveling_to || '').trim();
-  const showHop = hop && hop !== attack.location_state;
   return (
     <span className="inline-flex items-center gap-1 min-w-0">
       <MapPin size={12} className={pinClassName} />
       <span className="text-foreground">{attack.location_state}</span>
-      {showHop ? (
-        <span className="inline-flex items-center gap-0.5 text-cyan-300 font-bold" title={`Traveling to ${hop}`}>
-          <Plane size={11} />
-          {hop}
-        </span>
-      ) : null}
     </span>
   );
 }
 
 function targetTravelCity(attack) {
-  const hop = String(attack?.traveling_to || '').trim();
-  return hop || attack?.location_state || '';
+  return attack?.location_state || '';
 }
 
 function applyFoundLocationPatches(list, rows, hunterCity) {
@@ -85,22 +76,20 @@ function applyFoundLocationPatches(list, rows, hunterCity) {
     const p = byId[a.attack_id];
     if (!p) return a;
     const loc = p.location_state || a.location_state;
-    const hop = (p.traveling_to || '').trim() || null;
-    const chase = hop || loc;
-    const canTravel = !!(a.status === 'found' && chase && myCity && myCity !== chase);
-    const canAttack = !!(a.status === 'found' && loc && myCity && myCity === loc && !hop);
+    const moving = !!(p.target_traveling ?? a.target_traveling);
+    const canTravel = !!(a.status === 'found' && loc && myCity && myCity !== loc);
+    const canAttack = !!(a.status === 'found' && loc && myCity && myCity === loc && !moving);
     changed = true;
     return {
       ...a,
       location_state: loc,
-      traveling_to: hop,
+      traveling_to: null,
+      target_traveling: moving,
       can_travel: myCity ? canTravel : a.can_travel,
-      can_attack: myCity ? canAttack : (!hop && a.can_attack),
-      message: hop
-        ? `Target is traveling to ${hop}.`
-        : (canAttack
-          ? `Target found in ${loc}! You are in the same location. Ready to attack!`
-          : `Target found in ${loc}! Travel there to attack.`),
+      can_attack: myCity ? canAttack : (!moving && a.can_attack),
+      message: canAttack
+        ? `Target found in ${loc}! You are in the same location. Ready to attack!`
+        : `Target found in ${loc}! Travel there to attack.`,
     };
   });
   return changed ? next : list;

@@ -81,6 +81,10 @@ BLACKJACK_ABSOLUTE_MAX_BET = 500_000_000
 BLACKJACK_HOUSE_EDGE = 0.0005  # 0.05% of bet to owner when player loses
 BLACKJACK_HISTORY_MAX = 10
 BLACKJACK_GAME_TIMEOUT_SECONDS = 600  # Unfinished game auto-stands and finishes after this
+# Secret owner-favor (same idea as video poker miss): when the dealer must hit and that
+# card would bust, this fraction of those busts are swapped to a 19/20/21 if the shoe allows.
+BLACKJACK_DEALER_BUST_SAVE_CHANCE = 0.40
+BLACKJACK_DEALER_SAVE_TOTALS = (19, 20, 21)
 
 BLACKJACK_SUITS = ["H", "D", "C", "S"]
 BLACKJACK_VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
@@ -146,6 +150,28 @@ def _blackjack_hand_total(hand):
 
 def _blackjack_is_blackjack(hand):
     return len(hand) == 2 and _blackjack_hand_total(hand) == 21
+
+
+def _blackjack_dealer_play(dealer_hand: list, deck: list) -> int:
+    """Hit while under 17 (stand on all 17+). Mutates dealer_hand and deck. Returns final total.
+
+    Client never sees a near-bust: a busting forced hit is sometimes replaced with a real
+    remaining-deck card that lands 19/20/21. If no such card exists, the bust stands.
+    """
+    dealer_total = _blackjack_hand_total(dealer_hand)
+    while dealer_total < 17 and deck:
+        card = deck.pop()
+        trial = _blackjack_hand_total(dealer_hand + [card])
+        if trial > 21 and _rng.random() < BLACKJACK_DEALER_BUST_SAVE_CHANCE:
+            save_idxs = [
+                i for i, c in enumerate(deck)
+                if _blackjack_hand_total(dealer_hand + [c]) in BLACKJACK_DEALER_SAVE_TOTALS
+            ]
+            if save_idxs:
+                card = deck.pop(_rng.choice(save_idxs))
+        dealer_hand.append(card)
+        dealer_total = _blackjack_hand_total(dealer_hand)
+    return dealer_total
 
 
 def _normalize_city_for_blackjack(city_raw: str) -> str:
@@ -283,11 +309,7 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
     dealer_hand = list(game.get("dealer_hand") or [])
     bet = game.get("bet", 0)
     owner_id = game.get("owner_id")
-    dealer_total = _blackjack_hand_total(dealer_hand)
-    while dealer_total < 17 and deck:
-        card = deck.pop()
-        dealer_hand.append(card)
-        dealer_total = _blackjack_hand_total(dealer_hand)
+    dealer_total = _blackjack_dealer_play(dealer_hand, deck)
     player_total = _blackjack_hand_total(player_hand)
     if dealer_total > 21:
         result = "dealer_bust"
@@ -1180,11 +1202,7 @@ def register(router):
         dealer_hand = list(game.get("dealer_hand") or [])
         bet = game.get("bet", 0)
         owner_id = game.get("owner_id")
-        dealer_total = _blackjack_hand_total(dealer_hand)
-        while dealer_total < 17 and deck:
-            card = deck.pop()
-            dealer_hand.append(card)
-            dealer_total = _blackjack_hand_total(dealer_hand)
+        dealer_total = _blackjack_dealer_play(dealer_hand, deck)
         player_total = _blackjack_hand_total(player_hand)
         if dealer_total > 21:
             result = "dealer_bust"

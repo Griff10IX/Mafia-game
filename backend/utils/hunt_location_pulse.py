@@ -36,13 +36,17 @@ async def notify_hunters_target_moved(
     *,
     location_state: Optional[str],
     traveling_to: Optional[str] = None,
+    target_traveling: Optional[bool] = None,
 ) -> int:
-    """Bump every hunter who has a FOUND row on this target. Returns hunter count."""
+    """Bump every hunter who has a FOUND row on this target. Returns hunter count.
+
+    Never include destination city in the pulse. `target_traveling` is a yes/no flag only.
+    """
     tid = str(target_id or "").strip()
     loc = (location_state or "").strip() or None
-    hop = (traveling_to or "").strip() or None
     if not tid or not loc:
         return 0
+    moving = bool(target_traveling) if target_traveling is not None else bool((traveling_to or "").strip())
     by_attacker: Dict[str, List[dict]] = {}
     try:
         cursor = db.attacks.find(
@@ -58,7 +62,8 @@ async def notify_hunters_target_moved(
                 {
                     "attack_id": attack_id,
                     "location_state": loc,
-                    "traveling_to": hop,
+                    "traveling_to": None,
+                    "target_traveling": moving,
                 }
             )
     except Exception:
@@ -82,6 +87,7 @@ def schedule_notify_hunters_target_moved(
     *,
     location_state: Optional[str],
     traveling_to: Optional[str] = None,
+    target_traveling: Optional[bool] = None,
 ) -> None:
     try:
         loop = asyncio.get_running_loop()
@@ -94,6 +100,7 @@ def schedule_notify_hunters_target_moved(
                 target_id,
                 location_state=location_state,
                 traveling_to=traveling_to,
+                target_traveling=target_traveling,
             )
         )
     except Exception:

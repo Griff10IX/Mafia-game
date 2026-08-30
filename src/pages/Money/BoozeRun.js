@@ -1020,7 +1020,7 @@ export default function BoozeRun() {
           <div className="min-w-0">
             <p className="text-[10px] font-heading font-bold uppercase tracking-wider text-primary">⚡ Skip Run</p>
             <p className="text-[9px] text-zinc-500 font-heading">
-              One tap: runs the most profitable direction on the route — drives you there instantly if needed, buys the best booze, skips the drive back and sells. 1 skip token per drive — bust risk still applies.
+              One tap: buys and sells on the best route prices without leaving your city. 1 skip token per drive skipped — bust risk still applies.
               {' '}<span className="text-zinc-400 tabular-nums">{skipCredits > 0 ? `${skipCredits} credit${skipCredits === 1 ? '' : 's'} active` : `${skipTokens} token${skipTokens === 1 ? '' : 's'} held`}</span>
             </p>
           </div>

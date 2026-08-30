@@ -611,8 +611,19 @@ class AdminBoozeListedPriceRequest(BaseModel):
 
 
 # ----- Internal impls (for auto-rank) -----
-async def _booze_buy_impl(user: dict, booze_id: str, amount: int, *, via_auto_rank: bool = False) -> dict:
-    """Perform buy for given user (by id). Returns response dict or raises HTTPException. Updates DB."""
+async def _booze_buy_impl(
+    user: dict,
+    booze_id: str,
+    amount: int,
+    *,
+    via_auto_rank: bool = False,
+    trade_city: Optional[str] = None,
+) -> dict:
+    """Perform buy for given user (by id). Returns response dict or raises HTTPException. Updates DB.
+
+    ``trade_city`` prices the buy at that city's board without moving the player
+    (used by Skip Run so a skip token does not change location).
+    """
     from utils.booze_intake_gate import raise_if_booze_intake_blocked
 
     user = await _booze_reload_user_trade_state(user)
@@ -624,7 +635,7 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int, *, via_auto_ra
     booze_ids = [b["id"] for b in BOOZE_TYPES]
     if booze_id not in booze_ids:
         raise HTTPException(status_code=400, detail="Invalid booze type")
-    current_state = user.get("current_state", STATES[0] if STATES else "")
+    current_state = (trade_city or user.get("current_state") or (STATES[0] if STATES else "")).strip()
     loc_index = STATES.index(current_state) if current_state in STATES else 0
     booze_index = booze_ids.index(booze_id)
     prices_map = _booze_prices_for_rotation()
@@ -733,11 +744,13 @@ async def _booze_sell_impl(
     via_distillery_collect: bool = False,
     illegal_business_id: Optional[str] = None,
     distillery_cash_mult: float = 1.0,
+    trade_city: Optional[str] = None,
 ) -> dict:
     """Perform sell for given user. Returns response dict or raises HTTPException. Updates DB.
 
     When ``illegal_business_id`` is set (only with ``via_distillery_collect``), revenue is credited
     to that illegal business vault instead of hand ``money``.
+    ``trade_city`` prices the sell (and run-profit) at that city without moving the player.
     """
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
@@ -750,7 +763,7 @@ async def _booze_sell_impl(
     booze_ids = [b["id"] for b in BOOZE_TYPES]
     if booze_id not in booze_ids:
         raise HTTPException(status_code=400, detail="Invalid booze type")
-    current_state = user.get("current_state", STATES[0] if STATES else "")
+    current_state = (trade_city or user.get("current_state") or (STATES[0] if STATES else "")).strip()
     loc_index = STATES.index(current_state) if current_state in STATES else 0
     booze_index = booze_ids.index(booze_id)
     prices_map = _booze_prices_for_rotation()
@@ -1158,9 +1171,8 @@ async def booze_run_sell(
 
 async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
     """One-tap best-profit booze run: picks the most profitable direction on this rotation's
-    route, drives there instantly (1 skip credit per drive; tokens auto-activate when credits
-    run out), buys the best-margin booze, skips the drive back, and sells everything.
-    Bust risk applies at every phase, same as a manual run."""
+    route, prices buy/sell at those cities, and spends 1 skip credit per drive skipped.
+    Does not change location, start a trip, or pulse hunters. Bust risk still applies."""
     from utils.cooldown_skip import (
         has_skip_credit,
         consume_skip_credit,
@@ -1169,7 +1181,6 @@ async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
     )
     from utils.booze_intake_gate import raise_if_booze_intake_blocked
     from routers.account.auto_rank import _get_travel_method
-    from routers.admin.airport import _start_travel_impl
 
     uid = current_user.get("id") or ""
     user = await db.users.find_one({"id": uid}, {"_id": 0})
@@ -1179,9 +1190,10 @@ async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
     if _booze_user_in_jail(user):
         raise HTTPException(status_code=400, detail="You are in jail!")
 
-    now = datetime.now(timezone.utc)
     steps: list = []
     credits_used = 0
+    home_state = (user.get("current_state") or "").strip()
+    leg_city = home_state
 
     async def _ensure_skip_credit() -> bool:
         """True when a credit is available, auto-activating a held token if needed (daily cap applies)."""
@@ -1203,14 +1215,8 @@ async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
         user = await db.users.find_one({"id": uid}, {"_id": 0})
         return has_skip_credit(user, "booze")
 
-    async def _arrive_now(dest_state: str):
-        await db.users.update_one(
-            {"id": uid},
-            {"$set": {"current_state": dest_state}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}},
-        )
-
     async def _skip_drive_to(dest_city: str):
-        """Start a real booze-run travel (car checks, damage, casino blocks) then fast-forward it."""
+        """Spend a skip credit instead of driving. Does not change location."""
         nonlocal user, credits_used
         if not await _ensure_skip_credit():
             raise HTTPException(
@@ -1220,36 +1226,20 @@ async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
         travel_method = await _get_travel_method(db, uid)
         if not travel_method:
             raise HTTPException(status_code=400, detail="You need a working car to run booze.")
-        await _start_travel_impl(user, dest_city, travel_method, airport_slot=None, booze_run=True)
         if not await consume_skip_credit(db, uid, "booze"):
             raise HTTPException(
                 status_code=400,
-                detail="Skip credit was used up — travel started normally, wait for arrival.",
+                detail="Out of Booze Travel Skip tokens/credits (or you hit the daily cap).",
             )
         credits_used += 1
-        await _arrive_now(dest_city)
         steps.append(f"Skipped the drive to {dest_city}")
-        user = await db.users.find_one({"id": uid}, {"_id": 0})
-
-    # Resolve any pending travel first: overdue legs land for free, active legs cost a credit.
-    if user.get("travel_arrives_at") and user.get("traveling_to"):
-        arrives = _parse_iso_datetime(user.get("travel_arrives_at"))
-        if arrives and now < arrives:
-            if not await _ensure_skip_credit() or not await consume_skip_credit(db, uid, "booze"):
-                raise HTTPException(
-                    status_code=400,
-                    detail="You're mid-travel and out of skip tokens/credits.",
-                )
-            credits_used += 1
-            steps.append(f"Skipped the current drive to {user['traveling_to']}")
-        await _arrive_now(user["traveling_to"])
         user = await db.users.find_one({"id": uid}, {"_id": 0})
 
     round_trip = _booze_round_trip_cities()
     if not round_trip or len(round_trip) != 2:
         raise HTTPException(status_code=400, detail="No booze route available right now.")
     city_a, city_b = round_trip
-    current_state = (user.get("current_state") or "").strip()
+    current_state = home_state
     prices = _booze_prices_for_rotation()
 
     def _best_margin(buy_city: str, sell_city: str):
@@ -1294,9 +1284,9 @@ async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
         candidates.sort(reverse=True)
         _, _, buy_city, sell_city, booze, buy_price = candidates[0]
 
-        if current_state != buy_city:
+        if leg_city != buy_city:
             await _skip_drive_to(buy_city)
-            current_state = buy_city
+            leg_city = buy_city
 
         fam_extra = await _family_booze_cargo_extra(user.get("family_id"))
         vip_car = await _booze_vip_pass_car_owned(db, uid)
@@ -1304,7 +1294,7 @@ async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
         amount = min(int(capacity), int(user.get("money") or 0) // max(1, buy_price))
         if amount <= 0:
             raise HTTPException(status_code=400, detail="Not enough cash (or cargo space) to buy booze.")
-        buy_res = await _booze_buy_impl(user, booze["id"], amount)
+        buy_res = await _booze_buy_impl(user, booze["id"], amount, trade_city=buy_city)
         if buy_res.get("caught"):
             return {**buy_res, "phase": "buy", "steps": steps, "credits_used": credits_used}
         spent = int(buy_res.get("spent") or 0)
@@ -1312,8 +1302,9 @@ async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
         steps.append(f"Bought {bought_label} in {buy_city} for ${spent:,}")
         user = await db.users.find_one({"id": uid}, {"_id": 0})
 
-    if (user.get("current_state") or "").strip() != sell_city:
+    if leg_city != sell_city:
         await _skip_drive_to(sell_city)
+        leg_city = sell_city
 
     # Sell phase: everything in the trunk, one booze type at a time.
     carrying = _booze_carrying_dict(user.get("booze_carrying"))
@@ -1325,7 +1316,7 @@ async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
         amt = int(carrying.get(booze["id"]) or 0)
         if amt <= 0:
             continue
-        sell_res = await _booze_sell_impl(user, booze["id"], amt)
+        sell_res = await _booze_sell_impl(user, booze["id"], amt, trade_city=sell_city)
         if sell_res.get("caught"):
             return {**sell_res, "phase": "sell", "steps": steps, "credits_used": credits_used}
         total_revenue += int(sell_res.get("revenue") or 0)
@@ -1350,7 +1341,7 @@ async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
     await log_activity(uid, user.get("username", ""), "booze_skip_run", {
         "bought": bought_label, "sold_units": sold_units, "revenue": total_revenue,
         "profit": total_profit, "credits_used": credits_used, "sell_city": sell_city,
-        "rank_points": total_rp,
+        "home_city": home_state, "rank_points": total_rp,
     })
     return {
         "success": True,
@@ -1361,7 +1352,7 @@ async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
         "revenue": total_revenue,
         "profit": total_profit,
         "credits_used": credits_used,
-        "location": sell_city,
+        "location": home_state,
         "rank_points_earned": total_rp,
     }
 

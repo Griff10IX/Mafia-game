@@ -1513,6 +1513,7 @@ async def _build_active_attacks_list(
     - Exact `found_at` only when find_clock_active and status is searching.
     - Never include `first_bodyguard` / `bodyguard_count` (reveal only on execute BG-block).
     - While searching, BG target flags/owner only for the attacker's own robot BG.
+    - Never leak `traveling_to` (destination city). Hunters only see current city.
     """
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=24)
@@ -1609,11 +1610,11 @@ async def _build_active_attacks_list(
                     bulk_ops.append(op)
                 attack["status"] = "found"
                 attack["location_state"] = new_location
-        traveling_to = None
+        in_transit = False
         if attack["status"] == "found":
             tu_found = users_map.get(attack.get("target_id") or "") if attack.get("target_id") else None
             eff_loc = _resolved_target_location(attack, tu_found)
-            traveling_to = _in_transit_destination(tu_found)
+            in_transit = bool(_in_transit_destination(tu_found))
             if eff_loc and eff_loc != attack.get("location_state"):
                 bulk_ops.append(
                     UpdateOne(
@@ -1624,18 +1625,16 @@ async def _build_active_attacks_list(
                 attack["location_state"] = eff_loc
             elif eff_loc:
                 attack["location_state"] = eff_loc
-        chase_city = traveling_to or attack.get("location_state")
+        chase_city = attack.get("location_state")
         can_travel = attack["status"] == "found" and chase_city and ac_state != chase_city
         can_attack = (
             attack["status"] == "found"
             and attack.get("location_state")
             and ac_state == attack["location_state"]
-            and not traveling_to
+            and not in_transit
         )
         if attack["status"] == "searching":
             msg = "Searching..."
-        elif traveling_to:
-            msg = f"Target is traveling to {traveling_to}."
         elif can_attack:
             msg = f"Target found in {attack['location_state']}! You are in the same location. Ready to attack!"
         else:
@@ -1647,7 +1646,8 @@ async def _build_active_attacks_list(
             "target_username": attack.get("target_username") or "?",
             "note": attack.get("note"),
             "location_state": attack.get("location_state") if attack["status"] == "found" else None,
-            "traveling_to": traveling_to,
+            "traveling_to": None,
+            "target_traveling": in_transit,
             "search_started": attack.get("search_started"),
             "expires_at": attack.get("expires_at"),
             "can_travel": can_travel,
@@ -2203,22 +2203,20 @@ async def get_attack_status(
             await db.attacks.update_one({"id": attack["id"]}, {"$set": {"location_state": eff_s}})
         if eff_s:
             attack["location_state"] = eff_s
-        traveling_to = _in_transit_destination(tu_status)
+        in_transit = bool(_in_transit_destination(tu_status))
     else:
-        traveling_to = None
-    chase_city = traveling_to or attack.get("location_state")
+        in_transit = False
+    chase_city = attack.get("location_state")
     can_travel = attack["status"] == "found" and chase_city and current_user["current_state"] != chase_city
     can_attack = (
         attack["status"] == "found"
         and attack.get("location_state")
         and current_user["current_state"] == attack["location_state"]
-        and not traveling_to
+        and not in_transit
     )
     message = ""
     if attack["status"] == "searching":
         message = "Searching..."
-    elif traveling_to:
-        message = f"Target is traveling to {traveling_to}."
     elif attack["status"] == "found":
         message = f"Target found in {attack['location_state']}! You are in the same location. Ready to attack!" if can_attack else f"Target found in {attack['location_state']}! Travel there to attack."
     exec_tok = None
@@ -2233,7 +2231,8 @@ async def get_attack_status(
         "status": attack["status"],
         "target_username": attack.get("target_username") or "?",
         "location_state": attack.get("location_state"),
-        "traveling_to": traveling_to,
+        "traveling_to": None,
+        "target_traveling": in_transit,
         "can_travel": can_travel,
         "can_attack": can_attack,
         "message": message,
@@ -2341,7 +2340,7 @@ async def travel_to_target(body: AttackIdRequest, req: Request, current_user: di
         {"id": attack.get("target_id")},
         {"_id": 0, "current_state": 1, "traveling_to": 1, "travel_arrives_at": 1, "is_npc": 1, "is_bodyguard": 1},
     )
-    location_state = _in_transit_destination(tu_travel) or _resolved_target_location(attack, tu_travel)
+    location_state = _resolved_target_location(attack, tu_travel)
     if not location_state:
         raise HTTPException(status_code=400, detail="Target location unknown")
     from_state = (current_user.get("current_state") or "").strip() or None
@@ -2637,7 +2636,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Target is traveling", req), label="log_target_traveling")
         raise HTTPException(
             status_code=400,
-            detail=f"Target is traveling to {in_transit_dest}. Wait until they arrive.",
+            detail="Target is traveling. Wait until they arrive.",
         )
     attack["location_state"] = target_location
     attacker_location = (attacker_row or {}).get("current_state") or ""

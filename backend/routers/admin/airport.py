@@ -806,7 +806,7 @@ async def _start_travel_impl(
         else:
             origin = (user.get("current_state") or "").strip() or destination
             schedule_notify_hunters_target_moved(
-                db, user["id"], location_state=origin, traveling_to=destination
+                db, user["id"], location_state=origin, target_traveling=True
             )
     except Exception:
         pass
