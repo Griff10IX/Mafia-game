@@ -33,6 +33,15 @@ html {
   scrollbar-width: thin;
 }
 
+/* First-paint: don't animate the swap from default classic chrome to the saved theme. */
+html[data-theme-booting],
+html[data-theme-booting] *,
+html[data-theme-booting] *::before,
+html[data-theme-booting] *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
 body {
   margin: 0;
   font-family: var(--font-body), 'Inter', sans-serif;

@@ -1,8 +1,11 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "@/index.css";
+import { applyThemeFromLocalStorage } from "@/context/ThemeContext";
 import App from "@/App";
 import { startBlankScreenWatchdog } from "@/utils/blankScreenWatchdog";
+
+applyThemeFromLocalStorage();
 
 // When user returns after a deploy, lazy chunks can 404 (old chunk URLs). Reload once to load the new build.
 // On iOS wake, wait until the tab is visible AND online — immediate reload while the radio is

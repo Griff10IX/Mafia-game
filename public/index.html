@@ -35,9 +35,72 @@
         Learn how to configure a non-root public URL by running `npm run build`.
         -->
         <title>Mafia Wars</title>
+        <style>
+          html[data-theme-booting],
+          html[data-theme-booting] *,
+          html[data-theme-booting] *::before,
+          html[data-theme-booting] *::after {
+            transition: none !important;
+          }
+        </style>
+        <script>
+          (function () {
+            try {
+              var root = document.documentElement;
+              root.setAttribute('data-theme-booting', '1');
+              var raw = localStorage.getItem('app_theme_boot');
+              if (raw) {
+                var boot = JSON.parse(raw);
+                var k;
+                if (boot && boot.vars) {
+                  for (k in boot.vars) {
+                    if (Object.prototype.hasOwnProperty.call(boot.vars, k) && boot.vars[k] != null) {
+                      root.style.setProperty(k, boot.vars[k]);
+                    }
+                  }
+                }
+                if (boot && boot.attrs) {
+                  for (k in boot.attrs) {
+                    if (Object.prototype.hasOwnProperty.call(boot.attrs, k) && boot.attrs[k]) {
+                      root.setAttribute(k, boot.attrs[k]);
+                    }
+                  }
+                }
+              } else {
+                var v = localStorage.getItem('app_theme_variant');
+                if (v === 'wars2026') v = 'dark_mafia';
+                if (v === 'modern' || v === 'dark_mafia' || v === 'old_school') {
+                  root.setAttribute('data-theme-variant', v);
+                }
+                var tex = localStorage.getItem('app_theme_texture');
+                if (tex && tex !== 'none') root.setAttribute('data-texture', tex);
+                var bs = localStorage.getItem('app_theme_button_style');
+                if (bs) root.setAttribute('data-button-style', bs);
+                var bsh = localStorage.getItem('app_theme_button_shape');
+                if (bsh === 'sharp' || bsh === 'rounded' || bsh === 'pill') root.setAttribute('data-button-shape', bsh);
+              }
+            } catch (e) {}
+          })();
+        </script>
         <!-- visual-edits scripts removed -->
     </head>
     <body>
+        <script>
+          (function () {
+            try {
+              var root = document.documentElement;
+              var body = document.body;
+              var names = ['data-theme-variant', 'data-texture', 'data-button-style', 'data-button-shape', 'data-mobile-layout', 'data-modern-perf'];
+              for (var i = 0; i < names.length; i++) {
+                var val = root.getAttribute(names[i]);
+                if (val) body.setAttribute(names[i], val);
+              }
+              if (root.getAttribute('data-theme-booting') === '1') {
+                body.setAttribute('data-theme-booting', '1');
+              }
+            } catch (e) {}
+          })();
+        </script>
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="root"></div>
         <!-- Early empty-root recovery for iOS wake (runs even if the main bundle failed to start). -->

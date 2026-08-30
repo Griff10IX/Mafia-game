@@ -43,6 +43,8 @@ const STORAGE_KEY_MOBILE_LAYOUT = 'app_theme_mobile_layout';
 const STORAGE_KEY_BUTTON_SHAPE = 'app_theme_button_shape';
 const STORAGE_KEY_THEME_VARIANT = 'app_theme_variant';
 const STORAGE_KEY_MODERN_VISUAL_QUALITY = 'app_theme_modern_visual_quality';
+const STORAGE_KEY_BOOT = 'app_theme_boot';
+const THEME_BOOT_ATTRS = ['data-theme-variant', 'data-texture', 'data-button-style', 'data-button-shape', 'data-mobile-layout', 'data-modern-perf'];
 
 const LS_TOPBAR_GAP = 'topbar_gap';
 const LS_TOPBAR_SIZE = 'topbar_size';
@@ -393,54 +395,60 @@ function applyTextStyleToDocument(style) {
   root.style.setProperty('--app-font-style', style.fontStyle);
 }
 
+function applyAttrToRootAndBody(name, value) {
+  const root = document.documentElement;
+  const body = document.body;
+  const apply = (el) => {
+    if (!el) return;
+    if (value == null || value === '') el.removeAttribute(name);
+    else el.setAttribute(name, value);
+  };
+  apply(root);
+  apply(body);
+}
+
 function applyTextureToDocument(textureId) {
   const body = document.body;
-  const prev = body.getAttribute('data-texture');
-  if (prev) body.removeAttribute('data-texture');
-  if (textureId && textureId !== 'none') {
-    body.setAttribute('data-texture', textureId);
+  if (body) {
+    const prev = body.getAttribute('data-texture');
+    if (prev) body.removeAttribute('data-texture');
+    if (textureId && textureId !== 'none') {
+      body.setAttribute('data-texture', textureId);
+    }
+  }
+  const root = document.documentElement;
+  if (root) {
+    if (textureId && textureId !== 'none') root.setAttribute('data-texture', textureId);
+    else root.removeAttribute('data-texture');
   }
 }
 
 function applyThemeVariantToDocument(themeVariant) {
-  const body = document.body;
-  const root = document.documentElement;
   const variant = normalizeThemeVariant(themeVariant);
   if (variant === 'modern' || variant === 'dark_mafia' || variant === 'old_school') {
-    body.setAttribute('data-theme-variant', variant);
-    root.setAttribute('data-theme-variant', variant);
+    applyAttrToRootAndBody('data-theme-variant', variant);
   } else {
-    body.removeAttribute('data-theme-variant');
-    root.removeAttribute('data-theme-variant');
+    applyAttrToRootAndBody('data-theme-variant', '');
   }
 }
 
 function applyMobileLayoutToDocument(mobileLayoutId) {
-  const body = document.body;
-  const root = document.documentElement;
   const id = normalizeMobileLayoutId(mobileLayoutId);
   if (id === 'pocket_deck') {
-    body.setAttribute('data-mobile-layout', id);
-    root.setAttribute('data-mobile-layout', id);
+    applyAttrToRootAndBody('data-mobile-layout', id);
   } else {
-    body.removeAttribute('data-mobile-layout');
-    root.removeAttribute('data-mobile-layout');
+    applyAttrToRootAndBody('data-mobile-layout', '');
   }
 }
 
 function applyModernPerfFlagToDocument(themeVariant, modernVisualQuality) {
-  const body = document.body;
-  const root = document.documentElement;
   const isModernShell = themeVariant === 'modern' || themeVariant === 'dark_mafia';
   const usePerf = modernVisualQuality !== 'high';
   if (isModernShell && usePerf) {
-    body.setAttribute('data-modern-perf', 'on');
-    root.setAttribute('data-modern-perf', 'on');
+    applyAttrToRootAndBody('data-modern-perf', 'on');
   } else {
-    body.removeAttribute('data-modern-perf');
-    root.removeAttribute('data-modern-perf');
-    body.removeAttribute('data-busy-animations');
-    root.removeAttribute('data-busy-animations');
+    applyAttrToRootAndBody('data-modern-perf', '');
+    applyAttrToRootAndBody('data-busy-animations', '');
   }
 }
 
@@ -461,14 +469,146 @@ function shouldApplyMobileCompositorBackdropWorkaround() {
 function applyMobileCompositorSafeToDocument() {
   const body = document.body;
   const root = document.documentElement;
-  if (!body || !root) return;
+  if (!root) return;
   if (shouldApplyMobileCompositorBackdropWorkaround()) {
-    body.setAttribute('data-mobile-compositor-safe', 'on');
-    root.setAttribute('data-mobile-compositor-safe', 'on');
+    applyAttrToRootAndBody('data-mobile-compositor-safe', 'on');
   } else {
-    body.removeAttribute('data-mobile-compositor-safe');
-    root.removeAttribute('data-mobile-compositor-safe');
+    applyAttrToRootAndBody('data-mobile-compositor-safe', '');
   }
+}
+
+function persistThemeBootSnapshot() {
+  if (typeof document === 'undefined' || typeof localStorage === 'undefined') return;
+  try {
+    const root = document.documentElement;
+    const body = document.body;
+    const attrs = {};
+    THEME_BOOT_ATTRS.forEach((name) => {
+      const val = root?.getAttribute(name) || body?.getAttribute(name);
+      if (val) attrs[name] = val;
+    });
+    const vars = {};
+    const style = root.style;
+    for (let i = 0; i < style.length; i += 1) {
+      const prop = style[i];
+      if (prop.startsWith('--')) vars[prop] = style.getPropertyValue(prop);
+    }
+    localStorage.setItem(STORAGE_KEY_BOOT, JSON.stringify({ v: 1, attrs, vars }));
+  } catch (_) {}
+}
+
+function readStoredThemeState() {
+  const ls = (key) => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  };
+  let customThemes = [];
+  try {
+    const raw = ls(STORAGE_KEY_CUSTOM_THEMES);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) customThemes = parsed;
+    }
+  } catch (_) {}
+
+  let themeVariant = DEFAULT_THEME_VARIANT;
+  const storedVariant = ls(STORAGE_KEY_THEME_VARIANT);
+  if (storedVariant === 'modern' || storedVariant === 'classic' || storedVariant === 'dark_mafia' || storedVariant === 'wars2026' || storedVariant === 'old_school') {
+    themeVariant = normalizeThemeVariant(storedVariant);
+  } else if (ls(STORAGE_KEY_TEXTURE) === 'modern-soft') {
+    themeVariant = 'modern';
+  }
+
+  const storedButton = ls(STORAGE_KEY_BUTTON);
+  const storedAccent = ls(STORAGE_KEY_ACCENT_LINE);
+  const storedMuted = ls(STORAGE_KEY_MUTED_WRITING);
+  const storedToast = ls(STORAGE_KEY_TOAST_TEXT);
+  const storedShape = ls(STORAGE_KEY_BUTTON_SHAPE);
+  const storedQuality = ls(STORAGE_KEY_MODERN_VISUAL_QUALITY);
+
+  return {
+    colourId: ls(STORAGE_KEY_COLOUR) || DEFAULT_COLOUR_ID,
+    textureId: ls(STORAGE_KEY_TEXTURE) || DEFAULT_TEXTURE_ID,
+    buttonColourId: storedButton === null || storedButton === '' ? null : storedButton,
+    accentLineColourId: storedAccent === '' || storedAccent == null ? null : storedAccent,
+    fontId: ls(STORAGE_KEY_FONT) || DEFAULT_FONT_ID,
+    buttonStyleId: ls(STORAGE_KEY_BUTTON_STYLE) || DEFAULT_BUTTON_STYLE_ID,
+    writingColourId: ls(STORAGE_KEY_WRITING) || DEFAULT_WRITING_COLOUR_ID,
+    mutedWritingColourId: storedMuted === '' || storedMuted == null ? null : storedMuted,
+    toastTextColourId: storedToast === '' || storedToast == null ? null : storedToast,
+    textStyleId: ls(STORAGE_KEY_TEXT_STYLE) || DEFAULT_TEXT_STYLE_ID,
+    customThemes,
+    themeVariant,
+    modernVisualQuality: storedQuality === 'high' ? 'high' : 'performance',
+    mobileLayoutId: normalizeMobileLayoutId(ls(STORAGE_KEY_MOBILE_LAYOUT)),
+    buttonShapeId: storedShape === 'sharp' || storedShape === 'pill' ? storedShape : 'rounded',
+  };
+}
+
+function applyStoredThemeState(state) {
+  if (typeof document === 'undefined' || !document.documentElement || !state) return;
+  const colour = getResolvedColour(state.colourId, state.customThemes) || getThemeColour(DEFAULT_COLOUR_ID);
+  applyColourToDocument(colour);
+  const buttonColour = state.buttonColourId
+    ? (getResolvedColour(state.buttonColourId, state.customThemes) || colour)
+    : { ...colour, stops: [colour.primary, colour.primary, colour.primary, colour.primary] };
+  applyButtonColourToDocument(buttonColour);
+  const accentLineColour = state.accentLineColourId
+    ? (getResolvedColour(state.accentLineColourId, state.customThemes) || colour)
+    : colour;
+  applyAccentLineToDocument(accentLineColour);
+  applyFontToDocument(getThemeFont(state.fontId));
+  document.documentElement.setAttribute('data-button-style', state.buttonStyleId || 'original');
+  document.documentElement.setAttribute('data-button-shape', state.buttonShapeId || 'rounded');
+  const w = getThemeWritingColour(state.writingColourId);
+  const mutedHex = state.mutedWritingColourId
+    ? getThemeWritingColour(state.mutedWritingColourId).foreground
+    : w.muted;
+  applyWritingColourToDocument(w.foreground, mutedHex);
+  const toastW = getThemeWritingColour(state.toastTextColourId || state.writingColourId);
+  document.documentElement.style.setProperty('--noir-toast-foreground', toastW.foreground);
+  applyTextStyleToDocument(getThemeTextStyle(state.textStyleId));
+  applyTextureToDocument(state.textureId);
+  applyThemeVariantToDocument(state.themeVariant);
+  applyMobileLayoutToDocument(state.mobileLayoutId);
+  applyModernPerfFlagToDocument(state.themeVariant, state.modernVisualQuality);
+  applyMobileCompositorSafeToDocument();
+  persistThemeBootSnapshot();
+}
+
+/** Apply the last saved theme before React's first paint (avoids classic/old-school chrome flash). */
+export function applyThemeFromLocalStorage() {
+  if (typeof document === 'undefined') return;
+  try {
+    document.documentElement.setAttribute('data-theme-booting', '1');
+    if (document.body) document.body.setAttribute('data-theme-booting', '1');
+    applyStoredThemeState(readStoredThemeState());
+  } catch (_) {}
+}
+
+function releaseThemeBootingFlag() {
+  if (typeof document === 'undefined' || typeof requestAnimationFrame === 'undefined') {
+    try {
+      document.documentElement.removeAttribute('data-theme-booting');
+      if (document.body) document.body.removeAttribute('data-theme-booting');
+    } catch (_) {}
+    return;
+  }
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      try {
+        document.documentElement.removeAttribute('data-theme-booting');
+        if (document.body) document.body.removeAttribute('data-theme-booting');
+      } catch (_) {}
+    });
+  });
+}
+
+if (typeof document !== 'undefined') {
+  applyThemeFromLocalStorage();
 }
 
 const ThemeContext = createContext(null);
@@ -701,8 +841,13 @@ export function ThemeProvider({ children }) {
     applyMobileCompositorSafeToDocument();
     const onPageShow = () => applyMobileCompositorSafeToDocument();
     window.addEventListener('pageshow', onPageShow);
+    releaseThemeBootingFlag();
     return () => window.removeEventListener('pageshow', onPageShow);
   }, []);
+
+  useEffect(() => {
+    persistThemeBootSnapshot();
+  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, modernVisualQuality, mobileLayoutId, buttonShapeId]);
 
   const themeLoadedRef = useRef(false);
   const serverThemePcRef = useRef(null);
