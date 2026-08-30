@@ -1,37 +1,266 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { formatGameTimeWeekday } from '../utils/gameDateTime';
+import styles from '../styles/noir.module.css';
 
 const DEATH_STYLES = `
-  @keyframes ds-fadeIn    { from { transform: translateY(4px) } to { transform: translateY(0) } }
-  @keyframes ds-fadeUp    { from { transform: translateY(12px) } to { transform: translateY(0) } }
+  [data-death-screen].ds-root {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: max(20px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+    background:
+      radial-gradient(ellipse 100% 55% at 50% 0%, rgba(var(--noir-primary-rgb, 184, 145, 68), 0.07) 0%, transparent 58%),
+      radial-gradient(ellipse 80% 45% at 50% 100%, rgba(var(--noir-primary-rgb, 184, 145, 68), 0.04) 0%, transparent 52%),
+      linear-gradient(180deg, #0f0e13 0%, #13121a 100%);
+    color: var(--noir-foreground, #e8e4dc);
+  }
+
+  @keyframes ds-fadeIn    { from { transform: translateY(4px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+  @keyframes ds-fadeUp    { from { transform: translateY(12px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
   @keyframes ds-stoneRise { from { transform: translateY(24px) } to { transform: translateY(0) } }
   @keyframes ds-expandX   { from { transform: scaleX(0); opacity: 0 } to { transform: scaleX(1); opacity: 1 } }
-  @keyframes ds-twinkle   { from { opacity: 0.07; transform: scale(0.7) } to { opacity: 0.95; transform: scale(1.3) } }
-  @keyframes ds-flicker   { 0% { transform: scale(1,1) skewX(0); opacity: .9 } 25% { transform: scale(.87,1.13) skewX(-2deg); opacity: 1 } 55% { transform: scale(1.06,.94) skewX(1deg); opacity: .84 } 100% { transform: scale(1,1) skewX(.4deg); opacity: .9 } }
-  @keyframes ds-emberRise { 0% { transform: translateY(0) translateX(0); opacity: 0 } 8% { opacity: 1 } 90% { opacity: .15 } 100% { transform: translateY(-94vh) translateX(20px); opacity: 0 } }
-  @keyframes ds-fogDrift  { from { transform: translateX(-4%) scaleX(1) } to { transform: translateX(4%) scaleX(1.06) } }
-  @keyframes ds-crossGlow { from { filter: drop-shadow(0 0 3px rgba(184,145,68,.22)) } to { filter: drop-shadow(0 0 18px rgba(184,145,68,.72)) } }
-  @keyframes ds-shimmer   { from { transform: translateX(-100%) } to { transform: translateX(200%) } }
+  @keyframes ds-twinkle   { from { opacity: 0.12 } to { opacity: 0.85 } }
+  @keyframes ds-flicker   { 0% { opacity: .88 } 50% { opacity: 1 } 100% { opacity: .82 } }
+  @keyframes ds-emberRise { 0% { transform: translateY(0); opacity: 0 } 10% { opacity: .7 } 100% { transform: translateY(-90vh); opacity: 0 } }
+  @keyframes ds-fogDrift  { from { transform: translateX(-3%) } to { transform: translateX(3%) } }
+  @keyframes ds-crossGlow { from { filter: drop-shadow(0 0 3px rgba(var(--noir-primary-rgb, 184, 145, 68), .22)) } to { filter: drop-shadow(0 0 14px rgba(var(--noir-primary-rgb, 184, 145, 68), .65)) } }
   @keyframes ds-lightFlash { 0%,91%,93%,95%,100% { opacity: 0 } 92%,94% { opacity: 1 } }
-  @keyframes ds-ravenFly  { from { transform: translateX(-50px); opacity: 0 } 10% { opacity: .35 } 90% { opacity: .35 } to { transform: translateX(110vw); opacity: 0 } }
+  @keyframes ds-ravenFly  { from { transform: translateX(-40px); opacity: 0 } 12% { opacity: .3 } 88% { opacity: .3 } to { transform: translateX(110vw); opacity: 0 } }
 
-  /* Visible immediately — opacity:0 + long delays looked like a black screen. */
-  .ds-fade-in  { animation: ds-fadeIn .45s ease-out }
-  .ds-fade-in2 { animation: ds-fadeIn .45s .05s ease-out both }
-  .ds-fade-in3 { animation: ds-fadeIn .45s .1s ease-out both }
-  .ds-fade-in4 { animation: ds-fadeIn .45s .12s ease-out both }
-  .ds-fade-in5 { animation: ds-fadeIn .45s .15s ease-out both }
-  .ds-fade-in6 { animation: ds-fadeIn .45s .18s ease-out both }
-  .ds-stone-rise { animation: ds-stoneRise 1.1s cubic-bezier(0.16,1,0.3,1) }
-  .ds-actions  { animation: ds-fadeUp .5s .2s ease-out both }
-  .ds-revenge  { animation: ds-fadeUp .5s .25s ease-out both }
-  .ds-expand   { animation: ds-expandX .8s .15s both }
-  .ds-cross    { animation: ds-crossGlow 2.8s 1.8s ease-in-out infinite alternate }
-  .ds-flicker  { animation: ds-flicker .98s ease-in-out infinite alternate }
-  .ds-flicker2 { animation: ds-flicker .72s .28s ease-in-out infinite alternate }
+  .ds-fade-in  { animation: ds-fadeIn .4s ease-out both }
+  .ds-fade-in2 { animation: ds-fadeIn .4s .05s ease-out both }
+  .ds-fade-in3 { animation: ds-fadeIn .4s .1s ease-out both }
+  .ds-stone-rise { animation: ds-stoneRise 1s cubic-bezier(0.16,1,0.3,1) }
+  .ds-actions  { animation: ds-fadeUp .45s .15s ease-out both }
+  .ds-expand   { animation: ds-expandX .7s .12s both }
+  .ds-cross    { animation: ds-crossGlow 2.8s 1.4s ease-in-out infinite alternate }
+  .ds-flicker  { animation: ds-flicker 1s ease-in-out infinite alternate }
+  .ds-flicker2 { animation: ds-flicker .8s .25s ease-in-out infinite alternate }
+
+  .ds-sky { position: absolute; inset: 0; pointer-events: none; overflow: hidden }
+  .ds-star {
+    position: absolute; width: 2px; height: 2px; border-radius: 50%;
+    background: rgba(255,255,255,.7);
+    animation: ds-twinkle 2.8s ease-in-out infinite alternate;
+  }
+  .ds-ember {
+    position: absolute; bottom: 4%; width: 2px; height: 2px; border-radius: 50%;
+    background: rgba(var(--noir-primary-rgb, 184, 145, 68), .65);
+    box-shadow: 0 0 6px rgba(var(--noir-primary-rgb, 184, 145, 68), .4);
+    animation: ds-emberRise linear infinite;
+  }
+  .ds-flash {
+    position: fixed; inset: 0; pointer-events: none; z-index: 4;
+    background: rgba(210,205,240,0.03);
+    animation: ds-lightFlash 14s 5s infinite;
+  }
+  .ds-moon {
+    position: absolute; top: 36px; right: 12%; width: 48px; height: 48px; border-radius: 50%;
+    background: radial-gradient(circle at 38% 35%, #f0ead8 55%, #bca880 100%);
+    box-shadow: 0 0 28px rgba(240,234,216,.12);
+  }
+  .ds-raven {
+    position: absolute; top: 18%; width: 26px; height: 9px;
+    animation: ds-ravenFly linear 18s 5s both;
+  }
+  .ds-fog {
+    position: absolute; bottom: 0; left: -20%; right: -20%; height: 140px;
+    background: radial-gradient(ellipse at 50% 100%, rgba(var(--noir-primary-rgb, 184, 145, 68), .05) 0%, transparent 70%);
+    animation: ds-fogDrift 10s ease-in-out infinite alternate;
+  }
+
+  .ds-col {
+    position: relative; z-index: 10; width: 100%; max-width: 480px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+
+  .ds-stone {
+    width: 100%; max-width: 380px;
+    background: linear-gradient(158deg, #2c2a32 0%, #1c1a22 42%, #111019 100%);
+    border: 1px solid rgba(var(--noir-primary-rgb, 184, 145, 68), 0.18);
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,.95),
+      0 40px 90px rgba(0,0,0,.7),
+      inset 0 1px 0 rgba(255,255,255,.04);
+    padding: 32px 28px 28px;
+    clip-path: polygon(0% 8%, 4% 0%, 96% 0%, 100% 8%, 100% 100%, 0% 100%);
+    position: relative;
+  }
+  .ds-stone-bar {
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(var(--noir-primary-rgb, 184, 145, 68), .55), transparent);
+  }
+  .ds-rip {
+    font-family: var(--font-heading, inherit);
+    font-size: 10px; letter-spacing: .55em; text-transform: uppercase; text-align: center;
+    color: rgba(var(--noir-primary-rgb, 184, 145, 68), .5); margin-bottom: 8px;
+  }
+  .ds-name {
+    font-family: serif;
+    font-size: clamp(26px, 6vw, 36px); font-weight: 700; text-align: center;
+    letter-spacing: .04em; color: rgba(232, 228, 220, .94);
+    text-shadow: 0 2px 24px rgba(0,0,0,.9); margin-bottom: 4px;
+    overflow-wrap: anywhere;
+  }
+  .ds-sub {
+    font-family: var(--font-heading, inherit);
+    font-size: 12px; text-align: center;
+    color: rgba(var(--noir-primary-rgb, 184, 145, 68), .62); margin-bottom: 16px;
+  }
+  .ds-rule {
+    border: none; height: 1px; margin: 0 0 16px;
+    background: linear-gradient(90deg, transparent, rgba(var(--noir-primary-rgb, 184, 145, 68), .28), transparent);
+  }
+  .ds-epitaph {
+    font-family: serif; font-size: 14px; font-style: italic; text-align: center;
+    line-height: 1.75; color: rgba(232, 228, 220, .38); margin-bottom: 8px;
+  }
+  .ds-dates {
+    font-family: var(--font-heading, inherit);
+    font-size: 10px; letter-spacing: .14em; text-transform: uppercase; text-align: center;
+    color: rgba(232, 228, 220, .28);
+  }
+  .ds-time {
+    font-family: var(--font-heading, inherit);
+    font-size: 10px; letter-spacing: .16em; text-transform: uppercase; text-align: center;
+    color: rgba(232, 228, 220, .2); margin-top: 8px;
+  }
+  .ds-plinth {
+    width: 100%;
+    background: linear-gradient(180deg, #1c1a22, #0d0c12);
+    border: 1px solid rgba(var(--noir-primary-rgb, 184, 145, 68), .08);
+    border-top: none;
+  }
+
+  .ds-card {
+    width: 100%;
+    margin-top: 18px;
+    padding: 16px 16px 14px;
+    background: rgba(12, 11, 16, .72);
+    border: 1px solid rgba(var(--noir-primary-rgb, 184, 145, 68), .16);
+    border-radius: 6px;
+  }
+  .ds-card-label {
+    font-family: var(--font-heading, inherit);
+    font-size: 10px; letter-spacing: .2em; text-transform: uppercase;
+    color: rgba(var(--noir-primary-rgb, 184, 145, 68), .55); margin-bottom: 10px;
+  }
+  .ds-killer {
+    text-align: center; padding: 10px 12px;
+    background: rgba(130, 25, 25, .1);
+    border: 1px solid rgba(170, 45, 45, .28);
+    margin-bottom: 12px;
+  }
+  .ds-killer button {
+    font-family: var(--font-heading, inherit);
+    font-size: 16px; font-weight: 700; letter-spacing: .03em;
+    color: rgba(230, 110, 110, .92); background: none; border: none; cursor: pointer; padding: 0;
+  }
+  .ds-killer button:hover { color: #fca5a5; }
+  .ds-killer-fam {
+    font-family: var(--font-heading, inherit);
+    font-size: 11px; color: rgba(232, 228, 220, .35); margin-top: 4px;
+  }
+  .ds-reveal {
+    width: 100%;
+    font-family: var(--font-heading, inherit);
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+    padding: 10px 12px; cursor: pointer;
+    background: rgba(18, 16, 22, .85);
+    border: 1px solid rgba(var(--noir-primary-rgb, 184, 145, 68), .28);
+    color: rgba(var(--noir-primary-rgb, 184, 145, 68), .85);
+  }
+  .ds-reveal:hover:not(:disabled) { border-color: rgba(var(--noir-primary-rgb, 184, 145, 68), .5); }
+  .ds-reveal:disabled { opacity: .55; cursor: default; }
+  .ds-err {
+    font-family: var(--font-heading, inherit);
+    font-size: 11px; color: rgba(220, 80, 80, .85); text-align: center; margin-bottom: 8px;
+  }
+  .ds-stats {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+    background: rgba(var(--noir-primary-rgb, 184, 145, 68), .1);
+    border: 1px solid rgba(var(--noir-primary-rgb, 184, 145, 68), .1);
+  }
+  .ds-stat {
+    background: rgba(10, 9, 14, .8); padding: 10px 6px; text-align: center;
+  }
+  .ds-stat span {
+    display: block; font-family: var(--font-heading, inherit);
+    font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
+    color: rgba(var(--noir-primary-rgb, 184, 145, 68), .4); margin-bottom: 4px;
+  }
+  .ds-stat strong {
+    font-family: var(--font-heading, inherit); font-size: 12px; font-weight: 600;
+    color: rgba(232, 228, 220, .7);
+  }
+  .ds-stat strong.ds-stat-red { color: rgba(200, 80, 80, .75); }
+
+  .ds-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .ds-steps li {
+    display: flex; gap: 10px; align-items: flex-start;
+    font-family: var(--font-heading, inherit); font-size: 13px; line-height: 1.4;
+    color: rgba(232, 228, 220, .72);
+  }
+  .ds-num {
+    flex: 0 0 20px; height: 20px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700;
+    color: var(--noir-button-foreground, #111);
+    background: rgb(var(--noir-primary-rgb, 184, 145, 68));
+  }
+  .ds-note {
+    font-family: var(--font-heading, inherit);
+    font-size: 11px; line-height: 1.45; color: rgba(232, 228, 220, .4); margin: 12px 0 0;
+  }
+  .ds-cta {
+    width: 100%; margin-top: 14px; padding: 12px 16px;
+    font-family: var(--font-heading, inherit);
+    font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  }
+
+  .ds-candles { display: flex; justify-content: center; gap: 88px; margin-bottom: 12px; }
+  .ds-candle { display: flex; flex-direction: column; align-items: center; }
+  .ds-flame {
+    width: 8px; height: 13px; border-radius: 50% 50% 30% 30%;
+    background: radial-gradient(ellipse at 50% 78%, #fff 0%, #ffe566 20%, #ff8c00 62%, transparent 100%);
+  }
+  .ds-wax { width: 6px; background: linear-gradient(180deg, #ddd0bc, #aa9878); }
+  .ds-base { width: 10px; height: 4px; background: linear-gradient(180deg, #988870, #787058); border-radius: 0 0 2px 2px; }
+
+  @media (max-width: 480px) {
+    .ds-stone { padding: 26px 20px 22px; clip-path: none; border-radius: 4px 4px 0 0; }
+    .ds-candles { gap: 64px; }
+    .ds-moon { top: 16px; right: 16px; width: 36px; height: 36px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ds-fade-in, .ds-fade-in2, .ds-fade-in3, .ds-stone-rise, .ds-actions, .ds-expand, .ds-cross,
+    .ds-flicker, .ds-flicker2, .ds-star, .ds-ember, .ds-flash, .ds-fog, .ds-raven {
+      animation: none !important;
+    }
+    .ds-flash, .ds-ember, .ds-raven { display: none !important; }
+  }
 `;
+
+const STAR_SPOTS = [
+  ['8%', '12%', '0s'], ['22%', '28%', '0.6s'], ['41%', '9%', '1.1s'], ['63%', '18%', '0.3s'],
+  ['78%', '7%', '1.8s'], ['91%', '22%', '0.9s'], ['14%', '41%', '1.4s'], ['33%', '52%', '0.2s'],
+  ['55%', '36%', '2s'], ['71%', '48%', '0.7s'], ['86%', '39%', '1.5s'], ['5%', '61%', '1.2s'],
+  ['47%', '14%', '0.4s'], ['96%', '55%', '1.7s'],
+];
+
+const EMBER_SPOTS = [
+  ['12%', '11s', '0s'], ['28%', '14s', '3s'], ['46%', '10s', '6s'], ['61%', '16s', '1s'],
+  ['74%', '12s', '8s'], ['88%', '15s', '4s'],
+];
 
 function formatMoney(n) {
   if (!n) return '$0';
@@ -50,9 +279,15 @@ function formatTime(iso) {
   return formatGameTimeWeekday(iso);
 }
 
+function prefersReducedMotion() {
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
+
 export default function DeathScreen({ user, onLogout }) {
-  const starsRef = useRef(null);
-  const embersRef = useRef(null);
   const navigate = useNavigate();
   const [killer, setKiller] = useState(
     user?.killer_revealed
@@ -61,51 +296,10 @@ export default function DeathScreen({ user, onLogout }) {
   );
   const [revealing, setRevealing] = useState(false);
   const [revealError, setRevealError] = useState(null);
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   useEffect(() => {
-    // Stars
-    const starsEl = starsRef.current;
-    if (starsEl) {
-      for (let i = 0; i < 110; i++) {
-        const s = document.createElement('div');
-        const sz = Math.random() * 1.8 + 0.3;
-        Object.assign(s.style, {
-          position: 'absolute', borderRadius: '50%', background: 'white',
-          width: sz + 'px', height: sz + 'px',
-          top: Math.random() * 72 + '%', left: Math.random() * 100 + '%',
-          animationName: 'ds-twinkle',
-          animationDuration: (1.4 + Math.random() * 3.2) + 's',
-          animationDelay: Math.random() * 5 + 's',
-          animationTimingFunction: 'ease-in-out',
-          animationIterationCount: 'infinite',
-          animationDirection: 'alternate',
-        });
-        starsEl.appendChild(s);
-      }
-    }
-    // Embers
-    const embersEl = embersRef.current;
-    if (embersEl) {
-      const cols = ['rgba(184,145,68,.72)', 'rgba(200,162,78,.5)', 'rgba(220,185,90,.4)', 'rgba(184,145,68,.35)'];
-      for (let i = 0; i < 20; i++) {
-        const e = document.createElement('div');
-        const sz = Math.random() * 2.5 + 0.7;
-        const c = cols[Math.floor(Math.random() * cols.length)];
-        Object.assign(e.style, {
-          position: 'absolute', borderRadius: '50%',
-          width: sz + 'px', height: sz + 'px',
-          left: (8 + Math.random() * 84) + '%',
-          bottom: (Math.random() * 14) + '%',
-          background: c, boxShadow: `0 0 ${sz * 2}px ${c}`,
-          animationName: 'ds-emberRise',
-          animationDuration: (8 + Math.random() * 15) + 's',
-          animationDelay: Math.random() * 13 + 's',
-          animationTimingFunction: 'linear',
-          animationIterationCount: 'infinite',
-        });
-        embersEl.appendChild(e);
-      }
-    }
+    setReduceMotion(prefersReducedMotion());
   }, []);
 
   const cashLost = user?.money_at_death || 0;
@@ -138,212 +332,114 @@ export default function DeathScreen({ user, onLogout }) {
   };
 
   return (
-    <div data-app-shell="1" data-death-screen style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'radial-gradient(ellipse 100% 55% at 50% 0%, rgba(184,145,68,0.045) 0%, transparent 58%), radial-gradient(ellipse 80% 45% at 50% 100%, rgba(184,145,68,0.025) 0%, transparent 52%), linear-gradient(180deg, #0f0e13 0%, #13121a 100%)',
-      overflowY: 'auto', overflowX: 'hidden',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      padding: '60px 20px',
-    }}>
+    <div data-app-shell="1" data-death-screen data-testid="death-screen" className={`ds-root ${styles.themeGangsterModern}`}>
       <style>{DEATH_STYLES}</style>
 
-      {/* Lightning flash */}
-      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', background: 'rgba(210,205,240,0.022)', animation: 'ds-lightFlash 12s 4s infinite', zIndex: 4 }} />
+      {!reduceMotion && <div className="ds-flash" />}
 
-      {/* Stars */}
-      <div ref={starsRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }} />
-
-      {/* Embers */}
-      <div ref={embersRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }} />
-
-      {/* Moon */}
-      <div style={{
-        position: 'absolute', top: 52, right: 72, width: 56, height: 56,
-        borderRadius: '50%',
-        background: 'radial-gradient(circle at 38% 35%, #f0ead8 55%, #bca880 100%)',
-        boxShadow: '0 0 36px rgba(240,234,216,.1), 0 0 90px rgba(240,234,216,.04)',
-        animation: 'ds-fadeIn 3.5s .5s both', pointerEvents: 'none',
-      }} />
-
-      {/* Raven */}
-      <svg style={{ position: 'absolute', top: '20%', width: 26, height: 9, animation: 'ds-ravenFly linear 16s 4s both', pointerEvents: 'none' }}>
-        <path d="M0,5 Q6,0 13,4 Q19,0 26,4" stroke="rgba(220,216,230,0.18)" strokeWidth="1" fill="none" />
-      </svg>
-
-      {/* Fog */}
-      <div style={{ position: 'absolute', bottom: 0, left: '-20%', right: '-20%', pointerEvents: 'none' }}>
-        <div style={{ height: 145, background: 'radial-gradient(ellipse at 50% 100%, rgba(184,145,68,.027) 0%, transparent 70%)', animation: 'ds-fogDrift 9s ease-in-out infinite alternate' }} />
+      <div className="ds-sky" aria-hidden>
+        {STAR_SPOTS.map(([left, top, delay], i) => (
+          <span key={i} className="ds-star" style={{ left, top, animationDelay: delay }} />
+        ))}
+        {!reduceMotion && EMBER_SPOTS.map(([left, dur, delay], i) => (
+          <span key={`e${i}`} className="ds-ember" style={{ left, animationDuration: dur, animationDelay: delay }} />
+        ))}
+        <div className="ds-moon" />
+        {!reduceMotion && (
+          <svg className="ds-raven" viewBox="0 0 26 9">
+            <path d="M0,5 Q6,0 13,4 Q19,0 26,4" stroke="rgba(220,216,230,0.2)" strokeWidth="1" fill="none" />
+          </svg>
+        )}
+        <div className="ds-fog" />
       </div>
 
-      {/* Main content */}
-      <div style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: 460 }}>
-
-        {/* Stone monument */}
+      <div className="ds-col">
         <div className="ds-stone-rise" style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{
-            width: '100%', maxWidth: 375,
-            background: 'linear-gradient(158deg, #2c2a32 0%, #1c1a22 42%, #111019 100%)',
-            border: '1px solid rgba(184,145,68,0.15)',
-            boxShadow: '0 0 0 1px rgba(0,0,0,.95), -6px 0 20px rgba(0,0,0,.5), 6px 0 20px rgba(0,0,0,.5), 0 60px 120px rgba(0,0,0,.98), inset 0 1px 0 rgba(255,255,255,.04), inset 0 -2px 0 rgba(0,0,0,.4)',
-            padding: '40px 36px 44px',
-            clipPath: 'polygon(0% 8%, 4% 0%, 96% 0%, 100% 8%, 100% 100%, 0% 100%)',
-            position: 'relative',
-          }}>
-            {/* Top gold bar */}
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, transparent, rgba(184,145,68,.5), transparent)' }} />
-            {/* Inner border */}
-            <div style={{ position: 'absolute', inset: 9, border: '1px solid rgba(184,145,68,.055)', clipPath: 'polygon(0% 10%, 5% 0%, 95% 0%, 100% 10%, 100% 100%, 0% 100%)', pointerEvents: 'none' }} />
-
-            {/* Cross */}
-            <div className="ds-cross" style={{ textAlign: 'center', marginBottom: 14 }}>
-              <svg width="44" height="54" viewBox="0 0 44 54">
-                <circle cx="22" cy="18" r="10" fill="none" stroke="rgba(184,145,68,.1)" strokeWidth=".8" />
-                <line x1="22" y1="2" x2="22" y2="52" stroke="rgba(184,145,68,.28)" strokeWidth="1.5" />
-                <line x1="8" y1="18" x2="36" y2="18" stroke="rgba(184,145,68,.28)" strokeWidth="1.5" />
-                <line x1="6" y1="15" x2="8" y2="18" stroke="rgba(184,145,68,.11)" strokeWidth=".8" />
-                <line x1="6" y1="21" x2="8" y2="18" stroke="rgba(184,145,68,.11)" strokeWidth=".8" />
-                <line x1="38" y1="15" x2="36" y2="18" stroke="rgba(184,145,68,.11)" strokeWidth=".8" />
-                <line x1="38" y1="21" x2="36" y2="18" stroke="rgba(184,145,68,.11)" strokeWidth=".8" />
-                <line x1="19" y1="2" x2="25" y2="2" stroke="rgba(184,145,68,.1)" strokeWidth=".8" />
+          <div className="ds-stone">
+            <div className="ds-stone-bar" />
+            <div className="ds-cross" style={{ textAlign: 'center', marginBottom: 10 }}>
+              <svg width="40" height="50" viewBox="0 0 44 54" aria-hidden>
+                <circle cx="22" cy="18" r="10" fill="none" stroke="rgba(var(--noir-primary-rgb, 184, 145, 68), .12)" strokeWidth=".8" />
+                <line x1="22" y1="2" x2="22" y2="52" stroke="rgba(var(--noir-primary-rgb, 184, 145, 68), .32)" strokeWidth="1.5" />
+                <line x1="8" y1="18" x2="36" y2="18" stroke="rgba(var(--noir-primary-rgb, 184, 145, 68), .32)" strokeWidth="1.5" />
               </svg>
             </div>
-
-            {/* Candles */}
-            <div className="ds-fade-in" style={{ display: 'flex', justifyContent: 'center', gap: 96, marginBottom: 14 }}>
-              {[32, 22].map((h, i) => (
-                <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: i === 1 ? 10 : 0 }}>
-                  <div style={{ position: 'relative', width: 9, height: 15, background: 'radial-gradient(ellipse at 50% 78%, #fff 0%, #ffe566 20%, #ff8c00 62%, transparent 100%)', borderRadius: '50% 50% 30% 30%', filter: 'blur(.35px)' }}
-                    className={i === 0 ? 'ds-flicker' : 'ds-flicker2'}>
-                    <div style={{ position: 'absolute', width: 22, height: 22, borderRadius: '50%', background: 'radial-gradient(circle, rgba(184,145,68,.24) 0%, transparent 70%)', top: -5, left: -7 }} />
-                  </div>
-                  <div style={{ width: 7, height: h, background: 'linear-gradient(180deg, #ddd0bc, #aa9878)', position: 'relative' }} />
-                  <div style={{ width: 11, height: 5, background: 'linear-gradient(180deg, #988870, #787058)', borderRadius: '0 0 2px 2px' }} />
+            <div className="ds-candles ds-fade-in">
+              {[30, 20].map((h, i) => (
+                <div key={i} className="ds-candle" style={{ marginTop: i === 1 ? 8 : 0 }}>
+                  <div className={`ds-flame ${i === 0 ? 'ds-flicker' : 'ds-flicker2'}`} />
+                  <div className="ds-wax" style={{ height: h }} />
+                  <div className="ds-base" />
                 </div>
               ))}
             </div>
-
-            {/* RIP */}
-            <div className="ds-fade-in" style={{ fontFamily: 'serif', fontSize: 10, letterSpacing: '.6em', color: 'rgba(184,145,68,.4)', textAlign: 'center', textTransform: 'uppercase', marginBottom: 8 }}>
-              R · I · P
-            </div>
-
-            {/* Username */}
-            <div className="ds-fade-in2" style={{ fontFamily: 'serif', fontSize: 'clamp(24px,5.5vw,34px)', fontWeight: 700, color: 'rgba(220,216,230,.92)', textAlign: 'center', letterSpacing: '.05em', textShadow: '0 2px 26px rgba(0,0,0,.95)', marginBottom: 4 }}>
-              {username}
-            </div>
-
-            {/* Rank · Family */}
-            <div className="ds-fade-in2" style={{ fontFamily: 'serif', fontSize: 13, fontStyle: 'italic', color: 'rgba(184,145,68,.5)', textAlign: 'center', marginBottom: 20 }}>
-              {rankName}{familyName ? ` · ${familyName}` : ''}
-            </div>
-
-            {/* Rule */}
-            <hr className="ds-expand" style={{ border: 'none', height: 1, background: 'linear-gradient(90deg, transparent, rgba(184,145,68,.22), transparent)', margin: '0 0 18px' }} />
-
-            {/* Epitaph */}
-            <div className="ds-fade-in3" style={{ fontFamily: 'serif', fontSize: 14.5, fontStyle: 'italic', color: 'rgba(220,216,230,.28)', textAlign: 'center', lineHeight: 1.92, marginBottom: 20 }}>
+            <div className="ds-rip">R · I · P</div>
+            <div className="ds-name">{username}</div>
+            <div className="ds-sub">{rankName}{familyName ? ` · ${familyName}` : ''}</div>
+            <hr className="ds-rule ds-expand" />
+            <div className="ds-epitaph ds-fade-in2">
               {cashLost > 0
-                ? <>Struck down in the shadows.<br />Everything was taken.<br />Even the empire you built.</>
-                : <>He came. He fell.<br />The streets swallowed him whole.<br />No one saw a thing.</>
+                ? <>Struck down in the shadows.<br />Everything on hand was taken.</>
+                : <>He came. He fell.<br />The streets swallowed him whole.</>
               }
             </div>
-
-            {/* Killer reveal */}
-            <div className="ds-fade-in3" style={{ marginBottom: 20, width: '100%' }}>
-              {killer ? (
-                <div style={{ background: 'rgba(130,25,25,.08)', border: '1px solid rgba(170,45,45,.25)', padding: '14px 18px', textAlign: 'center' }}>
-                  <div style={{ fontFamily: 'serif', fontSize: 9, letterSpacing: '.2em', textTransform: 'uppercase', color: 'rgba(180,55,55,.45)', marginBottom: 8 }}>Killed By</div>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/profile/${encodeURIComponent(killer.username)}`)}
-                    style={{ fontFamily: 'serif', fontSize: 18, fontWeight: 700, color: 'rgba(220,100,100,.85)', letterSpacing: '.04em', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textShadow: '0 0 18px rgba(180,55,55,.4)' }}
-                    onMouseEnter={e => { e.currentTarget.style.color = 'rgba(220,100,100,1)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.color = 'rgba(220,100,100,.85)'; }}
-                  >
-                    {killer.username}
-                  </button>
-                  {killer.family && (
-                    <div style={{ fontFamily: 'serif', fontSize: 11, fontStyle: 'italic', color: 'rgba(220,216,230,.25)', marginTop: 4 }}>of {killer.family}</div>
-                  )}
-                </div>
-              ) : (
-                <div style={{ textAlign: 'center' }}>
-                  {revealError && (
-                    <div style={{ fontFamily: 'serif', fontSize: 11, color: 'rgba(180,55,55,.7)', marginBottom: 8, fontStyle: 'italic' }}>{revealError}</div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleRevealKiller}
-                    disabled={revealing}
-                    style={{ padding: '10px 22px', fontFamily: 'serif', fontSize: 9, letterSpacing: '.2em', textTransform: 'uppercase', cursor: revealing ? 'default' : 'pointer', background: 'rgba(18,16,22,.8)', border: '1px solid rgba(184,145,68,.18)', color: revealing ? 'rgba(184,145,68,.25)' : 'rgba(184,145,68,.55)', transition: 'all .25s', opacity: revealing ? 0.6 : 1 }}
-                    onMouseEnter={e => { if (!revealing) { e.currentTarget.style.borderColor = 'rgba(184,145,68,.38)'; e.currentTarget.style.color = 'rgba(184,145,68,.8)'; } }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(184,145,68,.18)'; e.currentTarget.style.color = 'rgba(184,145,68,.55)'; }}
-                  >
-                    {revealing ? 'Revealing...' : '🔍 Reveal Killer — 1,000 pts'}
-                  </button>
-                </div>
-              )}
+            <div className="ds-dates ds-fade-in2">
+              Joined {formatDate(createdAt)} — Killed {formatDate(deadAt)}
             </div>
-
-            {/* Stats */}
-            <div className="ds-fade-in4" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 1, background: 'rgba(184,145,68,.08)', border: '1px solid rgba(184,145,68,.08)', marginBottom: 20 }}>
-              {[
-                { label: 'Kills', value: kills.toLocaleString(), red: false },
-                { label: 'Rank', value: rankName, red: false },
-                { label: 'Cash Lost', value: formatMoney(cashLost), red: true },
-              ].map(({ label, value, red }) => (
-                <div key={label} style={{ background: 'rgba(10,9,14,.8)', padding: '10px 6px', textAlign: 'center' }}>
-                  <div style={{ fontFamily: 'serif', fontSize: 6.5, letterSpacing: '.18em', textTransform: 'uppercase', color: 'rgba(184,145,68,.3)', marginBottom: 4 }}>{label}</div>
-                  <div style={{ fontFamily: 'serif', fontSize: 11, color: red ? 'rgba(180,55,55,.65)' : 'rgba(220,216,230,.5)', letterSpacing: '.03em' }}>{value}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Dates */}
-            <div className="ds-fade-in5" style={{ display: 'flex', justifyContent: 'center', gap: 10, fontFamily: 'serif', fontSize: 8, letterSpacing: '.2em', color: 'rgba(220,216,230,.13)' }}>
-              Joined <span style={{ color: 'rgba(184,145,68,.22)' }}>·</span> {formatDate(createdAt)}
-              &nbsp;—&nbsp; Killed <span style={{ color: 'rgba(184,145,68,.22)' }}>·</span> {formatDate(deadAt)}
-            </div>
+            <div className="ds-time">{formatTime(deadAt)}</div>
           </div>
-
-          {/* Stone base layers */}
-          <div style={{ width: '100%', maxWidth: 415, height: 20, background: 'linear-gradient(180deg,#222028,#141218)', border: '1px solid rgba(184,145,68,.08)', borderTop: 'none', boxShadow: '0 10px 36px rgba(0,0,0,.8)' }} />
-          <div style={{ width: '100%', maxWidth: 455, height: 12, background: 'linear-gradient(180deg,#161420,#0d0c12)', border: '1px solid rgba(184,145,68,.05)', borderTop: 'none' }} />
-          <div style={{ width: '100%', maxWidth: 515, height: 8, background: '#09080c', borderTop: '1px solid rgba(184,145,68,.03)' }} />
+          <div className="ds-plinth" style={{ maxWidth: 410, height: 16 }} />
+          <div className="ds-plinth" style={{ maxWidth: 448, height: 10 }} />
         </div>
 
-        {/* Action buttons */}
-        <div className="ds-actions" style={{ display: 'flex', gap: 12, marginTop: 32, width: '100%', maxWidth: 375 }}>
-          <button
-            type="button"
-            onClick={handleNewLife}
-            style={{ flex: 1, padding: 13, fontFamily: 'serif', fontSize: 8.5, letterSpacing: '.22em', textTransform: 'uppercase', cursor: 'pointer', background: 'rgba(184,145,68,.1)', border: '1px solid rgba(184,145,68,.35)', color: 'var(--noir-primary-bright)', position: 'relative', overflow: 'hidden', transition: 'all .25s' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(184,145,68,.2)'; e.currentTarget.style.boxShadow = '0 0 24px rgba(184,145,68,.12)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(184,145,68,.1)'; e.currentTarget.style.boxShadow = 'none'; }}
-          >
-            <span style={{ position: 'absolute', top: 0, left: 0, width: '40%', height: '100%', background: 'linear-gradient(90deg, transparent, rgba(184,145,68,.1), transparent)', animation: 'ds-shimmer 3.5s 2.5s infinite' }} />
-            New Life
-          </button>
+        <div className="ds-card ds-fade-in3">
+          <div className="ds-card-label">How you fell</div>
+          {killer ? (
+            <div className="ds-killer">
+              <button
+                type="button"
+                onClick={() => navigate(`/profile/${encodeURIComponent(killer.username)}`)}
+              >
+                {killer.username}
+              </button>
+              {killer.family && <div className="ds-killer-fam">of {killer.family}</div>}
+            </div>
+          ) : (
+            <div style={{ marginBottom: 12 }}>
+              {revealError && <div className="ds-err">{revealError}</div>}
+              <button
+                type="button"
+                className="ds-reveal"
+                onClick={handleRevealKiller}
+                disabled={revealing}
+              >
+                {revealing ? 'Revealing…' : 'Reveal killer — 1,000 pts'}
+              </button>
+            </div>
+          )}
+          <div className="ds-stats">
+            <div className="ds-stat"><span>Kills</span><strong>{kills.toLocaleString()}</strong></div>
+            <div className="ds-stat"><span>Rank</span><strong>{rankName}</strong></div>
+            <div className="ds-stat"><span>Cash taken</span><strong className="ds-stat-red">{formatMoney(cashLost)}</strong></div>
+          </div>
         </div>
 
-        {/* Time of death */}
-        <div className="ds-fade-in6" style={{ marginTop: 22, fontFamily: 'serif', fontSize: 7.5, letterSpacing: '.25em', color: 'rgba(220,216,230,.08)', textTransform: 'uppercase', textAlign: 'center' }}>
-          Time of death &nbsp;<span style={{ color: 'rgba(184,145,68,.2)' }}>{formatTime(deadAt)}</span>
-        </div>
-
-        {/* Claim inheritance requires a living new account — New Life first. */}
-        <div className="ds-fade-in6" style={{ marginTop: 24, textAlign: 'center', maxWidth: 320 }}>
-          <p style={{ fontFamily: 'serif', fontSize: 10, letterSpacing: '.06em', color: 'rgba(220,216,230,.28)', lineHeight: 1.55, marginBottom: 10 }}>
-            To claim this estate: start a New Life, then open Dead → Alive on the living account.
+        <div className="ds-card ds-actions">
+          <div className="ds-card-label">What happens next</div>
+          <ol className="ds-steps">
+            <li><span className="ds-num">1</span><span>Create a new account</span></li>
+            <li><span className="ds-num">2</span><span>Log in on that living account</span></li>
+            <li><span className="ds-num">3</span><span>Open Dead &gt; Alive and claim the estate</span></li>
+          </ol>
+          <p className="ds-note">
+            Pocket cash is gone. Points and Swiss stay for Dead &gt; Alive on the living account.
           </p>
           <button
             type="button"
+            className={`${styles.btnPrimary} ds-cta`}
             onClick={handleNewLife}
-            style={{ fontFamily: 'serif', fontSize: 9, letterSpacing: '.18em', textTransform: 'uppercase', color: 'rgba(184,145,68,.45)', background: 'none', border: 'none', borderBottom: '1px solid rgba(184,145,68,.15)', padding: '0 0 1px', cursor: 'pointer' }}
-            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(184,145,68,.75)'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(184,145,68,.45)'; }}
           >
-            New Life — then claim estate →
+            Start a new life
           </button>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { markDeadAliveEstateNudgePending } from '../../utils/deadAliveEstateNudge';
+import { seedDashboardSessionFromLogin } from '../../utils/dashboardSessionCache';
 import { toast } from 'sonner';
 import { useIpBanGate } from '../../hooks/useIpBanGate';
 import IpBannedPanel from '../../components/IpBannedPanel';
@@ -25,6 +26,7 @@ function finishVerified(navigate, setStatus, setMessage, setIsAuthenticated, dat
   const bullets = Number(data?.reward_bullets ?? 0) || 0;
   const respect = Number(data?.reward_respect_points ?? 0) || 0;
   if (data?.token) {
+    try { seedDashboardSessionFromLogin(data.user); } catch (_) { /* ignore */ }
     localStorage.setItem('token', data.token);
     if (setIsAuthenticated) setIsAuthenticated(true);
     markDeadAliveEstateNudgePending();

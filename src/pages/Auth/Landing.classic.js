@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { Turnstile } from '@marsidev/react-turnstile';
 import api, { getBaseURL, AUTH_ERROR_KEY } from '../../utils/api';
 import { markDeadAliveEstateNudgePending } from '../../utils/deadAliveEstateNudge';
+import { seedDashboardSessionFromLogin } from '../../utils/dashboardSessionCache';
 import { parseIpBanFromError } from '../../utils/ipBan';
 import { useIpBanGate } from '../../hooks/useIpBanGate';
 import IpBannedPanel from '../../components/IpBannedPanel';
@@ -313,6 +314,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
 
       if (response.data.verify_required) {
         if (response.data.token) {
+          try { seedDashboardSessionFromLogin(response.data.user); } catch (_) { /* ignore */ }
           localStorage.setItem('token', response.data.token);
           setIsAuthenticated(true);
         }
@@ -320,6 +322,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
         setVerifySentForEmail(formData.email);
         return;
       }
+      try { seedDashboardSessionFromLogin(response.data.user); } catch (_) { /* ignore */ }
       localStorage.setItem('token', response.data.token);
       setIsAuthenticated(true);
       markDeadAliveEstateNudgePending();

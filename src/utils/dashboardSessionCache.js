@@ -69,6 +69,21 @@ export function readDashboardSessionCache() {
   return safeEntry;
 }
 
+/** Replace session user on login so a prior alive snapshot cannot flash before /auth/me. */
+export function seedDashboardSessionFromLogin(user) {
+  writeSessionJson(DASHBOARD_SESSION_CACHE_KEY, {
+    user: sanitizeDashboardUser(user),
+    rankProgress: null,
+  });
+}
+
+export function clearDashboardSessionCache() {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(DASHBOARD_SESSION_CACHE_KEY);
+  } catch (_) { /* ignore */ }
+}
+
 /** Keep Layout / Dashboard session paint in sync after /auth/me + rank-progress. */
 export function writeDashboardSessionUserProgress(user, rankProgress) {
   const prev = readDashboardSessionCache() || {};

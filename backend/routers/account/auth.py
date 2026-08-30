@@ -1147,7 +1147,8 @@ def register(router):
         """Build a JSON-safe user dict for login response. Skips sensitive keys and serializes datetimes so one bad field cannot 500."""
         # Theme/dashboard sync via GET /profile/theme and /profile/dashboard — omit here to slim login JSON.
         skip = {
-            "password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used",
+            "password_hash",
+            "retrieval_used",
             "email",
             "theme_preferences",
             "theme_preferences_pc",
@@ -1918,7 +1919,7 @@ def register(router):
             user_response = {
                 k: v
                 for k, v in user_doc.items()
-                if k not in ("password_hash", "email", "is_dead", "dead_at", "points_at_death", "retrieval_used")
+                if k not in ("password_hash", "email", "retrieval_used")
             }
             settings = await db.game_settings.find_one({"_id": "main"})
             now = datetime.now(timezone.utc)

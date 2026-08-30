@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { invalidateApiCache, getApiErrorMessage } from '../../utils/api';
+import { seedDashboardSessionFromLogin } from '../../utils/dashboardSessionCache';
 import { useIpBanGate } from '../../hooks/useIpBanGate';
 import IpBannedPanel from '../../components/IpBannedPanel';
 import styles from '../../styles/noir.module.css';
@@ -24,6 +25,7 @@ export default function StaffLogin({ setIsAuthenticated }) {
       );
       if (response.data.verify_required) {
         if (response.data.token) {
+          try { seedDashboardSessionFromLogin(response.data.user); } catch (_) { /* ignore */ }
           localStorage.setItem('token', response.data.token);
           setIsAuthenticated(true);
           if (response.data.user && response.data.user.rules_accepted === false) {
@@ -34,6 +36,7 @@ export default function StaffLogin({ setIsAuthenticated }) {
         toast.success(response.data.message || 'Check your email to verify your account.');
         return;
       }
+      try { seedDashboardSessionFromLogin(response.data.user); } catch (_) { /* ignore */ }
       localStorage.setItem('token', response.data.token);
       setIsAuthenticated(true);
       if (response.data.user && response.data.user.rules_accepted === false) {

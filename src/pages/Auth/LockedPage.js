@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, LogOut } from 'lucide-react';
 import api from '../../utils/api';
+import { clearDashboardSessionCache } from '../../utils/dashboardSessionCache';
 import { parseIpBanFromError } from '../../utils/ipBan';
 
 const MAX_COMMENT_LENGTH = 2000;
@@ -112,6 +113,7 @@ export default function LockedPage() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    try { clearDashboardSessionCache(); } catch (_) { /* ignore */ }
     window.location.href = '/';
   };
 

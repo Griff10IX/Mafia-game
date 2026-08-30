@@ -15,7 +15,7 @@ import api, {
 import { setToastMutedPages } from '../utils/toastPageMutes';
 import { clearStaffPortalSession, isStaffPortalTokenValid, setStaffPortalToken, getOrCreateStaffPortalDeviceId } from '../utils/staffPortalSession';
 import { getThemeUiPlatform } from '../utils/themePlatform';
-import { readDashboardSessionCache, writeDashboardSessionUserProgress } from '../utils/dashboardSessionCache';
+import { readDashboardSessionCache, writeDashboardSessionUserProgress, clearDashboardSessionCache } from '../utils/dashboardSessionCache';
 import { SLOTS_FEATURE_ENABLED } from '../config/gameFeatures';
 import { buildLayoutStaffNavItems } from '../pages/StaffRole/adminToolMap';
 import { preloadRoute, preloadRouteHandlers } from '../utils/routePreload';
@@ -1071,10 +1071,9 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     const tAdmin = setTimeout(() => checkAdmin(), 400);
-    const tData = setTimeout(() => fetchData(), 150);
+    fetchData();
     return () => {
       clearTimeout(tAdmin);
-      clearTimeout(tData);
     };
   }, []); // eslint-disable-line
 
@@ -1914,6 +1913,7 @@ export default function Layout({ children }) {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    try { clearDashboardSessionCache(); } catch (_) { /* ignore */ }
     clearStaffPortalSession();
     clearProfileSessionLastMeUsername();
     clearDeadAliveEstateNudgePending();
@@ -2664,6 +2664,25 @@ export default function Layout({ children }) {
 
   if (user?.is_dead) {
     return <DeathScreen user={user} onLogout={handleLogout} />;
+  }
+
+  let hasAuthToken = false;
+  try {
+    hasAuthToken = Boolean(localStorage.getItem('token'));
+  } catch (_) { /* ignore */ }
+  if (hasAuthToken && user == null) {
+    return (
+      <div
+        data-app-shell="1"
+        data-auth-boot
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          background: 'linear-gradient(180deg, #0f0e13 0%, #13121a 100%)',
+        }}
+      />
+    );
   }
 
   return (
