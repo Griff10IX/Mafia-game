@@ -13,6 +13,7 @@ from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, get_current_user_verified, _is_admin, log_activity
+from utils.game_pass_micro_rewards import apply_game_pass_wait_hours, apply_game_pass_wait_seconds
 from utils.game_timezone import game_today_date_str
 
 logger = logging.getLogger(__name__)
@@ -353,7 +354,7 @@ def register(router):
                 remaining = int((cd_dt - now).total_seconds()) + 1
                 raise HTTPException(status_code=400, detail=f"Wait {remaining}s before your next guess.")
 
-        cooldown_until = now + timedelta(seconds=SAFE_GUESS_COOLDOWN_SECONDS)
+        cooldown_until = now + timedelta(seconds=apply_game_pass_wait_seconds(SAFE_GUESS_COOLDOWN_SECONDS, user))
         result = await db.users.update_one(
             {"id": uid, "money": {"$gte": SAFE_ENTRY_COST}},
             {"$inc": {"money": -SAFE_ENTRY_COST}, "$set": {"crack_safe_cooldown_until": cooldown_until}},
@@ -404,7 +405,7 @@ def register(router):
                     "refetch": True,
                 }
             jackpot_amount = won_safe.get("jackpot", SAFE_JACKPOT_SEED)
-            win_lock_until = now + timedelta(hours=SAFE_WIN_LOCK_HOURS)
+            win_lock_until = now + timedelta(hours=apply_game_pass_wait_hours(SAFE_WIN_LOCK_HOURS, user))
             win_inc: dict = {"money": jackpot_amount}
             bonus_tokens = []
             bonus_loot_pieces = 0

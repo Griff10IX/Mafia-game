@@ -24,6 +24,8 @@ from server import (
     CARS,
     ARMOUR_BASE_BULLETS,
     LOOT_EXCLUSIVE_ARMOUR_LEVEL,
+    _get_staff_user_ids,
+    expand_user_ids_for_mongo_nin,
 )
 from routers.kill.armoury import _invalidate_weapons_cache, TOKEN_CONFIG, TOKEN_TYPES, STORE_COUNT_ONLY_TOKENS
 from routers.game.store import STORE_COUNT_ONLY_TOKEN_FIELDS, TOKEN_STORE_UNIT_PRICE_POINTS
@@ -36,6 +38,7 @@ from utils.speakeasy_rewards import (
     SPEAKEASY_DAILY_POINTS,
     SPEAKEASY_COOLDOWN_HOURS,
 )
+from utils.game_pass_micro_rewards import apply_game_pass_wait_hours
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.loot_perk_stack import stacked_perk_until as _stacked_perk_until, GTA_RARE_DROP_PERK_ATTEMPTS
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_LOOT_BOX
@@ -76,11 +79,21 @@ EXCLUSIVE_CAP_BY_TYPE: Dict[str, int] = {
     "weed_strain": 5,  # 5 unique loot-exclusive Weed Empire strains (1 of each)
 }
 LOOT_EXCLUSIVE_WEAPON_ID = "weapon_loot"
-LOOT_EXCLUSIVE_CAR_ID = "car21"  # legacy Cadillac — no longer droppable from loot boxes
-LOOT_EXCLUSIVE_SJ_CAR_ID = "car23"  # Duesenberg Model SJ — Rare/Ultra Rare only
+LOOT_EXCLUSIVE_CAR_ID = "car21"  # Cadillac V-16 — 1/1 exclusive-pool drop; returns to pool if melted
+LOOT_EXCLUSIVE_SJ_CAR_ID = "car23"  # Duesenberg Model SJ — Rare/Ultra Rare only; returns to pool if melted
 LOOT_EXCLUSIVE_SJ_RATES: Dict[str, float] = {
     "rare": 0.05,
     "ultra_rare": 0.10,
+}
+LOOT_EXCLUSIVE_540K_CAR_ID = "car24"  # Mercedes-Benz 540K — Ultra Rare only; returns to pool if melted
+# Server-only. Do not put this rate in public loot APIs, scarcity, reward catalogs, or notifications.
+LOOT_EXCLUSIVE_540K_RATES: Dict[str, float] = {
+    "ultra_rare": 0.08,
+}
+USER_LOOT_BOX_OPEN_TOTAL_FIELD = "loot_box_open_total"
+LOOT_BOX_FREE_OPEN_FIELDS: Dict[str, str] = {
+    "rare": "loot_box_free_rare_opens",
+    "ultra_rare": "loot_box_free_ultra_opens",
 }
 # Ultra Rare box token pool extras (not in common/uncommon/rare token rolls).
 LOOT_BOX_UR_ONLY_TOKEN_FIELDS: Dict[str, str] = {
@@ -223,9 +236,11 @@ async def _get_claimed_counts():
     weed_claimed = await _weed_strain_claimed_live()
     if weed_claimed <= 0:
         weed_claimed = min(_exclusive_cap("weed_strain"), int(raw.get("weed_strain") or 0))
+    # Cadillac 1/1 is live garage ownership, not the sticky claimed counter (melt must reopen the pool).
+    car_claimed = await _cadillac_claimed_live()
     return {
         "weapon": min(_exclusive_cap("weapon"), int(raw.get("weapon") or 0)),
-        "car": min(_exclusive_cap("car"), int(raw.get("car") or 0)),
+        "car": min(_exclusive_cap("car"), car_claimed),
         "armour": min(_exclusive_cap("armour"), int(raw.get("armour") or 0)),
         "property": min(_exclusive_cap("property"), int(raw.get("property") or 0)),
         "weed_strain": weed_claimed,
@@ -249,7 +264,7 @@ async def resync_loot_exclusive_claimed_counts_from_live() -> Dict[str, int]:
     weapon_n = int(
         await db.user_weapons.count_documents({"weapon_id": LOOT_EXCLUSIVE_WEAPON_ID, "quantity": {"$gte": 1}})
     )
-    car_n = int(await db.user_cars.count_documents({"car_id": LOOT_EXCLUSIVE_CAR_ID}))
+    car_n = int(await db.user_cars.count_documents(await _player_loot_exclusive_car_filter(LOOT_EXCLUSIVE_CAR_ID)))
     armour_n = int(
         await db.users.count_documents(
             {
@@ -328,10 +343,109 @@ async def _user_has_loot_exclusive_car(user_id: str) -> bool:
     return uc is not None
 
 
+async def _player_loot_exclusive_car_filter(car_id: str) -> Dict[str, Any]:
+    """1/1 loot-exclusive copies that count toward the player pool (admin/mod garages ignored)."""
+    q: Dict[str, Any] = {"car_id": car_id}
+    staff = expand_user_ids_for_mongo_nin(await _get_staff_user_ids())
+    if staff:
+        q["user_id"] = {"$nin": staff}
+    return q
+
+
+async def _catalog_loot_exclusive_claimed_live(car_id: str) -> int:
+    """Live 0/1 player ownership for a unique loot-exclusive catalog car. Admin/mod copies do not count."""
+    n = int(await db.user_cars.count_documents(await _player_loot_exclusive_car_filter(car_id)))
+    return 1 if n > 0 else 0
+
+
+async def _cadillac_claimed_live() -> int:
+    """Live count of Cadillac V-16 (car21) — source of truth for exclusive-pool scarcity."""
+    return await _catalog_loot_exclusive_claimed_live(LOOT_EXCLUSIVE_CAR_ID)
+
+
 async def _model_sj_claimed_live() -> int:
     """Live count of Duesenberg Model SJ (car23) — source of truth for 0/1 scarcity."""
-    n = int(await db.user_cars.count_documents({"car_id": LOOT_EXCLUSIVE_SJ_CAR_ID}))
-    return 1 if n > 0 else 0
+    return await _catalog_loot_exclusive_claimed_live(LOOT_EXCLUSIVE_SJ_CAR_ID)
+
+
+async def _insert_unique_loot_exclusive_car(
+    *,
+    user_id: str,
+    car_id: str,
+    now: datetime,
+    username: Optional[str] = None,
+    event_extra: Optional[dict] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Insert one unique loot-exclusive catalog car for the player pool. Returns reward dict, or None if a
+    non-staff player already owns it / race lost. Admin and mod copies do not block the pool.
+    Melt/scrap of the player copy puts the car back in the pool.
+    """
+    if await _catalog_loot_exclusive_claimed_live(car_id) >= 1:
+        return None
+    car_info = next((c for c in (CARS or []) if c.get("id") == car_id), None)
+    car_name = (car_info.get("name") if car_info else None) or car_id
+    loot_car_uc_id = str(uuid.uuid4())
+    try:
+        await db.user_cars.insert_one(
+            {
+                "id": loot_car_uc_id,
+                "user_id": user_id,
+                "car_id": car_id,
+                "car_name": car_name,
+                "acquired_at": now.isoformat(),
+                "damage_percent": 0,
+                "rarity": "loot_exclusive",
+                "value": int((car_info or {}).get("value") or 0),
+                "min_rank": int((car_info or {}).get("min_rank") or 1),
+                "min_difficulty": int((car_info or {}).get("min_difficulty") or 1),
+                "travel_bonus": int((car_info or {}).get("travel_bonus") or 0),
+                "image": str((car_info or {}).get("image") or ""),
+                "source": "loot_box",
+            }
+        )
+    except Exception:
+        logger.exception("Loot exclusive car insert failed user=%s car=%s", user_id, car_id)
+        return None
+    try:
+        rows = await db.user_cars.find(
+            await _player_loot_exclusive_car_filter(car_id),
+            {"_id": 1, "id": 1, "acquired_at": 1},
+        ).sort("acquired_at", 1).to_list(10)
+        if len(rows) > 1:
+            keep_id = rows[0].get("id")
+            for r in rows[1:]:
+                await db.user_cars.delete_one({"_id": r["_id"]})
+            if keep_id != loot_car_uc_id:
+                return None
+    except Exception:
+        logger.exception("Loot exclusive uniqueness cleanup failed car=%s", car_id)
+    try:
+        from utils.exclusive_car_events import log_exclusive_car_event
+
+        await log_exclusive_car_event(
+            db,
+            event_type="loot_box",
+            car_id=car_id,
+            user_car_id=loot_car_uc_id,
+            to_user_id=user_id,
+            to_username=username or "",
+            car_name=car_name,
+            extra=event_extra,
+        )
+    except Exception:
+        logger.exception("Loot exclusive exclusive_car_events log failed car=%s", car_id)
+    try:
+        await maybe_revoke_civilian_protection(db, user_id, "exclusive_car")
+    except Exception:
+        pass
+    return {
+        "type": "car",
+        "name": car_name,
+        "id": car_id,
+        "rarity": "loot_exclusive",
+        "reward_tier": "loot_exclusive",
+    }
 
 
 async def _get_sj_ur_guarantee() -> Optional[Dict[str, Any]]:
@@ -381,72 +495,23 @@ async def _try_grant_model_sj_car(
         if guaranteed:
             await _clear_sj_ur_guarantee()
         return None
-    car_info = next((c for c in (CARS or []) if c.get("id") == LOOT_EXCLUSIVE_SJ_CAR_ID), None)
-    car_name = (car_info.get("name") if car_info else None) or "Duesenberg Model SJ"
-    loot_car_uc_id = str(uuid.uuid4())
-    try:
-        await db.user_cars.insert_one(
-            {
-                "id": loot_car_uc_id,
-                "user_id": user_id,
-                "car_id": LOOT_EXCLUSIVE_SJ_CAR_ID,
-                "car_name": car_name,
-                "acquired_at": now.isoformat(),
-                "damage_percent": 0,
-                "rarity": "loot_exclusive",
-                "value": int((car_info or {}).get("value") or 0),
-                "min_rank": int((car_info or {}).get("min_rank") or 1),
-                "min_difficulty": int((car_info or {}).get("min_difficulty") or 1),
-                "travel_bonus": int((car_info or {}).get("travel_bonus") or 0),
-                "image": str((car_info or {}).get("image") or ""),
-                "source": "loot_box",
-            }
-        )
-    except Exception:
-        logger.exception("Model SJ loot grant insert failed user=%s", user_id)
-        return None
-    # Race guard: if two inserts slipped through, keep one and drop extras.
-    try:
-        rows = await db.user_cars.find(
-            {"car_id": LOOT_EXCLUSIVE_SJ_CAR_ID},
-            {"_id": 1, "id": 1, "acquired_at": 1},
-        ).sort("acquired_at", 1).to_list(10)
-        if len(rows) > 1:
-            keep_id = rows[0].get("id")
-            for r in rows[1:]:
-                await db.user_cars.delete_one({"_id": r["_id"]})
-            if keep_id != loot_car_uc_id:
-                if guaranteed:
-                    await _clear_sj_ur_guarantee()
-                return None
-    except Exception:
-        logger.exception("Model SJ uniqueness cleanup failed")
-    if guaranteed:
+    reward = await _insert_unique_loot_exclusive_car(
+        user_id=user_id,
+        car_id=LOOT_EXCLUSIVE_SJ_CAR_ID,
+        now=now,
+        username=username,
+        event_extra={"guaranteed_ur": True} if guaranteed else None,
+    )
+    if guaranteed and (reward or await _model_sj_claimed_live() >= 1):
         await _clear_sj_ur_guarantee()
-    try:
-        from utils.exclusive_car_events import log_exclusive_car_event
-
-        await log_exclusive_car_event(
-            db,
-            event_type="loot_box",
-            car_id=LOOT_EXCLUSIVE_SJ_CAR_ID,
-            user_car_id=loot_car_uc_id,
-            to_user_id=user_id,
-            to_username=username or "",
-            car_name=car_name,
-            extra={"guaranteed_ur": bool(guaranteed)} if guaranteed else None,
-        )
-    except Exception:
-        logger.exception("Model SJ exclusive_car_events log failed")
-    try:
-        await maybe_revoke_civilian_protection(db, user_id, "exclusive_car")
-    except Exception:
-        pass
+    if not reward:
+        return None
+    car_name = reward.get("name") or "Duesenberg Model SJ"
     try:
         await send_notification(
             user_id,
             "Loot box exclusive",
-            f"You claimed the only Duesenberg Model SJ ({car_name}) — 2s travel. It never returns to the loot pool.",
+            f"You claimed the only Duesenberg Model SJ ({car_name}) — 2s travel. If melted, it returns to the loot pool.",
             "reward",
         )
         await send_notification(
@@ -457,13 +522,49 @@ async def _try_grant_model_sj_car(
         )
     except Exception:
         pass
-    return {
-        "type": "car",
-        "name": car_name,
-        "id": LOOT_EXCLUSIVE_SJ_CAR_ID,
-        "rarity": "loot_exclusive",
-        "reward_tier": "loot_exclusive",
-    }
+    return reward
+
+
+async def _try_grant_540k_car(
+    *,
+    user_id: str,
+    paid_tier: str,
+    now: datetime,
+    username: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Dedicated once-per-open Ultra Rare roll. Rate is server-only — never mention it to players."""
+    rate = LOOT_EXCLUSIVE_540K_RATES.get(paid_tier)
+    if rate is None:
+        return None
+    if _rng.random() >= float(rate):
+        return None
+    if await _catalog_loot_exclusive_claimed_live(LOOT_EXCLUSIVE_540K_CAR_ID) >= 1:
+        return None
+    reward = await _insert_unique_loot_exclusive_car(
+        user_id=user_id,
+        car_id=LOOT_EXCLUSIVE_540K_CAR_ID,
+        now=now,
+        username=username,
+    )
+    if not reward:
+        return None
+    car_name = reward.get("name") or "Mercedes-Benz 540K Special Roadster"
+    try:
+        await send_notification(
+            user_id,
+            "Loot box exclusive",
+            f"You claimed the only {car_name} — Ultra Rare exclusive. If melted, it returns to the loot pool.",
+            "reward",
+        )
+        await send_notification(
+            user_id,
+            "Loot box",
+            f"The last exclusive car ({car_name}) has been claimed!",
+            "system",
+        )
+    except Exception:
+        pass
+    return reward
 
 
 async def _user_has_armour_6(user_id: str) -> bool:
@@ -543,13 +644,14 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
     pieces = int(current_user.get("loot_box_pieces") or 0)
     claimed = await _get_claimed_counts()
     claimed["car_sj"] = await _model_sj_claimed_live()
+    claimed["car_540k"] = await _catalog_loot_exclusive_claimed_live(LOOT_EXCLUSIVE_540K_CAR_ID)
     reclaimable = await claimed_counts_live(db)
     owned_relics = sorted(await user_owned_item_ids(db, current_user.get("id") or ""))
     active_rewards = _active_rewards_from_user(current_user)
     last_10_wins = list(current_user.get("loot_box_recent") or [])[-10:]
     last_10_wins.reverse()  # newest first for display
     rarity = await _get_loot_rarity_config()
-    exclusive_car_weekly = {"pieces": 0, "cap": 25, "cars": []}
+    exclusive_car_weekly = {"pieces": 0, "cap": 128, "cars": []}
     try:
         from utils.exclusive_car_weekly_loot import weekly_loot_breakdown_for_user
 
@@ -562,12 +664,14 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
     return {
         "loot_box_pieces": pieces,
         "loot_box_free_rare_opens": int(current_user.get("loot_box_free_rare_opens") or 0),
+        "loot_box_free_ultra_opens": int(current_user.get("loot_box_free_ultra_opens") or 0),
         "open_cost_by_tier": dict(LOOT_BOX_OPEN_COST_BY_TIER),
         "claimed_counts": claimed,
         "exclusive_caps": {
             "weapon": _exclusive_cap("weapon"),
             "car": _exclusive_cap("car"),
             "car_sj": 1,
+            "car_540k": 1,
             "armour": _exclusive_cap("armour"),
             "property": _exclusive_cap("property"),
             "weed_strain": _exclusive_cap("weed_strain"),
@@ -805,6 +909,11 @@ def _loot_public_reward_info() -> Dict[str, Any]:
             "cap_global": 1,
             "drop_rates_pct": {"rare": 5, "ultra_rare": 10},
         },
+        {
+            "id": "car_540k",
+            "label": "1936 Mercedes-Benz 540K Special Roadster (Ultra Rare exclusive, 2s travel)",
+            "cap_global": 1,
+        },
     ]
     tiers: Dict[str, Any] = {}
     for q in PAID_LOOT_TIERS:
@@ -858,9 +967,10 @@ def _loot_public_reward_info() -> Dict[str, Any]:
             f"armour {_exclusive_cap('armour')}, Speakeasy {_exclusive_cap('property')}, "
             f"Weed Empire special strains {_exclusive_cap('weed_strain')} (1 of each; "
             "loot can grant you at most one — more only by killing holders), "
-            "Duesenberg Model SJ 1 (Rare boxes 5% / Ultra Rare 10% only; 2s travel). "
+            "Duesenberg Model SJ 1 (Rare boxes 5% / Ultra Rare 10% only; 2s travel), "
+            "Mercedes-Benz 540K Special Roadster 1 (Ultra Rare boxes only; 2s travel). "
             "If a type is full or you already own that exclusive, the roll tries another exclusive or becomes a standard prize. "
-            "Weed exclusives and Model SJ transfer on PvP kill once claimed."
+            "Weed exclusives, Model SJ, and 540K transfer on PvP kill once claimed."
         ),
         "standard_token_note": (
             "Ultra Rare boxes can also roll Mission Skip and Free Robot Bodyguard from the token prize pool."
@@ -928,7 +1038,7 @@ def _loot_tier_profile(box_quality: str) -> Dict[str, Any]:
 def _loot_build_car_pool(car_rarities: Tuple[str, ...]) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for c in CARS or []:
-        if c.get("id") in (LOOT_EXCLUSIVE_CAR_ID, LOOT_EXCLUSIVE_SJ_CAR_ID, "car_custom"):
+        if c.get("id") in (LOOT_EXCLUSIVE_CAR_ID, LOOT_EXCLUSIVE_SJ_CAR_ID, LOOT_EXCLUSIVE_540K_CAR_ID, "car_custom"):
             continue
         if c.get("rarity") == "loot_exclusive":
             continue
@@ -1020,20 +1130,27 @@ async def open_loot_box(
         type(raw_pieces).__name__,
     )
     is_admin_test = _is_admin(current_user)
-    used_free_rare = False
-    # Burn free Rare voucher for everyone (including admins) so FREE cannot be reused.
-    if paid_tier == "rare" and int(current_user.get("loot_box_free_rare_opens") or 0) > 0:
+    free_field = LOOT_BOX_FREE_OPEN_FIELDS.get(paid_tier)
+    used_free_open = False
+    # Burn free vouchers for everyone (including admins) so FREE cannot be reused.
+    if free_field and int(current_user.get(free_field) or 0) > 0:
         free_res = await db.users.find_one_and_update(
-            {"id": user_id, "loot_box_free_rare_opens": {"$gte": 1}},
-            {"$inc": {"loot_box_free_rare_opens": -1}},
-            projection={"_id": 0, "id": 1, "loot_box_pieces": 1, "loot_box_free_rare_opens": 1},
+            {"id": user_id, free_field: {"$gte": 1}},
+            {"$inc": {free_field: -1}},
+            projection={
+                "_id": 0,
+                "id": 1,
+                "loot_box_pieces": 1,
+                "loot_box_free_rare_opens": 1,
+                "loot_box_free_ultra_opens": 1,
+            },
             return_document=True,
         )
         if free_res:
-            used_free_rare = True
+            used_free_open = True
             new_pieces = int(free_res.get("loot_box_pieces") or 0)
             res = free_res
-    if used_free_rare:
+    if used_free_open:
         pass
     elif is_admin_test:
         res = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "loot_box_pieces": 1})
@@ -1104,17 +1221,30 @@ async def open_loot_box(
         exclusive_chance = min(1.0, max(0.0, exclusive_chance))
         chosen_standard_types: set = set()
 
-        # Dedicated Model SJ roll (Rare 5% / Ultra Rare 10%) — once per open, not shared exclusive pool.
-        sj_reward = await _try_grant_model_sj_car(
+        # Dedicated 540K roll first (Ultra Rare only; rate is server-only). Skip SJ this open if it hits.
+        k_reward = await _try_grant_540k_car(
             user_id=user_id,
             paid_tier=paid_tier,
             now=now,
             username=current_user.get("username") if current_user else None,
         )
-        if sj_reward:
-            rewards.append(sj_reward)
-            cars_given_ids.add(LOOT_EXCLUSIVE_SJ_CAR_ID)
+        if k_reward:
+            rewards.append(k_reward)
+            cars_given_ids.add(LOOT_EXCLUSIVE_540K_CAR_ID)
             cars_prize_granted = True
+
+        # Dedicated Model SJ roll (Rare 5% / Ultra Rare 10%) — once per open, not shared exclusive pool.
+        if not cars_prize_granted:
+            sj_reward = await _try_grant_model_sj_car(
+                user_id=user_id,
+                paid_tier=paid_tier,
+                now=now,
+                username=current_user.get("username") if current_user else None,
+            )
+            if sj_reward:
+                rewards.append(sj_reward)
+                cars_given_ids.add(LOOT_EXCLUSIVE_SJ_CAR_ID)
+                cars_prize_granted = True
 
         for prize_idx in range(num_prizes):
             claimed = await _get_claimed_counts()
@@ -1137,7 +1267,8 @@ async def open_loot_box(
                     available = []
                     if claimed["weapon"] < _exclusive_cap("weapon") and not await _user_has_loot_exclusive_weapon(user_id):
                         available.append("weapon")
-                    # Exclusive cars no longer granted from loot boxes
+                    if claimed["car"] < _exclusive_cap("car") and not await _user_has_loot_exclusive_car(user_id):
+                        available.append("car")
                     if claimed["armour"] < _exclusive_cap("armour") and not await _user_has_armour_6(user_id):
                         available.append("armour")
                     if claimed["property"] < _exclusive_cap("property") and not await _user_has_exclusive_property(user_id):
@@ -1158,6 +1289,8 @@ async def open_loot_box(
                     # Admin at 100% exclusive: if nothing available (cap or already have), still grant an exclusive for testing (skip property if user already has one to avoid duplicate key)
                     if is_admin_test and exclusive_chance >= 1.0 and not available:
                         available = ["weapon", "armour"]
+                        if claimed["car"] < _exclusive_cap("car") and not await _user_has_loot_exclusive_car(user_id):
+                            available.append("car")
                         if not await _user_has_exclusive_property(user_id):
                             available.append("property")
                         if unowned_weed and not user_owns_weed:
@@ -1188,7 +1321,36 @@ async def open_loot_box(
                             })
                             continue
                         if typ == "car":
-                            # Exclusive cars no longer granted from loot boxes — skip to another exclusive if possible
+                            car_reward = await _insert_unique_loot_exclusive_car(
+                                user_id=user_id,
+                                car_id=LOOT_EXCLUSIVE_CAR_ID,
+                                now=now,
+                                username=current_user.get("username") if current_user else None,
+                            )
+                            if not car_reward:
+                                continue
+                            await _increment_claimed_count("car")
+                            new_claimed = await _get_claimed_counts()
+                            car_name = car_reward.get("name") or "Cadillac V-16"
+                            if new_claimed["car"] >= _exclusive_cap("car"):
+                                await send_notification(
+                                    user_id,
+                                    "Loot box",
+                                    f"The last exclusive car ({car_name}) has been claimed!",
+                                    "system",
+                                )
+                            try:
+                                await send_notification(
+                                    user_id,
+                                    "Loot box exclusive",
+                                    f"You claimed the only {car_name}. If melted, it returns to the loot exclusive pool.",
+                                    "reward",
+                                )
+                            except Exception:
+                                pass
+                            rewards.append(car_reward)
+                            cars_given_ids.add(LOOT_EXCLUSIVE_CAR_ID)
+                            cars_prize_granted = True
                             continue
                         if typ == "armour":
                             await db.users.update_one(
@@ -1407,7 +1569,10 @@ async def open_loot_box(
         }
         await db.users.update_one(
             {"id": user_id},
-            {"$push": {"loot_box_recent": {"$each": [win_entry], "$slice": -10}}},
+            {
+                "$push": {"loot_box_recent": {"$each": [win_entry], "$slice": -10}},
+                "$inc": {USER_LOOT_BOX_OPEN_TOTAL_FIELD: 1},
+            },
         )
         await db.economy_events.insert_one({
             "at": now.isoformat(),
@@ -1425,41 +1590,42 @@ async def open_loot_box(
             "types": [r.get("type") for r in rewards if r.get("type")],
         })
         piece_grant = int(merged_inc.get("loot_box_pieces", 0))
-        if used_free_rare:
-            free_opens_left = int((res or {}).get("loot_box_free_rare_opens") or 0)
-        else:
-            free_opens_left = int(current_user.get("loot_box_free_rare_opens") or 0)
+        src_free = res if used_free_open else current_user
+        rare_left = int((src_free or {}).get("loot_box_free_rare_opens") or 0)
+        ultra_left = int((src_free or {}).get("loot_box_free_ultra_opens") or 0)
         return {
             "rewards": rewards,
             "box_quality": box_quality,
             "paid_tier": paid_tier,
-            "pieces_spent": 0 if used_free_rare else cost,
-            "used_free_rare_open": used_free_rare,
-            "loot_box_free_rare_opens": free_opens_left,
+            "pieces_spent": 0 if used_free_open else cost,
+            "used_free_rare_open": used_free_open and paid_tier == "rare",
+            "used_free_ultra_open": used_free_open and paid_tier == "ultra_rare",
+            "loot_box_free_rare_opens": rare_left,
+            "loot_box_free_ultra_opens": ultra_left,
             "guaranteed_rare_plus": 2 if paid_tier in ("rare", "ultra_rare") else 0,
             "prizes_count": len(rewards),
             "new_pieces": new_pieces + piece_grant,
             "claimed_counts": await _get_claimed_counts(),
         }
     except HTTPException:
-        if used_free_rare:
+        if used_free_open and free_field:
             try:
                 await db.users.update_one(
                     {"id": user_id},
-                    {"$inc": {"loot_box_free_rare_opens": 1}},
+                    {"$inc": {free_field: 1}},
                 )
             except Exception:
-                logger.exception("Failed to refund free rare open user_id=%s", user_id)
+                logger.exception("Failed to refund free %s open user_id=%s", paid_tier, user_id)
         raise
     except Exception as e:
-        if used_free_rare:
+        if used_free_open and free_field:
             try:
                 await db.users.update_one(
                     {"id": user_id},
-                    {"$inc": {"loot_box_free_rare_opens": 1}},
+                    {"$inc": {free_field: 1}},
                 )
             except Exception:
-                logger.exception("Failed to refund free rare open user_id=%s", user_id)
+                logger.exception("Failed to refund free %s open user_id=%s", paid_tier, user_id)
         logger.exception("Loot box open (rewards) user_id=%s: %s", user_id, e)
         raise HTTPException(
             status_code=500,
@@ -1471,7 +1637,8 @@ async def collect_speakeasy(current_user: dict = Depends(get_current_user)):
     """Collect daily Speakeasy perk if user owns an exclusive property (Speakeasy). Once per 24h."""
     user_id = current_user["id"]
     now = datetime.now(timezone.utc)
-    cooldown_threshold = (now - timedelta(hours=SPEAKEASY_COOLDOWN_HOURS)).isoformat()
+    speakeasy_hours = apply_game_pass_wait_hours(SPEAKEASY_COOLDOWN_HOURS, current_user)
+    cooldown_threshold = (now - timedelta(hours=speakeasy_hours)).isoformat()
     ep = await db.exclusive_properties.find_one_and_update(
         {"owner_id": user_id, "type": "speakeasy",
          "$or": [
@@ -1487,7 +1654,7 @@ async def collect_speakeasy(current_user: dict = Depends(get_current_user)):
         )
         if not owns:
             raise HTTPException(status_code=400, detail="You do not own a Speakeasy")
-        raise HTTPException(status_code=400, detail="Speakeasy daily collection is on cooldown (once per 24 hours)")
+        raise HTTPException(status_code=400, detail=f"Speakeasy daily collection is on cooldown (once per {speakeasy_hours:g} hours)")
     await db.users.update_one(
         {"id": user_id},
         {"$inc": {

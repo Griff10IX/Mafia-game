@@ -63,7 +63,7 @@ def _theme_response_payload(user: Dict[str, Any]) -> Dict[str, Any]:
 
 import httpx
 from fastapi import Body, Depends, File, HTTPException, Query, Request, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from utils.profile_cosmetics import profile_cosmetic_public_fields
 from utils.civilian_protection import (
@@ -76,6 +76,8 @@ from utils.gambling_self_ban import (
     GAMBLING_SELF_BAN_DURATIONS_HOURS,
     gambling_self_ban_status_payload,
     is_gambling_self_banned,
+    submitted_gambling_ban_code,
+    valid_gambling_ban_code,
 )
 from utils.hitlist_resolution import resolve_user_hitlist_kill
 from utils.bbcode_normalize import normalize_bbcode_media_typos
@@ -565,6 +567,10 @@ def register(router):
     @router.get("/users/{username}/profile/honours")
     async def get_user_profile_honours(username: str, current_user: dict = Depends(get_current_user)):
         """Honour ranks only (same numbers as full profile); use with GET .../profile?include_honours=0 for faster first paint."""
+        from utils.system_ai_inbox import is_system_ai_profile_username
+
+        if is_system_ai_profile_username(username):
+            return {"honours": []}
         user = await _find_user_by_profile_username(username, {"_id": 0, "password_hash": 0})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -574,6 +580,14 @@ def register(router):
     @router.get("/users/{username}/profile-preview")
     async def get_user_profile_preview(username: str, current_user: dict = Depends(get_current_user)):
         """Minimal profile data for hover previews (e.g. Users Online). Only returns public-safe fields."""
+        from utils.system_ai_inbox import (
+            is_system_ai_profile_username,
+            is_system_ai_shown_online,
+            system_ai_profile_preview,
+        )
+
+        if is_system_ai_profile_username(username):
+            return system_ai_profile_preview(online=await is_system_ai_shown_online(db))
         user = await _find_user_by_profile_username(
             username,
             {
@@ -742,6 +756,14 @@ def register(router):
         current_user: dict = Depends(get_current_user),
     ):
         """View a user's profile (requires auth). Pass include_honours=0 with GET .../profile/honours for faster parallel loads."""
+        from utils.system_ai_inbox import (
+            is_system_ai_profile_username,
+            is_system_ai_shown_online,
+            system_ai_profile_payload,
+        )
+
+        if is_system_ai_profile_username(username):
+            return system_ai_profile_payload(online=await is_system_ai_shown_online(db))
         user = await _find_user_by_profile_username(username, {"_id": 0, "password_hash": 0})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -855,7 +877,20 @@ def register(router):
                 if d.get("buy_back_reward") is not None:
                     item["buy_back_reward"] = int(d.get("buy_back_reward") or 0)
                 out.append(item)
-            return out
+            best = {}
+            for item in out:
+                key = str(item.get("city") or "").strip().lower()
+                prev = best.get(key)
+                if not prev:
+                    best[key] = item
+                    continue
+                item_bet = int(item.get("max_bet") or 0)
+                prev_bet = int(prev.get("max_bet") or 0)
+                if item_bet > prev_bet:
+                    best[key] = item
+                elif item_bet == prev_bet and int(item.get("buy_back_reward") or 0) > int(prev.get("buy_back_reward") or 0):
+                    best[key] = item
+            return list(best.values())
 
         async def _family_name_and_tag():
             variants = _family_member_user_id_variants(user_id)
@@ -1194,6 +1229,10 @@ def register(router):
         username_pattern = _username_pattern(username)
         if not username_pattern:
             raise HTTPException(status_code=400, detail="Invalid username")
+        from utils.system_ai_inbox import is_system_ai_profile_username
+
+        if is_system_ai_profile_username(username):
+            raise HTTPException(status_code=404, detail="System AI is not a player account")
         try:
             user = await db.users.find_one(
                 {"username": username_pattern},
@@ -2363,6 +2402,7 @@ def register(router):
         return civilian_protection_status_payload(merged)
 
     class GamblingSelfBanBody(BaseModel):
+        model_config = ConfigDict(extra="allow")
         duration_hours: int = Field(..., description="12, 24, 48, or 72")
 
     @router.get("/account/gambling-self-ban")
@@ -2372,13 +2412,44 @@ def register(router):
             {"_id": 0, "gambling_self_ban_until": 1},
         )
         merged = {**current_user, **(u or {})}
-        return gambling_self_ban_status_payload(merged)
+        return gambling_self_ban_status_payload(merged, include_ban_code=True)
 
     @router.post("/account/gambling-self-ban")
     async def post_gambling_self_ban(
         body: GamblingSelfBanBody,
+        req: Request,
         current_user: dict = Depends(get_current_user_verified),
     ):
+        raw_body: Dict[str, Any] = {}
+        try:
+            parsed = await req.json()
+            if isinstance(parsed, dict):
+                raw_body = parsed
+        except Exception:
+            raw_body = dict(getattr(body, "__pydantic_extra__", None) or {})
+        extras = getattr(body, "__pydantic_extra__", None) or {}
+        if isinstance(extras, dict):
+            for k, v in extras.items():
+                if k not in raw_body:
+                    raw_body[k] = v
+        submitted_code = submitted_gambling_ban_code(raw_body)
+        if not valid_gambling_ban_code(current_user.get("id") or "", submitted_code):
+            try:
+                from utils.staff_bot_client_alert import maybe_notify_staff_gambling_ban_code_fail
+
+                await maybe_notify_staff_gambling_ban_code_fail(
+                    db=db,
+                    request=req,
+                    user_id=current_user.get("id") or "",
+                    username=current_user.get("username") or "",
+                    duration_hours=int(body.duration_hours or 0),
+                )
+            except Exception:
+                logger.exception("gambling ban code fail staff notify")
+            raise HTTPException(
+                status_code=400,
+                detail="Could not start the ban. Refresh the page and try again.",
+            )
         hours = int(body.duration_hours)
         if hours not in GAMBLING_SELF_BAN_DURATIONS_HOURS:
             raise HTTPException(
@@ -2408,4 +2479,8 @@ def register(router):
                 }
             },
         )
-        return gambling_self_ban_status_payload({**merged, "gambling_self_ban_until": until_iso}, now)
+        return gambling_self_ban_status_payload(
+            {**merged, "gambling_self_ban_until": until_iso},
+            now,
+            include_ban_code=True,
+        )

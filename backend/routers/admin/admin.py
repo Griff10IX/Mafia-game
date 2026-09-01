@@ -1384,6 +1384,20 @@ def register(router):
         )
         return {"admin_ghost_mode": new_value, "message": "Ghost mode " + ("on" if new_value else "off")}
 
+    @router.post("/admin/system-ai-online")
+    async def admin_toggle_system_ai_online(current_user: dict = Depends(get_current_user)):
+        """Listed admins only: show or hide System AI on Who's Around."""
+        if not user_has_admin_list_email(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.system_ai_inbox import is_system_ai_shown_online, set_system_ai_shown_online
+
+        new_value = not await is_system_ai_shown_online(db)
+        await set_system_ai_shown_online(db, new_value)
+        return {
+            "system_ai_online": new_value,
+            "message": "System AI " + ("online" if new_value else "offline"),
+        }
+
     @router.post("/admin/act-as-normal")
     async def admin_act_as_normal(acting: bool, current_user: dict = Depends(get_current_user)):
         # Use user_has_admin_list_email (case-insensitive) instead of raw ADMIN_EMAILS membership.
@@ -4688,16 +4702,23 @@ def register(router):
         if not car:
             raise HTTPException(status_code=404, detail="Car not found")
         if car_id in LOOT_EXCLUSIVE_CAR_IDS or (car and car.get("rarity") == "loot_exclusive"):
-            other = await db.user_cars.find_one(
-                {"car_id": car_id, "user_id": {"$ne": target["id"]}},
-                {"_id": 0, "user_id": 1},
-            )
-            if other:
-                ou = await db.users.find_one({"id": other["user_id"]}, {"_id": 0, "username": 1})
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"{car.get('name') or 'Loot-exclusive car'} is already owned by {(ou or {}).get('username') or other.get('user_id')}",
-                )
+            target_is_staff = _is_admin(target) or _is_moderator(target)
+            if not target_is_staff:
+                from routers.money.loot_box import _player_loot_exclusive_car_filter
+
+                q = await _player_loot_exclusive_car_filter(car_id)
+                nin = list((q.get("user_id") or {}).get("$nin") or [])
+                if target["id"] not in nin:
+                    nin.append(target["id"])
+                if nin:
+                    q["user_id"] = {"$nin": nin}
+                other = await db.user_cars.find_one(q, {"_id": 0, "user_id": 1})
+                if other:
+                    ou = await db.users.find_one({"id": other["user_id"]}, {"_id": 0, "username": 1})
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{car.get('name') or 'Loot-exclusive car'} is already owned by {(ou or {}).get('username') or other.get('user_id')}",
+                    )
         if car_id == GTA_EXCLUSIVE_CAR_ID:
             other = await db.user_cars.find_one(
                 {"car_id": GTA_EXCLUSIVE_CAR_ID, "user_id": {"$ne": target["id"]}},
@@ -4819,16 +4840,18 @@ def register(router):
     GTA_EXCLUSIVE_CAR_ID = "car20"
     LOOT_EXCLUSIVE_CAR_ID = "car21"
     LOOT_EXCLUSIVE_SJ_CAR_ID = "car23"
-    LOOT_EXCLUSIVE_CAR_IDS = ("car21", "car23")
+    LOOT_EXCLUSIVE_540K_CAR_ID = "car24"
+    LOOT_EXCLUSIVE_CAR_IDS = ("car21", "car23", "car24")
     GAME_SETTINGS_LOOT_COUNTS_KEY = "loot_exclusive_counts"
     GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT = 0.000006
     GTA_EXCLUSIVE_DROP_WEIGHT_MIN = 0.0000001
     GTA_EXCLUSIVE_DROP_WEIGHT_MAX = 0.05
 
     async def _sync_loot_exclusive_car_claimed_count() -> int:
-        """Align loot box global car claim counter with car21 copies in garages."""
-        n = await db.user_cars.count_documents({"car_id": LOOT_EXCLUSIVE_CAR_ID})
-        claimed = 1 if n > 0 else 0
+        """Align loot box global car claim counter with non-staff car21 copies in garages."""
+        from routers.money.loot_box import _cadillac_claimed_live
+
+        claimed = await _cadillac_claimed_live()
         await db.game_settings.update_one(
             {"key": GAME_SETTINGS_LOOT_COUNTS_KEY},
             {"$set": {"value.car": claimed}},

@@ -703,6 +703,35 @@ async def buy_booze_capacity(
     return {"message": f"+{add_bonus} booze capacity for {cost_used} points", "new_capacity": new_capacity, "capacity_bonus": current_bonus + add_bonus, "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX}
 
 
+async def buy_interest_limit(
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Spend 1,000 points (or respect) to raise the interest deposit cap by $2.5B, up to $50B."""
+    from utils.bank_economy_settings import INTEREST_LIMIT_UPGRADE_COST, apply_interest_limit_upgrade
+    from routers.money.bank import _invalidate_overview_cache
+
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, INTEREST_LIMIT_UPGRADE_COST, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    result = await apply_interest_limit_upgrade(
+        db,
+        current_user["id"],
+        inc=inc,
+        gte_filter=gte_filter,
+    )
+    await _record_store_points_spend(current_user, inc, "buy-interest-limit", cost_used=cost_used)
+    _invalidate_overview_cache(current_user["id"])
+    new_limit = int(result["interest_limit"])
+    add = int(result["added"])
+    return {
+        "message": f"Interest cap raised by ${add:,} to ${new_limit:,}",
+        "interest_limit": new_limit,
+        "added": add,
+        "cost": cost_used,
+    }
+
+
 async def store_buy_bullets(
     bullets: int = Query(..., ge=1, le=CUSTOM_BULLETS_MAX),
     pay_with: str = Query("auto"),
@@ -2760,6 +2789,7 @@ def register(router):
     router.add_api_route("/store/buy-crew-oc-timer", buy_crew_oc_timer, methods=["POST"])
     router.add_api_route("/store/upgrade-garage-batch", upgrade_garage_batch_limit, methods=["POST"])
     router.add_api_route("/store/buy-booze-capacity", buy_booze_capacity, methods=["POST"])
+    router.add_api_route("/store/buy-interest-limit", buy_interest_limit, methods=["POST"])
     router.add_api_route("/store/weed-empire-summary", get_weed_empire_store_summary, methods=["GET"])
     router.add_api_route("/store/buy-weed-daily-cap", buy_weed_daily_cap, methods=["POST"])
     router.add_api_route("/store/buy-weed-safety-deposit", buy_weed_safety_deposit, methods=["POST"])

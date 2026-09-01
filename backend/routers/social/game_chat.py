@@ -119,9 +119,36 @@ async def _role_default_colors() -> tuple[str, str]:
     return _role_color_cache["admin"], _role_color_cache["mod"]
 
 
+_CHAT_NAME_FX = frozenset({
+    "girly-multi",
+    "rainbow",
+    "rainbow-multi",
+    "gay-multi",
+    "pride-multi",
+    "rainbow-anim",
+})
+
+
+def _is_chat_name_fx(custom_chat: str) -> bool:
+    c = (custom_chat or "").strip()
+    if not c:
+        return False
+    low = c.lower()
+    if c.startswith("#") and 4 <= len(c) <= 9:
+        return True
+    if c.startswith("linear-gradient"):
+        return True
+    if low.startswith("girly-"):
+        return True
+    return low in _CHAT_NAME_FX
+
+
 def _author_online_color_from_defaults(user: dict, admin_default: str, mod_default: str) -> Optional[str]:
     if _is_admin(user):
         return admin_default
+    custom_chat = (user.get("chat_name_color") or "").strip()
+    if _is_chat_name_fx(custom_chat):
+        return custom_chat
     if _is_moderator(user):
         custom = (user.get("mod_online_color") or "").strip()
         return custom or mod_default
@@ -154,6 +181,7 @@ async def _backfill_author_colors(messages: list[dict]) -> None:
             "_id": 0, "id": 1, "email": 1, "is_moderator": 1,
             "is_entertainer": 1, "is_help_desk_operator": 1,
             "mod_online_color": 1, "entertainer_online_color": 1, "hdo_online_color": 1,
+            "chat_name_color": 1,
         },
     ).to_list(len(missing_ids))
     admin_default, mod_default = await _role_default_colors()

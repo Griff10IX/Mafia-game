@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import { parseForumContent, insertAtCursor, FORUM_INLINE_SMILEY_PX } from '../../utils/forumContent';
+import { ForumSystemAiAuthor, isSystemAiAuthor } from '../../components/SystemAiInboxMessage';
 import styles from '../../styles/noir.module.css';
 import FamilyEmblem from '../../components/FamilyEmblem';
 import { useEntJoinTurnstile } from '../../hooks/useEntJoinTurnstile';
@@ -966,6 +967,8 @@ const TopicRowDesktop = ({ topic, designerCompId, myEntryTopicIds, meUsername, o
                 </span>
               )}
             </span>
+          ) : isSystemAiAuthor(topic) ? (
+            <ForumSystemAiAuthor className="truncate text-[10px]" avatarClassName="w-3.5 h-3.5" />
           ) : (
             <Link to={`/profile/${encodeURIComponent(topic.author_username || '?')}`} className="hover:text-primary hover:underline truncate block" style={topic.author_online_color ? { color: topic.author_online_color } : undefined}>{topic.author_username || '?'}</Link>
           )}
@@ -979,7 +982,7 @@ const TopicRowDesktop = ({ topic, designerCompId, myEntryTopicIds, meUsername, o
         <div className="absolute left-4 right-4 top-full z-20 mt-1 p-3 bg-zinc-900 border border-primary/30 rounded-md shadow-xl">
           <p className="text-xs text-mutedForeground line-clamp-3">{topic.preview}</p>
           <div className="flex items-center gap-3 mt-2 pt-2 border-t border-zinc-700/30 text-[10px] text-mutedForeground">
-            <span>By {topic.redeem_code ? <span className="text-mutedForeground font-heading font-semibold">System</span> : <Link to={`/profile/${encodeURIComponent(topic.author_username || '?')}`} className="hover:text-primary hover:underline" style={topic.author_online_color ? { color: topic.author_online_color } : undefined}>{topic.author_username || '?'}</Link>}</span>
+            <span>By {topic.redeem_code ? <span className="text-mutedForeground font-heading font-semibold">System</span> : isSystemAiAuthor(topic) ? <ForumSystemAiAuthor className="text-[10px]" avatarClassName="w-3 h-3" /> : <Link to={`/profile/${encodeURIComponent(topic.author_username || '?')}`} className="hover:text-primary hover:underline" style={topic.author_online_color ? { color: topic.author_online_color } : undefined}>{topic.author_username || '?'}</Link>}</span>
             {topic.created_at && <span>{getTimeAgo(topic.created_at)}</span>}
             <span className="flex items-center gap-0.5"><MessageCircle size={10} /> {topic.posts} replies</span>
           </div>
@@ -1077,6 +1080,8 @@ const TopicRowMobile = ({ topic, designerCompId, myEntryTopicIds, meUsername, on
                 </span>
               )}
             </span>
+          ) : isSystemAiAuthor(topic) ? (
+            <ForumSystemAiAuthor className="text-[10px]" avatarClassName="w-3.5 h-3.5" />
           ) : (
             <Link
               to={`/profile/${encodeURIComponent(topic.author_username || '?')}`}

@@ -16948,6 +16948,7 @@ export default function Admin() {
                     <option value="car20">car20 (Al Capone)</option>
                     <option value="car21">car21 (Cadillac V-16 loot exclusive)</option>
                     <option value="car23">car23 (Model SJ loot exclusive)</option>
+                    <option value="car24">car24 (540K loot exclusive)</option>
                   </select>
                   <input
                     type="text"

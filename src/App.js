@@ -54,6 +54,8 @@ const Referral = lazy(() => import("./pages/Account/Referral"));
 
 // Auth pages
 const LockedPage = lazy(() => import("./pages/Auth/LockedPage"));
+const KickedPage = lazy(() => import("./pages/Auth/KickedPage"));
+const AiLockedPage = lazy(() => import("./pages/Auth/AiLockedPage"));
 const RulesAccept = lazy(() => import("./pages/Auth/RulesAccept"));
 
 // Cars pages
@@ -374,6 +376,22 @@ function App() {
           <Route
             path="/staff-entrance"
             element={<StaffLogin setIsAuthenticated={setIsAuthenticated} />}
+          />
+          <Route
+            path="/kicked"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <KickedPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/ai-locked"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <AiLockedPage />
+              </Suspense>
+            }
           />
           <Route
             path="/locked"

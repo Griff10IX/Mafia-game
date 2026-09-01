@@ -1157,7 +1157,8 @@ export default function GamePass() {
                     VIP rewards are applied automatically: when you activate the pass, anything you already earned this season (season rank XP) is granted immediately; after that, each new tier credits on its own as soon as you pass the next milestone (you don’t need to buy again).
                   </p>
                   <p className="text-[9px] text-emerald-400/90 font-heading leading-relaxed">
-                    While VIP is active: <span className="text-emerald-300 font-bold">+10% rank points</span> from all sources (crimes, kills, GTA, missions, objectives, and more).
+                    While VIP is active: <span className="text-emerald-300 font-bold">+10% rank points</span> from all sources (crimes, kills, GTA, missions, objectives, and more).{" "}
+                    <span className="text-emerald-300 font-bold">Action waits are 25% shorter</span> (crimes, GTA, OC, jail, and similar). Travel, airport, and Kill page timers stay the same.
                   </p>
                 </>
               )}

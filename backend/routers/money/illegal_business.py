@@ -35,6 +35,7 @@ from routers.kill.armoury import (
 )
 from utils.game_timezone import game_today_date_str
 from utils.point_provenance import log_points_event
+from utils.game_pass_micro_rewards import apply_game_pass_wait_hours
 from utils.booze_intake_gate import booze_intake_blocked
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_ILLEGAL_BUSINESS
 
@@ -1848,9 +1849,10 @@ def _distillery_public_payload(
     queue = distillery.get("aging_queue") or []
     now = _utc_now()
     last_risk_at = _parse_iso_utc(distillery.get("last_risk_action_at"), now)
+    risk_cd_hours = apply_game_pass_wait_hours(DISTILLERY_RISK_ACTION_COOLDOWN_HOURS, user)
     cooldown_remaining_seconds = 0
     if distillery.get("last_risk_action_at"):
-        remaining = (last_risk_at + timedelta(hours=DISTILLERY_RISK_ACTION_COOLDOWN_HOURS) - now).total_seconds()
+        remaining = (last_risk_at + timedelta(hours=risk_cd_hours) - now).total_seconds()
         cooldown_remaining_seconds = max(0, int(remaining))
     equipment = distillery.get("equipment") or {}
     next_upgrade_costs: Dict[str, Optional[int]] = {}
@@ -1868,7 +1870,7 @@ def _distillery_public_payload(
         "special_effects": effects,
         "risk_cooldown": {
             "last_risk_action_at": distillery.get("last_risk_action_at"),
-            "cooldown_hours": DISTILLERY_RISK_ACTION_COOLDOWN_HOURS,
+            "cooldown_hours": risk_cd_hours,
             "cooldown_remaining_seconds": cooldown_remaining_seconds,
         },
         "vault_balance": int(business.get("vault") or 0),
@@ -2463,7 +2465,8 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
             last_dt = datetime.fromisoformat(last_extras.replace("Z", "+00:00"))
             if last_dt.tzinfo is None:
                 last_dt = last_dt.replace(tzinfo=timezone.utc)
-            extras_cooldown_passed = (now - last_dt).total_seconds() >= RACKET_EXTRAS_COOLDOWN_HOURS * 3600
+            extras_cd_hours = apply_game_pass_wait_hours(RACKET_EXTRAS_COOLDOWN_HOURS, current_user)
+            extras_cooldown_passed = (now - last_dt).total_seconds() >= extras_cd_hours * 3600
         except Exception:
             pass
     grant_extras = hours >= MIN_COLLECT_HOURS_FOR_EXTRAS and extras_cooldown_passed
@@ -3048,8 +3051,9 @@ async def distillery_risk_action(req: DistilleryRiskActionRequest, current_user:
         )
     now = _utc_now()
     last = _parse_iso_utc(distillery.get("last_risk_action_at"), now)
-    if distillery.get("last_risk_action_at") and (now - last).total_seconds() < DISTILLERY_RISK_ACTION_COOLDOWN_HOURS * 3600:
-        raise HTTPException(status_code=400, detail=f"Risk actions are on cooldown ({DISTILLERY_RISK_ACTION_COOLDOWN_HOURS}h).")
+    risk_cd_hours = apply_game_pass_wait_hours(DISTILLERY_RISK_ACTION_COOLDOWN_HOURS, current_user)
+    if distillery.get("last_risk_action_at") and (now - last).total_seconds() < risk_cd_hours * 3600:
+        raise HTTPException(status_code=400, detail=f"Risk actions are on cooldown ({risk_cd_hours:g}h).")
     cost = int(action_costs[action])
     vault = int(business.get("vault") or 0)
     if vault < cost:
@@ -3065,7 +3069,7 @@ async def distillery_risk_action(req: DistilleryRiskActionRequest, current_user:
     risk_actions = distillery.get("risk_actions") or {}
     risk_actions[action] = int(risk_actions.get(action) or 0) + 1
     distillery["risk_actions"] = risk_actions
-    cutoff = (now - timedelta(hours=DISTILLERY_RISK_ACTION_COOLDOWN_HOURS)).isoformat()
+    cutoff = (now - timedelta(hours=risk_cd_hours)).isoformat()
     result = await db.illegal_businesses.update_one(
         {
             "id": business["id"],
@@ -3085,8 +3089,8 @@ async def distillery_risk_action(req: DistilleryRiskActionRequest, current_user:
         if latest_vault < cost:
             raise HTTPException(status_code=400, detail=f"Need ${cost:,} in vault. You have ${latest_vault:,}.")
         last_dt = _parse_iso_utc(latest_last, now)
-        if latest_last and (now - last_dt).total_seconds() < DISTILLERY_RISK_ACTION_COOLDOWN_HOURS * 3600:
-            raise HTTPException(status_code=400, detail=f"Risk actions are on cooldown ({DISTILLERY_RISK_ACTION_COOLDOWN_HOURS}h).")
+        if latest_last and (now - last_dt).total_seconds() < risk_cd_hours * 3600:
+            raise HTTPException(status_code=400, detail=f"Risk actions are on cooldown ({risk_cd_hours:g}h).")
         raise HTTPException(status_code=400, detail="Risk action failed.")
     action_label = "Cool Off" if action == "cool_off" else "Bribe"
     msg = f"{action_label} paid (${cost:,}). Heat cleared from {heat_before:.1f} to {heat:.1f}."

@@ -8,7 +8,7 @@ import os
 import sys
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException, Request
-from pymongo import ReturnDocument
+
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, get_current_user_verified, log_activity, send_notification
@@ -16,10 +16,8 @@ from utils.bank_economy_settings import (
     get_bank_economy_config,
     interest_option_for_hours,
     personal_interest_limit,
-    interest_limit_upgrade_add,
-    interest_limit_max_upgrades,
     interest_limit_public,
-    INTEREST_LIMIT_HARD_MAX,
+    apply_interest_limit_upgrade,
     INTEREST_LIMIT_START,
     INTEREST_LIMIT_UPGRADE_COST,
     INTEREST_LIMIT_UPGRADES_FIELD,
@@ -294,42 +292,19 @@ async def bank_interest_upgrade_limit(current_user: dict = Depends(get_current_u
     from utils.point_provenance import log_points_event
 
     uid = current_user.get("id") or ""
-    cfg = await get_bank_economy_config(
-        db,
-        swiss_fallback=int(SWISS_BANK_LIMIT_START or 50_000_000),
-        interest_max_fallback=INTEREST_LIMIT_START,
-        interest_options_fallback=list(BANK_INTEREST_OPTIONS or []),
-    )
-    start = int(cfg["interest_max_unclaimed_principal"])
-    max_upgrades = interest_limit_max_upgrades(start)
-    if max_upgrades <= 0:
-        raise HTTPException(status_code=400, detail="Interest limit is already at the $50,000,000,000 maximum")
-
-    user = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1, INTEREST_LIMIT_UPGRADES_FIELD: 1})
-    current_limit = personal_interest_limit(user, start)
-    add = interest_limit_upgrade_add(current_limit)
-    if add <= 0:
-        raise HTTPException(status_code=400, detail="Interest limit is already at the $50,000,000,000 maximum")
     cost = int(INTEREST_LIMIT_UPGRADE_COST)
-    if int((user or {}).get("points") or 0) < cost:
+    wallet = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1})
+    if int((wallet or {}).get("points") or 0) < cost:
         raise HTTPException(status_code=400, detail=f"Not enough points (need {cost:,})")
 
-    after = await db.users.find_one_and_update(
-        {
-            "id": uid,
-            "points": {"$gte": cost},
-            "$or": [
-                {INTEREST_LIMIT_UPGRADES_FIELD: {"$exists": False}},
-                {INTEREST_LIMIT_UPGRADES_FIELD: {"$lt": max_upgrades}},
-            ],
-        },
-        {"$inc": {"points": -cost, INTEREST_LIMIT_UPGRADES_FIELD: 1}},
-        return_document=ReturnDocument.AFTER,
+    result = await apply_interest_limit_upgrade(
+        db,
+        uid,
+        inc={"points": -cost},
+        gte_filter={"points": {"$gte": cost}},
     )
-    if not after:
-        raise HTTPException(status_code=400, detail="Could not raise interest limit. Check points and try again.")
-
-    new_limit = personal_interest_limit(after, start)
+    new_limit = int(result["interest_limit"])
+    add = int(result["added"])
     await log_points_event(
         db,
         user_id=uid,
@@ -343,7 +318,7 @@ async def bank_interest_upgrade_limit(current_user: dict = Depends(get_current_u
         "message": f"Interest limit raised to ${new_limit:,} for {cost:,} points",
         "interest_limit": new_limit,
         "added": add,
-        "points": int(after.get("points") or 0),
+        "points": int(result.get("points") or 0),
     }
 
 

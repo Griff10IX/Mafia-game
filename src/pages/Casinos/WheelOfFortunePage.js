@@ -223,12 +223,14 @@ export default function WheelOfFortunePage() {
     if (!config) return null;
     const bonus = Number(config.bonus_free_spins ?? 0);
     const adminUnlimited = !!config.admin_unlimited;
+    const extraDaily = Number(config.extra_daily_free_spins ?? 0);
     const dailyReady = !!config.daily_free_available || (freeSecs != null && freeSecs <= 0) || adminUnlimited;
-    const freeOk = !!config.free_available || dailyReady || bonus > 0 || adminUnlimited;
+    const freeOk = !!config.free_available || dailyReady || bonus > 0 || extraDaily > 0 || adminUnlimited;
     const dailySecs = freeSecs ?? config.free_seconds_remaining;
     return {
       freeOk,
       bonus,
+      extraDaily,
       adminUnlimited,
       dailyReady,
       dailySecs: adminUnlimited ? null : dailySecs,
@@ -244,6 +246,7 @@ export default function WheelOfFortunePage() {
     if (!statusBits) return 'Free Spin';
     if (statusBits.adminUnlimited) return 'Free Spin · admin';
     if (statusBits.bonus > 0) return `Free Spin · ${statusBits.bonus} banked`;
+    if (statusBits.extraDaily > 0) return `Free Spin · ${statusBits.extraDaily} extra today`;
     if (statusBits.dailyReady || statusBits.freeOk) return 'Free Spin';
     return `Free in ${formatCountdown(statusBits.dailySecs)}`;
   }, [statusBits]);

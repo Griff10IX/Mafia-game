@@ -663,6 +663,7 @@ export default function Layout({ children }) {
         tutorial_theme_done: data.tutorial_theme_done ?? prev.tutorial_theme_done,
         tutorial_rewards_granted: data.tutorial_rewards_granted ?? prev.tutorial_rewards_granted,
         loot_box_free_rare_opens: data.loot_box_free_rare_opens ?? prev.loot_box_free_rare_opens,
+        loot_box_free_ultra_opens: data.loot_box_free_ultra_opens ?? prev.loot_box_free_ultra_opens,
       };
       if (
         next.tutorial_status === prev.tutorial_status
@@ -672,6 +673,7 @@ export default function Layout({ children }) {
         && next.tutorial_theme_done === prev.tutorial_theme_done
         && next.tutorial_rewards_granted === prev.tutorial_rewards_granted
         && next.loot_box_free_rare_opens === prev.loot_box_free_rare_opens
+        && next.loot_box_free_ultra_opens === prev.loot_box_free_ultra_opens
       ) {
         return prev;
       }
@@ -1089,7 +1091,7 @@ export default function Layout({ children }) {
     if (user.account_locked || user.is_dead || !user.rules_accepted) return undefined;
     if (user.tutorial_status === 'in_progress') return undefined;
     const path = location.pathname || '';
-    if (path === '/account/rules-acceptance' || path === '/locked' || path.startsWith('/tjjeujr3wa')) {
+    if (path === '/account/rules-acceptance' || path === '/locked' || path === '/ai-locked' || path.startsWith('/tjjeujr3wa')) {
       return undefined;
     }
     const onDeadAlive = path === '/game/dead-alive' || path === '/dead-alive';
@@ -1579,8 +1581,9 @@ export default function Layout({ children }) {
       const userRes = await apiGetWithResumeRetries('/auth/me');
       if (userRes.data?.account_locked) {
         sinkProgress(progressPromise);
-        if (window.location.pathname !== '/locked') {
-          window.location.replace('/locked');
+        const dest = userRes.data?.system_ai_lock ? '/ai-locked' : '/locked';
+        if (window.location.pathname !== dest) {
+          window.location.replace(dest);
         }
         return;
       }

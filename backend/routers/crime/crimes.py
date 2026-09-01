@@ -280,7 +280,7 @@ MOLOTOV_GLOBAL_DROP_CHANCE = 0.001
 MOLOTOV_GLOBAL_DROP_AMOUNT = 1
 
 # Successful crime cash (main roll + prestige bonus cash) scaled after all other multipliers
-CRIME_CASH_PAYOUT_MULT = 1.485  # ~35% above prior 1.10 (1.10 × 1.35)
+CRIME_CASH_PAYOUT_MULT = 1.70775  # 1.485 × 1.15
 
 # Extremely rare loot box piece drops from crimes
 # Normal crimes: ~0.05% (1 in 2,000) per successful crime
@@ -486,6 +486,7 @@ from routers.kill.armoury import (
     TOKEN_GLOBAL_DROP_AMOUNT_MIN,
     TOKEN_GLOBAL_DROP_CHANCE,
 )
+from utils.game_pass_micro_rewards import apply_game_pass_wait_seconds
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.point_provenance import log_points_event
 from utils.rolling_event_stats import (
@@ -551,6 +552,12 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
             cooldown_minutes = float(crime["cooldown_seconds"]) / 60.0
         if cooldown_minutes is None:
             cooldown_minutes = 5.0
+        cd_sec = crime.get("cooldown_seconds")
+        if cd_sec is None:
+            cd_sec = int(float(cooldown_minutes) * 60) if cooldown_minutes else 300
+        else:
+            cd_sec = int(float(cd_sec))
+        cooldown_minutes = apply_game_pass_wait_seconds(cd_sec, current_user) / 60.0
         crime_type = crime.get("crime_type") or "petty"
         # Do not expose prestige-exclusive crimes until rank + prestige requirements are met (reduces ID scraping).
         if crime_type == "prestige" and not unlocked:
@@ -785,6 +792,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         _cd_seconds = int(float(cooldown_min) * 60) if cooldown_min else 300
     else:
         _cd_seconds = int(float(_cd_seconds))
+    _cd_seconds = apply_game_pass_wait_seconds(_cd_seconds, current_user)
     cooldown_until = (now + timedelta(seconds=_cd_seconds)).isoformat()
     now_iso = now.isoformat()
     uid = current_user["id"]
@@ -1186,7 +1194,8 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         respect_earned = 0
         # Casino Heist fail: immediate 90s jail + temporary 2x harder bust-out.
         if str(crime.get("id") or "") == CASINO_HEIST_ID:
-            jail_until_dt = now + timedelta(seconds=CASINO_HEIST_FAIL_JAIL_SECONDS)
+            heist_jail_sec = apply_game_pass_wait_seconds(CASINO_HEIST_FAIL_JAIL_SECONDS, current_user)
+            jail_until_dt = now + timedelta(seconds=heist_jail_sec)
             jail_until_iso = jail_until_dt.isoformat()
             await db.users.update_one(
                 {"id": current_user["id"]},
@@ -1202,7 +1211,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             )
             message = (
                 f"{message} You got caught in the heist and were jailed for "
-                f"{CASINO_HEIST_FAIL_JAIL_SECONDS}s. Busting you out is 2x harder during this term."
+                f"{heist_jail_sec}s. Busting you out is 2x harder during this term."
             )
     # Track attempts, successes, progress (success +6-8%; fail -1-3%; once at 92% floor is 77%)
     set_fields = {

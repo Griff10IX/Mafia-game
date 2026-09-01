@@ -50,6 +50,7 @@ from server import (
 )
 from routers.account.objectives import update_objectives_progress
 from routers.game.achievements import badge_bonuses_from_user
+from utils.game_pass_micro_rewards import apply_game_pass_wait_seconds
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.location_climate import get_location_climate, jail_bust_rate_after_climate, rank_multiplier_for_actor
 from utils.point_provenance import log_points_event
@@ -274,6 +275,8 @@ JAIL_BUST_FAIL_MESSAGES = [
     "Sloppy work. They threw you in. 30 seconds to think it over.",
 ]
 
+JAIL_FAILED_BUST_SECONDS = 30
+
 # Private "cell" NPCs: only when no global jail NPCs exist; per-user, max 5 at once; summon batch every 5 min.
 JAIL_PRIVATE_CELL_COOLDOWN_SECONDS = 5 * 60
 JAIL_PRIVATE_CELL_MAX = 5
@@ -467,7 +470,7 @@ async def _private_cell_meta(user_id: str) -> dict:
         _count_personal_jail_npcs(user_id),
         db.users.find_one(
             {"id": user_id},
-            {"_id": 0, "jail_private_cell_last_spawn_at": 1, "in_jail": 1},
+            {"_id": 0, "jail_private_cell_last_spawn_at": 1, "in_jail": 1, "rank_xp_pass_rewards_granted": 1, "rank_xp_pass_token_expires_at": 1},
         ),
     )
     in_jail = bool((me or {}).get("in_jail"))
@@ -479,8 +482,9 @@ async def _private_cell_meta(user_id: str) -> dict:
             if lt.tzinfo is None:
                 lt = lt.replace(tzinfo=timezone.utc)
             elapsed = (now - lt).total_seconds()
-            if elapsed < JAIL_PRIVATE_CELL_COOLDOWN_SECONDS:
-                cooldown_remaining = int(JAIL_PRIVATE_CELL_COOLDOWN_SECONDS - elapsed)
+            cell_cd = apply_game_pass_wait_seconds(JAIL_PRIVATE_CELL_COOLDOWN_SECONDS, me or {})
+            if elapsed < cell_cd:
+                cooldown_remaining = int(cell_cd - elapsed)
         except Exception:
             pass
     available = (
@@ -754,7 +758,8 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     now = datetime.now(timezone.utc)
     skip_bust_interval = await _is_own_private_cell_npc(uid, username_ci)
     if not skip_bust_interval:
-        cutoff_iso = (now - timedelta(seconds=JAIL_BUST_MIN_INTERVAL_SEC)).isoformat()
+        bust_interval = apply_game_pass_wait_seconds(JAIL_BUST_MIN_INTERVAL_SEC, current_user)
+        cutoff_iso = (now - timedelta(seconds=bust_interval)).isoformat()
         cd_res = await db.users.update_one(
             {
                 "id": uid,
@@ -769,7 +774,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         if cd_res.modified_count == 0:
             u = await db.users.find_one({"id": uid}, {"jail_last_bust_attempt_at": 1})
             raw_last = (u or {}).get("jail_last_bust_attempt_at")
-            remaining = JAIL_BUST_MIN_INTERVAL_SEC
+            remaining = bust_interval
             if raw_last:
                 try:
                     last_dt = datetime.fromisoformat(str(raw_last).replace("Z", "+00:00"))
@@ -777,7 +782,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                         last_dt = last_dt.replace(tzinfo=timezone.utc)
                     last_dt = last_dt.astimezone(timezone.utc)
                     elapsed = (now - last_dt).total_seconds()
-                    remaining = max(0, math.ceil(JAIL_BUST_MIN_INTERVAL_SEC - elapsed))
+                    remaining = max(0, math.ceil(bust_interval - elapsed))
                 except (ValueError, TypeError, OSError):
                     pass
             if remaining < 1:
@@ -911,7 +916,8 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                     "respect_points": respect_earned,
                 }
             )
-        jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
+        jail_sec = apply_game_pass_wait_seconds(JAIL_FAILED_BUST_SECONDS, current_user)
+        jail_until = datetime.now(timezone.utc) + timedelta(seconds=jail_sec)
         next_attempts = total_attempts + 1
         go_to_jail = True
         jailbust_bonus_until = current_user.get("jailbust_bonus_until")
@@ -953,7 +959,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         deferred_ops.append(_post_npc_fail_event)
         msg = _rng.choice(JAIL_BUST_FAIL_MESSAGES if go_to_jail else JAIL_BUST_FAIL_AVOID_JAIL_MESSAGES)
         return _spawn_and_return(
-            {"success": False, "message": msg, "jail_time": 30 if go_to_jail else 0}
+            {"success": False, "message": msg, "jail_time": jail_sec if go_to_jail else 0}
         )
 
     target = await db.users.find_one({"username": username_ci}, {"_id": 0})
@@ -1108,7 +1114,8 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 "respect_points": respect_earned,
             }
         )
-    jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
+    jail_sec = apply_game_pass_wait_seconds(JAIL_FAILED_BUST_SECONDS, current_user)
+    jail_until = datetime.now(timezone.utc) + timedelta(seconds=jail_sec)
     next_attempts = total_attempts + 1
     go_to_jail = not _jailbust_failed_bust_avoids_jail(current_user)
     if go_to_jail:
@@ -1142,7 +1149,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     deferred_ops.append(_post_player_fail_event)
     msg = _rng.choice(JAIL_BUST_FAIL_MESSAGES if go_to_jail else JAIL_BUST_FAIL_AVOID_JAIL_MESSAGES)
     return _spawn_and_return(
-        {"success": False, "message": msg, "jail_time": 30 if go_to_jail else 0}
+        {"success": False, "message": msg, "jail_time": jail_sec if go_to_jail else 0}
     )
 
 
@@ -1487,7 +1494,8 @@ async def snitch(
         }
 
     now = datetime.now(timezone.utc)
-    jail_until = now + timedelta(seconds=SNITCH_JAIL_SECONDS)
+    snitch_jail_sec = apply_game_pass_wait_seconds(SNITCH_JAIL_SECONDS, current_user)
+    jail_until = now + timedelta(seconds=snitch_jail_sec)
     snitch_immunity_until = now + timedelta(minutes=SNITCH_IMMUNITY_MINUTES)
     await db.users.update_one(
         {"id": current_user["id"]},
@@ -1506,14 +1514,14 @@ async def snitch(
         category="jail",
     )
     await log_activity(current_user["id"], current_user.get("username", "?"), "jail_snitch", {
-        "target": target["username"], "jail_seconds": SNITCH_JAIL_SECONDS,
+        "target": target["username"], "jail_seconds": snitch_jail_sec,
     })
     return {
         "success": True,
-        "message": f"You snitched on {target['username']}. You're free; they're serving {SNITCH_JAIL_SECONDS} seconds.",
+        "message": f"You snitched on {target['username']}. You're free; they're serving {snitch_jail_sec} seconds.",
         "released": True,
         "target_username": target["username"],
-        "target_jail_seconds": SNITCH_JAIL_SECONDS,
+        "target_jail_seconds": snitch_jail_sec,
     }
 
 
@@ -1526,7 +1534,7 @@ async def try_spawn_private_jail_cell(uid: str) -> Tuple[bool, Optional[str], in
         return False, "Not logged in", 401
     me = await db.users.find_one(
         {"id": uid},
-        {"_id": 0, "in_jail": 1, "jail_private_cell_last_spawn_at": 1},
+        {"_id": 0, "in_jail": 1, "jail_private_cell_last_spawn_at": 1, "rank_xp_pass_rewards_granted": 1, "rank_xp_pass_token_expires_at": 1},
     )
     if not me:
         return False, "User not found", 404
@@ -1552,8 +1560,9 @@ async def try_spawn_private_jail_cell(uid: str) -> Tuple[bool, Optional[str], in
             if lt.tzinfo is None:
                 lt = lt.replace(tzinfo=timezone.utc)
             elapsed = (now - lt).total_seconds()
-            if elapsed < JAIL_PRIVATE_CELL_COOLDOWN_SECONDS:
-                left = int(JAIL_PRIVATE_CELL_COOLDOWN_SECONDS - elapsed)
+            cell_cd = apply_game_pass_wait_seconds(JAIL_PRIVATE_CELL_COOLDOWN_SECONDS, me)
+            if elapsed < cell_cd:
+                left = int(cell_cd - elapsed)
                 return False, f"Wait {left}s before summoning another private cell.", 429
         except Exception:
             pass

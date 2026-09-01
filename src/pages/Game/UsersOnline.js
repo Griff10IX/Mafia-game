@@ -315,6 +315,7 @@ const RoleKeyStrip = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor,
       {item(<span className="w-2 h-2 rounded-full shrink-0 border border-white/20" style={{ backgroundColor: modColor }} aria-hidden />, 'Mod')}
       {item(<span className="w-2 h-2 rounded-full shrink-0 border border-white/20" style={hdoSwatchStyle} aria-hidden />, 'Help Desk')}
       {item(<span className="w-2 h-2 rounded-full shrink-0 border border-white/20" style={entertainerSwatchStyle} aria-hidden />, 'Entertainer')}
+      {item(<span className="w-2 h-2 rounded-full shrink-0 border border-white/20" style={{ backgroundColor: '#FBBF24' }} aria-hidden />, 'System AI')}
       {item(<Target size={11} className="text-red-400 shrink-0" aria-hidden />, 'Hitlist')}
       {item(<span className="text-[10px] font-heading font-normal text-zinc-500 leading-none" aria-hidden>Aa</span>, 'No family')}
     </div>
@@ -328,12 +329,14 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
   // Staff role colours only (admin / mod / HDO / entertainer). Do not use
   // profile cosmetic name glow here — it reads like staff and confuses the roster.
   const isStaff =
-    !!user.is_admin || !!user.is_moderator || !!user.is_help_desk_operator || !!user.is_entertainer;
+    !!user.system_ai || !!user.is_admin || !!user.is_moderator || !!user.is_help_desk_operator || !!user.is_entertainer;
   // Missing in_family (old cache) → treat as in-family so we don't falsely grey everyone.
   const inFamily = user.in_family == null ? true : !!user.in_family;
   const displayColor = isStaff
     ? user.online_color ||
-      (user.is_admin
+      (user.system_ai
+        ? '#FBBF24'
+        : user.is_admin
         ? adminColor
         : user.is_moderator
           ? modColor

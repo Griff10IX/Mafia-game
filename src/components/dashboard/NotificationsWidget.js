@@ -7,6 +7,7 @@ import { NotificationMessage } from '../NotificationMessage';
 import { staffBotAlertPreview } from '../StaffBotAlertMessage';
 import { rewardInboxPreview } from '../RewardInboxMessage';
 import { structuredInboxPreview } from '../StructuredInboxMessage';
+import { isSystemAiInbox, systemAiInboxPreview } from '../SystemAiInboxMessage';
 import { notificationIcon, notificationVisual } from '../../pages/Social/notificationTypeChrome';
 import { toast } from 'sonner';
 import dash from '../../styles/dashboard.module.css';
@@ -156,7 +157,9 @@ export default function NotificationsWidget({ onRefresh, userId }) {
                     {n.title}
                   </p>
                   <div className="text-[9px] text-mutedForeground line-clamp-2">
-                    {n.notification_type === 'staff_bot_client' && staffBotAlertPreview(n.message)
+                    {isSystemAiInbox(n) && systemAiInboxPreview(n.message)
+                      ? systemAiInboxPreview(n.message)
+                      : n.notification_type === 'staff_bot_client' && staffBotAlertPreview(n.message)
                       ? staffBotAlertPreview(n.message)
                       : rewardInboxPreview(n.message)
                         || structuredInboxPreview(n.message) || (

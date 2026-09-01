@@ -1,7 +1,7 @@
 """Weekly loot-box pieces from exclusive / loot-exclusive cars.
 
-Unique catalog models stack (copies of the same car do not). Cap 25/week
-(Cadillac exclusive 10, loot exclusive Cadillac 18, Model SJ 25).
+Unique catalog models stack (copies of the same car do not). Cap 128/week
+(Cadillac exclusive 10, loot exclusive Cadillac 18, Model SJ 25, 540K 75).
 VIP Pass cars are not included.
 """
 from __future__ import annotations
@@ -26,6 +26,7 @@ WEEKLY_LOOT_PIECES_BY_CAR_ID = {
     "car20": 10,  # exclusive Cadillac (7s)
     "car21": 18,  # loot exclusive Cadillac (5s)
     "car23": 25,  # Model SJ (2s)
+    "car24": 75,  # 540K Special Roadster (2s + 25× 1s/day)
 }
 # Future exclusive / loot exclusive models: by catalog travel seconds.
 WEEKLY_LOOT_FALLBACK_BY_MAX_SECONDS = (
@@ -34,7 +35,7 @@ WEEKLY_LOOT_FALLBACK_BY_MAX_SECONDS = (
     (7, 10),
 )
 WEEKLY_LOOT_FALLBACK_DEFAULT = 10
-WEEKLY_LOOT_PIECES_MAX = 25
+WEEKLY_LOOT_PIECES_MAX = 128
 USER_WEEK_FIELD = "exclusive_car_loot_week"
 
 
@@ -151,13 +152,25 @@ async def credit_exclusive_car_weekly_loot(db) -> Dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat()
     for user in eligible:
         uid = user.get("id") or ""
-        amount = weekly_loot_pieces_for_car_ids(by_user.get(uid) or [])
+        owned_ids = by_user.get(uid) or set()
+        amount = weekly_loot_pieces_for_car_ids(owned_ids)
         if amount <= 0:
             continue
+        from utils.loot_exclusive_540k import (
+            CAR_ID as CAR24_ID,
+            WEEKLY_MISSION_SKIP,
+            WEEKLY_ROBOT_HIRES,
+        )
+
+        owns_540k = CAR24_ID in owned_ids
+        inc: Dict[str, int] = {"loot_box_pieces": amount}
+        if owns_540k:
+            inc["mission_skip_tokens"] = int(WEEKLY_MISSION_SKIP)
+            inc["robot_bodyguard_hire_tokens"] = int(WEEKLY_ROBOT_HIRES)
         after = await db.users.find_one_and_update(
             {"id": uid, USER_WEEK_FIELD: {"$ne": week}},
             {
-                "$inc": {"loot_box_pieces": amount},
+                "$inc": inc,
                 "$set": {
                     USER_WEEK_FIELD: week,
                     "exclusive_car_loot_last_amount": amount,
@@ -186,10 +199,13 @@ async def credit_exclusive_car_weekly_loot(db) -> Dict[str, Any]:
             logger.warning("exclusive_car_weekly_loot economy_events: %s", e)
         try:
             cap_note = " (weekly cap)" if amount >= WEEKLY_LOOT_PIECES_MAX else ""
+            extra = ""
+            if owns_540k:
+                extra = " Your 540K also paid 1 Mission Skip and 3 Free Robot Bodyguard hires."
             await send_notification(
                 uid,
                 "Exclusive car loot",
-                f"Your exclusive cars generated {amount:,} loot box piece{'s' if amount != 1 else ''} this week{cap_note}.",
+                f"Your exclusive cars generated {amount:,} loot box piece{'s' if amount != 1 else ''} this week{cap_note}.{extra}",
                 "loot",
             )
         except Exception as e:

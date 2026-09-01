@@ -22,6 +22,7 @@ class TicketCreate(BaseModel):
 
 class TicketReply(BaseModel):
     body: str
+    as_system_ai: bool = False
 
 
 class ErrorReportCreate(BaseModel):
@@ -234,7 +235,7 @@ def register(router):
     def _latest_staff_reply_at(replies: list) -> str | None:
         latest = None
         for r in replies or []:
-            if (r.get("author_role") or "") not in ("admin", "mod", "hdo"):
+            if (r.get("author_role") or "") not in ("admin", "mod", "hdo", "system_ai"):
                 continue
             ca = r.get("created_at")
             if ca and (latest is None or str(ca) > str(latest)):
@@ -244,10 +245,20 @@ def register(router):
     def _ticket_to_response(t: dict) -> dict:
         replies = t.get("replies") or []
         # Reply response: do not expose author_id to client
-        reply_list = [
-            {"author_username": r.get("author_username"), "author_role": r.get("author_role"), "body": r.get("body"), "created_at": r.get("created_at")}
-            for r in reversed(replies)
-        ]
+        reply_list = []
+        for r in reversed(replies):
+            row = {
+                "author_username": r.get("author_username"),
+                "author_role": r.get("author_role"),
+                "body": r.get("body"),
+                "created_at": r.get("created_at"),
+            }
+            if r.get("system_ai") or (r.get("author_role") or "") == "system_ai":
+                row["system_ai"] = True
+                row["avatar_url"] = r.get("avatar_url") or "/images/system-ai-avatar.png"
+                row["author_username"] = r.get("author_username") or "System AI"
+                row["author_role"] = "system_ai"
+            reply_list.append(row)
         latest_staff_at = _latest_staff_reply_at(replies)
         user_viewed_at = t.get("user_last_viewed_at")
         user_seen_latest_staff_reply = bool(
@@ -360,13 +371,27 @@ def register(router):
         if contains_profanity(reply_text, extra_words=additions):
             raise HTTPException(status_code=400, detail="Your reply contains a word that is not allowed.")
         now = datetime.now(timezone.utc).isoformat()
-        reply = {
-            "author_id": current_user["id"],
-            "author_username": current_user.get("username") or "?",
-            "author_role": _author_role(current_user),
-            "body": reply_text,
-            "created_at": now,
-        }
+        as_system_ai = bool(getattr(body, "as_system_ai", False)) and is_staff and _is_admin(current_user)
+        if as_system_ai:
+            from utils.system_ai_inbox import SYSTEM_AI_AVATAR_URL
+
+            reply = {
+                "author_id": current_user["id"],
+                "author_username": "System AI",
+                "author_role": "system_ai",
+                "body": reply_text,
+                "created_at": now,
+                "system_ai": True,
+                "avatar_url": SYSTEM_AI_AVATAR_URL,
+            }
+        else:
+            reply = {
+                "author_id": current_user["id"],
+                "author_username": current_user.get("username") or "?",
+                "author_role": _author_role(current_user),
+                "body": reply_text,
+                "created_at": now,
+            }
         await db.help_desk_tickets.update_one(
             {"id": ticket_id},
             {"$push": {"replies": reply}, "$set": {"updated_at": now}},

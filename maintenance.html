@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Updating Game...</title>
+<title>__MAINT_TITLE__</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap');
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -26,6 +26,19 @@
     font-size: 48px;
     margin-bottom: 1.5rem;
     animation: pulse 2s ease-in-out infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 88px;
+  }
+  .ai-avatar {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    object-fit: cover;
+    object-position: 22% 14%;
+    border: 2px solid #d4af37;
+    box-shadow: 0 0 24px rgba(212, 175, 55, 0.35);
   }
   @keyframes pulse {
     0%, 100% { opacity: 0.6; transform: scale(1); }
@@ -98,14 +111,14 @@
 </head>
 <body>
   <div class="container">
-    <div class="icon">&#9876;</div>
-    <h1>Updating Game</h1>
+    <div class="icon">__MAINT_ICON__</div>
+    <h1>__MAINT_HEADLINE__</h1>
     <div class="divider"></div>
-    <p>We're pushing a fresh update to the streets.</p>
-    <p>Hang tight, the game will be back shortly.</p>
-    <div class="estimate">~ 30 seconds</div>
+    <p>__MAINT_LINE1__</p>
+    <p>__MAINT_LINE2__</p>
+    <div class="estimate">__MAINT_ESTIMATE__</div>
     <div class="bar-track"><div class="bar-fill"></div></div>
-    <div class="footer">The Commission will return</div>
+    <div class="footer">__MAINT_FOOTER__</div>
     <div class="status">This page will automatically refresh in 5 seconds...</div>
   </div>
 </body>

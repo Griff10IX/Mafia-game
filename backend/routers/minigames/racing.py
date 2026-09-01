@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from pymongo import UpdateOne
 
 from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, user_prestige_rank_mult, send_notification, log_gambling, _is_admin, _get_staff_user_ids, log_respect_delta, require_admin_verified, gta_car_image
+from utils.game_pass_micro_rewards import apply_game_pass_wait_hours
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 import pathlib as _pathlib
@@ -647,7 +648,7 @@ def _require_racing_team(prof: Optional[dict]) -> None:
         )
 
 
-def _crew_bank_withdraw_cooldown_remaining_sec(prof: Optional[dict]) -> int:
+def _crew_bank_withdraw_cooldown_remaining_sec(prof: Optional[dict], user: Optional[dict] = None) -> int:
     """Seconds until crew bank withdraw is allowed; 0 if no cooldown."""
     if not prof:
         return 0
@@ -662,7 +663,7 @@ def _crew_bank_withdraw_cooldown_remaining_sec(prof: Optional[dict]) -> int:
             last_dt = last_dt.astimezone(timezone.utc)
     except Exception:
         return 0
-    need_sec = int(CREW_BANK_WITHDRAW_COOLDOWN_HOURS * 3600)
+    need_sec = int(apply_game_pass_wait_hours(CREW_BANK_WITHDRAW_COOLDOWN_HOURS, user) * 3600)
     elapsed = (datetime.now(timezone.utc) - last_dt).total_seconds()
     return max(0, need_sec - int(elapsed))
 
@@ -1926,8 +1927,8 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "racing_respect_fallback_cost": RACING_RESPECT_FALLBACK_COST,
         "user_money_on_hand": int((user_wallet or {}).get("money") or 0),
         "user_respect_points": int((user_wallet or {}).get("respect_points") or 0),
-        "crew_bank_withdraw_cooldown_hours": CREW_BANK_WITHDRAW_COOLDOWN_HOURS,
-        "crew_bank_withdraw_cooldown_seconds_remaining": _crew_bank_withdraw_cooldown_remaining_sec(prof),
+        "crew_bank_withdraw_cooldown_hours": apply_game_pass_wait_hours(CREW_BANK_WITHDRAW_COOLDOWN_HOURS, current_user),
+        "crew_bank_withdraw_cooldown_seconds_remaining": _crew_bank_withdraw_cooldown_remaining_sec(prof, current_user),
         "racing_team_create_cost": RACING_TEAM_CREATE_COST,
         "max_racing_teams": MAX_RACING_TEAMS,
         "racing_team_count": await db.racing_profiles.count_documents({"team_name": {"$exists": True, "$ne": None, "$ne": ""}}),
@@ -4805,13 +4806,14 @@ async def withdraw_crew_bank(body: CrewBankWithdrawRequest, current_user: dict =
         raise HTTPException(status_code=400, detail="Amount must be at least $1")
     prof = await _ensure_racing_profile(uid)
     _require_racing_team(prof)
-    cd_rem = _crew_bank_withdraw_cooldown_remaining_sec(prof)
+    cd_rem = _crew_bank_withdraw_cooldown_remaining_sec(prof, current_user)
     if cd_rem > 0:
         mins = max(1, (cd_rem + 59) // 60)
+        cd_hours = apply_game_pass_wait_hours(CREW_BANK_WITHDRAW_COOLDOWN_HOURS, current_user)
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Crew bank withdrawals are limited to once every {CREW_BANK_WITHDRAW_COOLDOWN_HOURS} hours. "
+                f"Crew bank withdrawals are limited to once every {cd_hours:g} hours. "
                 f"Try again in {mins} minute(s)."
             ),
         )
@@ -4838,7 +4840,9 @@ async def withdraw_crew_bank(body: CrewBankWithdrawRequest, current_user: dict =
         "ok": True,
         "withdrawn": amount,
         "crew_bank": bank_after,
-        "crew_bank_withdraw_cooldown_seconds_remaining": int(CREW_BANK_WITHDRAW_COOLDOWN_HOURS * 3600),
+        "crew_bank_withdraw_cooldown_seconds_remaining": int(
+            apply_game_pass_wait_hours(CREW_BANK_WITHDRAW_COOLDOWN_HOURS, current_user) * 3600
+        ),
         "message": f"Withdrew ${amount:,} from crew bank to cash on hand.",
     }
 

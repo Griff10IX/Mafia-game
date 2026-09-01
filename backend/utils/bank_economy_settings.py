@@ -110,6 +110,51 @@ def interest_limit_max_upgrades(start: int) -> int:
     return (remaining + INTEREST_LIMIT_STEP - 1) // INTEREST_LIMIT_STEP
 
 
+async def apply_interest_limit_upgrade(db, uid: str, *, inc: Dict[str, Any], gte_filter: Dict[str, Any]) -> Dict[str, Any]:
+    """Atomically spend currency in `inc` and raise the personal interest cap by one step."""
+    from fastapi import HTTPException
+    from pymongo import ReturnDocument
+
+    cfg = await get_bank_economy_config(
+        db,
+        swiss_fallback=1,
+        interest_max_fallback=INTEREST_LIMIT_START,
+        interest_options_fallback=[],
+    )
+    start = int(cfg["interest_max_unclaimed_principal"])
+    max_upgrades = interest_limit_max_upgrades(start)
+    if max_upgrades <= 0:
+        raise HTTPException(status_code=400, detail="Interest limit is already at the $50,000,000,000 maximum")
+
+    user = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1, INTEREST_LIMIT_UPGRADES_FIELD: 1})
+    current_limit = personal_interest_limit(user, start)
+    add = interest_limit_upgrade_add(current_limit)
+    if add <= 0:
+        raise HTTPException(status_code=400, detail="Interest limit is already at the $50,000,000,000 maximum")
+
+    merged_inc = {**dict(inc or {}), INTEREST_LIMIT_UPGRADES_FIELD: 1}
+    after = await db.users.find_one_and_update(
+        {
+            "id": uid,
+            **dict(gte_filter or {}),
+            "$or": [
+                {INTEREST_LIMIT_UPGRADES_FIELD: {"$exists": False}},
+                {INTEREST_LIMIT_UPGRADES_FIELD: {"$lt": max_upgrades}},
+            ],
+        },
+        {"$inc": merged_inc},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not after:
+        raise HTTPException(status_code=400, detail="Could not raise interest limit. Check points and try again.")
+    return {
+        "added": add,
+        "interest_limit": personal_interest_limit(after, start),
+        "points": int(after.get("points") or 0),
+        "upgrades": max(0, int(after.get(INTEREST_LIMIT_UPGRADES_FIELD) or 0)),
+    }
+
+
 def interest_limit_public(user: Optional[dict], start: int, *, principal: int = 0, points: int = 0) -> Dict[str, Any]:
     limit = personal_interest_limit(user, start)
     add = interest_limit_upgrade_add(limit)

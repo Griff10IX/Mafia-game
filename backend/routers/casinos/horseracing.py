@@ -41,6 +41,8 @@ from server import (
     resolve_gambling_log_buy_back,
     _user_owns_any_casino,
     raise_if_single_casino_claim_blocked,
+    raise_if_city_casino_already_owned,
+    claim_unowned_city_casino,
     raise_if_single_casino_receive_blocked,
     raise_if_dead_casino_transfer_target,
     _username_pattern,
@@ -329,6 +331,7 @@ def register(router):
             raise HTTPException(status_code=400, detail="Invalid city")
         await raise_if_single_casino_claim_blocked(current_user, game_type="horseracing", city=city)
         stored_city, doc = await _get_horseracing_ownership_doc(city)
+        raise_if_city_casino_already_owned(doc, current_user, already_owned_detail="This track already has an owner", you_own_detail="You already own this track")
         cc = await load_claim_costs(db)
         claim_cost = cc["horseracing"]
         debit_result = await db.users.find_one_and_update(
@@ -337,12 +340,19 @@ def register(router):
         )
         if not debit_result:
             raise HTTPException(status_code=400, detail=f"You need ${claim_cost:,} to claim")
-        res = await db.horseracing_ownership.update_one(
-            {"city": stored_city or city, "owner_id": None},
-            {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": HORSERACING_MAX_BET, "buy_back_reward": 0, "buy_back_points_held": 0}},
-            upsert=True,
+        claimed = await claim_unowned_city_casino(
+            db.horseracing_ownership,
+            city=city,
+            stored_city=stored_city,
+            set_fields={
+                "owner_id": current_user.get("id") or "",
+                "owner_username": current_user.get("username") or "",
+                "max_bet": HORSERACING_MAX_BET,
+                "buy_back_reward": 0,
+                "buy_back_points_held": 0,
+            },
         )
-        if not res.modified_count and not res.upserted_id:
+        if not claimed:
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": claim_cost}})
             raise HTTPException(status_code=400, detail="This track already has an owner")
         await shorten_civilian_protection_for_casino_claim(db, current_user.get("id") or "")

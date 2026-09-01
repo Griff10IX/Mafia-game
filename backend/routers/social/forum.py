@@ -21,6 +21,7 @@ from utils.ensure_update_log_topic import (
     parse_update_log_entries,
     unread_update_log_count,
 )
+from utils.system_ai_inbox import SYSTEM_AI_AUTHOR_ID, SYSTEM_AI_AVATAR_URL
 
 
 async def _forum_sustained_rl_user(current_user: dict = Depends(get_current_user)):
@@ -327,6 +328,17 @@ async def _get_author_display_colors(author_ids) -> dict:
     return result
 
 
+def _is_system_ai_forum_author(author_id=None, author_username: str = "", *, topic: Optional[dict] = None) -> bool:
+    if topic:
+        if topic.get("system_ai"):
+            return True
+        author_id = topic.get("author_id") if author_id is None else author_id
+        author_username = author_username or (topic.get("author_username") or "")
+    if str(author_id or "") == SYSTEM_AI_AUTHOR_ID:
+        return True
+    return str(author_username or "").strip().lower() in ("system ai", "system_ai")
+
+
 def _pick_author_online_color(
     colors: dict,
     username_to_id: dict,
@@ -334,6 +346,8 @@ def _pick_author_online_color(
     author_username: str,
 ) -> Optional[str]:
     """Staff accent for forum author links. Prefer stored author_id; if it has no staff color (stale/wrong id), fall back to id resolved from author_username."""
+    if _is_system_ai_forum_author(stored_author_id, author_username):
+        return None
     if stored_author_id and colors.get(stored_author_id):
         return colors[stored_author_id]
     key = (author_username or "").strip().lower()
@@ -474,6 +488,8 @@ async def get_topics(
         "title_color": 1,
         "author_id": 1,
         "author_username": 1,
+        "system_ai": 1,
+        "avatar_url": 1,
         "category": 1,
         "views": 1,
         "is_sticky": 1,
@@ -582,6 +598,11 @@ async def get_topics(
         )
         if col:
             item["author_online_color"] = col
+        if _is_system_ai_forum_author(topic=t):
+            item["system_ai"] = True
+            item["author_username"] = "System AI"
+            item["avatar_url"] = t.get("avatar_url") or SYSTEM_AI_AVATAR_URL
+            item.pop("author_online_color", None)
         if t.get("crew_oc_family_id"):
             item["crew_oc_family_id"] = t["crew_oc_family_id"]
             fam = crew_oc_fam_map.get(t["crew_oc_family_id"])
@@ -671,6 +692,11 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
     )
     if tcol:
         topic["author_online_color"] = tcol
+    if _is_system_ai_forum_author(topic=topic):
+        topic["system_ai"] = True
+        topic["author_username"] = "System AI"
+        topic["avatar_url"] = topic.get("avatar_url") or SYSTEM_AI_AVATAR_URL
+        topic.pop("author_online_color", None)
     for c in comments:
         ccol = _pick_author_online_color(
             colors,
@@ -1265,7 +1291,11 @@ async def update_topic(
         raise HTTPException(status_code=404, detail="Topic not found")
     uid = current_user.get("id") or ""
     # Redeem-code topics are system-owned; only staff may edit (not the admin who created the code).
-    is_author = topic.get("author_id") == uid and not (topic.get("redeem_code") or "").strip()
+    is_author = (
+        topic.get("author_id") == uid
+        and not (topic.get("redeem_code") or "").strip()
+        and not _is_system_ai_forum_author(topic=topic)
+    )
     is_admin = _is_admin(current_user)
     is_mod = _is_moderator(current_user)
     is_hdo = _is_hdo(current_user)

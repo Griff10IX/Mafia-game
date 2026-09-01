@@ -475,7 +475,25 @@ export default function ViewCar() {
                   <p className="text-[9px] text-mutedForeground font-heading mt-1 leading-snug">
                     Loot box pieces each week from this car.
                     {Number(car.weekly_loot_pieces_total) > Number(car.weekly_loot_pieces)
-                      ? ` Your exclusive cars total ${Number(car.weekly_loot_pieces_total).toLocaleString()}/${Number(car.weekly_loot_pieces_cap || 25)}.`
+                      ? ` Your exclusive cars total ${Number(car.weekly_loot_pieces_total).toLocaleString()}/${Number(car.weekly_loot_pieces_cap || 128)}.`
+                      : ''}
+                  </p>
+                </div>
+              )}
+
+              {Number(car.fast_travels_per_day) > 0 && (
+                <div className="vc-stat">
+                  <div className="vc-stat-label"><Clock size={13} /> Daily 1s trips</div>
+                  <div className="vc-stat-val accent">
+                    {Number(car.fast_travels_remaining ?? car.fast_travels_per_day)}/{Number(car.fast_travels_per_day)}
+                  </div>
+                  <p className="text-[9px] text-mutedForeground font-heading mt-1 leading-snug">
+                    {Number(car.fast_travels_per_day)} travels per UTC day at 1 second; after that this car is 2s.
+                    {Number(car.extra_wheel_free_spins_per_day) > 0
+                      ? ` Also ${Number(car.extra_wheel_free_spins_per_day)} extra Wheel of Fortune free spins each day.`
+                      : ''}
+                    {Number(car.weekly_mission_skip_tokens) > 0 || Number(car.weekly_robot_bodyguard_hire_tokens) > 0
+                      ? ` Weekly: ${Number(car.weekly_mission_skip_tokens || 0)} Mission Skip, ${Number(car.weekly_robot_bodyguard_hire_tokens || 0)} Free Robot Bodyguard.`
                       : ''}
                   </p>
                 </div>

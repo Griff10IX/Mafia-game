@@ -1,5 +1,6 @@
 @echo off
 REM Refresh the "How To" forum topic from docs/FORUM_HOW_TO.md on the LIVE server (Mongo update).
+REM Does not take the site down, so the downtime page is not shown.
 REM Like push-faq-topic.bat: SSH to the app host, sync repo, run backend/seeds/update_how_to_topic.py
 REM
 REM Prerequisite: commit and PUSH your How To edits to origin/MAfiaGame2 so the server can pull them.

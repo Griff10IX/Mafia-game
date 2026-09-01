@@ -30,7 +30,7 @@ async def _grant_redeem_code_cars(db: Any, *, user_id: str, car_ids: List[str]) 
     now_iso = datetime.now(timezone.utc).isoformat()
     catalog = {c.get("id"): c for c in (CARS or []) if c.get("id")}
     # Globally unique exclusives (same rules as admin add-car).
-    unique_car_ids = {"car20", "car21", "car23"}
+    unique_car_ids = {"car20", "car21", "car23", "car24"}
 
     for raw_id in car_ids:
         car_id = (raw_id or "").strip()

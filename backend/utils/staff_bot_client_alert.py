@@ -400,6 +400,8 @@ _last_travel_code_alert: dict[str, float] = {}
 _last_travel_code_telegram_alert: dict[str, float] = {}
 _last_attack_search_code_alert: dict[str, float] = {}
 _last_attack_search_code_telegram_alert: dict[str, float] = {}
+_last_gambling_ban_code_alert: dict[str, float] = {}
+_last_gambling_ban_code_telegram_alert: dict[str, float] = {}
 _EXECUTE_TOKEN_ALERT_TTL_SEC = 3600.0
 
 
@@ -961,3 +963,106 @@ async def maybe_notify_staff_attack_search_code_fail(
                 logger.warning("staff attack-search-code notify %s: %s", rid, e)
     except Exception:
         logger.exception("maybe_notify_staff_attack_search_code_fail failed")
+
+
+async def maybe_notify_staff_gambling_ban_code_fail(
+    *,
+    db,
+    request,
+    user_id: str,
+    username: str,
+    duration_hours: int = 0,
+) -> None:
+    """Staff inbox + Telegram when POST /account/gambling-self-ban fails the rotating hidden code."""
+    now = time.monotonic()
+    uid = (user_id or "").strip()
+    if not uid:
+        return
+
+    ip = client_ip_from_request(request)
+    ua = (request.headers.get("user-agent") or "").strip()
+    ua_short = (ua[:200] + "…") if len(ua) > 200 else ua
+    event_id = await record_bot_client_block_event(
+        db=db,
+        user_id=uid,
+        username=username,
+        source="gambling_ban_code_fail",
+        internal_reason="invalid_or_missing_gambling_ban_code",
+        request=request,
+        extra={
+            "duration_hours": duration_hours,
+            "path": str(getattr(request, "url", "")),
+        },
+    )
+
+    lines = [
+        "— Gambling ban: invalid / missing hidden code (anti-bot) —",
+        "The client POSTed a gambling self-exclusion without the current rotating page code.",
+        "Legitimate clients receive this code from GET /account/gambling-self-ban; scripts often skip that step.",
+        f"User: {username or '?'} (id {uid})",
+        f"Requested duration hours: {duration_hours or '—'}",
+        f"IP: {ip or '—'}",
+        f"User-Agent: {ua_short or '—'}",
+    ]
+    if event_id:
+        lines.append(f"Persisted event id (Mongo bot_client_block_events): {event_id}")
+    lines.append("— Request metadata —")
+    lines.extend(_request_intel_lines(request))
+    acc = await _account_intel_lines(db, uid)
+    if acc:
+        lines.append("— Account —")
+        lines.extend(acc)
+
+    try:
+        from middleware.security import flush_telegram_alerts, send_telegram_alert
+
+        tg_cooldown = _execute_token_telegram_cooldown_sec()
+        tg_key = f"tggban|{uid}"
+        if _last_gambling_ban_code_telegram_alert.get(tg_key, 0) + tg_cooldown <= now:
+            _last_gambling_ban_code_telegram_alert[tg_key] = now
+            _prune(_last_gambling_ban_code_telegram_alert)
+            await send_telegram_alert(
+                "\n".join([
+                    "Gambling ban hidden code failed",
+                    f"User: {username or '?'} (id {uid})",
+                    f"Hours: {duration_hours or '—'}",
+                    f"IP: {ip or '—'}",
+                    f"UA: {ua_short or '—'}",
+                    f"Stored event id: {event_id or '—'}",
+                ]),
+                "warning",
+                use_markdown=False,
+            )
+            await flush_telegram_alerts()
+    except Exception:
+        logger.exception("gambling ban code fail telegram alert failed")
+
+    key = f"gban|{uid}"
+    if _last_gambling_ban_code_alert.get(key, 0) + _EXECUTE_TOKEN_ALERT_TTL_SEC > now:
+        return
+    _last_gambling_ban_code_alert[key] = now
+    _prune(_last_gambling_ban_code_alert)
+
+    try:
+        from server import _get_admin_user_ids, _get_staff_user_ids, send_notification
+
+        mode = (os.environ.get("BOT_BLOCK_ALERT_RECIPIENTS") or "staff").strip().lower()
+        if mode == "admins":
+            recipient_ids = await _get_admin_user_ids()
+            if not recipient_ids:
+                recipient_ids = await _get_staff_user_ids()
+        else:
+            recipient_ids = await _get_staff_user_ids()
+
+        title = "Security: gambling ban hidden code failed"
+        msg = "\n".join(lines)
+        extra = {"staff_alert_kind": "gambling_ban_code_fail"}
+        if event_id:
+            extra["staff_alert_event_id"] = event_id
+        for rid in recipient_ids:
+            try:
+                await send_notification(rid, title, msg, "staff_bot_client", **extra)
+            except Exception as e:
+                logger.warning("staff gambling-ban-code notify %s: %s", rid, e)
+    except Exception:
+        logger.exception("maybe_notify_staff_gambling_ban_code_fail failed")

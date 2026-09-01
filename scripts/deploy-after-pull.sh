@@ -111,47 +111,7 @@ fi
 
 step 4 4 "Restart backend API"
 info "Maintenance page while uvicorn restarts"
-
-index_bak=/tmp/mafia-index.html.bak
-live_index=/opt/mafia-app/build/index.html
-maint=/opt/mafia-app/maintenance.html
-if [ ! -f "$maint" ]; then
-  maint=/var/www/html/maintenance.html
-fi
-
-restore_index() {
-  if [ -f "$index_bak" ] && [ -d /opt/mafia-app/build ]; then
-    cp -f "$index_bak" "$live_index"
-    rm -f "$index_bak"
-  fi
-}
-trap restore_index EXIT
-
-if [ -f "$live_index" ] && [ -f "$maint" ]; then
-  cp -f "$live_index" "$index_bak"
-  cp -f "$maint" "$live_index"
-  sudo systemctl reload nginx || true
-  ok "Maintenance page shown"
-fi
-
-sudo systemctl restart mafia-backend
-
-up=0
-for i in $(seq 1 30); do
-  if curl -s -o /dev/null --max-time 2 http://127.0.0.1:8000/openapi.json 2>/dev/null; then
-    up=1
-    break
-  fi
-  info "Waiting for API... (${i}/30)"
-  sleep 3
-done
-if [ "$up" -ne 1 ]; then
-  warn "Backend did not answer on :8000 within 90s - restoring site anyway"
-fi
-
-restore_index
-trap - EXIT
-sudo systemctl reload nginx || true
+bash scripts/apply-maintenance.sh restart-backend
 ok "API restart finished - site restored"
 echo
 printf '%b\n' "${C_GREEN}${C_BOLD}  [OK] Deploy complete - frontend + API live${C_RESET}"

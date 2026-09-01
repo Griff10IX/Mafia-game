@@ -366,6 +366,9 @@ const DestinationCard = ({
                 </span>
                 <span className={`text-[9px] font-heading whitespace-nowrap ml-1 ${!canTravel ? 'text-red-400' : 'text-mutedForeground'}`}>
                   {item.travel_time}s
+                  {item.fast_travels_remaining != null && Number(item.fast_travels_remaining) > 0
+                    ? ` · ${Number(item.fast_travels_remaining)}×1s left`
+                    : ''}
                   {item.damage_percent != null && ` · ${item.damage_percent}%`}
                 </span>
               </button>
@@ -422,6 +425,7 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => {
         </h4>
         <div className="space-y-0.5 text-[10px] font-heading">
           {[
+            { name: 'Loot Exclusive (540K)', time: '2s', color: 'text-amber-200' },
             { name: 'Loot Exclusive (Model SJ)', time: '2s', color: 'text-amber-300' },
             { name: 'Loot Exclusive', time: '5s', color: 'text-amber-400' },
             { name: 'Exclusive', time: '7s', color: 'text-purple-400' },

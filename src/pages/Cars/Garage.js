@@ -848,6 +848,7 @@ export default function Garage() {
         car_ids: idsToSend,
         action: 'bullets',
         manual_garage: true,
+        rarity_ids: meltScrapRarities,
         ...(captchaToken ? { captcha_token: captchaToken } : {}),
       });
       if (response.data?.success === false) {
@@ -896,6 +897,7 @@ export default function Garage() {
         car_ids: idsToSend,
         action: 'cash',
         manual_garage: true,
+        rarity_ids: meltScrapRarities,
         ...(captchaToken ? { captcha_token: captchaToken } : {}),
       });
       if (response.data?.success === false) {

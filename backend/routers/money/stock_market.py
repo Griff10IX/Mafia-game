@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, send_notification, log_activity
+from utils.game_pass_micro_rewards import apply_game_pass_wait_seconds
 from utils.point_provenance import log_points_event
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_STOCK_MARKET
 
@@ -359,9 +360,10 @@ def register(router):
             bought_at_dt = _parse_bought_at(bought_at_raw)
             if bought_at_raw and bought_at_dt:
                 elapsed = (now - bought_at_dt).total_seconds()
-                if elapsed < SELL_COOLDOWN_SEC:
+                sell_cd = apply_game_pass_wait_seconds(SELL_COOLDOWN_SEC, current_user)
+                if elapsed < sell_cd:
                     can_sell = False
-                    sell_available_in_seconds = max(0, int(SELL_COOLDOWN_SEC - elapsed))
+                    sell_available_in_seconds = max(0, int(sell_cd - elapsed))
             auto_sell_at = None
             if bought_at_dt:
                 auto_sell_at = (bought_at_dt + timedelta(days=AUTO_SELL_DAYS)).isoformat()
@@ -559,11 +561,12 @@ def register(router):
         bought_at = _parse_bought_at(pos.get("bought_at"))
         if bought_at:
             elapsed = (datetime.now(timezone.utc) - bought_at).total_seconds()
-            if elapsed < SELL_COOLDOWN_SEC:
-                wait_sec = int(SELL_COOLDOWN_SEC - elapsed)
+            sell_cd = apply_game_pass_wait_seconds(SELL_COOLDOWN_SEC, current_user)
+            if elapsed < sell_cd:
+                wait_sec = int(sell_cd - elapsed)
                 raise HTTPException(
                     status_code=400,
-                    detail=f"You must wait 3 minutes after opening before closing. You can close in {wait_sec} seconds.",
+                    detail=f"You must wait {max(1, sell_cd // 60)} minutes after opening before closing. You can close in {wait_sec} seconds.",
                 )
         stock = next((s for s in STOCKS if s["id"] == pos.get("stock_id")), None)
         if not stock:

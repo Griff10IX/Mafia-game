@@ -35,40 +35,18 @@ async def _entertainer_sustained_rl_verified(current_user: dict = Depends(get_cu
     await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_ENTERTAINER)
 
 
-# Min gap between join attempts (same user). Keep short so players can join several open
-# games back-to-back; frontend also serializes joins. True bot spam still hits sustained RL.
-ENT_JOIN_SPAM_GAP_SECONDS = 0.45
+# Join attempts are not rate-limited (min-age and spam gap caused false blocks on real taps).
+ENT_JOIN_SPAM_GAP_SECONDS = 0
 
 
 async def _entertainer_join_spam_guard(current_user: dict = Depends(get_current_user_verified)):
-    """Small always-on per-user guard for rapid repeat join attempts."""
-    uid = str((current_user or {}).get("id") or "").strip()
-    if not uid:
-        return
-    now = datetime.now(timezone.utc)
-    endpoint_key = "entertainer_join"
-    row = await db.rate_limit_clicks.find_one(
-        {"user_id": uid, "endpoint_key": endpoint_key},
-        {"_id": 0, "last_at": 1},
-    )
-    last_at = _parse_iso((row or {}).get("last_at"))
-    if last_at and (now - last_at).total_seconds() < ENT_JOIN_SPAM_GAP_SECONDS:
-        raise HTTPException(
-            status_code=429,
-            detail="Please wait a moment before trying to join again.",
-        )
-    await db.rate_limit_clicks.update_one(
-        {"user_id": uid, "endpoint_key": endpoint_key},
-        {"$set": {"last_at": now.isoformat()}},
-        upsert=True,
-    )
+    return
 
-# --- Anti-bot join tokens (layer 1, always on) ---
-# Issued per-user with the games list; joins must echo the token back. A minimum age check
-# means a script that fetches the list and joins in the same instant fails; single-use per join.
-# After a successful join we re-issue a token that is immediately usable so multi-joins work.
+# --- Anti-bot join tokens (layer 1) ---
+# Issued per-user with the games list; joins must echo the token back (single-use).
+# No min-age delay: a 1.5s wait caused false too_fresh blocks on real taps.
 ENT_JOIN_TOKEN_TTL_SECONDS = 600
-ENT_JOIN_TOKEN_MIN_AGE_SECONDS = 1.5
+ENT_JOIN_TOKEN_MIN_AGE_SECONDS = 0
 
 
 async def _issue_ent_join_token(uid: str, *, ready_immediately: bool = False) -> Optional[str]:
@@ -1479,8 +1457,6 @@ async def _require_ent_join_token(
             age = (datetime.now(timezone.utc) - issued_at).total_seconds() if issued_at else None
             if age is None or age > ENT_JOIN_TOKEN_TTL_SECONDS:
                 fail_reason = "expired"
-            elif age < ENT_JOIN_TOKEN_MIN_AGE_SECONDS:
-                fail_reason = "too_fresh"
             else:
                 consumed = await db.forum_game_seats.delete_one({"user_id": uid, "token": token})
                 if consumed.deleted_count == 0:
@@ -1512,8 +1488,6 @@ async def _require_ent_join_token(
         )
     except Exception:
         logger.exception("ent join token staff alert failed")
-    if fail_reason == "too_fresh":
-        raise HTTPException(status_code=400, detail="Please wait briefly before joining.")
     raise HTTPException(status_code=400, detail="Could not verify join — reload the table and try again.")
 
 
@@ -2218,7 +2192,7 @@ async def ent_join_turnstile_config(current_user: dict = Depends(get_current_use
 def register(router):
     _ent_rl_u = [Depends(_entertainer_sustained_rl_user)]
     _ent_rl_v = [Depends(_entertainer_sustained_rl_verified)]
-    _ent_rl_join = [Depends(_entertainer_sustained_rl_verified), Depends(_entertainer_join_spam_guard)]
+    _ent_rl_join = []
     router.add_api_route("/forum/entertainer/join-turnstile-config", ent_join_turnstile_config, methods=["GET"], dependencies=_ent_rl_u)
     router.add_api_route("/forum/entertainer/find-word/active", find_word_active, methods=["GET"], dependencies=_ent_rl_u)
     router.add_api_route("/forum/entertainer/find-word/history", find_word_history, methods=["GET"], dependencies=_ent_rl_u)

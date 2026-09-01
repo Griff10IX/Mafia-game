@@ -406,16 +406,21 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
   };
 
   const claim = async () => {
+    if (claiming) return;
     setClaiming(true);
     try {
-      await api.post('/bullet-factory/claim', { state: data?.state || currentState });
-      toast.success('You now own the Armoury!');
+      const res = await api.post('/bullet-factory/claim', { state: data?.state || currentState });
+      toast.success(res.data?.message || 'You now own the Armoury!');
       refreshUser();
       const meRes = await api.get('/auth/me').catch(() => ({}));
       if (meRes.data) setMe(meRes.data);
       fetchData();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to claim armoury');
+      const detail = e.response?.data?.detail;
+      const msg = typeof detail === 'string'
+        ? detail
+        : (Array.isArray(detail) ? (detail[0]?.msg || detail[0]?.message) : null);
+      toast.error(msg || 'Failed to claim armoury');
     } finally {
       setClaiming(false);
     }

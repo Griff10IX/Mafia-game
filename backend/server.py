@@ -34,6 +34,7 @@ from utils.point_provenance import log_points_event
 from utils.staff_access_audit import path_requires_staff_issued_jwt
 from utils.family_vault_log import log_family_vault_tx
 from utils.jwt_env import require_jwt_secret_key
+from utils.loot_piece_store import point_package_entries as loot_piece_point_packages
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from jose.exceptions import ExpiredSignatureError
@@ -772,6 +773,7 @@ POINT_PACKAGES = {
     # Game Pass prestige (no points pack; +50% VIP season totals then reset track).
     "game_pass_prestige_10": {"points": 0, "price_gbp": 10.00},
 }
+POINT_PACKAGES.update(loot_piece_point_packages())
 
 # Travel times based on car rarity (in seconds)
 TRAVEL_TIMES = {
@@ -787,9 +789,10 @@ TRAVEL_TIMES = {
     "airport": 0   # Airport (instant); set > 0 for timed flights (family -1s perk applies to this value)
 }
 
-# Per-car travel seconds override (beats TRAVEL_TIMES[rarity]). Model SJ loot exclusive = 2s.
+# Per-car travel seconds override (beats TRAVEL_TIMES[rarity]). Model SJ / 540K loot exclusives = 2s.
 TRAVEL_TIME_OVERRIDES = {
     "car23": 2,
+    "car24": 2,
 }
 
 
@@ -806,7 +809,7 @@ MELT_BULLETS_VALUE_MULT_NUM = 165  # ~35% above prior 122 (122 × 1.35 ≈ 165)
 MELT_BULLETS_VALUE_MULT_DEN = 100
 
 # Bump when Cloudflare caches SPA HTML/404 for /images/gta/* (browsers then hide imgs via onError).
-GTA_IMAGE_CACHE_BUST = "6"
+GTA_IMAGE_CACHE_BUST = "7"
 
 
 def gta_car_image(filename: str) -> str:
@@ -851,6 +854,9 @@ CARS = [
     # Loot-exclusive: Rare 5% / Ultra Rare 10% loot boxes only; 1 game-wide; 2s travel
     # Appraised 50% above the slower loot exclusive (car21 Cadillac).
     {"id": "car23", "name": "Duesenberg Model SJ", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 215625000, "travel_bonus": 75, "image": gta_car_image("car23.png"), "travel_seconds": 2},
+    # Loot-exclusive: Ultra Rare boxes only (rate is server-only — never show % in player UI); 1/1 player pool; 2s travel, 25× 1s/day.
+    # Appraised 50% above Model SJ.
+    {"id": "car24", "name": "1936 Mercedes-Benz 540K Special Roadster", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 323437500, "travel_bonus": 82, "image": gta_car_image("car24.png"), "travel_seconds": 2},
 ]
 
 # Models (UserRegister, UserLogin, PasswordResetRequest, PasswordResetConfirm moved to routers/auth.py)
@@ -911,6 +917,8 @@ class UserResponse(BaseModel):
     created_at: str
     swiss_balance: int = 0
     swiss_limit: int = SWISS_BANK_LIMIT_START
+    interest_limit_upgrades: int = 0
+    interest_limit: int = 5_000_000_000
     oc_timer_reduced: bool = False
     crew_oc_timer_reduced: bool = False
     admin_ghost_mode: bool = False
@@ -929,6 +937,7 @@ class UserResponse(BaseModel):
     account_locked_until: Optional[str] = None  # when set, lock auto-expires at this time (e.g. test lock)
     account_locked_comment: Optional[str] = None  # user's one-time comment
     can_submit_comment: bool = False  # true when locked and no comment submitted yet
+    system_ai_lock: bool = False  # System AI prank lock — player sees /ai-locked, not investigation page
     email_verified: bool = True  # false until user clicks verification link
     require_email_verification: bool = True  # admin play lock; off = unverified users can play
     respect_points: int = 0  # second currency; earn from activities, spend in store at 5x; not sendable/tradeable
@@ -1059,6 +1068,7 @@ class UserResponse(BaseModel):
     tutorial_rewards_granted: bool = False
     tutorial_ineligible_reason: Optional[str] = None
     loot_box_free_rare_opens: int = 0
+    loot_box_free_ultra_opens: int = 0
 
 class NotificationCreate(BaseModel):
     title: str
@@ -1342,6 +1352,21 @@ async def get_current_user(
     # Reject if token was invalidated (e.g. admin "log out user")
     if payload.get("v", 0) != user.get("token_version", 0):
         _log_auth_failure(user_id, 401, "Session invalidated (token_version mismatch)")
+        kick_until = user.get("system_ai_kick_landing_until")
+        insult_kick = False
+        if kick_until:
+            try:
+                until_dt = datetime.fromisoformat(str(kick_until).replace("Z", "+00:00"))
+                if until_dt.tzinfo is None:
+                    until_dt = until_dt.replace(tzinfo=timezone.utc)
+                insult_kick = until_dt >= datetime.now(timezone.utc)
+            except Exception:
+                insult_kick = False
+        if insult_kick:
+            raise HTTPException(
+                status_code=401,
+                detail={"logout_page": "insult", "message": "Session invalidated."},
+            )
         raise HTTPException(status_code=401, detail="Session invalidated. Please log in again.")
     # If token has session_id, validate it exists (revoked sessions are removed from user.sessions)
     session_id = payload.get("session_id")
@@ -1421,7 +1446,7 @@ async def get_current_user(
                     {"id": user_id},
                     {
                         "$set": {"account_locked": False},
-                        "$unset": {"account_locked_at": "", "account_locked_comment": "", "account_locked_comment_at": "", "account_locked_until": "", "account_locked_admin_message": "", "account_locked_admin_message_at": "", "account_locked_user_reply": "", "account_locked_user_reply_at": ""},
+                        "$unset": {"account_locked_at": "", "account_locked_comment": "", "account_locked_comment_at": "", "account_locked_until": "", "account_locked_admin_message": "", "account_locked_admin_message_at": "", "account_locked_user_reply": "", "account_locked_user_reply_at": "", "system_ai_lock": ""},
                     },
                 )
                 user = await db.users.find_one({"id": user_id}, {"_id": 0})
@@ -1430,6 +1455,11 @@ async def get_current_user(
     # Locked (under investigation): only whitelisted paths allowed
     if user.get("account_locked") and request and request.url.path not in ACCOUNT_LOCKED_WHITELIST:
         _log_auth_failure(user_id, 403, "Account locked (path not whitelisted)")
+        if user.get("system_ai_lock"):
+            raise HTTPException(
+                status_code=403,
+                detail={"lock_page": "insult", "message": "System AI locked you."},
+            )
         raise HTTPException(
             status_code=403,
             detail="Account is under investigation. You can only access the account status page.",
@@ -3590,6 +3620,48 @@ def raise_if_dead_casino_transfer_target(target: Optional[dict]) -> None:
     """Dead characters cannot receive casino ownership (venue would be unusable / stuck)."""
     if target and target.get("is_dead"):
         raise HTTPException(status_code=400, detail="That player is dead and cannot receive a casino.")
+
+
+_UNOWNED_CITY_OWNER = {
+    "$or": [{"owner_id": None}, {"owner_id": ""}, {"owner_id": {"$exists": False}}],
+}
+
+
+def raise_if_city_casino_already_owned(doc, current_user, *, already_owned_detail: str, you_own_detail: str = "You already own this table") -> None:
+    oid = str((doc or {}).get("owner_id") or "").strip()
+    if not oid:
+        return
+    if oid == str(current_user.get("id") or ""):
+        raise HTTPException(status_code=400, detail=you_own_detail)
+    raise HTTPException(status_code=400, detail=already_owned_detail)
+
+
+async def claim_unowned_city_casino(coll, *, city: str, stored_city: Optional[str], set_fields: dict, set_on_insert: Optional[dict] = None) -> bool:
+    """Claim the city's unowned row, or insert one. Never adds a second row for an owned city."""
+    from pymongo.errors import DuplicateKeyError
+
+    loc = stored_city or city
+    existing = await coll.find_one({"city": loc})
+    if existing is None and city:
+        existing = await coll.find_one({"city": re.compile(f"^{re.escape(city)}$", re.IGNORECASE)})
+        if existing:
+            loc = existing.get("city") or loc
+    if str((existing or {}).get("owner_id") or "").strip():
+        return False
+    payload = {"$set": {**set_fields, "city": loc}}
+    if set_on_insert:
+        payload["$setOnInsert"] = set_on_insert
+    if existing:
+        res = await coll.update_one({"_id": existing["_id"], **_UNOWNED_CITY_OWNER}, payload)
+        return bool(res.modified_count)
+    doc = {"city": loc, **set_fields}
+    if set_on_insert:
+        doc.update(set_on_insert)
+    try:
+        await coll.insert_one(doc)
+        return True
+    except DuplicateKeyError:
+        return False
 
 
 from routers.casinos.dice import DICE_MAX_BET, DiceSellOnTradeRequest  # used by CASINO_GAMES and roulette/blackjack/horseracing sell-on-trade

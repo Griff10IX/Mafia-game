@@ -850,11 +850,11 @@ export default function MDGPage() {
                         {!isIn && (
                           <button
                             type="button"
-                            disabled={joiningId === g.id}
+                            disabled={!!joiningId}
                             onClick={() => handleJoin(g.id)}
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-primary/40 bg-primary/20 text-primary font-heading font-bold text-[9px] uppercase hover:bg-primary/30 disabled:opacity-50 transition-colors"
                           >
-                            {joiningId === g.id ? '…' : 'Join'}
+                            {joiningId ? '…' : 'Join'}
                           </button>
                         )}
                         {canRoll && (
@@ -1066,12 +1066,12 @@ function AutoGameRow({ game: g, idx, myUserId, joiningId, onJoin }) {
           {!isIn && (
             <button
               type="button"
-              disabled={joiningId === g.id || isFull}
+              disabled={!!joiningId || isFull}
               onClick={() => onJoin(g.id)}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-primary/50 bg-gradient-to-r from-primary/25 to-primary/15 text-primary font-heading font-bold text-[10px] uppercase tracking-wider hover:from-primary/35 hover:to-primary/25 disabled:opacity-40 transition-all shadow-lg shadow-primary/5"
             >
               <Dices size={13} />
-              {joiningId === g.id ? 'Joining…' : isFull ? 'Full' : `Join · ${formatMoney(fee)}`}
+              {joiningId ? 'Joining…' : isFull ? 'Full' : `Join · ${formatMoney(fee)}`}
             </button>
           )}
           {isIn && (

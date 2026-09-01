@@ -42,6 +42,7 @@ _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
 from server import db, get_current_user, get_effective_event, log_activity, maybe_process_rank_up, send_notification, user_prestige_rank_mult
+from utils.game_pass_micro_rewards import apply_game_pass_wait_hours, apply_game_pass_wait_seconds
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.point_provenance import log_points_event
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_OC
@@ -224,6 +225,7 @@ async def get_oc_status(current_user: dict = Depends(get_current_user)):
     has_timer_upgrade = bool(current_user.get("oc_timer_reduced", False))
     oc_reduced = _oc_reduced_active(current_user)
     cooldown_hours = OC_COOLDOWN_HOURS_REDUCED if (has_timer_upgrade or oc_reduced) else OC_COOLDOWN_HOURS
+    cooldown_hours = apply_game_pass_wait_hours(cooldown_hours, current_user)
     cooldown_until = current_user.get("oc_cooldown_until")
     now = datetime.now(timezone.utc)
     if cooldown_until:
@@ -556,6 +558,7 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     from server import rank_xp_pass_multiplier
     pass_mult = float(rank_xp_pass_multiplier(current_user))
     cooldown_hours = OC_COOLDOWN_HOURS_REDUCED if (has_timer_upgrade or oc_reduced) else OC_COOLDOWN_HOURS
+    cooldown_hours = apply_game_pass_wait_hours(cooldown_hours, current_user)
     user_oc = await db.user_organised_crime.find_one({"user_id": uid}, {"_id": 0, "selected_equipment": 1})
     selected_id = (user_oc or {}).get("selected_equipment", "basic")
     equip = OC_EQUIPMENT_BY_ID.get(selected_id, OC_EQUIPMENT_BY_ID["basic"])
@@ -602,13 +605,14 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     if not success:
         goes_to_jail = _rng.random() < OC_JAIL_CHANCE_ON_FAIL
         if goes_to_jail:
-            jail_until = now + timedelta(seconds=OC_JAIL_SECONDS_TEAM)
-            unbreakable_until = now + timedelta(seconds=60)
+            oc_jail_sec = apply_game_pass_wait_seconds(OC_JAIL_SECONDS_TEAM, current_user)
+            jail_until = now + timedelta(seconds=oc_jail_sec)
+            unbreakable_until = now + timedelta(seconds=oc_jail_sec)
             await db.users.update_one(
                 {"id": uid},
                 {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "unbreakable_until": unbreakable_until.isoformat(), "snitch_attempted_this_term": False}},
             )
-            msg = _rng.choice(OC_TEAM_HEIST_JAIL_MESSAGES).format(jail_time=OC_JAIL_SECONDS_TEAM)
+            msg = _rng.choice(OC_TEAM_HEIST_JAIL_MESSAGES).format(jail_time=oc_jail_sec)
             return {
                 "success": False,
                 "message": msg,

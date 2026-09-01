@@ -13,8 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from utils.faq_topic_author import resolve_faq_topic_author_async
 from utils.ip_normalize import normalize_ip_string
+from utils.system_ai_inbox import system_ai_forum_author_fields
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ _IPV6_IN_TEXT_RE = re.compile(
     re.IGNORECASE,
 )
 SHAME_INTRO = (
-    "Posts here are automated. Staff kills, wipes, and IP bans — duration and reason when given. "
+    "Posted by System AI. Staff kills, wipes, and IP bans — duration and reason when given. "
     "Anyone caught playing with a banned user will be modkilled (wipe). "
     "Proof is summarized so it does not help anyone copy the method. Staff only — this topic is locked."
 )
@@ -72,14 +72,12 @@ async def ensure_topic_of_shame_forum_topic(db) -> None:
         return
 
     now = datetime.now(timezone.utc).isoformat()
-    author_id, author_username = await resolve_faq_topic_author_async(db)
     doc = {
         "id": str(uuid.uuid4()),
         "title": TOPIC_TITLE,
         "content": body,
         "category": "general",
-        "author_id": author_id,
-        "author_username": author_username,
+        **system_ai_forum_author_fields(),
         "created_at": now,
         "updated_at": now,
         "views": 0,
@@ -124,7 +122,10 @@ def strip_ips_from_text(raw: str) -> str:
         if _token_is_ip(p):
             continue
         kept.append(p)
-    return _WS_RE.sub(" ", "".join(kept)).strip()
+    cleaned = "".join(kept)
+    cleaned = re.sub(r"[^\S\n]+", " ", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
 
 
 def apply_shame_intro(body: str) -> str:
@@ -160,7 +161,7 @@ async def prepend_topic_of_shame_bbcode(db, entry: str) -> bool:
     new_content = apply_shame_intro(insert_shame_entry(topic.get("content") or "", entry))
     await db.forum_topics.update_one(
         {"id": topic["id"]},
-        {"$set": {"content": new_content, "updated_at": now}},
+        {"$set": {"content": new_content, "updated_at": now, **system_ai_forum_author_fields()}},
     )
     try:
         path = _shame_path()

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package, Copy, Swords, Award, Gauge, Coins, Sparkles, Search } from 'lucide-react';
+import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package, Copy, Swords, Award, Gauge, Coins, Sparkles, Search, Landmark, Gift } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { copyTextToClipboard } from '../../utils/copyToClipboard';
 import { toast } from 'sonner';
@@ -16,6 +16,7 @@ import {
   AUTO_RANK_STRIPE_PACKAGE_ID,
   AUTO_RANK_STRIPE_PRICE_GBP,
 } from '../../constants/autoRankStripePricing';
+import { LOOT_PIECE_PACKS, formatLootPackGbp } from '../../constants/lootPieceStore';
 import { formatGameDateTime, formatGameDateTimeShort, formatGameDateOnly } from '../../utils/gameDateTime';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import { STORE_PAGE_CACHE_KEY } from '../../utils/sessionStaleCache';
@@ -92,6 +93,7 @@ const STORE_STYLES = `
 
 const STORE_TAB_META = [
   { id: 'points', label: 'Points', Icon: Coins },
+  { id: 'loot', label: 'Loot', Icon: Gift },
   { id: 'upgrades', label: 'Upgrades', Icon: Shield },
   { id: 'tokens', label: 'Tokens', Icon: Package },
   { id: 'bullets', label: 'Bullets', Icon: Crosshair },
@@ -127,6 +129,7 @@ const UPGRADE_CATEGORY_BY_ID = {
   'crew-oc-timer': 'income',
   garage: 'income',
   booze: 'income',
+  'interest-limit': 'income',
   'weed-daily-cap': 'income',
   'weed-safety-deposit': 'income',
   'family-safe-deposit-tier': 'income',
@@ -251,6 +254,16 @@ function buildStoreRecommendations(user, { pointsTabLocked } = {}) {
       Icon: Package,
     });
   }
+  if (Number(user.loot_box_pieces || 0) < 400) {
+    recs.push({
+      id: 'rec-loot-pieces',
+      title: 'Loot pieces',
+      reason: 'Buy vault pieces — 1,000 for £7 (card).',
+      tab: 'loot',
+      price: 'From £7',
+      Icon: Gift,
+    });
+  }
   return recs.slice(0, 4);
 }
 
@@ -266,7 +279,7 @@ const BULLET_PACKS = [
 const CUSTOM_BULLETS_MAX = 250_000;
 const VIP_PASS_CAR_COST_POINTS = 5000;
 
-const VALID_TABS = ['points', 'sendpts', 'upgrades', 'tokens', 'bullets'];
+const VALID_TABS = ['points', 'loot', 'sendpts', 'upgrades', 'tokens', 'bullets'];
 const bulletCost = (bullets) => bullets < 5000 ? Math.max(1, Math.floor(bullets * 0.02)) : 100 + Math.ceil((bullets - 5000) * 75 / 5000);
 
 /** Match backend store._store_respect_cost_for_points: ceil(20.25×pts) = (pts×81+3)//4 */
@@ -453,6 +466,22 @@ const UPGRADES = [
     value: `Total ${cfg.capacity != null ? Number(cfg.capacity).toLocaleString() : '—'} · bonus +${Number(cfg.capacity_bonus ?? 0).toLocaleString()}/${cfg.capacity_bonus_max != null ? Number(cfg.capacity_bonus_max).toLocaleString() : '—'}`,
   }) },
   {
+    id: 'interest-limit',
+    title: 'Interest Bank Cap',
+    Icon: Landmark,
+    price: 1000,
+    path: '/store/buy-interest-limit',
+    ownedKey: null,
+    stackWhileActive: true,
+    needsConfirm: true,
+    disabledWhen: (u) => Number(u?.interest_limit ?? 0) >= 50_000_000_000,
+    desc: '+$2,500,000,000 interest deposit cap. Starts at $5,000,000,000; 1,000 points per step; max $50,000,000,000.',
+    extra: (u) => {
+      const cap = Number(u?.interest_limit) || (5_000_000_000 + Math.max(0, Number(u?.interest_limit_upgrades) || 0) * 2_500_000_000);
+      return { line: 'Cap', value: `$${Math.min(50_000_000_000, cap).toLocaleString()} / $50,000,000,000` };
+    },
+  },
+  {
     id: 'hitlist-npc-cap',
     title: 'Practice Targets',
     Icon: Crosshair,
@@ -594,7 +623,46 @@ function StoreFilterChips({ options, value, onChange, ariaLabel }) {
   );
 }
 
-const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, onBuy, loading, disabled, comingSoon, staffPreview, user, payWith = 'auto', cashPrice, children }) => (
+const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, onBuy, loading, disabled, comingSoon, staffPreview, user, payWith = 'auto', cashPrice, children, needsConfirm = false }) => {
+  const [confirming, setConfirming] = useState(false);
+  useEffect(() => {
+    if (loading || disabled || owned) setConfirming(false);
+  }, [loading, disabled, owned]);
+  const buyDisabled =
+    loading
+    || disabled
+    || (comingSoon && !staffPreview)
+    || (payWith === 'cash'
+      ? (!cashPrice || (user && (user.money ?? 0) < cashPrice))
+      : (
+        !!user
+        && (
+          respectPrice != null
+            ? (
+              payWith === 'points'
+                ? (user.points ?? 0) < price
+                : payWith === 'respect'
+                  ? (user.respect_points ?? 0) < respectPrice
+                  : ((user.points ?? 0) < price && (user.respect_points ?? 0) < respectPrice)
+            )
+            : (user.points ?? 0) < price
+        )
+      )
+    );
+  const priceLabel = loading
+    ? '...'
+    : payWith === 'cash'
+      ? (cashPrice ? `$${Math.round(cashPrice).toLocaleString()}` : 'Unavailable')
+      : respectPrice != null
+        ? (
+          payWith === 'points'
+            ? `${price} pts`
+            : payWith === 'respect'
+              ? `${respectPrice} resp`
+              : `${price} pts or ${respectPrice} resp`
+        )
+        : `${price} pts`;
+  return (
   <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel ${comingSoon && !staffPreview ? 'opacity-60' : ''}`}>
     <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
@@ -610,59 +678,55 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, 
       {children}
       {owned ? (
         <div className="py-1.5 text-center text-[10px] font-heading font-bold text-primary uppercase">{ownedLabel || 'Owned'}</div>
+      ) : confirming && needsConfirm ? (
+        <div className="mt-1 space-y-1.5">
+          <p className="text-[9px] text-mutedForeground font-heading leading-snug">Confirm this purchase?</p>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setConfirming(false);
+                onBuy();
+              }}
+              disabled={buyDisabled}
+              className="flex-1 min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
+            >
+              {loading ? '...' : 'Confirm'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              disabled={loading}
+              className="min-h-[44px] px-3 py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-foreground disabled:opacity-50 touch-manipulation"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       ) : (
         <button
           type="button"
-          onClick={() => onBuy()}
-          disabled={
-            loading
-            || disabled
-            || (comingSoon && !staffPreview)
-            || (payWith === 'cash'
-              ? (!cashPrice || (user && (user.money ?? 0) < cashPrice))
-              : (
-                !!user
-                && (
-                  respectPrice != null
-                    ? (
-                      payWith === 'points'
-                        ? (user.points ?? 0) < price
-                        : payWith === 'respect'
-                          ? (user.respect_points ?? 0) < respectPrice
-                          : ((user.points ?? 0) < price && (user.respect_points ?? 0) < respectPrice)
-                    )
-                    // Points-only items ignore the pay-with toggle.
-                    : (user.points ?? 0) < price
-                )
-              )
-            )
-          }
+          onClick={() => {
+            if (needsConfirm) setConfirming(true);
+            else onBuy();
+          }}
+          disabled={buyDisabled}
           className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 mt-1 touch-manipulation"
         >
-          {loading
-            ? '...'
-            : payWith === 'cash'
-              ? (cashPrice ? `$${Math.round(cashPrice).toLocaleString()}` : 'Unavailable')
-              : respectPrice != null
-                ? (
-                  payWith === 'points'
-                    ? `${price} pts`
-                    : payWith === 'respect'
-                      ? `${respectPrice} resp`
-                      : `${price} pts or ${respectPrice} resp`
-                )
-                : `${price} pts`}
+          {priceLabel}
         </button>
       )}
     </div>
     <div className="store-art-line text-primary mx-3" />
   </div>
-);
+  );
+};
 
 export default function Store() {
   const storeBoot = readSessionJson(STORE_PAGE_CACHE_KEY);
   const [loading, setLoading] = useState(false);
   const [autoRankStripeLoading, setAutoRankStripeLoading] = useState(false);
+  const [lootStripePackageId, setLootStripePackageId] = useState(null);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [user, setUser] = useState(() => storeBoot?.user ?? null);
   const [boozeConfig, setBoozeConfig] = useState(() => storeBoot?.boozeConfig ?? null);
@@ -1083,8 +1147,14 @@ export default function Store() {
           toast.success(`Payment received. ${res.data.points_added} points will be credited on ${releaseDate}.`);
         } else {
           const pts = Number(res.data.points_added || 0);
+          const lootPieces = Number(res.data.loot_box_pieces || 0);
           if (res.data.auto_rank_entitled) {
             toast.success('Permanent Auto Rank purchased — tied to your verified email.');
+          } else if (lootPieces > 0) {
+            const spins = Number(res.data.wheel_bonus_free_spins || 0);
+            toast.success(
+              `+${lootPieces.toLocaleString()} loot box pieces${spins ? ` and ${spins} Wheel free spin${spins === 1 ? '' : 's'}` : ''}.`,
+            );
           } else if (pts === 0) toast.success('Game Pass purchased — token delivered. Activate in My Inventory.');
           else toast.success(`${pts} points added.`);
         }
@@ -1145,6 +1215,26 @@ export default function Store() {
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Checkout failed');
       setAutoRankStripeLoading(false);
+    }
+  };
+
+  const handleBuyLootPiecesStripe = async (packageId) => {
+    if (lootStripePackageId) return;
+    if (pointsTabLocked) {
+      toast.error(pointsTabLockMessage || 'Card purchases are temporarily unavailable');
+      return;
+    }
+    setLootStripePackageId(packageId);
+    try {
+      const origin = `${window.location.origin}/game/store`;
+      const res = await api.post('/payments/checkout', {
+        package_id: packageId,
+        origin_url: origin,
+      });
+      window.location.href = res.data.url;
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Checkout failed');
+      setLootStripePackageId(null);
     }
   };
 
@@ -1318,6 +1408,7 @@ export default function Store() {
     }
     if (u.id === 'garage' && (user?.garage_batch_limit ?? 0) >= 100) return false;
     if (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) return false;
+    if (u.id === 'interest-limit' && Number(user?.interest_limit ?? 0) >= 50_000_000_000) return false;
     if (u.id === 'hitlist-npc-cap' && (Number(user?.hitlist_npc_bonus_slots) || 0) >= 3) return false;
     if (u.id === 'weed-daily-cap' && weedEmpireSummary?.at_max_sell_cap) return false;
     if (u.id === 'family-safe-deposit-tier' && familySafeDepositSummary?.at_max) return false;
@@ -1347,7 +1438,7 @@ export default function Store() {
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] sm:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.18em]">Point Store</p>
-            <p className="text-[10px] text-zinc-500 font-heading italic truncate">Buy points · upgrades · tokens · bullets</p>
+            <p className="text-[10px] text-zinc-500 font-heading italic truncate">Buy points · loot pieces · upgrades · tokens · bullets</p>
           </div>
           {user != null && (
             <div className="shrink-0 text-right">
@@ -1529,8 +1620,8 @@ export default function Store() {
                     <>
                       Enter whole points from 1,000–1,000,000, or a GBP budget — the server prices along the standard store curve (Stripe checkout).
                       {' '}
-                      <span className="text-violet-400/90">GBP card checkouts earn ~9,000 loot box pieces per £120 charged</span> (75 per whole £1; credited when your points are). Any GBP store checkout also earns{' '}
-                      <span className="text-amber-400/90">1 Wheel of Fortune free spin per whole £10</span> (banked; leftover under £10 on that checkout does not carry).
+                      <span className="text-violet-400/90">GBP card checkouts earn 1,100 loot box pieces per whole £10 charged</span> (110 per whole £1; credited when your points are). Any GBP store checkout also earns{' '}
+                      <span className="text-amber-400/90">2 Wheel of Fortune free spins per whole £10</span> (banked; leftover under £10 on that checkout does not carry).
                     </>
                   )
                   : (
@@ -1984,6 +2075,7 @@ export default function Store() {
                 staffPreview={staffPreview}
                 user={user}
                 payWith={storePayWith}
+                needsConfirm={!!u.needsConfirm}
                 onBuy={() => {
                   const body = u.needsGlowPreset ? { preset_id: glowPresetId } : {};
                   apiBuy(`${u.path}?pay_with=${encodeURIComponent(storePayWith)}`, body, 'Purchased');
@@ -2126,6 +2218,69 @@ export default function Store() {
               <div className="store-art-line text-primary mx-3" />
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'loot' && (
+        <div className="space-y-4 sm:space-y-6">
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Loot box pieces</span>
+              <p className="text-[8px] text-mutedForeground font-heading mt-0.5 leading-snug">
+                Card only. Each pack grants the listed pieces and Wheel free spins — not the Points-tab 1,100 pieces / £10 bonus.
+                {' '}
+                Buy points with card if you want points as well as pieces.
+              </p>
+            </div>
+            <div className="px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-[9px] font-heading text-zinc-400 uppercase tracking-wider">Held</span>
+              <span className="text-sm font-heading font-bold text-primary tabular-nums">
+                {Number(user?.loot_box_pieces || 0).toLocaleString()}
+              </span>
+              <span className="text-[9px] text-zinc-500 font-heading">pieces</span>
+              <Link to="/money/loot-box" className="text-[9px] font-heading text-primary underline ml-auto">
+                Open vaults →
+              </Link>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
+            {LOOT_PIECE_PACKS.map((pack) => {
+              const stripeBusy = lootStripePackageId === pack.packageId;
+              return (
+                <div
+                  key={pack.packageId}
+                  className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}
+                >
+                  <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                  <div className="p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">
+                          {pack.pieces.toLocaleString()} pieces
+                        </p>
+                        <p className="text-[9px] text-zinc-400 font-heading mt-0.5 leading-snug">
+                          {pack.wheelSpins} Wheel free spin{pack.wheelSpins === 1 ? '' : 's'} · {formatLootPackGbp(pack.priceGbp / (pack.pieces / 1000))} per 1,000
+                        </p>
+                      </div>
+                      <Gift size={14} className="text-primary/80 shrink-0 mt-0.5" />
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!!lootStripePackageId || pointsTabLocked}
+                      onClick={() => handleBuyLootPiecesStripe(pack.packageId)}
+                      className="mt-2 w-full min-h-[44px] py-2.5 text-[10px] font-heading font-bold uppercase rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/35 hover:bg-emerald-500/25 disabled:opacity-50 touch-manipulation"
+                    >
+                      {stripeBusy ? '...' : `Buy ${formatLootPackGbp(pack.priceGbp)}`}
+                    </button>
+                    {pointsTabLocked && (
+                      <p className="text-[8px] text-zinc-500 font-heading mt-1.5">Card checkout locked with Points purchase.</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

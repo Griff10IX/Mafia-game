@@ -9,6 +9,8 @@ import AutoRefreshNote from '../../components/AutoRefreshNote';
 import GifPicker from '../../components/GifPicker';
 import { toast } from 'sonner';
 import { parseForumContent, insertAtCursor, FORUM_INLINE_SMILEY_PX } from '../../utils/forumContent';
+import { ForumSystemAiAuthor, isSystemAiAuthor } from '../../components/SystemAiInboxMessage';
+import TopicOfShameBody from '../../components/TopicOfShameBody';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import FamilyEmblem from '../../components/FamilyEmblem';
 import styles from '../../styles/noir.module.css';
@@ -1078,6 +1080,7 @@ export default function ForumTopic() {
   const commentCount = comments.length;
   const topicTitlePlain = (topic.title || '').replace(/<[^>]+>/g, '').trim();
   const isPinnedGuideTopic = /^(how\s*to|faqs?|update\s*log|forum\s*rules|topic\s*of\s*shame)$/i.test(topicTitlePlain);
+  const isTopicOfShame = /^topic\s*of\s*shame$/i.test(topicTitlePlain);
   const isLegacyFaqHtml =
     topic.content &&
     (topic.content.includes('<details') ||
@@ -1133,6 +1136,8 @@ export default function ForumTopic() {
                     </span>
                   )}
                 </span>
+              ) : isSystemAiAuthor(topic) ? (
+                <ForumSystemAiAuthor />
               ) : (
                 <Link to={`/profile/${encodeURIComponent(topic.author_username || '?')}`} className="text-foreground font-bold hover:text-primary hover:underline" style={topic.author_online_color ? { color: topic.author_online_color } : undefined}>{topic.author_username || '?'}</Link>
               )}
@@ -1438,22 +1443,28 @@ export default function ForumTopic() {
       )}
 
       {/* Topic Content */}
-      <div id={topic?.id ? `forum-topic-${topic.id}` : undefined} className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">📝 Original Post</span>
+      <div id={topic?.id ? `forum-topic-${topic.id}` : undefined} className={`${styles.panel} rounded-md overflow-hidden mobile-panel ${isTopicOfShame ? 'border-amber-500/30' : 'border-primary/20'}`}>
+        <div className={`px-3 py-2 border-b flex flex-wrap items-center justify-between gap-2 ${isTopicOfShame ? 'bg-amber-500/[0.08] border-amber-500/20' : 'bg-primary/10 border-primary/30'}`}>
+          {isTopicOfShame ? (
+            <ForumSystemAiAuthor className="text-xs uppercase tracking-widest" avatarClassName="w-4 h-4" />
+          ) : (
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">📝 Original Post</span>
+          )}
           {topic.redeem_code && topic.redeem_max_uses != null && topic.redeem_uses_remaining != null && (
             <span className="text-[10px] font-heading font-semibold text-amber-400/95 tabular-nums" title="Global redemption limit for this code">
               {topic.redeem_uses_remaining} of {topic.redeem_max_uses} uses left
             </span>
           )}
         </div>
-        <div className="p-3">
-          {topic.gif_url && (
+        <div className={isTopicOfShame ? 'p-4 sm:p-5' : 'p-3'}>
+          {topic.gif_url && !isTopicOfShame && !isSystemAiAuthor(topic) && (
             <div className="mb-3">
               <img src={topic.gif_url} alt="GIF" className="rounded max-h-64 object-contain forum-content-gif" loading="lazy" />
             </div>
           )}
-          {isLegacyFaqHtml ? (
+          {isTopicOfShame ? (
+            <TopicOfShameBody content={topic.content} />
+          ) : isLegacyFaqHtml ? (
             <>
               <style>{FORUM_FAQ_STYLES}</style>
               <div
@@ -1658,6 +1669,8 @@ export default function ForumTopic() {
                     <div className="flex items-center gap-2 text-[10px] text-mutedForeground">
                       {isGameIdeasLog ? (
                         <span className="text-amber-400/90 font-bold font-heading">System</span>
+                      ) : isSystemAiAuthor(c) ? (
+                        <ForumSystemAiAuthor />
                       ) : (
                       <Link to={`/profile/${encodeURIComponent(c.author_username)}`} className="text-foreground font-bold hover:text-primary hover:underline" style={c.author_online_color ? { color: c.author_online_color } : undefined}>
                         {c.author_username}

@@ -10,6 +10,7 @@ from fastapi import Depends, HTTPException
 
 from server import db, get_current_user_verified, log_activity, send_notification
 from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
+from utils.game_pass_micro_rewards import apply_game_pass_wait_hours, apply_game_pass_wait_seconds
 from utils.point_provenance import log_points_event
 
 logger = logging.getLogger(__name__)
@@ -228,7 +229,7 @@ def register(router):
             "global_cash_won": global_cash_won,
             "global_net_cash": global_cash_won - global_spent,
             "jail_chance_per_dig": GR_JAIL_CHANCE,
-            "jail_seconds_on_caught": GR_JAIL_SECONDS,
+            "jail_seconds_on_caught": apply_game_pass_wait_seconds(GR_JAIL_SECONDS, fresh),
             "possible_wins": [
                 {
                     "kind": "nothing",
@@ -335,8 +336,9 @@ def register(router):
         go_to_jail = _rng.random() < GR_JAIL_CHANCE
         jail_fields = {}
         jail_until_iso = None
+        jail_sec = apply_game_pass_wait_seconds(GR_JAIL_SECONDS, fresh) if go_to_jail else 0
         if go_to_jail:
-            jail_until_iso = (now + timedelta(seconds=GR_JAIL_SECONDS)).isoformat()
+            jail_until_iso = (now + timedelta(seconds=jail_sec)).isoformat()
             jail_fields = {
                 "in_jail": True,
                 "jail_until": jail_until_iso,
@@ -399,8 +401,10 @@ def register(router):
         is_last_attempt = next_attempts_used >= attempts_total
         cooldown_until_iso = None
         cool_until = None
+        cd_hours = 0
         if is_last_attempt:
-            cool_until = now + timedelta(hours=GR_COOLDOWN_HOURS)
+            cd_hours = apply_game_pass_wait_hours(GR_COOLDOWN_HOURS, fresh)
+            cool_until = now + timedelta(hours=cd_hours)
             await db.users.update_one(
                 {
                     "id": uid,
@@ -538,7 +542,7 @@ def register(router):
             "recent_attempt": recent_entry,
             "hitlist_event": hitlist_event,
             "jailed": go_to_jail,
-            "jail_seconds": GR_JAIL_SECONDS if go_to_jail else 0,
+            "jail_seconds": jail_sec if go_to_jail else 0,
             "jail_until": jail_until_iso,
             "attempts_total": attempts_total,
             "attempts_used": next_attempts_used,
@@ -551,7 +555,7 @@ def register(router):
             "cooldown_active": bool(is_last_attempt),
             "cooldown_until": cooldown_until_iso,
             "cooldown_remaining_seconds": _remaining_seconds(cool_until, now) if cool_until else 0,
-            "cooldown_hours": GR_COOLDOWN_HOURS if is_last_attempt else 0,
+            "cooldown_hours": cd_hours if is_last_attempt else 0,
             "total_spent": total_spent,
             "total_rewards_cash": total_rewards_cash,
             "total_rewards_bullets": total_rewards_bullets,

@@ -16,6 +16,7 @@ import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
+import { SystemAiInboxMessage, isSystemAiInbox } from '../../components/SystemAiInboxMessage';
 
 function hdTicketsCacheKey(statusFilter) {
   return `mafia_helpdesk_tickets_${statusFilter === '' || statusFilter == null ? 'all' : statusFilter}`;
@@ -28,7 +29,7 @@ const HD_STYLES = `
   .hd-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
-const ROLE_LABELS = { user: 'User', admin: 'Admin', mod: 'Mod', hdo: 'HDO' };
+const ROLE_LABELS = { user: 'User', admin: 'Admin', mod: 'Mod', hdo: 'HDO', system_ai: 'System AI' };
 
 export default function HelpDesk() {
   const [canManage, setCanManage] = useState(false);
@@ -599,10 +600,16 @@ export default function HelpDesk() {
                   <span className="text-[9px] font-heading font-bold text-primary uppercase">Replies</span>
                   {ticketDetail.replies.map((r, i) => (
                     <div key={i} className="pl-2 border-l-2 border-primary/30 py-1">
-                      <div className="text-[9px] text-mutedForeground">
-                        {r.author_username} <span className="text-primary/80">({ROLE_LABELS[r.author_role] || r.author_role})</span> · {formatDateTime(r.created_at)}
-                      </div>
-                      <div className="text-[11px] font-heading whitespace-pre-wrap mt-0.5">{r.body}</div>
+                      {isSystemAiInbox(r) || r.author_role === 'system_ai' ? (
+                        <SystemAiInboxMessage notification={{ ...r, message: r.body }} />
+                      ) : (
+                        <>
+                          <div className="text-[9px] text-mutedForeground">
+                            {r.author_username} <span className="text-primary/80">({ROLE_LABELS[r.author_role] || r.author_role})</span> · {formatDateTime(r.created_at)}
+                          </div>
+                          <div className="text-[11px] font-heading whitespace-pre-wrap mt-0.5">{r.body}</div>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>

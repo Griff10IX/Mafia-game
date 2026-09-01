@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown, Star, Eraser, Eye } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown, Star, Eraser, Eye, Bot } from 'lucide-react';
 import api, { apiGetWithResumeRetries, getApiErrorMessage, isTransientResumeLoadError, shouldSuppressResumeNetworkToast } from '../../utils/api';
 import {
   apiPostWithCivilianProtectionConfirm,
@@ -463,7 +463,34 @@ const ProfileInfoCard = ({
   const roleColor = isAdminProfile
     ? adminColor
     : (isModeratorProfile ? modColor : (isHdoProfile ? hdoColor : (isEntertainerProfile ? entColor : undefined)));
-  const allRows = [
+  const isSystemAi = Boolean(profile.system_ai);
+  const allRows = isSystemAi ? [
+    {
+      label: 'Username',
+      value: profile.username,
+      icon: UserIcon,
+      valueClass: 'text-amber-300 font-heading font-bold',
+    },
+    {
+      label: 'Type',
+      value: 'Artificial intelligence',
+      icon: Ghost,
+      valueClass: 'text-amber-200/90 font-heading',
+    },
+    {
+      label: 'Role',
+      value: profile.system_ai_role || 'House intelligence',
+      icon: Shield,
+      valueClass: 'text-amber-200 font-heading font-bold',
+    },
+    {
+      label: 'Status',
+      icon: Activity,
+      isStatus: true,
+      isDead: false,
+      status: profile.status || (profile.online ? 'online' : 'offline'),
+    },
+  ] : [
     { 
       label: 'Username', 
       value: profile.username, 
@@ -526,8 +553,7 @@ const ProfileInfoCard = ({
       } : {}),
     },
   ];
-  
-  // Check if user is a founding member
+
   const isFoundingMember = profile.founding_member || (profile.badges || []).includes('Founding Member');
   const isCustomBadge = profile.custom_profile_badge || (profile.badges || []).includes('Custom Profile Badge');
   const isWarRat = Boolean(profile.show_war_rat_badge) || (profile.badges || []).includes('Rat');
@@ -537,12 +563,16 @@ const ProfileInfoCard = ({
     : undefined;
   const hasCosmeticBorder = profile.profile_cosmetic_active && profile.profile_border_style;
   const isCustomBorder = hasCosmeticBorder && profile.profile_border_style === 'custom';
-  const dossierBorderClass = hasCosmeticBorder
-    ? (isCustomBorder ? 'border-2' : `border-2 prof-border-${profile.profile_border_style}`)
-    : 'border-2 border-primary/35';
-  const dossierBorderStyle = isCustomBorder
-    ? customGlowBorderStyle(profile.profile_name_glow_color)
-    : undefined;
+  const dossierBorderClass = isSystemAi
+    ? 'border-2 border-amber-400/45'
+    : (hasCosmeticBorder
+      ? (isCustomBorder ? 'border-2' : `border-2 prof-border-${profile.profile_border_style}`)
+      : 'border-2 border-primary/35');
+  const dossierBorderStyle = isSystemAi
+    ? { boxShadow: '0 0 28px rgba(251,191,36,0.18)' }
+    : (isCustomBorder
+      ? customGlowBorderStyle(profile.profile_name_glow_color)
+      : undefined);
   
   let profileRows = isStaffProfile
     ? allRows.filter((r) => r.label !== 'Status' && r.label !== 'Jailbusts')
@@ -555,14 +585,15 @@ const ProfileInfoCard = ({
   });
 
   const isRobotBodyguard = Boolean(profile.is_npc && profile.is_bodyguard);
-  const dossierAvatarUrl =
-    (typeof profile?.avatar_url === 'string' && profile.avatar_url.trim())
+  const dossierAvatarUrl = isSystemAi
+    ? (profile.profile_portrait_url || profile.avatar_url || '/images/system-ai-profile.jpg?v=5')
+    : ((typeof profile?.avatar_url === 'string' && profile.avatar_url.trim())
       ? profile.avatar_url.trim()
       : (isRobotBodyguard
         ? robotBodyguardAvatarUrl(profile.id || profile.username)
         : (!profile.is_npc
           ? defaultPlayerAvatarUrl(profile.id || profile.username)
-          : null));
+          : null)));
   const profileNotepadBg = profile.profile_notepad_color || null;
   const profileNotepadStyle = profileNotepadBg
     ? { backgroundColor: profileNotepadBg, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04)' }
@@ -573,7 +604,7 @@ const ProfileInfoCard = ({
       <div className="h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
       <div className="px-2.5 py-2 md:px-3 md:py-2.5 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border-b border-primary/25">
         <div className="flex items-start gap-2 md:gap-3 min-w-0">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-lg overflow-hidden border-2 border-primary/35 bg-secondary flex items-center justify-center shrink-0 ring-1 ring-black/25 shadow-inner">
+          <div className={`${isSystemAi ? 'w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24' : 'w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16'} rounded-lg overflow-hidden border-2 ${isSystemAi ? 'border-amber-400/50' : 'border-primary/35'} bg-secondary flex items-center justify-center shrink-0 ring-1 ${isSystemAi ? 'ring-amber-400/40' : 'ring-black/25'} shadow-inner`}>
             {dossierAvatarUrl ? (
               onAvatarPreview ? (
                 <button
@@ -582,10 +613,10 @@ const ProfileInfoCard = ({
                   className="w-full h-full p-0 border-0 bg-transparent cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-lg"
                   aria-label={`View ${profile.username} profile picture`}
                 >
-                  <img src={dossierAvatarUrl} alt="" className="w-full h-full object-cover pointer-events-none" />
+                  <img src={dossierAvatarUrl} alt="" className={`w-full h-full object-cover pointer-events-none ${isSystemAi ? 'object-[22%_14%]' : ''}`} />
                 </button>
               ) : (
-                <img src={dossierAvatarUrl} alt={`${profile.username} avatar`} className="w-full h-full object-cover" />
+                <img src={dossierAvatarUrl} alt={`${profile.username} avatar`} className={`w-full h-full object-cover ${isSystemAi ? 'object-[22%_14%]' : ''}`} />
               )
             ) : (
               <UserIcon size={26} className="text-mutedForeground" />
@@ -594,7 +625,7 @@ const ProfileInfoCard = ({
           <div className="min-w-0 flex-1 flex flex-col gap-1">
             <div className="flex items-center justify-between gap-2 min-w-0">
               <span className="text-[8px] md:text-[9px] font-heading font-bold text-primary uppercase tracking-[0.16em]">
-                Dossier
+                {isSystemAi ? 'System file' : 'Dossier'}
               </span>
               <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                 {profile.show_profile_view_count === true && profile.profile_view_count != null && (
@@ -691,7 +722,7 @@ const ProfileInfoCard = ({
                 </span>
               )}
             </div>
-            {!isMe && (
+            {!isMe && !isSystemAi && (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5">
                 <button
                   type="button"
@@ -727,7 +758,7 @@ const ProfileInfoCard = ({
       </div>
 
       {/* Staff actions: Lock, Unlock, Kill, Revive, Mute, Unmute, Activity log, Gambling log */}
-      {!isMe && staffViewerCaps && profile?.username && (
+      {!isMe && !isSystemAi && staffViewerCaps && profile?.username && (
         <>
           {!staffShellGateOk ? (
             <div className="px-2.5 py-1.5 md:px-3 bg-amber-950/35 border-b border-amber-600/30 text-[9px] font-heading text-amber-100/95 leading-snug">
@@ -882,7 +913,7 @@ const ProfileInfoCard = ({
       )}
 
       {/* Compact Honours + Properties (under stats, above notepad) */}
-      {showCompactHonoursAndProperties && (
+      {showCompactHonoursAndProperties && !isSystemAi && (
         <div className="border-t border-primary/15 bg-zinc-950/25">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 px-2.5 py-2 md:px-3 md:py-2">
             <div>
@@ -1072,7 +1103,7 @@ const ProfileInfoCard = ({
         <div className="border-t border-zinc-700/30" style={profileNotepadStyle}>
           <div className="px-3 py-2 md:px-4 bg-primary/8 border-b border-primary/20 text-center">
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
-              Account Created
+              {isSystemAi ? 'Commissioned' : 'Account Created'}
             </span>
           </div>
           <div className="px-3 py-2 md:px-4 md:py-2.5 text-foreground font-heading text-[11px] md:text-sm text-center">
@@ -1530,6 +1561,7 @@ export default function Profile() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
+  const [systemAiOnline, setSystemAiOnline] = useState(true);
   const [staffLoginSession, setStaffLoginSession] = useState(false);
   const [staffPortalEnabled, setStaffPortalEnabled] = useState(false);
   const [prefs, setPrefs] = useState(DEFAULT_NOTIFICATION_PREFERENCES);
@@ -1817,6 +1849,9 @@ export default function Profile() {
         setIsAdmin(!!adminRes.data?.is_admin);
         setIsModerator(!!adminRes.data?.is_moderator);
         setHasAdminEmail(!!adminRes.data?.has_admin_email);
+        if (typeof adminRes.data?.system_ai_online === 'boolean') {
+          setSystemAiOnline(!!adminRes.data.system_ai_online);
+        }
         setStaffLoginSession(!!adminRes.data?.staff_login_session);
         setStaffPortalEnabled(!!adminRes.data?.staff_portal_enabled);
       } catch (e) {
@@ -2352,12 +2387,36 @@ export default function Profile() {
     }
   };
 
+  const toggleSystemAiOnline = async () => {
+    const caps = hasAdminEmail;
+    if (caps && !staffLoginSession) {
+      toast.error('Use staff login (Staff entrance) for admin actions.');
+      navigate('/staff-entrance');
+      return;
+    }
+    if (caps && staffPortalEnabled && !isStaffPortalTokenValid()) {
+      toast.error('Enter the staff portal password first (unlock on a profile or open Admin).');
+      return;
+    }
+    try {
+      const res = await api.post('/admin/system-ai-online');
+      const enabled = res.data?.system_ai_online ?? false;
+      setSystemAiOnline(!!enabled);
+      toast.success(enabled ? 'System AI online — showing on Who\'s Around' : 'System AI offline — hidden from Who\'s Around');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to toggle System AI');
+    }
+  };
+
   const refetchAdmin = async () => {
     try {
       const r = await api.get('/auth/staff-flags');
       setIsAdmin(!!r.data?.is_admin);
       setIsModerator(!!r.data?.is_moderator);
       setHasAdminEmail(!!r.data?.has_admin_email);
+      if (typeof r.data?.system_ai_online === 'boolean') {
+        setSystemAiOnline(!!r.data.system_ai_online);
+      }
       setStaffLoginSession(!!r.data?.staff_login_session);
       setStaffPortalEnabled(!!r.data?.staff_portal_enabled);
       window.dispatchEvent(new CustomEvent('app:admin-changed'));
@@ -2648,7 +2707,9 @@ export default function Profile() {
       {isMe && !isPublicView ? (
         <p className="text-[9px] text-zinc-500 font-heading italic max-w-3xl mx-auto">Edit your profile text and settings.</p>
       ) : (
-        <p className="text-[9px] text-zinc-500 font-heading italic max-w-3xl mx-auto">Rank, family, honours and property.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic max-w-3xl mx-auto">
+          {profile.system_ai ? 'The house intelligence. Not a player.' : 'Rank, family, honours and property.'}
+        </p>
       )}
 
       {isMe && (
@@ -3298,6 +3359,30 @@ export default function Profile() {
                 </p>
               </div>
             )}
+            {hasAdminEmail && (
+              <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
+                <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1 md:gap-1.5">
+                    <Bot className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-400" />
+                    <span className="text-[9px] md:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">System AI online</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleSystemAiOnline}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${systemAiOnline ? 'bg-primary' : 'bg-secondary'}`}
+                    role="switch"
+                    aria-checked={!!systemAiOnline}
+                    title={systemAiOnline ? 'System AI is on Who\'s Around. Click to hide.' : 'System AI is hidden. Click to show online.'}
+                  >
+                    <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow ring-0 transition-transform ${systemAiOnline ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+                <p className="px-2.5 py-1.5 md:px-3 text-[9px] md:text-[10px] text-mutedForeground font-heading">
+                  When on, System AI appears on Who&apos;s Around as online. Off hides her from the list and shows Offline on her profile.
+                </p>
+              </div>
+            )}
             {hasAdminEmail ? (
             <>
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
@@ -3474,10 +3559,29 @@ export default function Profile() {
                 </div>
               </div>
             )}
+            {profile.system_ai && profile.profile_portrait_url ? (
+              <div className="relative rounded-lg overflow-hidden border-2 border-amber-400/35 shadow-[0_0_40px_rgba(251,191,36,0.16)]">
+                <img
+                  src={profile.profile_portrait_url}
+                  alt="System AI"
+                  className="w-full max-h-[28rem] object-cover object-top"
+                />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent px-4 py-3">
+                  <p className="text-[10px] font-heading font-bold uppercase tracking-[0.22em] text-amber-300">
+                    System AI
+                  </p>
+                  <p className="text-[11px] text-zinc-200 font-heading mt-0.5">
+                    House intelligence
+                  </p>
+                </div>
+              </div>
+            ) : null}
+            {!profile.system_ai ? (
             <SpotifyCard
               spotifyEmbedUrl={profile.spotify_embed_url}
               spotifyUrl={profile.spotify_url}
             />
+            ) : null}
             <ProfileInfoCard 
               profile={profile} 
               isMe={isMe}

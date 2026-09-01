@@ -329,23 +329,26 @@ def _prize_label(prize: Dict[str, Any]) -> str:
     return "prize"
 
 
-def _spin_status(user: dict) -> Dict[str, Any]:
+def _spin_status(user: dict, *, extra_daily_free: int = 0) -> Dict[str, Any]:
     now = datetime.now(timezone.utc)
     free_ok, free_next, free_secs = _free_available(user, now)
     paid_used = _paid_spins_used(user)
     bonus = max(0, int(user.get("wheel_bonus_free_spins") or 0))
+    extra_daily = max(0, int(extra_daily_free or 0))
     admin = _is_admin(user)
     if admin:
         free_ok = True
         free_next = None
         free_secs = None
         paid_remaining = 999
+        extra_daily = 0
     else:
         paid_remaining = max(0, WHEEL_PAID_SPINS_PER_DAY - paid_used)
     return {
-        "free_available": free_ok or bonus > 0,
+        "free_available": free_ok or bonus > 0 or extra_daily > 0,
         "daily_free_available": free_ok,
         "bonus_free_spins": bonus,
+        "extra_daily_free_spins": extra_daily,
         "free_next_at": free_next,
         "free_seconds_remaining": free_secs,
         "paid_spins_used_today": 0 if admin else paid_used,
@@ -431,6 +434,14 @@ def register(router):
     @router.get("/casino/wheel/config", dependencies=_casinos_rl_u)
     async def wheel_config(current_user: dict = Depends(get_current_user_verified)):
         user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0}) or current_user
+        extra_daily = 0
+        try:
+            from utils.loot_exclusive_540k import user_owns as _owns_540k, wheel_free_remaining
+
+            if await _owns_540k(db, user.get("id") or ""):
+                extra_daily = wheel_free_remaining(user)
+        except Exception:
+            extra_daily = 0
         wedges = [
             {
                 "id": s["id"],
@@ -446,7 +457,7 @@ def register(router):
             "wedges": wedges,
             "segment_count": len(WHEEL_SEGMENTS),
             "recent_wins": await _recent_wheel_wins(),
-            **_spin_status(user),
+            **_spin_status(user, extra_daily_free=extra_daily),
         }
 
     @router.post("/casino/wheel/spin", dependencies=_casinos_rl_u)
@@ -485,6 +496,17 @@ def register(router):
         if pay == "free":
             bonus = max(0, int(user.get("wheel_bonus_free_spins") or 0))
             free_ok, free_next, _ = _free_available(user, now)
+            extra_daily = 0
+            owns_540k = False
+            try:
+                from utils.loot_exclusive_540k import user_owns as _owns_540k, wheel_free_remaining, consume_wheel_free
+
+                owns_540k = await _owns_540k(db, uid)
+                if owns_540k:
+                    extra_daily = wheel_free_remaining(user, now)
+            except Exception:
+                owns_540k = False
+                extra_daily = 0
             if admin:
                 # Admins: unlimited free spins; do not touch cooldown or bonus bank
                 pass
@@ -492,6 +514,12 @@ def register(router):
                 # Store GBP bonus spins: consume bank first (does not start 24h cooldown)
                 inc["wheel_bonus_free_spins"] = int(inc.get("wheel_bonus_free_spins") or 0) - 1
                 filt["wheel_bonus_free_spins"] = {"$gte": 1}
+            elif extra_daily > 0 and owns_540k:
+                extra_set, extra_inc, extra_filt = consume_wheel_free(user, now)
+                set_doc.update(extra_set)
+                for k, v in extra_inc.items():
+                    inc[k] = int(inc.get(k) or 0) + int(v)
+                filt.update(extra_filt)
             elif free_ok:
                 set_doc["wheel_last_free_spin_at"] = now.isoformat()
                 # Race: only one free within cooldown window
@@ -615,7 +643,15 @@ def register(router):
             )
 
         refreshed = await db.users.find_one({"id": uid}, {"_id": 0}) or user
-        status = _spin_status(refreshed)
+        extra_after = 0
+        try:
+            from utils.loot_exclusive_540k import user_owns as _owns_540k_after, wheel_free_remaining as _wheel_rem
+
+            if await _owns_540k_after(db, uid):
+                extra_after = _wheel_rem(refreshed)
+        except Exception:
+            extra_after = 0
+        status = _spin_status(refreshed, extra_daily_free=extra_after)
         return {
             "segment_index": segment_index,
             "segment_id": segment["id"],

@@ -337,10 +337,25 @@ async def ensure_all_indexes(db):
         await db.sports_betting_ownership.create_index("id", unique=True)
         await db.sports_betting_weekly.create_index("week_key", unique=True)
 
-        # --- Casino ownership: city/state + owner_id (roulette, dice, horseracing, video poker, blackjack, slots) ---
+        # --- Casino ownership: one row per city (roulette, dice, horseracing, video poker, blackjack) ---
         for coll_name in ("dice_ownership", "roulette_ownership", "blackjack_ownership", "horseracing_ownership", "videopoker_ownership"):
-            await db[coll_name].create_index("city")
-            await db[coll_name].create_index("owner_id")
+            coll = db[coll_name]
+            try:
+                info = await coll.index_information()
+                city_idx = info.get("city_1") or {}
+                if city_idx and not city_idx.get("unique"):
+                    await coll.drop_index("city_1")
+            except Exception:
+                pass
+            try:
+                await coll.create_index("city", unique=True)
+            except Exception as e:
+                logger.warning("%s unique city index: %s", coll_name, e)
+                try:
+                    await coll.create_index("city")
+                except Exception:
+                    pass
+            await coll.create_index("owner_id")
         await db.slots_ownership.create_index("state")
         await db.slots_ownership.create_index("owner_id")
         await db.slots_entries.create_index("state", unique=True)
@@ -1008,6 +1023,7 @@ async def ensure_all_indexes(db):
             await db.mdg_games.create_index([("is_automated", 1), ("status", 1)])
             await db.mdg_games.create_index([("cycle_id", 1), ("status", 1)])
             await db.mdg_house_stats.create_index([("id", 1)], unique=True)
+            await db.mdg_join_guards.create_index("user_id", unique=True)
         except Exception as e:
             logger.warning("mdg indexes: %s", e)
 

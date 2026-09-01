@@ -38,6 +38,10 @@ async def build_staff_flags_payload(db, current_user: Dict[str, Any]) -> Dict[st
         "admin_preview_as_mod": preview_active,
         "admin_preview_as_mod_seconds_remaining": admin_mod_preview_seconds_remaining(current_user),
     }
+    if has_admin_email:
+        from utils.system_ai_inbox import is_system_ai_shown_online
+
+        out["system_ai_online"] = await is_system_ai_shown_online(db)
     if is_moderator:
         doc = await db.game_settings.find_one({"key": "mod_visible_category_ids"}, {"_id": 0, "value": 1})
         raw = doc.get("value") if doc else None

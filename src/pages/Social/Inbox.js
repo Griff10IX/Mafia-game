@@ -9,6 +9,7 @@ import { NotificationMessage } from '../../components/NotificationMessage';
 import { StaffBotAlertMessage, staffBotAlertPreview } from '../../components/StaffBotAlertMessage';
 import { RewardInboxMessage, parseRewardInboxMessage, rewardInboxPreview } from '../../components/RewardInboxMessage';
 import { StructuredInboxMessage, structuredInboxPreview } from '../../components/StructuredInboxMessage';
+import { SystemAiInboxMessage, isSystemAiInbox, systemAiInboxPreview, SYSTEM_AI_AVATAR } from '../../components/SystemAiInboxMessage';
 import {
   INBOX_STYLES,
   IB_ACTION_GO,
@@ -99,7 +100,8 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, isSent }) =
   const timeAgo = getTimeAgo(notification.created_at);
   const recipient = isSent ? sentRecipient(notification) : null;
   const listPreview =
-    (notification.notification_type === 'staff_bot_client' && staffBotAlertPreview(notification.message))
+    (isSystemAiInbox(notification) && systemAiInboxPreview(notification.message))
+    || (notification.notification_type === 'staff_bot_client' && staffBotAlertPreview(notification.message))
     || rewardInboxPreview(notification.message)
     || structuredInboxPreview(notification.message);
 
@@ -134,6 +136,12 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, isSent }) =
       <div className={`p-1 rounded shrink-0 ${isSent ? 'bg-primary/20' : 'bg-secondary/50'}`}>
         {isSent ? (
           <Send size={12} className="text-primary" />
+        ) : isSystemAiInbox(notification) ? (
+          <img
+            src={notification.avatar_url || SYSTEM_AI_AVATAR}
+            alt=""
+            className="w-5 h-5 rounded-full object-cover"
+          />
         ) : (
           <Icon size={12} className={notification.read ? 'text-mutedForeground' : vis.icon} />
         )}
@@ -205,9 +213,17 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
       <div className="px-2.5 py-2 border-b border-primary/20 bg-primary/8">
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex items-start gap-2">
-            <div className={`p-1.5 rounded-md ${isSent ? 'bg-primary/10 border border-primary/20' : 'bg-secondary/50'}`}>
-              <Icon size={16} className={isSent ? 'text-primary' : vis.icon} />
-            </div>
+            {notification.avatar_url ? (
+              <img
+                src={notification.avatar_url}
+                alt=""
+                className="w-10 h-10 rounded-full object-cover border border-primary/30 shrink-0"
+              />
+            ) : (
+              <div className={`p-1.5 rounded-md ${isSent ? 'bg-primary/10 border border-primary/20' : 'bg-secondary/50'}`}>
+                <Icon size={16} className={isSent ? 'text-primary' : vis.icon} />
+              </div>
+            )}
             <div>
               <h2 className="text-xs font-heading font-bold text-foreground mb-0.5">
                 {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
@@ -265,13 +281,15 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
             />
           ) : notification.notification_type === 'staff_bot_client' ? (
             <StaffBotAlertMessage message={notification.message} />
+          ) : isSystemAiInbox(notification) ? (
+            <SystemAiInboxMessage notification={notification} />
           ) : parseRewardInboxMessage(notification.message) ? (
             <RewardInboxMessage message={notification.message} visual={vis} />
           ) : (
             <StructuredInboxMessage notification={notification} visual={vis} />
           )}
 
-          {notification.gif_url && (
+          {notification.gif_url && !isSystemAiInbox(notification) && (
             <div className="mt-2">
               <img
                 src={notification.gif_url}

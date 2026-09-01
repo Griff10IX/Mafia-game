@@ -6,6 +6,22 @@ import api from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 import { formatGameDateTime } from '../../utils/gameDateTime';
 
+function extractBanCodePayload(data) {
+  const codeName = String(data?.ban_code_name || '').trim();
+  if (
+    codeName
+    && Object.prototype.hasOwnProperty.call(data || {}, codeName)
+    && typeof data[codeName] === 'string'
+    && data[codeName].trim().length >= 16
+  ) {
+    return {
+      ban_code_name: codeName,
+      [codeName]: data[codeName].trim(),
+    };
+  }
+  return {};
+}
+
 const DURATIONS = [
   { hours: 12, label: '12 hours' },
   { hours: 24, label: '1 day' },
@@ -35,6 +51,7 @@ const NOTICE = (
 
 export default function GamblingBan() {
   const [status, setStatus] = useState(null);
+  const [banCodePayload, setBanCodePayload] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [durationHours, setDurationHours] = useState(24);
@@ -44,10 +61,13 @@ export default function GamblingBan() {
   const load = useCallback(async () => {
     try {
       const res = await api.get('/account/gambling-self-ban');
-      setStatus(res.data || null);
+      const data = res.data || null;
+      setStatus(data);
+      setBanCodePayload(extractBanCodePayload(data));
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load gambling ban status');
       setStatus(null);
+      setBanCodePayload({});
     } finally {
       setLoading(false);
     }
@@ -79,12 +99,18 @@ export default function GamblingBan() {
   const activate = async () => {
     setSaving(true);
     try {
-      const res = await api.post('/account/gambling-self-ban', { duration_hours: durationHours });
-      setStatus(res.data || null);
+      const res = await api.post('/account/gambling-self-ban', {
+        duration_hours: durationHours,
+        ...banCodePayload,
+      });
+      const data = res.data || null;
+      setStatus(data);
+      setBanCodePayload(extractBanCodePayload(data));
       setConfirmStep(false);
       toast.success('Gambling self-exclusion is now active.');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to start gambling ban');
+      load();
     } finally {
       setSaving(false);
     }

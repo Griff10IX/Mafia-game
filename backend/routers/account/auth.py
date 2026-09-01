@@ -800,6 +800,7 @@ def register(router):
                 "tutorial_rewards_granted": False,
                 "tutorial_ineligible_reason": None,
                 "loot_box_free_rare_opens": 0,
+                "loot_box_free_ultra_opens": 0,
                 # Rank-XP pass (£15): entitlement is unactivated until used in Armoury.
                 "rank_xp_pass_tokens": 0,
                 "rank_xp_pass_bonus_until": None,
@@ -2384,6 +2385,7 @@ def register(router):
             if ref_ids:
                 referred_by_username = ", ".join(id_to_ref_name.get(i, "?") for i in ref_ids)
                 referred_by_legacy = ref_ids[0]
+            from utils.bank_economy_settings import personal_interest_limit, INTEREST_LIMIT_START
             return UserResponse(
                 id=str(u["id"]),
                 email="",
@@ -2441,6 +2443,8 @@ def register(router):
                 created_at=str(u.get("created_at") or datetime.now(timezone.utc).isoformat()),
                 swiss_balance=_safe_int(u.get("swiss_balance"), 0),
                 swiss_limit=_safe_int(u.get("swiss_limit"), SWISS_BANK_LIMIT_START),
+                interest_limit_upgrades=_safe_int(u.get("interest_limit_upgrades"), 0),
+                interest_limit=personal_interest_limit(u, INTEREST_LIMIT_START),
                 oc_timer_reduced=bool(u.get("oc_timer_reduced", False)),
                 crew_oc_timer_reduced=bool(u.get("crew_oc_timer_reduced", False)),
                 admin_ghost_mode=bool(u.get("admin_ghost_mode", False)),
@@ -2455,6 +2459,7 @@ def register(router):
                 account_locked_until=u.get("account_locked_until"),
                 account_locked_comment=u.get("account_locked_comment"),
                 can_submit_comment=bool(u.get("account_locked", False)) and not u.get("account_locked_comment"),
+                system_ai_lock=bool(u.get("system_ai_lock", False)),
                 email_verified=bool(u.get("email_verified", True)),
                 require_email_verification=await require_email_verification_enabled(db),
                 respect_points=_safe_int(u.get("respect_points"), 0),
@@ -2582,6 +2587,7 @@ def register(router):
                 tutorial_rewards_granted=bool(u.get("tutorial_rewards_granted", False)),
                 tutorial_ineligible_reason=u.get("tutorial_ineligible_reason"),
                 loot_box_free_rare_opens=_safe_int(u.get("loot_box_free_rare_opens"), 0),
+                loot_box_free_ultra_opens=_safe_int(u.get("loot_box_free_ultra_opens"), 0),
             )
         except HTTPException:
             raise

@@ -1,5 +1,6 @@
 @echo off
 REM Refresh the "FAQs" forum topic from docs/FORUM_FAQ.md on the LIVE server (Mongo update).
+REM Does not take the site down, so the downtime page is not shown.
 REM Like push-live.bat: SSH to the app host, sync repo, run backend/seeds/update_faq_topic.py
 REM
 REM Prerequisite: commit and PUSH your FAQ changes to origin/MAfiaGame2 so the server can pull them.

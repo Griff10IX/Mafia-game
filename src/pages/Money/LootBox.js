@@ -1056,8 +1056,11 @@ export default function LootBox() {
     const pieces = status?.loot_box_pieces ?? 0;
     const cost = resolveOpenCost(status, selectedTier);
     const freeRare = Number(status?.loot_box_free_rare_opens || 0);
+    const freeUltra = Number(status?.loot_box_free_ultra_opens || 0);
     const canUseFreeRare = selectedTier === 'rare' && freeRare > 0;
-    if (pieces < cost && !canUseFreeRare) return;
+    const canUseFreeUltra = selectedTier === 'ultra_rare' && freeUltra > 0;
+    const canUseFree = canUseFreeRare || canUseFreeUltra;
+    if (pieces < cost && !canUseFree) return;
     setResult(null);
     setOpenAnimLevel(0);
     setPhase('shaking');
@@ -1075,13 +1078,14 @@ export default function LootBox() {
       setPhase('done');
       setResult(apiData);
       // Clear FREE UI immediately when voucher burned (don't wait on status round-trip).
-      if (apiData?.used_free_rare_open || typeof apiData?.loot_box_free_rare_opens === 'number') {
+      if (apiData?.used_free_rare_open || apiData?.used_free_ultra_open || typeof apiData?.loot_box_free_rare_opens === 'number' || typeof apiData?.loot_box_free_ultra_opens === 'number') {
         setStatus((prev) => {
           if (!prev) return prev;
           const next = {
             ...prev,
             loot_box_pieces: apiData.new_pieces ?? prev.loot_box_pieces,
-            loot_box_free_rare_opens: Number(apiData.loot_box_free_rare_opens ?? 0),
+            loot_box_free_rare_opens: Number(apiData.loot_box_free_rare_opens ?? prev.loot_box_free_rare_opens ?? 0),
+            loot_box_free_ultra_opens: Number(apiData.loot_box_free_ultra_opens ?? prev.loot_box_free_ultra_opens ?? 0),
           };
           _cachedLootStatus = next;
           return next;
@@ -1093,7 +1097,10 @@ export default function LootBox() {
     } catch (e) {
       setPhase('idle');
       setOpenAnimLevel(0);
-      if (isCivilianProtectionConfirmCancelled(e)) return;
+      if (isCivilianProtectionConfirmCancelled(e)) {
+        toast.error('You have to confirm the new-account protection warning to open a box.');
+        return;
+      }
       const detail = getApiErrorMessage(e) || e.message || 'Failed to open loot box';
       if (process.env.NODE_ENV === 'development') {
         console.error('[Loot box open failed]', {
@@ -1113,10 +1120,11 @@ export default function LootBox() {
 
   const pieces = status?.loot_box_pieces ?? 0;
   const freeRareOpens = Number(status?.loot_box_free_rare_opens || 0);
+  const freeUltraOpens = Number(status?.loot_box_free_ultra_opens || 0);
   const tierCost = resolveOpenCost(status, selectedTier);
   const tierTheme = LOOT_TIER_THEME[selectedTier] || LOOT_TIER_THEME.common;
-  const claimed = status?.claimed_counts ?? { weapon: 0, car: 0, car_sj: 0, armour: 0, property: 0, weed_strain: 0 };
-  const exclusiveCaps = status?.exclusive_caps ?? { weapon: 1, car: 1, car_sj: 1, armour: 1, property: 1, weed_strain: 5 };
+  const claimed = status?.claimed_counts ?? { weapon: 0, car: 0, car_sj: 0, car_540k: 0, armour: 0, property: 0, weed_strain: 0 };
+  const exclusiveCaps = status?.exclusive_caps ?? { weapon: 1, car: 1, car_sj: 1, car_540k: 1, armour: 1, property: 1, weed_strain: 5 };
   const reclaimableCatalog = status?.reclaimable_passives_catalog ?? [];
   const reclaimableLive = status?.reclaimable_passives ?? [];
   const reclaimableById = Object.fromEntries(
@@ -1125,7 +1133,9 @@ export default function LootBox() {
   const ownedRelicIds = new Set(status?.owned_reclaimable_passive_ids || []);
   const ownedRelics = reclaimableCatalog.filter((r) => ownedRelicIds.has(r.id));
   const canUseFreeRare = selectedTier === 'rare' && freeRareOpens > 0;
-  const canOpen = (pieces >= tierCost || canUseFreeRare) && phase === 'idle';
+  const canUseFreeUltra = selectedTier === 'ultra_rare' && freeUltraOpens > 0;
+  const canUseFree = canUseFreeRare || canUseFreeUltra;
+  const canOpen = (pieces >= tierCost || canUseFree) && phase === 'idle';
 
   const last10 = status?.last_10_wins ?? [];
 
@@ -1145,29 +1155,31 @@ export default function LootBox() {
               {Number(status?.exclusive_car_weekly_loot?.pieces) > 0 && (
                 <p className="text-[9px] text-violet-300/90 font-heading mt-1">
                   Exclusive cars: +{Number(status.exclusive_car_weekly_loot.pieces).toLocaleString()} loot pieces / week
-                  {status.exclusive_car_weekly_loot.capped ? ` (cap ${Number(status.exclusive_car_weekly_loot.cap || 25)})` : ''}
+                  {status.exclusive_car_weekly_loot.capped ? ` (cap ${Number(status.exclusive_car_weekly_loot.cap || 128)})` : ''}
                   {(status.exclusive_car_weekly_loot.cars || []).length > 0
                     ? ` — ${(status.exclusive_car_weekly_loot.cars || []).map((c) => `${c.name} +${c.pieces}`).join(', ')}`
                     : ''}
                   . Credits Monday UTC.
                 </p>
               )}
-              {(tutorialLoot || freeRareOpens > 0) ? (
+              {(tutorialLoot || freeRareOpens > 0 || freeUltraOpens > 0) ? (
                 <div
                   className="mt-2 rounded-md border px-2.5 py-2"
                   style={{
-                    borderColor: freeRareOpens > 0 ? 'rgba(96,165,250,0.45)' : 'rgba(161,161,170,0.35)',
-                    background: freeRareOpens > 0 ? 'rgba(59,130,246,0.12)' : 'rgba(39,39,42,0.5)',
+                    borderColor: (freeRareOpens > 0 || freeUltraOpens > 0) ? 'rgba(96,165,250,0.45)' : 'rgba(161,161,170,0.35)',
+                    background: (freeRareOpens > 0 || freeUltraOpens > 0) ? 'rgba(59,130,246,0.12)' : 'rgba(39,39,42,0.5)',
                   }}
                   data-testid="lootbox-free-rare-callout"
                 >
                   <p className="text-[10px] font-heading font-bold uppercase tracking-wider text-blue-300">
-                    {freeRareOpens > 0 ? 'Free Rare box ready' : 'Tutorial loot'}
+                    {freeUltraOpens > 0 ? 'Free Ultra Rare box ready' : (freeRareOpens > 0 ? 'Free Rare box ready' : 'Tutorial loot')}
                   </p>
                   <p className="text-[10px] font-heading text-zinc-300 mt-0.5 leading-snug">
-                    {freeRareOpens > 0
-                      ? `Open Rare once for free (${freeRareOpens} voucher${freeRareOpens === 1 ? '' : 's'}). After that, Rare costs ${fmtInt(resolveOpenCost(status, 'rare'))} pieces.`
-                      : 'Your free Rare voucher was already used. Select Rare and spend pieces for another open.'}
+                    {freeUltraOpens > 0
+                      ? `Open Ultra Rare once for free (${freeUltraOpens} voucher${freeUltraOpens === 1 ? '' : 's'}). New-account protection still asks you to confirm first.`
+                      : (freeRareOpens > 0
+                        ? `Open Rare once for free (${freeRareOpens} voucher${freeRareOpens === 1 ? '' : 's'}). After that, Rare costs ${fmtInt(resolveOpenCost(status, 'rare'))} pieces.`
+                        : 'Your free Rare voucher was already used. Select Rare and spend pieces for another open.')}
                   </p>
                 </div>
               ) : null}
@@ -1180,7 +1192,7 @@ export default function LootBox() {
               {PAID_TIERS.map((t) => {
                 const th = LOOT_TIER_THEME[t];
                 const cost = resolveOpenCost(status, t);
-                const afford = pieces >= cost;
+                const afford = pieces >= cost || (t === 'rare' && freeRareOpens > 0) || (t === 'ultra_rare' && freeUltraOpens > 0);
                 const selected = selectedTier === t;
                 return (
                   <button
@@ -1197,6 +1209,7 @@ export default function LootBox() {
                     </div>
                     <div className="text-[8px] text-mutedForeground font-heading">
                       {t === 'rare' && freeRareOpens > 0 ? 'FREE open available · ' : ''}
+                      {t === 'ultra_rare' && freeUltraOpens > 0 ? 'FREE open available · ' : ''}
                       {fmtInt(cost)} pieces · {th.prizeHint}
                     </div>
                     <div className="text-[7px] text-mutedForeground/90 font-heading italic mt-0.5 leading-tight">{th.tagline}</div>
@@ -1231,6 +1244,9 @@ export default function LootBox() {
                     <span className="text-[10px] text-mutedForeground font-heading">/{fmtInt(tierCost)}</span>
                   </div>
                   <p className="text-[9px] text-mutedForeground font-heading italic mt-0.5">pieces for this tier</p>
+                  <Link to="/game/store?tab=loot" className="text-[9px] font-heading text-primary underline mt-1 inline-block">
+                    Buy pieces in Store
+                  </Link>
                 </div>
                 <PiecesBar pieces={pieces} cost={tierCost} />
                 <button
@@ -1249,7 +1265,7 @@ export default function LootBox() {
                     : phase === 'exploding'
                       ? 'THE VAULT OPENS…'
                       : canOpen
-                        ? (canUseFreeRare
+                        ? (canUseFree
                           ? `OPEN FREE ${tierTheme.label.toUpperCase()} BOX`
                           : `OPEN ${tierTheme.label.toUpperCase()} — ${fmtInt(tierCost)} PIECES`)
                         : `${fmtInt(Math.max(0, tierCost - pieces))} PIECES NEEDED`}
@@ -1266,14 +1282,16 @@ export default function LootBox() {
               </div>
               <div className="p-1.5">
                 <p className="text-[9px] text-mutedForeground font-heading italic text-center mb-1">
-                  Each row is how many exist worldwide vs the cap for that reward (you can still only hold one of each yourself).
+                  Each row is how many exist worldwide vs the cap for that reward (you can still only hold one of each yourself). Exclusive cars ignore admin and mod copies.
                 </p>
                 <p className="text-[9px] text-amber-200/90 font-heading italic text-center mb-1.5 leading-snug">
                   Loot exclusives are not guaranteed—each vault opening is chance-based, and exclusives still depend on availability and global caps.
                 </p>
                 <ul className="list-none p-0 m-0 flex flex-col gap-0.5">
                   <ScarcityRow icon={Swords} label="Exclusive Weapon" claimed={claimed.weapon} cap={exclusiveCaps.weapon} />
+                  <ScarcityRow icon={Car} label="Cadillac V-16 (exclusive pool)" claimed={claimed.car} cap={exclusiveCaps.car} />
                   <ScarcityRow icon={Car} label="Model SJ (Rare 5% / UR 10%)" claimed={claimed.car_sj} cap={exclusiveCaps.car_sj ?? 1} />
+                  <ScarcityRow icon={Car} label="540K (Ultra Rare only)" claimed={claimed.car_540k} cap={exclusiveCaps.car_540k ?? 1} />
                   <ScarcityRow icon={Shield} label="Exclusive Armour" claimed={claimed.armour} cap={exclusiveCaps.armour} />
                   <ScarcityRow icon={Building2} label="Speakeasy" claimed={claimed.property} cap={exclusiveCaps.property} />
                   <ScarcityRow icon={Leaf} label="Weed Empire specials" claimed={claimed.weed_strain} cap={exclusiveCaps.weed_strain} />

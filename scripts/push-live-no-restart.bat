@@ -1,6 +1,7 @@
 @echo off
 REM Double-click to push updates and deploy live WITHOUT restarting the backend
 REM Optional: push-live-no-restart.bat "Your commit message"
+REM Optional: --updating "Casino tables"  (used only if the server still restarts the API)
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0.."
 
@@ -8,7 +9,22 @@ set "SSH_PASSWORD=Ka?dz5Z6MK?h#4t"
 set "UI=%~dp0_deploy-ui.bat"
 call "%UI%" INIT
 
-if "%~1"=="" (set "msg=Update") else (set "msg=%~1")
+set "msg=Update"
+set "MAINT_BY=system_ai"
+set "MAINT_WHAT=the game"
+
+:parse_args
+if "%~1"=="" goto args_done
+if /i "%~1"=="--updating" goto parse_updating
+set "msg=%~1"
+shift
+goto parse_args
+:parse_updating
+if not "%~2"=="" set "MAINT_WHAT=%~2"
+shift
+shift
+goto parse_args
+:args_done
 
 call "%UI%" HEADER "MAFIA WARS - DEPLOY (NO API RESTART)" "Frontend rebuild only - backend process unchanged"
 
@@ -33,7 +49,7 @@ call "%UI%" OK "mafia2 updated"
 call "%UI%" STEP 5 6 "Deploy on live server (SSH)"
 call "%UI%" INFO "Atomic frontend build - backend NOT restarted"
 echo.
-plink -batch -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && export MAFIA_DEPLOY_ASCII=1 && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; bash scripts/deploy-after-pull.sh"
+plink -batch -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && export MAFIA_DEPLOY_ASCII=1 && export MAFIA_MAINT_BY=!MAINT_BY! && export MAFIA_MAINT_WHAT='!MAINT_WHAT!' && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; bash scripts/deploy-after-pull.sh"
 if errorlevel 1 (call "%UI%" FAIL "Remote deploy failed" & goto END)
 call "%UI%" OK "Server deploy finished"
 

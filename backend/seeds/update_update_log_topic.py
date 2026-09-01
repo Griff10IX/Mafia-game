@@ -51,8 +51,10 @@ def _load_update_log_content() -> str:
 def main():
     mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
     client = MongoClient(mongo_url)
-    db_name = os.environ.get("MONGO_DB", "mafia")
+    # Same database as server.py (live game is DB_NAME=mafia_game, not MONGO_DB=mafia).
+    db_name = (os.environ.get("DB_NAME") or os.environ.get("MONGO_DB") or "mafia_game").strip()
     db = client[db_name]
+    print(f"Using database '{db_name}'")
 
     body = _load_update_log_content()
     entries = parse_update_log_entries(body)

@@ -241,6 +241,11 @@ def register(router):
             return (2, -u.get("rank_points", 0))
         users_data.sort(key=_sort_key)
 
+        from utils.system_ai_inbox import is_system_ai_shown_online, system_ai_roster_item
+
+        if await is_system_ai_shown_online(db):
+            users_data.insert(0, system_ai_roster_item())
+
         admin_color_doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
         admin_online_color = (admin_color_doc.get("value") or "#a78bfa") if admin_color_doc else "#a78bfa"
         if not isinstance(admin_online_color, str) or not admin_online_color.strip():

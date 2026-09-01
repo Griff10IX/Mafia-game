@@ -1,5 +1,6 @@
 @echo off
 REM Refresh the "Update Log" forum topic from docs/UPDATE_LOG.md on the LIVE server (Mongo update).
+REM Does not take the site down, so the downtime page is not shown.
 REM Like push-live.bat: SSH to the app host, sync repo, run backend/seeds/update_update_log_topic.py
 REM
 REM Prerequisite: commit and PUSH your update log changes to origin/MAfiaGame2 so the server can pull them.
@@ -23,13 +24,13 @@ if /i "%~1"=="python" goto RUNPYTHON
 
 echo [1/2] Server: git fetch + reset to origin/MAfiaGame2, then update Update Log topic...
 echo.
-plink -batch -pw "%SSH_PASSWORD%" %SSH_HOST% "cd %APP_DIR% && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup-updatelog) && git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup-updatelog ] && cp /tmp/env-backup-updatelog backend/.env) && if [ -x backend/venv/bin/python ]; then backend/venv/bin/python backend/seeds/update_update_log_topic.py; else python3 backend/seeds/update_update_log_topic.py; fi"
+plink -batch -pw "%SSH_PASSWORD%" %SSH_HOST% "cd %APP_DIR% && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup-updatelog) && git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup-updatelog ] && cp /tmp/env-backup-updatelog backend/.env) && DBVAL=$(grep DB_NAME= backend/.env | head -1 | cut -d= -f2- | tr -d '\"') && if [ -x backend/venv/bin/python ]; then MONGO_DB=$DBVAL DB_NAME=$DBVAL backend/venv/bin/python backend/seeds/update_update_log_topic.py; else MONGO_DB=$DBVAL DB_NAME=$DBVAL python3 backend/seeds/update_update_log_topic.py; fi"
 goto DONE
 
 :RUNPYTHON
 echo [1/1] Server: running update_update_log_topic.py only (no git sync)...
 echo.
-plink -batch -pw "%SSH_PASSWORD%" %SSH_HOST% "cd %APP_DIR% && if [ -x backend/venv/bin/python ]; then backend/venv/bin/python backend/seeds/update_update_log_topic.py; else python3 backend/seeds/update_update_log_topic.py; fi"
+plink -batch -pw "%SSH_PASSWORD%" %SSH_HOST% "cd %APP_DIR% && DBVAL=$(grep DB_NAME= backend/.env | head -1 | cut -d= -f2- | tr -d '\"') && if [ -x backend/venv/bin/python ]; then MONGO_DB=$DBVAL DB_NAME=$DBVAL backend/venv/bin/python backend/seeds/update_update_log_topic.py; else MONGO_DB=$DBVAL DB_NAME=$DBVAL python3 backend/seeds/update_update_log_topic.py; fi"
 
 :DONE
 echo.

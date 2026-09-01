@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from pymongo import ReturnDocument, UpdateOne
 
 from utils.family_perks import family_perk_modifiers
+from utils.game_pass_micro_rewards import apply_game_pass_wait_seconds
 from utils.garage_dealership import (
     GARAGE_DEALERSHIP_CLAIM_COST_POINTS,
     GARAGE_DEALERSHIP_ID,
@@ -102,6 +103,8 @@ class GTAMeltRequest(BaseModel):
     captcha_token: Optional[str] = None
     # True = Garage: process all selected car_ids (cap GARAGE_BATCH_LIMIT_MAX) with only `action`. False = Auto Rank batch rules.
     manual_garage: bool = True
+    # Garage Melt/Scrap rarity ticks. Server-enforced so exclusives cannot melt when unticked.
+    rarity_ids: Optional[List[str]] = None
 
 
 class GTABuyCarRequest(BaseModel):
@@ -615,6 +618,12 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
         ).to_list(len(option_ids)),
         get_effective_event(),
     )
+    gta_cd_off = 0
+    try:
+        rpm = await family_perk_modifiers(db, current_user.get("family_id"))
+        gta_cd_off = int(rpm.get("gta_seconds_off") or 0)
+    except Exception:
+        pass
     _climate = get_location_climate()
     climate_mult = success_multiplier_for_actor(current_user.get("current_state"), _climate)
     event_mult = float((ev or {}).get("gta_success", 1.0) or 1.0)
@@ -646,6 +655,8 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
             (r["name"] for r in RANKS if r["id"] == opt["min_rank"]),
             f"Rank {opt['min_rank']}",
         )
+        row["cooldown"] = apply_game_pass_wait_seconds(max(1, int(opt["cooldown"]) - gta_cd_off), current_user)
+        row["jail_time"] = apply_game_pass_wait_seconds(int(opt["jail_time"]), current_user)
         row["cooldown_until"] = global_cooldown_until
         row["attempts"] = attempts
         row["successes"] = successes
@@ -712,6 +723,7 @@ async def _attempt_gta_impl(
     except Exception:
         pass
     cd_sec = max(1, int(option["cooldown"]) - gta_cd_off)
+    cd_sec = apply_game_pass_wait_seconds(cd_sec, current_user)
     cooldown_until = now + timedelta(seconds=cd_sec)
     cooldown_iso = cooldown_until.isoformat()
 
@@ -1088,12 +1100,13 @@ async def _attempt_gta_impl(
     # Failure: sometimes caught (jail), sometimes get away (no car, no jail)
     caught = _rng.random() < GTA_CAUGHT_CHANCE
     if caught:
-        jail_until = datetime.now(timezone.utc) + timedelta(seconds=option["jail_time"])
+        jail_sec = apply_game_pass_wait_seconds(int(option["jail_time"]), current_user)
+        jail_until = datetime.now(timezone.utc) + timedelta(seconds=jail_sec)
         await db.users.update_one(
             {"id": current_user.get("id") or ""},
             {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "snitch_attempted_this_term": False}},
         )
-        fail_msg = _rng.choice(GTA_FAIL_CAUGHT_MESSAGES).format(seconds=option["jail_time"])
+        fail_msg = _rng.choice(GTA_FAIL_CAUGHT_MESSAGES).format(seconds=jail_sec)
         return _spawn_and_return(
             GTAAttemptResponse(
                 success=False,
@@ -1139,11 +1152,24 @@ async def attempt_gta_locked(
         )
 
 
-async def melt_cars_locked(user: dict, car_ids: list, action: str, *, manual_garage: bool = False) -> dict:
+async def melt_cars_locked(
+    user: dict,
+    car_ids: list,
+    action: str,
+    *,
+    manual_garage: bool = False,
+    allowed_rarities: Optional[set] = None,
+) -> dict:
     """HTTP route and auto_rank: serialize melt/scrap with GTA for this user."""
     lock = await _get_gta_garage_lock(user.get("id") or "")
     async with lock:
-        return await _melt_cars_impl(user, car_ids, action, manual_garage=manual_garage)
+        return await _melt_cars_impl(
+            user,
+            car_ids,
+            action,
+            manual_garage=manual_garage,
+            allowed_rarities=allowed_rarities,
+        )
 
 
 async def attempt_gta(
@@ -1222,7 +1248,7 @@ async def attempt_gta(
         option = next((o for o in GTA_OPTIONS if o["id"] == request.option_id), None)
         car = getattr(result, "car", None)
         jailed = getattr(result, "jailed", False)
-        jail_seconds = int(option["jail_time"]) if (option and jailed) else None
+        jail_seconds = apply_game_pass_wait_seconds(int(option["jail_time"]), current_user) if (option and jailed) else None
         uid = current_user.get("id") or ""
         event_doc = {
             "user_id": uid,
@@ -1296,6 +1322,25 @@ _DEALERSHIP_RARITIES = frozenset({"common", "uncommon", "rare", "ultra_rare", "l
 _VALID_GARAGE_RARITIES = frozenset(
     {"common", "uncommon", "rare", "ultra_rare", "legendary", "custom", "loot_exclusive", "exclusive", "vip_exclusive"}
 )
+
+
+def _normalize_melt_allowed_rarities(raw: Optional[List[str]]) -> Optional[set]:
+    if raw is None:
+        return None
+    out = set()
+    for x in raw:
+        s = _normalize_garage_rarity_str(x)
+        if s in _VALID_GARAGE_RARITIES:
+            out.add(s)
+    return out
+
+
+def _melt_should_skip_rarity(rarity: object, allowed: Optional[set], *, manual_garage: bool) -> bool:
+    """Skip cars the player did not tick. Legacy garage clients: never melt exclusives."""
+    r = _normalize_garage_rarity_str(rarity)
+    if allowed is not None:
+        return r not in allowed
+    return bool(manual_garage and r in _MARKET_EXCLUSIVE_RARITIES)
 
 
 def _normalize_garage_rarity_str(raw: object) -> str:
@@ -1523,7 +1568,14 @@ def _parse_melt_cooldown(iso_str):
         return None
 
 
-async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_garage: bool = False):
+async def _melt_cars_impl(
+    user: dict,
+    car_ids: list,
+    action: str,
+    *,
+    manual_garage: bool = False,
+    allowed_rarities: Optional[set] = None,
+):
     """Core melt logic. Returns dict with success/melted_count/etc. On bullets cooldown returns {success: False, cooldown: True, detail: ...}."""
     now = datetime.now(timezone.utc)
     action = (action or "").strip().lower()
@@ -1543,16 +1595,14 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
     family_id = await resolve_family_id(user.get("id") or "") or (str(user.get("family_id") or "").strip() or None)
     in_war = family_id and await _family_in_active_war(family_id)
 
+    pre_docs = await db.user_cars.find(
+        {**owner, "id": {"$in": list(car_ids)}, "listed_for_sale": {"$ne": True}},
+    ).to_list(limit)
+    cars_by_id = {d.get("id"): d for d in pre_docs if d.get("id")}
+
     if in_war:
         for raw_id in car_ids[:limit]:
-            uc = await db.user_cars.find_one({**owner, "id": raw_id, "listed_for_sale": {"$ne": True}})
-            if not uc:
-                try:
-                    uc = await db.user_cars.find_one(
-                        {**owner, "_id": ObjectId(raw_id), "listed_for_sale": {"$ne": True}}
-                    )
-                except Exception:
-                    uc = None
+            uc = cars_by_id.get(raw_id)
             if not uc:
                 continue
             car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
@@ -1608,24 +1658,40 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
     uncommon_count = 0
     processed = 0
     melted_car20 = False
+    melted_exclusive_cars: list = []
     for car_id in car_ids:
         if processed >= limit:
             break
-        deleted_car = None
-        delete_filter = {**owner, "id": car_id, "listed_for_sale": {"$ne": True}}
-        deleted_car = await db.user_cars.find_one_and_delete(delete_filter)
-        if not deleted_car:
+        owned_filter = {**owner, "id": car_id, "listed_for_sale": {"$ne": True}}
+        candidate = cars_by_id.get(car_id)
+        if not candidate:
             try:
-                delete_filter = {**owner, "_id": ObjectId(car_id), "listed_for_sale": {"$ne": True}}
-                deleted_car = await db.user_cars.find_one_and_delete(delete_filter)
+                owned_filter = {**owner, "_id": ObjectId(car_id), "listed_for_sale": {"$ne": True}}
+                candidate = await db.user_cars.find_one(owned_filter)
             except Exception:
-                pass
+                candidate = None
+        if not candidate:
+            continue
+        model_id = candidate.get("car_id")
+        car_info = next((c for c in CARS if c.get("id") == model_id), None)
+        rarity_hint = (car_info or {}).get("rarity") if car_info else candidate.get("rarity")
+        if _melt_should_skip_rarity(rarity_hint, allowed_rarities, manual_garage=manual_garage):
+            continue
+        deleted_car = await db.user_cars.find_one_and_delete(owned_filter)
         if deleted_car:
-            model_id = deleted_car["car_id"]
             if model_id == GTA_EXCLUSIVE_CAR_ID:
                 melted_car20 = True
-            car_info = next((c for c in CARS if c["id"] == model_id), None)
             if car_info:
+                rarity_l = (car_info.get("rarity") or "").strip().lower()
+                if rarity_l in _MARKET_EXCLUSIVE_RARITIES:
+                    melted_exclusive_cars.append(
+                        {
+                            "car_id": model_id,
+                            "user_car_id": deleted_car.get("id"),
+                            "car_name": car_info.get("name") or model_id,
+                            "rarity": rarity_l,
+                        }
+                    )
                 if car_info.get("rarity") == "uncommon":
                     uncommon_count += 1
                 catalog_value = int(car_info.get("value", 0) or 0)
@@ -1671,6 +1737,35 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                 processed += 1
     if melted_car20:
         await _sync_gta_exclusive_pool_release_state()
+    if melted_exclusive_cars:
+        try:
+            from utils.exclusive_car_events import log_exclusive_car_event
+
+            melt_event = "melted" if action == "bullets" else "scraped"
+            for row in melted_exclusive_cars:
+                await log_exclusive_car_event(
+                    db,
+                    event_type=melt_event,
+                    car_id=row["car_id"],
+                    user_car_id=row.get("user_car_id"),
+                    from_user_id=user.get("id"),
+                    from_username=user.get("username") or "",
+                    car_name=row.get("car_name"),
+                    extra={
+                        "action": action,
+                        "source": "garage_ui" if manual_garage else "auto_rank_or_internal",
+                        "rarity": row.get("rarity"),
+                    },
+                )
+        except Exception:
+            logger.exception("Failed to log exclusive melt/scrap")
+        if any((row.get("rarity") or "") == "loot_exclusive" for row in melted_exclusive_cars):
+            try:
+                from routers.money.loot_box import resync_loot_exclusive_claimed_counts_from_live
+
+                await resync_loot_exclusive_claimed_counts_from_live()
+            except Exception:
+                logger.exception("Failed to return melted loot exclusive to loot pool")
     if deleted_count > 0:
         if action == "bullets":
             total_bullets = (int(total_bullets or 0) * MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM) // MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN
@@ -2048,6 +2143,7 @@ async def melt_cars(
         body.car_ids,
         body.action,
         manual_garage=body.manual_garage,
+        allowed_rarities=_normalize_melt_allowed_rarities(body.rarity_ids),
     )
     if result.get("exclusive_war_lock"):
         raise HTTPException(status_code=403, detail=result.get("message") or EXCLUSIVE_CAR_WAR_LOCK_DETAIL)
@@ -3222,7 +3318,25 @@ async def get_view_car(
             breakdown = await weekly_loot_breakdown_for_user(db, owner_id)
             if int(breakdown.get("pieces") or 0) > 0:
                 out["weekly_loot_pieces_total"] = int(breakdown["pieces"])
-                out["weekly_loot_pieces_cap"] = int(breakdown.get("cap") or 25)
+                out["weekly_loot_pieces_cap"] = int(breakdown.get("cap") or 128)
+            if car_id == "car24":
+                from utils.loot_exclusive_540k import (
+                    FAST_TRAVELS_PER_DAY,
+                    WEEKLY_MISSION_SKIP,
+                    WEEKLY_ROBOT_HIRES,
+                    WHEEL_FREE_PER_DAY,
+                    fast_travels_remaining,
+                )
+
+                user_doc = await db.users.find_one(
+                    {"id": owner_id},
+                    {"_id": 0, "car24_fast_travel_day": 1, "car24_fast_travels_today": 1},
+                )
+                out["fast_travels_per_day"] = FAST_TRAVELS_PER_DAY
+                out["fast_travels_remaining"] = fast_travels_remaining(user_doc)
+                out["extra_wheel_free_spins_per_day"] = WHEEL_FREE_PER_DAY
+                out["weekly_mission_skip_tokens"] = WEEKLY_MISSION_SKIP
+                out["weekly_robot_bodyguard_hire_tokens"] = WEEKLY_ROBOT_HIRES
     except Exception:
         pass
     if owner_id == current_user.get("id") or "":

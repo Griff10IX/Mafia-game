@@ -1,6 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { setServerMaintenanceOverlayActive } from '../utils/api';
+import { SYSTEM_AI_AVATAR } from './SystemAiInboxMessage';
+
+const DEFAULT_NOTICE = {
+  by: 'commission',
+  headline: 'Updating Game',
+  line1: "We're pushing a fresh update to the streets.",
+  line2: 'Hang tight, the game will be back shortly.',
+  footer: 'The Commission will return',
+  estimate: '~ 30 seconds',
+};
 
 async function apiIsBack() {
   try {
@@ -11,8 +21,33 @@ async function apiIsBack() {
   }
 }
 
+async function fetchDeployNotice() {
+  try {
+    const res = await fetch(`/deploy-notice.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || data.active !== true) return null;
+    const by = data.by === 'system_ai' ? 'system_ai' : 'commission';
+    const pick = (key, fallback) => {
+      const v = typeof data[key] === 'string' ? data[key].trim() : '';
+      return v || fallback;
+    };
+    return {
+      by,
+      headline: pick('headline', by === 'system_ai' ? 'System AI is updating' : DEFAULT_NOTICE.headline),
+      line1: pick('line1', DEFAULT_NOTICE.line1),
+      line2: pick('line2', DEFAULT_NOTICE.line2),
+      footer: pick('footer', by === 'system_ai' ? 'Posted by System AI' : DEFAULT_NOTICE.footer),
+      estimate: pick('estimate', DEFAULT_NOTICE.estimate),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function ServerUnavailableOverlay() {
   const [visible, setVisible] = useState(false);
+  const [notice, setNotice] = useState(DEFAULT_NOTICE);
   const lastShownRef = useRef(0);
   const reloadingRef = useRef(false);
 
@@ -36,6 +71,17 @@ export default function ServerUnavailableOverlay() {
   useEffect(() => {
     if (!visible) return undefined;
     let cancelled = false;
+    fetchDeployNotice().then((next) => {
+      if (!cancelled && next) setNotice(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible) return undefined;
+    let cancelled = false;
     const tick = async () => {
       if (cancelled || reloadingRef.current) return;
       if (await apiIsBack()) {
@@ -52,6 +98,8 @@ export default function ServerUnavailableOverlay() {
   }, [visible]);
 
   if (!visible) return null;
+
+  const systemAi = notice.by === 'system_ai';
 
   return (
     <div
@@ -71,9 +119,31 @@ export default function ServerUnavailableOverlay() {
             marginBottom: '1.5rem',
             lineHeight: 1,
             animation: 'mafia-maint-pulse 2s ease-in-out infinite',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: 88,
           }}
         >
-          &#9876;
+          {systemAi ? (
+            <img
+              src={SYSTEM_AI_AVATAR}
+              alt="System AI"
+              width={88}
+              height={88}
+              style={{
+                width: 88,
+                height: 88,
+                borderRadius: '50%',
+                objectFit: 'cover',
+                objectPosition: '22% 14%',
+                border: '2px solid #d4af37',
+                boxShadow: '0 0 24px rgba(212, 175, 55, 0.35)',
+              }}
+            />
+          ) : (
+            <span>&#9876;</span>
+          )}
         </div>
         <h1
           style={{
@@ -85,7 +155,7 @@ export default function ServerUnavailableOverlay() {
             fontWeight: 700,
           }}
         >
-          Updating Game
+          {notice.headline}
         </h1>
         <div
           style={{
@@ -96,13 +166,13 @@ export default function ServerUnavailableOverlay() {
           }}
         />
         <p style={{ color: '#a1a1aa', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: 8 }}>
-          We&apos;re pushing a fresh update to the streets.
+          {notice.line1}
         </p>
         <p style={{ color: '#a1a1aa', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: 8 }}>
-          Hang tight, the game will be back shortly.
+          {notice.line2}
         </p>
         <div style={{ color: '#d4af37', fontWeight: 700, fontSize: '1.1rem', marginTop: '1.5rem' }}>
-          ~ 30 seconds
+          {notice.estimate}
         </div>
         <div
           style={{
@@ -132,7 +202,7 @@ export default function ServerUnavailableOverlay() {
             textTransform: 'uppercase',
           }}
         >
-          The Commission will return
+          {notice.footer}
         </div>
         <p style={{ marginTop: '1.25rem', color: '#666', fontSize: '0.75rem' }}>
           This page will automatically refresh in 5 seconds...

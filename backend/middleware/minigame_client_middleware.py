@@ -38,6 +38,9 @@ _GAME_ACTION_PREFIXES = (
     "/api/bodyguards",
     "/api/attack",
     "/api/booze-run",
+    "/api/account/gambling-self-ban",
+    "/api/casino",
+    "/api/sports-betting",
 )
 
 _FORBIDDEN_DETAIL = "This action must use the official game app or a normal web browser."

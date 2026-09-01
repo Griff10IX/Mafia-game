@@ -3,6 +3,7 @@ REM Double-click to push updates and deploy live
 REM Optional: push-live.bat "Your commit message"
 REM Optional: push-live.bat --restart
 REM Optional: push-live.bat --restart "Your commit message"
+REM Optional: --updating "Casino tables"  (player-facing line on the downtime page)
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0.."
 
@@ -12,12 +13,26 @@ call "%UI%" INIT
 
 set "NEED_RESTART=0"
 set "msg=Update"
-if /i "%~1"=="--restart" (
-    set "NEED_RESTART=1"
-    if not "%~2"=="" set "msg=%~2"
-) else if not "%~1"=="" (
-    set "msg=%~1"
-)
+set "MAINT_BY=system_ai"
+set "MAINT_WHAT=the game"
+
+:parse_args
+if "%~1"=="" goto args_done
+if /i "%~1"=="--restart" goto parse_restart
+if /i "%~1"=="--updating" goto parse_updating
+set "msg=%~1"
+shift
+goto parse_args
+:parse_restart
+set "NEED_RESTART=1"
+shift
+goto parse_args
+:parse_updating
+if not "%~2"=="" set "MAINT_WHAT=%~2"
+shift
+shift
+goto parse_args
+:args_done
 
 call "%UI%" HEADER "MAFIA WARS - COMMIT / PUSH / DEPLOY" "Branch MAfiaGame2 -> live server"
 
@@ -81,7 +96,7 @@ if "%NEED_RESTART%"=="1" (
     call "%UI%" INFO "Backend stays up unless server sees Python changes"
 )
 echo.
-plink -batch -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && export MAFIA_DEPLOY_ASCII=1 && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; %DEPLOY_SH%"
+plink -batch -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && export MAFIA_DEPLOY_ASCII=1 && export MAFIA_MAINT_BY=!MAINT_BY! && export MAFIA_MAINT_WHAT='!MAINT_WHAT!' && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; %DEPLOY_SH%"
 if errorlevel 1 (call "%UI%" FAIL "Remote deploy failed" & goto END)
 call "%UI%" OK "Server deploy finished"
 

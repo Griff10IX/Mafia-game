@@ -230,7 +230,7 @@ api.interceptors.request.use((config) => {
 let hasRedirectedOnAuthFailure = false;
 const isPublicPath = () => {
   const p = (typeof window !== 'undefined' && window.location?.pathname) || '';
-  return p === '/' || p === '/preregister' || p === '/register' || p === '/login' || p === '/forgot-password' || p === '/reset-password' || p === '/staff-entrance' || p === '/verify-email' || p === '/verify-complete';
+  return p === '/' || p === '/preregister' || p === '/register' || p === '/login' || p === '/forgot-password' || p === '/reset-password' || p === '/staff-entrance' || p === '/verify-email' || p === '/verify-complete' || p === '/kicked' || p === '/kicked.html' || p === '/ai-locked' || p === '/ai-locked.html';
 };
 
 // Friendly messages for 502/503/504 and network errors so pages don't show raw "Bad Gateway" or break
@@ -363,6 +363,10 @@ api.interceptors.response.use(
       if (rawDetail && typeof rawDetail === 'object' && !Array.isArray(rawDetail)) {
         suppressOverlay = Boolean(rawDetail.suppress_global_cooldown);
       }
+      const reqUrl = String(error.config?.url || '');
+      if (reqUrl.includes('/game-chat')) {
+        suppressOverlay = true;
+      }
       const isSoftEndpointRl =
         data.is_cooldown === false && data.endpoint_rate_limit_hard !== true;
 
@@ -422,6 +426,14 @@ api.interceptors.response.use(
     // ── 403 Account under investigation → redirect to lock page immediately (no delay until next /auth/me) ──
     if (error.response?.status === 403 && !isPublicPath() && typeof window !== 'undefined') {
       const detail = error.response?.data?.detail;
+      const insultLock =
+        detail && typeof detail === 'object' && (detail.lock_page === 'insult' || detail.lock_page === 'kicked');
+      if (insultLock) {
+        if (window.location.pathname !== '/ai-locked') {
+          window.location.replace('/ai-locked');
+        }
+        return Promise.reject(error);
+      }
       const isAccountLocked = typeof detail === 'string' && (
         detail.toLowerCase().includes('under investigation') || detail.toLowerCase().includes('account status page')
       );
@@ -505,6 +517,10 @@ api.interceptors.response.use(
         if (error.response?.status === 401 || (error.response?.status === 403 && isAuthMe)) {
           hasRedirectedOnAuthFailure = true;
           const detail = error.response?.data?.detail;
+          const kicked =
+            detail &&
+            typeof detail === 'object' &&
+            (detail.logout_page === 'insult' || detail.logout_page === 'kicked');
           const msg = typeof detail === 'string' ? detail : (error.response?.status === 403 ? 'Access denied.' : 'Your session expired due to inactivity or the login time limit. Please log in again.');
           try {
             sessionStorage.setItem(AUTH_ERROR_KEY, msg);
@@ -512,7 +528,7 @@ api.interceptors.response.use(
           localStorage.removeItem('token');
           clearProfileSessionLastMeUsername();
           clearStaffPortalSession();
-          window.location.replace('/');
+          window.location.replace(kicked ? '/kicked' : '/');
         }
       }
     }

@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from server import SECRET_KEY, _is_admin, db, get_current_user, log_activity, send_notification
+from utils.game_pass_micro_rewards import apply_game_pass_wait_hours
 from utils.store_item_flags import require_store_item_allowed
 from utils.weed_empire_catalog import (
     BASE_STREET_PRICE_PER_OZ,
@@ -768,13 +769,14 @@ def _raid_last_by_target_map(farm: dict) -> Dict[str, str]:
 
 
 def _raid_available_at_for_target(
-    farm: dict, target_user_id: str, now: Optional[datetime] = None
+    farm: dict, target_user_id: str, now: Optional[datetime] = None, user: Optional[dict] = None
 ) -> Optional[datetime]:
     """When this attacker can raid this target again (None = ready now)."""
     last = _parse_iso(_raid_last_by_target_map(farm).get(str(target_user_id or "")))
     if not last:
         return None
-    ready = last + timedelta(hours=RAID_PER_TARGET_COOLDOWN_HOURS)
+    hours = apply_game_pass_wait_hours(RAID_PER_TARGET_COOLDOWN_HOURS, user)
+    ready = last + timedelta(hours=hours)
     now = now or _utcnow()
     return ready if ready > now else None
 
@@ -792,14 +794,15 @@ def _defender_raid_immune_until(farm: dict, now: Optional[datetime] = None) -> O
     return until if until > now else None
 
 
-def _mark_raid_against_target(farm: dict, target_user_id: str, now: Optional[datetime] = None) -> str:
+def _mark_raid_against_target(farm: dict, target_user_id: str, now: Optional[datetime] = None, user: Optional[dict] = None) -> str:
     """Record a raid attempt against target; returns ISO when that target is raidable again."""
     now = now or _utcnow()
     tid = str(target_user_id or "")
+    hours = apply_game_pass_wait_hours(RAID_PER_TARGET_COOLDOWN_HOURS, user)
     by = _raid_last_by_target_map(farm)
     by[tid] = _iso(now)
     # Drop stale entries so the map cannot grow forever
-    cutoff = now - timedelta(hours=RAID_PER_TARGET_COOLDOWN_HOURS * 2)
+    cutoff = now - timedelta(hours=hours * 2)
     pruned: Dict[str, str] = {}
     for key, ts in by.items():
         dt = _parse_iso(ts)
@@ -809,7 +812,7 @@ def _mark_raid_against_target(farm: dict, target_user_id: str, now: Optional[dat
             pruned[key] = ts if key != tid else _iso(now)
     farm["raid_last_by_target"] = pruned
     farm["raid_available_at"] = None  # clear legacy global lock
-    return _iso(now + timedelta(hours=RAID_PER_TARGET_COOLDOWN_HOURS))
+    return _iso(now + timedelta(hours=hours))
 
 
 def _security_upgrade_progress(farm: dict) -> Dict[str, Any]:
@@ -2303,7 +2306,10 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         "raid_stats": farm.get("raid_stats") or {},
         "raid_available_at": None,
         "raid_ready": True,
-        "raid_cooldown_hours": RAID_PER_TARGET_COOLDOWN_HOURS,
+        "raid_cooldown_hours": apply_game_pass_wait_hours(
+            RAID_PER_TARGET_COOLDOWN_HOURS,
+            {"rank_xp_pass_rewards_granted": bool(farm.get("_gp_active_vip"))},
+        ),
         "raid_cooldown_scope": "per_target",
         "security": _security_upgrade_progress(farm),
         "raid_success_at_max_security": RAID_SUCCESS_AT_MAX_SECURITY,
@@ -3832,7 +3838,7 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
             "raid_unlocked": False,
             "raid_ready": False,
             "raid_available_at": None,
-            "raid_cooldown_hours": RAID_PER_TARGET_COOLDOWN_HOURS,
+            "raid_cooldown_hours": apply_game_pass_wait_hours(RAID_PER_TARGET_COOLDOWN_HOURS, current_user),
             "raid_cooldown_scope": "per_target",
             "required_grower_level": MIN_RAID_GROWER_LEVEL,
             "required_target_grower_level": MIN_RAID_TARGET_GROWER_LEVEL,
@@ -3877,7 +3883,7 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
                         continue
             sec = _security_upgrade_progress(f)
             est_chance = _raid_success_chance(my_farm, f)
-            target_ready_at = _raid_available_at_for_target(my_farm, uid, now)
+            target_ready_at = _raid_available_at_for_target(my_farm, uid, now, user=current_user)
             immune_until = _defender_raid_immune_until(f, now)
             targets.append(
                 {
@@ -3908,7 +3914,7 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
         "raid_unlocked": True,
         "raid_ready": True,
         "raid_available_at": None,
-        "raid_cooldown_hours": RAID_PER_TARGET_COOLDOWN_HOURS,
+        "raid_cooldown_hours": apply_game_pass_wait_hours(RAID_PER_TARGET_COOLDOWN_HOURS, current_user),
         "raid_cooldown_scope": "per_target",
         "bust_raid_immune_hours": BUST_RAID_IMMUNE_HOURS,
         "required_grower_level": MIN_RAID_GROWER_LEVEL,
@@ -3934,7 +3940,7 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
     atk = await _get_or_create_farm(attacker_id)
     if int(atk.get("grower_level") or 1) < MIN_RAID_GROWER_LEVEL:
         raise HTTPException(status_code=400, detail="Reach Grower Level 5 before raiding other growers")
-    target_ready_at = _raid_available_at_for_target(atk, defender_id, now)
+    target_ready_at = _raid_available_at_for_target(atk, defender_id, now, user=current_user)
     if target_ready_at is not None:
         raise HTTPException(
             status_code=400,
@@ -3961,7 +3967,7 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
     success = _rng.random() < chance
     sec_progress = _security_upgrade_progress(dfn)
 
-    next_ready = _mark_raid_against_target(atk, defender_id, now)
+    next_ready = _mark_raid_against_target(atk, defender_id, now, user=current_user)
     stolen = {"stash": {}, "cash": 0, "equipment": None, "scrap_cash": 0, "grams_total": 0.0}
     sabotage_note = None
 

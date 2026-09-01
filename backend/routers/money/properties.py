@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, founding_member_income_mult, log_activity
+from utils.game_pass_micro_rewards import apply_game_pass_wait_seconds
 from utils.point_provenance import log_points_event
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_PROPERTIES
 
@@ -1176,12 +1177,13 @@ async def collect_property_income_impl(property_id: str, current_user: dict, *, 
         total_income += up_income
     if not first_user_prop:
         raise HTTPException(status_code=404, detail="You don't own this property")
-    cooldown_hours = COLLECT_COOLDOWN_MINUTES / 60.0
+    collect_cd_sec = apply_game_pass_wait_seconds(COLLECT_COOLDOWN_MINUTES * 60, current_user)
+    cooldown_hours = collect_cd_sec / 3600.0
     if min_hours_passed < cooldown_hours:
         from utils.cooldown_skip import allow_properties_collect_skip
 
         if await allow_properties_collect_skip(db, current_user, user_id, now_utc):
-            old_enough = (now_utc - timedelta(minutes=COLLECT_COOLDOWN_MINUTES + 1)).isoformat()
+            old_enough = (now_utc - timedelta(seconds=collect_cd_sec + 60)).isoformat()
             await db.user_properties.update_many(
                 {"user_id": user_id, "property_id": property_id},
                 {"$set": {"last_collected": old_enough}},
@@ -1191,12 +1193,12 @@ async def collect_property_income_impl(property_id: str, current_user: dict, *, 
             mins_left = max(1, int((cooldown_hours - min_hours_passed) * 60))
             raise HTTPException(
                 status_code=400,
-                detail=f"You can collect every {COLLECT_COOLDOWN_MINUTES} minutes. Try again in {mins_left} minute(s).",
+                detail=f"You can collect every {max(1, int((collect_cd_sec + 59) // 60))} minutes. Try again in {mins_left} minute(s).",
             )
     if total_income < 1:
         raise HTTPException(status_code=400, detail="No income to collect yet")
 
-    cooldown_threshold_dt = now_utc - timedelta(minutes=COLLECT_COOLDOWN_MINUTES)
+    cooldown_threshold_dt = now_utc - timedelta(seconds=collect_cd_sec)
     cooldown_threshold_iso = cooldown_threshold_dt.isoformat()
     claim_result = await db.user_properties.update_many(
         {
@@ -1212,7 +1214,7 @@ async def collect_property_income_impl(property_id: str, current_user: dict, *, 
     if claim_result.modified_count == 0:
         raise HTTPException(
             status_code=400,
-            detail=f"You can collect every {COLLECT_COOLDOWN_MINUTES} minutes. Try again shortly.",
+            detail=f"You can collect every {max(1, int((collect_cd_sec + 59) // 60))} minutes. Try again shortly.",
         )
 
     # Apply stack bonus

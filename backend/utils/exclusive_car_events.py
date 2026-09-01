@@ -377,16 +377,23 @@ async def build_exclusive_car_intel(
             )
         )
 
-    # Loot box car21
-    if not car_filter or car_filter == "car21":
+    # Loot box unique loot-exclusive cars (Cadillac, Model SJ, 540K)
+    loot_box_car_ids = {"car21", "car23", "car24"}
+    if not car_filter or car_filter in loot_box_car_ids:
+        wanted = {car_filter} if car_filter else loot_box_car_ids
         lb_q: Dict[str, Any] = {"type": "loot_box_open"}
         if scope_user_id:
             lb_q["user_id"] = scope_user_id
         lb_rows = await db.economy_events.find(lb_q, {"_id": 0, "rewards": 1, "at": 1, "user_id": 1, "username": 1}).sort("at", -1).limit(limit).to_list(limit)
         for lb in lb_rows:
-            car_rewards = [r for r in (lb.get("rewards") or []) if r.get("type") == "car" and (r.get("id") == "car21" or r.get("car_id") == "car21")]
+            car_rewards = [
+                r
+                for r in (lb.get("rewards") or [])
+                if r.get("type") == "car" and ((r.get("id") in wanted) or (r.get("car_id") in wanted))
+            ]
             if not car_rewards:
                 continue
+            cid = str(car_rewards[0].get("id") or car_rewards[0].get("car_id") or "")
             if lb.get("user_id"):
                 user_ids.add(lb["user_id"])
             timeline.append(
@@ -395,7 +402,7 @@ async def build_exclusive_car_intel(
                     event_type="loot_box",
                     source="economy_events",
                     summary=f"Loot box — {lb.get('username', '?')} won loot-exclusive car",
-                    car_id="car21",
+                    car_id=cid or "car21",
                     details=lb,
                 )
             )

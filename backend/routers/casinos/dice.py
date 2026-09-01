@@ -44,6 +44,8 @@ from server import (
     effective_public_casino_max_bet,
     _user_owns_any_casino,
     raise_if_single_casino_claim_blocked,
+    raise_if_city_casino_already_owned,
+    claim_unowned_city_casino,
     raise_if_single_casino_receive_blocked,
     raise_if_dead_casino_transfer_target,
     _username_pattern,
@@ -534,6 +536,7 @@ def register(router):
         if user_city != city:
             raise HTTPException(status_code=400, detail="You must be in this city to claim the dice table")
         stored_city, existing = await _get_dice_ownership_doc(city)
+        raise_if_city_casino_already_owned(existing, current_user, already_owned_detail="This table is already owned")
         cc = await load_claim_costs(db)
         cash_cost = cc["dice_cash"]
         pts_cost = cc["dice_points"]
@@ -546,21 +549,19 @@ def register(router):
         debit_result = await db.users.find_one_and_update(debit_filter, {"$inc": debit_inc})
         if not debit_result:
             raise HTTPException(status_code=400, detail=f"You need ${cash_cost:,} cash" + (f" and {pts_cost:,} points" if pts_cost > 0 else "") + " to claim")
-        res = await db.dice_ownership.update_one(
-            {"city": db_city, "owner_id": None},
-            {
-                "$set": {
-                    "city": db_city,
-                    "owner_id": current_user.get("id") or "",
-                    "owner_username": current_user.get("username") or "",
-                    "buy_back_reward": 0,
-                    "buy_back_points_held": 0,
-                },
-                "$setOnInsert": {"max_bet": DICE_MAX_BET},
+        claimed = await claim_unowned_city_casino(
+            db.dice_ownership,
+            city=city,
+            stored_city=stored_city,
+            set_fields={
+                "owner_id": current_user.get("id") or "",
+                "owner_username": current_user.get("username") or "",
+                "buy_back_reward": 0,
+                "buy_back_points_held": 0,
             },
-            upsert=True,
+            set_on_insert={"max_bet": DICE_MAX_BET},
         )
-        if res.matched_count == 0 and res.upserted_id is None:
+        if not claimed:
             refund_inc = {"money": cash_cost}
             if pts_cost > 0:
                 refund_inc["points"] = pts_cost

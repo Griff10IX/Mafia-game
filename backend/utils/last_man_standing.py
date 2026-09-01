@@ -79,6 +79,40 @@ def slug_team(name: str) -> str:
     return s or "team"
 
 
+_TEAM_ALIASES = {
+    "mancity": "manchestercity",
+    "manutd": "manchesterunited",
+    "manunited": "manchesterunited",
+    "spurs": "tottenhamhotspur",
+    "tottenham": "tottenhamhotspur",
+    "wolves": "wolverhamptonwanderers",
+    "newcastle": "newcastleunited",
+    "leeds": "leedsunited",
+    "nottforest": "nottinghamforest",
+    "nottingham": "nottinghamforest",
+    "bournemouth": "bournemouth",
+    "afcbournemouth": "bournemouth",
+    "brighton": "brightonhovealbion",
+    "brightonhovealbion": "brightonhovealbion",
+    "brightonandhovealbion": "brightonhovealbion",
+}
+
+
+def team_canon(name: str) -> str:
+    n = name_norm(name)
+    n = n.replace("and", "")
+    if n in _TEAM_ALIASES:
+        return _TEAM_ALIASES[n]
+    n2 = n
+    for junk in ("afc", "cfc", "fc"):
+        n2 = n2.replace(junk, "")
+    return _TEAM_ALIASES.get(n2, n2)
+
+
+def teams_same(a: str, b: str) -> bool:
+    return bool(a) and bool(b) and team_canon(a) == team_canon(b)
+
+
 def account_key_from_user(user: Optional[dict]) -> str:
     return normalize_email((user or {}).get("email"))
 
@@ -392,6 +426,117 @@ async def _fetch_odds_epl_events() -> List[dict]:
     return events
 
 
+THESPORTSDB_PL_ID = "4328"
+
+
+async def _fetch_thesportsdb_pl_results(gw: Optional[int] = None) -> List[dict]:
+    """PL results by gameweek round. eventsseason.php is truncated on the free key (~15 rows)."""
+    now = datetime.now(timezone.utc)
+    y = now.year
+    seasons = [f"{y}-{y + 1}", f"{y - 1}-{y}"] if now.month >= 7 else [f"{y - 1}-{y}", f"{y}-{y + 1}"]
+    rounds = [int(gw)] if gw else [1, 2, 3, 4]
+    out: List[dict] = []
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            for season in seasons:
+                got_any = False
+                for rnd in rounds:
+                    r = await client.get(
+                        "https://www.thesportsdb.com/api/v1/json/123/eventsround.php",
+                        params={"id": THESPORTSDB_PL_ID, "r": int(rnd), "s": season},
+                    )
+                    if r.status_code != 200:
+                        continue
+                    events = (r.json() or {}).get("events") or []
+                    if not events:
+                        continue
+                    got_any = True
+                    for e in events:
+                        ht = (e.get("strHomeTeam") or "").strip()
+                        at = (e.get("strAwayTeam") or "").strip()
+                        if not ht or not at:
+                            continue
+                        postponed = (e.get("strPostponed") or "").strip().lower()
+                        status = (e.get("strStatus") or "").strip().lower()
+                        if postponed in ("yes", "true") or "postponed" in status:
+                            out.append({"home": ht, "away": at, "result": "postponed"})
+                            continue
+                        try:
+                            hs = int(e.get("intHomeScore"))
+                            aws = int(e.get("intAwayScore"))
+                        except (TypeError, ValueError):
+                            continue
+                        out.append({
+                            "home": ht,
+                            "away": at,
+                            "home_score": hs,
+                            "away_score": aws,
+                            "result": _fixture_result_from_scores(hs, aws),
+                        })
+                if got_any:
+                    break
+    except Exception as ex:
+        logger.warning("TheSportsDB PL results failed: %s", ex)
+    return out
+
+
+async def _thesportsdb_round_fixtures(gw: int) -> List[dict]:
+    now = datetime.now(timezone.utc)
+    y = now.year
+    seasons = [f"{y}-{y + 1}", f"{y - 1}-{y}"] if now.month >= 7 else [f"{y - 1}-{y}", f"{y}-{y + 1}"]
+    out: List[dict] = []
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            for season in seasons:
+                r = await client.get(
+                    "https://www.thesportsdb.com/api/v1/json/123/eventsround.php",
+                    params={"id": THESPORTSDB_PL_ID, "r": int(gw), "s": season},
+                )
+                if r.status_code != 200:
+                    continue
+                events = (r.json() or {}).get("events") or []
+                if not events:
+                    continue
+                for e in events:
+                    ht = (e.get("strHomeTeam") or "").strip()
+                    at = (e.get("strAwayTeam") or "").strip()
+                    kick = (e.get("strTimestamp") or "").strip()
+                    if kick and "T" in kick and "+" not in kick and "Z" not in kick:
+                        kick = kick + "+00:00"
+                    if not ht or not at or not kick:
+                        continue
+                    home_name = "AFC Bournemouth" if team_canon(ht) == "bournemouth" else ht
+                    away_name = "AFC Bournemouth" if team_canon(at) == "bournemouth" else at
+                    fx = {
+                        "external_event_id": f"tsdb-{e.get('idEvent') or slug_team(home_name)+slug_team(away_name)}",
+                        "home_team_id": slug_team(home_name),
+                        "away_team_id": slug_team(away_name),
+                        "home": home_name,
+                        "away": away_name,
+                        "kickoff": kick,
+                        "result": None,
+                    }
+                    postponed = (e.get("strPostponed") or "").strip().lower()
+                    status = (e.get("strStatus") or "").strip().upper()
+                    if postponed in ("yes", "true") or "POSTPONED" in status:
+                        fx["result"] = "postponed"
+                    else:
+                        try:
+                            hs = int(e.get("intHomeScore"))
+                            aws = int(e.get("intAwayScore"))
+                            fx["home_score"] = hs
+                            fx["away_score"] = aws
+                            fx["result"] = _fixture_result_from_scores(hs, aws)
+                        except (TypeError, ValueError):
+                            pass
+                    out.append(fx)
+                if out:
+                    break
+    except Exception as ex:
+        logger.warning("TheSportsDB PL round %s fixtures failed: %s", gw, ex)
+    return _sort_fixtures(out)
+
+
 def _cluster_odds_into_gameweeks(events: List[dict]) -> Dict[int, List[dict]]:
     rows = []
     for ev in events or []:
@@ -561,6 +706,13 @@ async def sync_season_fixtures(db, season_id: str) -> dict:
         if gw1_completeness(official2)[0]:
             grouped[2] = official2
             source = "official-gw2" if source == "none" else f"{source}+official-gw2"
+    for gw in range(1, 7):
+        if gw1_completeness(grouped.get(gw) or [])[0]:
+            continue
+        ts_fx = await _thesportsdb_round_fixtures(gw)
+        if gw1_completeness(ts_fx)[0]:
+            grouped[gw] = ts_fx
+            source = "thesportsdb" if source == "none" else f"{source}+tsdb-gw{gw}"
     if not grouped:
         raise HTTPException(status_code=400, detail="Could not load Premier League fixtures")
     upserted = 0
@@ -570,6 +722,9 @@ async def sync_season_fixtures(db, season_id: str) -> dict:
         must_complete = gw == 1
         fixtures = _sort_fixtures(fixtures)
         status = _gw_status_for_fixtures(fixtures, gw1_must_complete=must_complete)
+        current_gw = int(season.get("current_gameweek") or 1)
+        if gw > current_gw and status == "picks_open":
+            status = "upcoming"
         if prev_status in ("settling", "settled", "locked"):
             status = prev_status
             if existing and existing.get("fixtures"):
@@ -1290,49 +1445,90 @@ async def settle_gameweek(db, season_id: str, gw: int, *, force: bool = False) -
     }
 
 
+def _fd_match_for_fixture(fixture: dict, fd_matches: List[dict]) -> Optional[dict]:
+    """Match a stored LMS fixture to a football-data match by id, then by team names.
+
+    Official GW fallbacks use synthetic ids (pl-2026-gw1-...), so id-only matching never
+    writes scores and locked weeks stay unresolved forever.
+    """
+    if not fixture:
+        return None
+    eid = str(fixture.get("external_event_id") or fixture.get("fd_match_id") or "")
+    if eid:
+        for m in fd_matches or []:
+            if str(m.get("id") or "") == eid:
+                return m
+    home = fixture.get("home") or ""
+    away = fixture.get("away") or ""
+    for m in fd_matches or []:
+        ht = m.get("homeTeam") or {}
+        at = m.get("awayTeam") or {}
+        home_ok = any(teams_same(home, ht.get(k) or "") for k in ("name", "shortName", "tla"))
+        away_ok = any(teams_same(away, at.get(k) or "") for k in ("name", "shortName", "tla"))
+        if home_ok and away_ok:
+            return m
+    return None
+
+
+def _odds_event_for_fixture(fixture: dict, odds_events: List[dict]) -> Optional[dict]:
+    if not fixture:
+        return None
+    eid = str(fixture.get("external_event_id") or "")
+    for ev in odds_events or []:
+        if eid and str(ev.get("id") or "") == eid:
+            return ev
+    home = fixture.get("home") or ""
+    away = fixture.get("away") or ""
+    for ev in odds_events or []:
+        if teams_same(home, ev.get("home_team") or "") and teams_same(away, ev.get("away_team") or ""):
+            return ev
+    return None
+
+
 async def refresh_results_into_gameweek(db, season_id: str, gw: int) -> dict:
     gw_doc = await get_gameweek(db, season_id, int(gw))
     if not gw_doc:
         return {"updated": 0}
     fixtures = list(gw_doc.get("fixtures") or [])
     fd_matches = await _fetch_football_data_pl_matches()
-    by_id = {str(m.get("id")): m for m in fd_matches if m.get("id") is not None}
     updated = 0
     new_fx = []
     for f in fixtures:
-        eid = str(f.get("external_event_id") or "")
-        m = by_id.get(eid)
+        m = _fd_match_for_fixture(f, fd_matches)
         if m:
             score = (m.get("score") or {}).get("fullTime") or {}
             nxt = _apply_fd_status(f, m.get("status") or "", score.get("home"), score.get("away"))
-            if nxt.get("result") != f.get("result"):
+            if m.get("id") is not None:
+                nxt["fd_match_id"] = str(m.get("id"))
+            if nxt.get("result") != f.get("result") or nxt.get("home_score") != f.get("home_score") or nxt.get("away_score") != f.get("away_score"):
                 updated += 1
             new_fx.append(nxt)
         else:
             new_fx.append(f)
-    if updated:
-        fixtures = new_fx
+    fixtures = new_fx
     odds_events = await _fetch_odds_epl_events()
     if odds_events:
-        by_odds_id = {str(ev.get("id") or ""): ev for ev in odds_events if ev.get("id")}
         merged = []
         for f in fixtures:
             nxt = dict(f)
-            ev = by_odds_id.get(str(f.get("external_event_id") or ""))
-            if not ev:
-                hn = name_norm(f.get("home") or "")
-                an = name_norm(f.get("away") or "")
-                for cand in odds_events:
-                    if name_norm(cand.get("home_team") or "") == hn and name_norm(cand.get("away_team") or "") == an:
-                        ev = cand
-                        break
-            if ev and ev.get("completed") and ev.get("scores") and nxt.get("result") not in ("home", "away", "draw", "postponed"):
+            if nxt.get("result") in ("home", "away", "draw", "postponed"):
+                merged.append(nxt)
+                continue
+            ev = _odds_event_for_fixture(nxt, odds_events)
+            scores = ev.get("scores") if ev else None
+            if ev and scores:
                 home = (ev.get("home_team") or nxt.get("home") or "").strip()
                 away = (ev.get("away_team") or nxt.get("away") or "").strip()
                 try:
-                    by_name = {(s.get("name") or "").strip(): int(s.get("score")) for s in (ev.get("scores") or [])}
+                    by_name = {(s.get("name") or "").strip(): int(s.get("score")) for s in (scores or [])}
                     hs = by_name.get(home)
                     aws = by_name.get(away)
+                    if hs is None or aws is None:
+                        for nm, sc in by_name.items():
+                            if teams_same(home, nm):
+                                hs = sc
+                            elif teams_same(away, nm):
+                                aws = sc
                     if hs is not None and aws is not None:
                         nxt["home_score"] = hs
                         nxt["away_score"] = aws
@@ -1340,6 +1536,30 @@ async def refresh_results_into_gameweek(db, season_id: str, gw: int) -> dict:
                         updated += 1
                 except Exception:
                     pass
+            merged.append(nxt)
+        fixtures = merged
+        new_fx = merged
+    tsdb = await _fetch_thesportsdb_pl_results(int(gw))
+    if tsdb:
+        merged = []
+        for f in fixtures:
+            nxt = dict(f)
+            if nxt.get("result") in ("home", "away", "draw", "postponed"):
+                merged.append(nxt)
+                continue
+            hit = None
+            for ev in tsdb:
+                if teams_same(nxt.get("home") or "", ev.get("home") or "") and teams_same(nxt.get("away") or "", ev.get("away") or ""):
+                    hit = ev
+                    break
+            if hit:
+                if hit.get("result") == "postponed":
+                    nxt["result"] = "postponed"
+                else:
+                    nxt["home_score"] = hit.get("home_score")
+                    nxt["away_score"] = hit.get("away_score")
+                    nxt["result"] = hit.get("result")
+                updated += 1
             merged.append(nxt)
         fixtures = merged
         new_fx = merged

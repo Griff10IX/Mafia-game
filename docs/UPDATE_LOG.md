@@ -6,11 +6,73 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-31[/color][/b] — [b]Garage: faster bulk melt[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] Melting a stack of cars at once (up to 100) was lagging the garage because each car was loaded one by one. Bulk melt is quicker now. Still [b]100 cars per click[/b].[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-30[/color][/b] — [b]5 Wheel spins · next updates 3 September[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] Every player has been credited [b]5 banked Wheel of Fortune free spins[/b] for recent update downtime. Use them on [b]Wheel of Fortune[/b].[/color]
+[*][color=#888888][b]New:[/b] There will be [b]no new updates until 3 September[/b].[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-30[/color][/b] — [b]Store: buy loot box pieces[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Game → Store → Loot[/b] sells fixed loot piece packs (1,000–5,000) for [b]card / GBP only[/b]. Each pack also banks Wheel of Fortune free spins (2 per 1,000 pieces). These packs do not also receive the Points-tab 1,100 pieces / £10 bonus.[/color]
+[*][color=#888888][b]New:[/b] Pack prices: [b]1,000[/b] for [b]£7[/b], [b]2,000[/b] for [b]£13.50[/b], [b]3,000[/b] for [b]£19.50[/b], [b]4,000[/b] for [b]£25[/b], [b]5,000[/b] for [b]£30[/b].[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-30[/color][/b] — [b]Store: more loot pieces + extra Wheel spins[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Game → Store → Points[/b] GBP card checkouts now grant [b]1,100 loot box pieces per whole £10[/b] (110 per whole £1; was 750 / 75). A [b]£40[/b] buy is [b]4,400[/b] pieces.[/color]
+[*][color=#888888][b]Changed:[/b] Every [b]whole £10[/b] on a [b]GBP store checkout[/b] now credits [b]2 banked Wheel of Fortune free spins[/b] (was 1). Leftover under £10 on that checkout still does not roll over.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-30[/color][/b] — [b]VIP Game Pass: 25% shorter action waits[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] While [b]VIP Game Pass[/b] is active, crime, GTA, OC, jail, and most other action waits are [b]25% shorter[/b] (for example Pickpocket 15s → 11s, Street Parking GTA 60s → 45s). Travel, airport, and Kill page timers are unchanged. When the pass ends, the next action uses the full wait again.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-30[/color][/b] — [b]Loot exclusive: 540K Special Roadster[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] Ultra Rare vaults can drop the [b]1936 Mercedes-Benz 540K Special Roadster[/b] (1/1). Admin and mod copies do not count. If melted, it returns to the loot pool.[/color]
+[*][color=#888888][b]New:[/b] While you own it: [b]2s travel[/b] ([b]25 trips per day at 1 second[/b]), [b]+75 loot box pieces[/b] each week, [b]2 extra Wheel of Fortune[/b] free spins per day, [b]1 Mission Skip[/b] per week, [b]3 Free Robot Bodyguard[/b] hires per week, and [b]+7 extra airport trips[/b] per hour.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-30[/color][/b] — [b]Armoury, jail, travel, profile[/b][/size]
 [quote]
 [list]
+[*][color=#888888][b]Fixed:[/b] Melting a [b]loot exclusive[/b] car puts it back in the loot exclusive pool. The Cadillac V-16 can drop again from the exclusive roll, and the Model SJ from Rare / Ultra Rare, while no player owns that car. Admin and mod copies do not count.[/color]
+[*][color=#888888][b]Fixed:[/b] Claiming an unowned [b]Armoury[/b] at [b]$0[/b] claim cost did nothing. Free claims work again.[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Interest bank[/b] Raise cap showed +$0 and would not buy. Each purchase now adds [b]$2,500,000,000[/b] (1,000 points).[/color]
+[*][color=#888888][b]Changed:[/b] Raising the [b]Interest bank[/b] cap is on the [b]Points Store[/b] only (tap once, then Confirm).[/color]
 [*][color=#888888][b]New:[/b] [b]Interest bank[/b] cap starts at [b]$5,000,000,000[/b] and can be raised with points: [b]1,000 points[/b] per [b]$2,500,000,000[/b], up to [b]$50,000,000,000[/b] in active deposits.[/color]
-[*][color=#888888][b]New:[/b] [b]Exclusive[/b] and [b]loot exclusive[/b] cars generate loot box pieces each week (Cadillac exclusive +10, loot exclusive Cadillac +18, Model SJ +25, max 25). Copies of the same car do not stack. Pieces credit on Monday UTC.[/color]
+[*][color=#888888][b]New:[/b] [b]Exclusive[/b] and [b]loot exclusive[/b] cars generate loot box pieces each week (Cadillac exclusive +10, loot exclusive Cadillac +18, Model SJ +25, 540K +75, unique models stack up to 128). Copies of the same car do not stack. Pieces credit on Monday UTC.[/color]
 [*][color=#888888][b]Changed:[/b] [b]Exclusive[/b] and [b]loot exclusive[/b] View Car links change each week (new personal id). The car and owner stay the same; old links stop working.[/color]
 [*][color=#888888][b]Changed:[/b] Faster exclusive cars add extra airport trips per hour (VIP +1, exclusive +2, loot exclusive +5, 2s Model SJ +7), on top of the 10 included and up to 10 bought airmiles.[/color]
 [*][color=#888888][b]Fixed:[/b] [b]Booze Skip Run[/b] no longer changes your city. The token skips the drive wait and uses the route prices — you stay where you are.[/color]

@@ -464,6 +464,38 @@ def vip_game_pass_entitlement_active(user: dict, *, now_utc: Optional[datetime] 
     return bool(dt > now)
 
 
+# Next-attempt waits while VIP Game Pass is active. Existing perks apply first, then this.
+# Travel, airport, and Kill-page timers are not scaled here.
+GAME_PASS_WAIT_MULT = 0.75
+
+
+def apply_game_pass_wait_seconds(seconds: Any, user: Optional[dict], *, now_utc: Optional[datetime] = None) -> int:
+    """Scale a wait in seconds by 0.75 while VIP Game Pass is active. Inactive/expired pass returns the original."""
+    try:
+        s = int(round(float(seconds or 0)))
+    except (TypeError, ValueError):
+        return 0
+    if s <= 0:
+        return s
+    if not vip_game_pass_entitlement_active(user or {}, now_utc=now_utc):
+        return s
+    # Half-up so 30s → 23s (Python round() is banker's and would yield 22).
+    return max(1, int(s * GAME_PASS_WAIT_MULT + 0.5))
+
+
+def apply_game_pass_wait_hours(hours: Any, user: Optional[dict], *, now_utc: Optional[datetime] = None) -> float:
+    """Scale a wait in hours by 0.75 while VIP Game Pass is active. Inactive/expired pass returns the original."""
+    try:
+        h = float(hours or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    if h <= 0:
+        return h
+    if not vip_game_pass_entitlement_active(user or {}, now_utc=now_utc):
+        return h
+    return h * GAME_PASS_WAIT_MULT
+
+
 def rank_points_for_game_pass_season(user: dict) -> int:
     """Season-isolated RP that drives Game Pass micro tiers (mirrors positive rank XP gains)."""
     try:

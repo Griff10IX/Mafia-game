@@ -49,6 +49,61 @@ function formatChatTime(value) {
   return sameDay ? time : `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
 }
 
+const GIRLY_MULTI = ['#FF69B4', '#FF1493', '#C026D3', '#F472B6', '#FB7185', '#E879F9'];
+const RAINBOW_MULTI = ['#FF0040', '#FF7A00', '#FFD400', '#39FF14', '#00C8FF', '#7A5CFF', '#FF00AA'];
+const GAY_MULTI = ['#E40303', '#FF8C00', '#FFED00', '#008026', '#24408E', '#732982'];
+const LETTER_PALETTES = {
+  'girly-multi': GIRLY_MULTI,
+  'rainbow': RAINBOW_MULTI,
+  'rainbow-multi': RAINBOW_MULTI,
+  'gay-multi': GAY_MULTI,
+  'pride-multi': GAY_MULTI,
+};
+
+function letterPalette(color) {
+  const c = String(color || '').trim().toLowerCase();
+  if (LETTER_PALETTES[c]) return LETTER_PALETTES[c];
+  if (c.startsWith('girly-')) return GIRLY_MULTI;
+  return null;
+}
+
+function chatNameStyle(color, fallback) {
+  const c = String(color || '').trim();
+  if (c.startsWith('linear-gradient')) {
+    return {
+      backgroundImage: c,
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      color: 'transparent',
+      WebkitTextFillColor: 'transparent',
+    };
+  }
+  if (c.startsWith('#')) return { color: c };
+  return { color: fallback };
+}
+
+function ChatUsername({ username, color, fallback, ...linkProps }) {
+  const c = String(color || '').trim();
+  const low = c.toLowerCase();
+  const name = username || 'Unknown';
+  const fallbackColor = fallback || 'rgba(var(--noir-primary-rgb), .78)';
+  const palette = letterPalette(c);
+  const anim = low === 'rainbow-anim';
+  return (
+    <Link
+      {...linkProps}
+      className={`shrink-0 font-heading text-[10px] font-bold hover:underline ${anim ? 'chat-name-rainbow-anim' : ''} ${linkProps.className || ''}`}
+      style={palette || anim ? undefined : chatNameStyle(c, fallbackColor)}
+    >
+      {palette
+        ? name.split('').map((ch, i) => (
+            <span key={`${i}-${ch}`} style={{ color: palette[i % palette.length] }}>{ch === ' ' ? '\u00a0' : ch}</span>
+          ))
+        : name}
+    </Link>
+  );
+}
+
 function sortAndDedupe(rows) {
   const byId = new Map();
   rows.forEach((row) => {
@@ -150,6 +205,7 @@ export default function GameChat({
   const [visible, setVisible] = useState(() => document.visibilityState === 'visible');
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
+  const rootRef = useRef(null);
   const inFlightRef = useRef(new Map());
   const initialLoadedRef = useRef({ global: false, family: false });
   const seenMessageIdRef = useRef({
@@ -332,6 +388,68 @@ export default function GameChat({
     }
   }, [messages, open]);
 
+  const closeChat = useCallback(() => {
+    inputRef.current?.blur();
+    setShowGifPicker(false);
+    setShowEmojis(false);
+    setSettingsOpen(false);
+    setOpen(false);
+  }, []);
+
+  const hideChat = useCallback(() => {
+    closeChat();
+    onHide?.();
+  }, [closeChat, onHide]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeChat();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [closeChat, open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const root = rootRef.current;
+    const vv = window.visualViewport;
+    const apply = () => {
+      if (!root) return;
+      const height = vv ? Math.round(vv.height) : window.innerHeight;
+      const offset = vv ? Math.round(vv.offsetTop) : 0;
+      const keyboardOpen = vv ? (window.innerHeight - vv.height > 80) : false;
+      root.style.setProperty('--game-chat-vvh', `${height}px`);
+      if (keyboardOpen) {
+        root.style.top = `${offset}px`;
+        root.style.bottom = 'auto';
+        root.style.height = `${height}px`;
+        root.dataset.chatKeyboard = '1';
+      } else {
+        root.style.top = '';
+        root.style.bottom = '';
+        root.style.height = '';
+        root.dataset.chatKeyboard = '';
+      }
+    };
+    apply();
+    if (!vv) return undefined;
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+    return () => {
+      vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
+      if (!root) return;
+      root.style.removeProperty('--game-chat-vvh');
+      root.style.top = '';
+      root.style.bottom = '';
+      root.style.height = '';
+      root.dataset.chatKeyboard = '';
+    };
+  }, [open]);
+
   const switchChannel = (nextChannel) => {
     setChannel(nextChannel);
     setReplyingTo(null);
@@ -485,6 +603,7 @@ export default function GameChat({
 
   return (
     <div
+      ref={rootRef}
       data-layout="game-chat-fab"
       className={`game-chat-root ${mobileBottomClearance ? 'game-chat-clear-mobile-nav' : ''}`}
     >
@@ -514,12 +633,15 @@ export default function GameChat({
           50% { transform: scale(1.25); box-shadow: 0 0 13px rgba(34,211,238,1); }
         }
         .game-chat-window {
-          width: min(390px, calc(100vw - 24px)); height: min(590px, calc(100dvh - 32px));
-          max-height: min(590px, calc(100dvh - 32px)); display: flex; flex-direction: column;
+          width: min(390px, calc(100vw - 24px)); height: min(590px, calc(var(--game-chat-vvh, 100dvh) - 32px));
+          max-height: min(590px, calc(var(--game-chat-vvh, 100dvh) - 32px)); display: flex; flex-direction: column;
           overflow: hidden; border-radius: 12px; color: var(--noir-foreground);
           background: var(--noir-content); border: 1px solid rgba(var(--noir-primary-rgb), .35);
           box-shadow: 0 20px 60px rgba(0,0,0,.72), 0 0 24px rgba(var(--noir-primary-rgb), .08);
           pointer-events: auto;
+        }
+        .game-chat-root[data-chat-keyboard="1"] .game-chat-window {
+          width: 100%; height: 100%; max-height: 100%;
         }
         .game-chat-message-content .inline-smiley {
           display: inline !important; width: ${FORUM_INLINE_SMILEY_PX}px !important;
@@ -554,12 +676,28 @@ export default function GameChat({
             bottom: calc(68px + env(safe-area-inset-bottom, 0px));
           }
           .game-chat-window {
-            width: 100%; height: min(620px, calc(100dvh - 92px));
-            max-height: calc(100dvh - 92px);
+            width: 100%; height: min(620px, calc(var(--game-chat-vvh, 100dvh) - 92px));
+            max-height: calc(var(--game-chat-vvh, 100dvh) - 92px);
           }
           .game-chat-clear-mobile-nav .game-chat-window {
-            height: min(620px, calc(100dvh - 148px)); max-height: calc(100dvh - 148px);
+            height: min(620px, calc(var(--game-chat-vvh, 100dvh) - 148px)); max-height: calc(var(--game-chat-vvh, 100dvh) - 148px);
           }
+          .game-chat-root[data-chat-keyboard="1"] .game-chat-window {
+            height: 100%; max-height: 100%;
+          }
+        }
+        @keyframes chat-name-rainbow-shift {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+        .chat-name-rainbow-anim {
+          background-image: linear-gradient(90deg, #ff0040, #ffae00, #ffe600, #39ff14, #00c8ff, #7a5cff, #ff00aa, #ff0040);
+          background-size: 200% 100%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          -webkit-text-fill-color: transparent;
+          animation: chat-name-rainbow-shift 1.6s linear infinite;
         }
       `}</style>
 
@@ -582,10 +720,7 @@ export default function GameChat({
                   <button
                     type="button"
                     className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-white/5"
-                    onClick={() => {
-                      setOpen(false);
-                      onHide();
-                    }}
+                    onClick={hideChat}
                     title="Hide Game Chat"
                     aria-label="Hide Game Chat"
                   >
@@ -597,7 +732,7 @@ export default function GameChat({
                     <Settings size={16} />
                   </button>
                 )}
-                <button type="button" className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-white/5" onClick={() => setOpen(false)} aria-label="Close game chat">
+                <button type="button" className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-white/5" onClick={closeChat} aria-label="Close game chat">
                   <X size={18} />
                 </button>
               </div>
@@ -676,15 +811,14 @@ export default function GameChat({
                 }}
               >
                 <div className={`flex items-baseline gap-2 ${!row.is_own && !row.sender_is_staff && row.sender_id != null ? 'pr-[88px]' : 'pr-11'}`}>
-                  <Link
+                  <ChatUsername
+                    username={row.username}
+                    color={row.author_online_color}
+                    fallback={row.is_own ? 'var(--noir-primary)' : 'rgba(var(--noir-primary-rgb), .78)'}
                     to={`/profile/${encodeURIComponent(row.username || '')}`}
-                    className="shrink-0 font-heading text-[10px] font-bold hover:underline"
-                    style={{ color: row.author_online_color || (row.is_own ? 'var(--noir-primary)' : 'rgba(var(--noir-primary-rgb), .78)') }}
                     onPointerDown={() => warmProfilePrefetchFromUsername(row.username)}
                     onPointerEnter={() => warmProfilePrefetchFromUsername(row.username)}
-                  >
-                    {row.username || 'Unknown'}
-                  </Link>
+                  />
                   <time className="text-[8px] font-heading" style={{ color: 'var(--noir-muted)' }}>{formatChatTime(row.created_at)}</time>
                   <span
                     className="inline-flex items-center gap-0.5 text-[8px] font-heading tabular-nums"

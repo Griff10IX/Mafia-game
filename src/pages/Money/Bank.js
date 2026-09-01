@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { Landmark, ShieldCheck, ArrowRightLeft, Clock, Coins, ChevronDown, ChevronRight, Copy, Lock, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
@@ -10,7 +10,7 @@ import AutoRefreshNote from '../../components/AutoRefreshNote';
 import styles from '../../styles/noir.module.css';
 import { formatGameDateTimeShort as formatDateTime } from '../../utils/gameDateTime';
 
-const BANK_CACHE_KEY = 'mafia_bank_v1';
+const BANK_CACHE_KEY = 'mafia_bank_v2';
 
 const BANK_STYLES = `
   @keyframes bank-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
@@ -139,12 +139,6 @@ function formatMoney(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
-function formatNumber(n) {
-  const num = Number(n ?? 0);
-  if (Number.isNaN(num)) return '0';
-  return Math.trunc(num).toLocaleString();
-}
-
 function timeLeft(iso) {
   if (!iso) return null;
   const until = new Date(iso);
@@ -190,16 +184,15 @@ const InterestBankCard = ({
   onDurationChange,
   preview,
   onDeposit,
-  onUpgradeLimit,
-  upgrading = false,
 }) => {
   const limit = Number(overview?.interest_limit ?? meta?.interest_max_unclaimed_principal ?? 0);
   const principal = Number(overview?.interest_principal ?? 0);
   const hardMax = Number(overview?.interest_limit_max ?? meta?.interest_limit_max ?? 50_000_000_000);
-  const add = Number(overview?.interest_limit_upgrade_add ?? 0);
+  const step = Number(overview?.interest_limit_step ?? meta?.interest_limit_step ?? 2_500_000_000);
   const cost = Number(overview?.interest_limit_upgrade_cost ?? meta?.interest_limit_upgrade_cost ?? 1000);
-  const atMax = !!overview?.interest_limit_at_max || limit >= hardMax;
-  const pts = Number(overview?.points ?? 0);
+  const atMax = !!overview?.interest_limit_at_max || (limit > 0 && limit >= hardMax);
+  const addFromApi = Number(overview?.interest_limit_upgrade_add);
+  const add = Number.isFinite(addFromApi) && addFromApi > 0 ? addFromApi : (atMax ? 0 : step);
   const remaining = Math.max(0, limit - principal);
   const pct = limit > 0 ? Math.min(100, (principal / limit) * 100) : 0;
   return (
@@ -268,18 +261,19 @@ const InterestBankCard = ({
       <Lock size={13} />
       Deposit
     </button>
-    <button
-      type="button"
-      onClick={onUpgradeLimit}
-      disabled={upgrading || atMax || pts < cost}
-      className={`${styles.surface} bk-btn`}
-    >
+    <div className="bk-note">
       {atMax
         ? `Interest cap maxed (${formatMoney(hardMax)})`
-        : upgrading
-          ? 'Raising…'
-          : `Raise cap +${formatMoney(add)} (${formatNumber(cost)} pts)`}
-    </button>
+        : (
+          <>
+            Raise this cap in the{' '}
+            <Link to="/game/store?tab=upgrades#store-interest-limit" className="text-primary hover:underline">
+              Points Store
+            </Link>
+            {' '}(+{formatMoney(add)} / {cost.toLocaleString()} pts).
+          </>
+        )}
+    </div>
   </div>
   );
 };
@@ -514,7 +508,6 @@ export default function Bank() {
   const sendMoneyRef = useRef(null);
   const [transferAmount, setTransferAmount] = useState('');
   const [sending, setSending] = useState(false);
-  const [upgradingLimit, setUpgradingLimit] = useState(false);
 
   const COLLAPSED_KEY = 'mafia_bank_collapsed';
   const [collapsedSections, setCollapsedSections] = useState(() => {
@@ -603,21 +596,6 @@ export default function Bank() {
       await fetchAll();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to deposit');
-    }
-  };
-
-  const upgradeInterestLimit = async () => {
-    if (upgradingLimit) return;
-    setUpgradingLimit(true);
-    try {
-      const res = await api.post('/bank/interest/upgrade-limit');
-      toast.success(res.data?.message || 'Interest limit raised');
-      refreshUser();
-      await fetchAll();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to raise interest limit');
-    } finally {
-      setUpgradingLimit(false);
     }
   };
 
@@ -721,8 +699,6 @@ export default function Bank() {
           onDurationChange={setDurationHours}
           preview={preview}
           onDeposit={doDeposit}
-          onUpgradeLimit={upgradeInterestLimit}
-          upgrading={upgradingLimit}
         />
       </BankSection>
 

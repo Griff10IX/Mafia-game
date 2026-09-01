@@ -34,6 +34,7 @@ from server import (
 from utils.minigame_captcha_gate import require_turnstile_for_game_action
 from utils.point_provenance import log_points_event
 from utils.family_perks import family_perk_modifiers, FAMILY_PERK_BOOZE_BONUS_CAP
+from utils.game_pass_micro_rewards import apply_game_pass_wait_seconds
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_BOOZE
 
 
@@ -655,7 +656,8 @@ async def _booze_buy_impl(
         raise HTTPException(status_code=400, detail=f"Over capacity (max {capacity} units)")
     jail_chance = _rng.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
     if _rng.random() < jail_chance:
-        jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
+        jail_sec = apply_game_pass_wait_seconds(BOOZE_RUN_JAIL_SECONDS, user)
+        jail_until = datetime.now(timezone.utc) + timedelta(seconds=jail_sec)
         inc_loss, set_loss, loss_basis = _booze_confiscation_profit_updates(user)
         await db.users.update_one(
             {"id": user["id"]},
@@ -698,7 +700,7 @@ async def _booze_buy_impl(
             "message": "Busted! Prohibition agents got you. You're going to jail.",
             "caught": True,
             "jail_until": jail_until.isoformat(),
-            "jail_seconds": BOOZE_RUN_JAIL_SECONDS,
+            "jail_seconds": jail_sec,
         }
         if loss_basis > 0:
             out["inventory_loss_basis"] = loss_basis
@@ -780,7 +782,8 @@ async def _booze_sell_impl(
             )
         raise HTTPException(status_code=400, detail=f"Only carrying {have} units")
     if await _booze_roll_jail(user.get("id", "")):
-        jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
+        jail_sec = apply_game_pass_wait_seconds(BOOZE_RUN_JAIL_SECONDS, user)
+        jail_until = datetime.now(timezone.utc) + timedelta(seconds=jail_sec)
         inc_loss, set_loss, loss_basis = _booze_confiscation_profit_updates(user)
         await db.users.update_one(
             {"id": user["id"]},
@@ -827,7 +830,7 @@ async def _booze_sell_impl(
             "message": "Busted! Prohibition agents got you. You're going to jail.",
             "caught": True,
             "jail_until": jail_until.isoformat(),
-            "jail_seconds": BOOZE_RUN_JAIL_SECONDS,
+            "jail_seconds": jail_sec,
             "booze_id": booze_id,
             "new_carrying": 0,
             "carrying_cleared": True,

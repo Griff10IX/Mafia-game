@@ -26,14 +26,20 @@ from utils.store_points_pricing import (
     validate_custom_gbp_budget,
     validate_custom_points_input,
 )
+from utils.loot_piece_store import (
+    get_loot_piece_pack,
+    is_loot_piece_package,
+    stripe_product_name as loot_piece_stripe_product_name,
+)
 
 logger = logging.getLogger(__name__)
 
-# GBP store points (Stripe): bonus loot box pieces — 75 pieces per whole £1 charged (~9,000 per £120; currency must be GBP).
+# GBP store points (Stripe): bonus loot box pieces — 110 pieces per whole £1 charged (1,100 per £10; currency must be GBP).
 STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK = 100
-STORE_POINTS_LOOT_PIECES_PER_BLOCK = 75
-# GBP store points: 1 bonus Wheel of Fortune free spin per whole £10 charged (per purchase; leftover under £10 does not carry).
+STORE_POINTS_LOOT_PIECES_PER_BLOCK = 110
+# GBP store: 2 bonus Wheel of Fortune free spins per whole £10 charged (per purchase; leftover under £10 does not carry).
 STORE_POINTS_WHEEL_GBP_MINOR_PER_SPIN = 1000
+STORE_POINTS_WHEEL_SPINS_PER_BLOCK = 2
 # Permanent card-points multiplier (+100% = double points vs listed/base amount).
 STORE_POINTS_EVENT_BONUS_RATE = 1.0
 
@@ -44,6 +50,32 @@ GAME_PASS_PRESTIGE_PACKAGE_ID = "game_pass_prestige_10"
 # No new Game Pass checkout while an active pass is within this many days of rank_xp_pass_token_expires_at.
 GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS = 7
 GAME_PASS_SEASON_END_AT = DEFAULT_GAME_PASS_SEASON_END_AT
+
+
+def _is_non_points_stripe_package(package_id: Optional[str]) -> bool:
+    pid = (package_id or "").strip()
+    return pid in {
+        RANK_XP_PASS_PACKAGE_ID,
+        AUTO_RANK_PERMANENT_PACKAGE_ID,
+        DEAD_ALIVE_REVIVE_PACKAGE_ID,
+        GAME_PASS_PRESTIGE_PACKAGE_ID,
+    } or is_loot_piece_package(pid)
+
+
+def _loot_piece_status_fields(package_id: Optional[str], txn: Optional[dict] = None) -> Dict[str, int]:
+    pack = get_loot_piece_pack(package_id)
+    if not pack:
+        return {}
+    t = txn or {}
+    try:
+        pieces = int(t.get("loot_box_pieces") or pack["loot_box_pieces"])
+    except (TypeError, ValueError):
+        pieces = int(pack["loot_box_pieces"])
+    try:
+        spins = int(t.get("wheel_bonus_free_spins") or pack["wheel_bonus_free_spins"])
+    except (TypeError, ValueError):
+        spins = int(pack["wheel_bonus_free_spins"])
+    return {"loot_box_pieces": pieces, "wheel_bonus_free_spins": spins}
 
 
 def game_pass_purchase_blocked_in_final_window(
@@ -222,7 +254,7 @@ async def _notify_staff_custom_points_fulfillment_blocked(
 
 
 def loot_box_pieces_for_gbp_stripe_minor(amount_minor: Optional[int], currency: Optional[str]) -> int:
-    """Whole £1 blocks (100 pence each) → 75 loot box pieces (~9,000 per £120). Non-GBP or invalid → 0."""
+    """Whole £1 blocks (100 pence each) → 110 loot box pieces (1,100 per £10). Non-GBP or invalid → 0."""
     if amount_minor is None:
         return 0
     cur = (currency or "gbp").strip().lower()
@@ -238,7 +270,7 @@ def loot_box_pieces_for_gbp_stripe_minor(amount_minor: Optional[int], currency: 
 
 
 def wheel_bonus_spins_for_gbp_stripe_minor(amount_minor: Optional[int], currency: Optional[str]) -> int:
-    """Whole £10 blocks (1000 pence each) → 1 bonus Wheel free spin. Per purchase; Non-GBP or invalid → 0."""
+    """Whole £10 blocks (1000 pence each) → 2 bonus Wheel free spins. Per purchase; Non-GBP or invalid → 0."""
     if amount_minor is None:
         return 0
     cur = (currency or "gbp").strip().lower()
@@ -250,7 +282,7 @@ def wheel_bonus_spins_for_gbp_stripe_minor(amount_minor: Optional[int], currency
         return 0
     if m <= 0:
         return 0
-    return m // STORE_POINTS_WHEEL_GBP_MINOR_PER_SPIN
+    return (m // STORE_POINTS_WHEEL_GBP_MINOR_PER_SPIN) * STORE_POINTS_WHEEL_SPINS_PER_BLOCK
 
 
 def _store_points_gbp_bonus_incs(amount_minor: Optional[int], currency: Optional[str]) -> Dict[str, int]:
@@ -411,9 +443,12 @@ def _minor_and_currency_for_store_points_loot_bonus(
     """
     Resolve Stripe total (minor units) + currency for loot bonus on a points purchase.
     Prefer recorded Stripe amount; else custom expected pence; else catalog GBP price as pence.
+    Loot-piece SKUs skip this path (pack loot/spins are granted separately — no 110/£1 double-dip).
     """
     t = txn or {}
     cur = str(t.get("stripe_currency") or "gbp").strip().lower() or "gbp"
+    if is_loot_piece_package(package_id):
+        return None, cur
     raw = t.get("stripe_amount_total_minor")
     if raw is not None:
         try:
@@ -461,10 +496,7 @@ def _resolve_points_for_stripe_payment(
             return 0, "invalid_points"
         return pts, None
     if (
-        package_id != RANK_XP_PASS_PACKAGE_ID
-        and package_id != AUTO_RANK_PERMANENT_PACKAGE_ID
-        and package_id != DEAD_ALIVE_REVIVE_PACKAGE_ID
-        and package_id != GAME_PASS_PRESTIGE_PACKAGE_ID
+        not _is_non_points_stripe_package(package_id)
         and txn
     ):
         pts = int(txn.get("points") or 0)
@@ -634,13 +666,8 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
     is_auto_rank_permanent = package_id == AUTO_RANK_PERMANENT_PACKAGE_ID
     is_dead_alive_revive = package_id == DEAD_ALIVE_REVIVE_PACKAGE_ID
     is_game_pass_prestige = package_id == GAME_PASS_PRESTIGE_PACKAGE_ID
-    if not user_id or (
-        points <= 0
-        and not is_rank_xp_pass
-        and not is_auto_rank_permanent
-        and not is_dead_alive_revive
-        and not is_game_pass_prestige
-    ):
+    is_loot_pieces = is_loot_piece_package(package_id)
+    if not user_id or (points <= 0 and not _is_non_points_stripe_package(package_id)):
         return {"credited": False, "preorder": False}
     
     now = datetime.now(timezone.utc)
@@ -1174,6 +1201,59 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
             "bonus_summary": prestige_out.get("bonus_summary"),
         }
 
+    if is_loot_pieces:
+        pack = get_loot_piece_pack(package_id)
+        if not pack:
+            return {"credited": False, "preorder": False}
+        pieces = int(pack["loot_box_pieces"])
+        spins = int(pack["wheel_bonus_free_spins"])
+        user = await db.users.find_one({"id": user_id}, {"_id": 0, "points": 1})
+        points_before = int(user.get("points") or 0) if user else 0
+        result = await db.payment_transactions.update_one(
+            {"session_id": session_id, "payment_status": {"$nin": ["completed", "preorder_pending", "manual_credit_pending"]}},
+            {
+                "$set": {
+                    "payment_status": "completed",
+                    "points_credited_at": now_iso,
+                    "points_before": points_before,
+                    "points_after": points_before,
+                    "loot_box_pieces": pieces,
+                    "wheel_bonus_free_spins": spins,
+                }
+            },
+        )
+        if result.modified_count == 0:
+            return {"credited": False, "preorder": False}
+        user_inc: Dict[str, int] = {"loot_box_pieces": pieces}
+        if spins:
+            user_inc["wheel_bonus_free_spins"] = spins
+        await db.users.update_one({"id": user_id}, {"$inc": user_inc})
+        spin_tail = _wheel_spins_notify_sentence(spins)
+        try:
+            await send_notification(
+                user_id,
+                "Loot pieces credited",
+                f"Your purchase of {pieces:,} loot box pieces has been credited.{spin_tail}",
+                "loot_pieces_credited",
+                category="system",
+            )
+        except Exception:
+            logger.exception("loot piece pack notify failed user_id=%s", user_id)
+        logger.info(
+            "Loot piece pack credited: session_id=%s user_id=%s package_id=%s pieces=%s wheel_bonus_spins=%s",
+            session_id,
+            user_id,
+            package_id,
+            pieces,
+            spins,
+        )
+        return {
+            "credited": True,
+            "preorder": False,
+            "loot_box_pieces": pieces,
+            "wheel_bonus_free_spins": spins,
+        }
+
     settings = await db.game_settings.find_one({"_id": "main"})
     auto_credit = settings.get("store_points_auto_credit") if settings else None
     if auto_credit is None:
@@ -1652,8 +1732,20 @@ def register(router):
         store_points_event = await _store_points_event_payload_for_db(db, now)
         price_gbp = 0.0
         expected_amount_minor: Optional[int] = None
+        loot_pack = get_loot_piece_pack(package_id)
 
-        if package_id == CUSTOM_POINTS_PACKAGE_ID:
+        if loot_pack:
+            if request.custom_points is not None or request.custom_gbp is not None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="custom_points and custom_gbp are only allowed when package_id is 'custom'.",
+                )
+            points = 0
+            base_points = 0
+            bonus_points = 0
+            price_gbp = float(loot_pack["price_gbp"])
+            expected_amount_minor = gbp_to_minor_pence(price_gbp)
+        elif package_id == CUSTOM_POINTS_PACKAGE_ID:
             if (request.custom_points is None) == (request.custom_gbp is None):
                 raise HTTPException(
                     status_code=400,
@@ -1692,7 +1784,7 @@ def register(router):
                 AUTO_RANK_PERMANENT_PACKAGE_ID,
                 DEAD_ALIVE_REVIVE_PACKAGE_ID,
                 GAME_PASS_PRESTIGE_PACKAGE_ID,
-            ):
+            ) and not is_loot_piece_package(package_id):
                 points, bonus_points, active_store_points_event = _apply_store_points_event_bonus(base_points, store_points_event)
                 store_points_event = active_store_points_event or store_points_event
             price_gbp = float(package["price_gbp"])
@@ -1777,6 +1869,9 @@ def register(router):
             cancel_url = f"{origin}?payment_cancel=1&session_id={{CHECKOUT_SESSION_ID}}"
         if package_id == GAME_PASS_PRESTIGE_PACKAGE_ID:
             cancel_url = f"{origin}?payment_cancel=1&session_id={{CHECKOUT_SESSION_ID}}"
+        if is_loot_piece_package(package_id):
+            success_url = f"{origin}?tab=loot&session_id={{CHECKOUT_SESSION_ID}}"
+            cancel_url = f"{origin}?tab=loot&payment_cancel=1&session_id={{CHECKOUT_SESSION_ID}}"
 
         def _create():
             import stripe
@@ -1792,6 +1887,8 @@ def register(router):
                 product_name = "Dead > Alive revive"
             if package_id == GAME_PASS_PRESTIGE_PACKAGE_ID:
                 product_name = "Game Pass Prestige"
+            if is_loot_piece_package(package_id):
+                product_name = loot_piece_stripe_product_name(package_id)
             md = {
                 "user_id": current_user["id"],
                 "package_id": package_id,
@@ -1864,6 +1961,9 @@ def register(router):
             txn_doc["expected_amount_minor"] = int(expected_amount_minor)
         if package_id == AUTO_RANK_PERMANENT_PACKAGE_ID:
             txn_doc["buyer_email"] = (current_user.get("email") or "").strip().lower()
+        if loot_pack:
+            txn_doc["loot_box_pieces"] = int(loot_pack["loot_box_pieces"])
+            txn_doc["wheel_bonus_free_spins"] = int(loot_pack["wheel_bonus_free_spins"])
         await db.payment_transactions.insert_one(txn_doc)
 
         # Refresh session activity: user is about to spend unbounded time on Stripe with no API calls;
@@ -2011,6 +2111,7 @@ def register(router):
                 out["prestige_pending"] = transaction.get("game_pass_prestige_pending")
                 out["game_pass_prestige_count"] = transaction.get("game_pass_prestige_count")
                 out["bonus_summary"] = transaction.get("game_pass_prestige_bonus_summary")
+            out.update(_loot_piece_status_fields(pkg, transaction))
             return out
         
         if transaction and transaction.get("payment_status") == "manual_credit_pending":
@@ -2112,13 +2213,7 @@ def register(router):
                 is_auto_rank_permanent = package_id == AUTO_RANK_PERMANENT_PACKAGE_ID
                 is_dead_alive_revive = package_id == DEAD_ALIVE_REVIVE_PACKAGE_ID
                 is_game_pass_prestige = package_id == GAME_PASS_PRESTIGE_PACKAGE_ID
-                if (
-                    not points
-                    and not is_rank_xp_pass
-                    and not is_auto_rank_permanent
-                    and not is_dead_alive_revive
-                    and not is_game_pass_prestige
-                ):
+                if not points and not _is_non_points_stripe_package(package_id or ""):
                     logger.warning("GET /payments/status: no points for package session=%s", session_id)
                     return {"status": "pending", "payment_status": "unknown"}
 
@@ -2187,6 +2282,11 @@ def register(router):
                         out["game_pass_prestige_queued"] = True
                         out["prestige_pending"] = credit_result.get("prestige_pending")
                         out["game_pass_prestiged"] = False
+                    out.update(_loot_piece_status_fields(package_id, None))
+                    if credit_result.get("loot_box_pieces"):
+                        out["loot_box_pieces"] = int(credit_result["loot_box_pieces"])
+                    if credit_result.get("wheel_bonus_free_spins"):
+                        out["wheel_bonus_free_spins"] = int(credit_result["wheel_bonus_free_spins"])
                     return out
                     return {
                         "status": "fulfillment_blocked",
@@ -2224,6 +2324,7 @@ def register(router):
                             out["dead_alive_revived"] = True
                         if (package_id or "") == GAME_PASS_PRESTIGE_PACKAGE_ID:
                             out["game_pass_prestiged"] = True
+                        out.update(_loot_piece_status_fields(package_id or "", t2))
                         return out
                     if t2.get("payment_status") == "manual_credit_pending":
                         settings = await db.game_settings.find_one({"_id": "main"})
@@ -2348,10 +2449,7 @@ def register(router):
                     is_game_pass_prestige = package_id == GAME_PASS_PRESTIGE_PACKAGE_ID
                     if not user_id or (
                         points <= 0
-                        and not is_rank_xp_pass
-                        and not is_auto_rank_permanent
-                        and not is_dead_alive_revive
-                        and not is_game_pass_prestige
+                        and not _is_non_points_stripe_package(package_id or "")
                     ):
                         logger.warning("Stripe webhook: missing user_id or invalid package_id, session_id=%s", session.id)
                     else:
@@ -2493,7 +2591,7 @@ def register(router):
                             AUTO_RANK_PERMANENT_PACKAGE_ID,
                             DEAD_ALIVE_REVIVE_PACKAGE_ID,
                             GAME_PASS_PRESTIGE_PACKAGE_ID,
-                        )
+                        ) or is_loot_piece_package(package_id)
                         if user_id and (points > 0 or is_rank_xp_pass or is_entitlement_pkg):
                             result = await _credit_payment_if_pending(db, session_id, user_id, package_id, points)
                             if result.get("credited"):
@@ -2726,7 +2824,7 @@ def register(router):
                 AUTO_RANK_PERMANENT_PACKAGE_ID,
                 DEAD_ALIVE_REVIVE_PACKAGE_ID,
                 GAME_PASS_PRESTIGE_PACKAGE_ID,
-            )
+            ) or is_loot_piece_package(package_id)
             if user_id and (points > 0 or is_rank_xp_pass or is_entitlement_pkg) and rerr != "stripe_amount_mismatch":
                 # Ensure transaction exists
                 if not txn:
@@ -2831,7 +2929,55 @@ def register(router):
         user_id = txn.get("user_id")
         package_id = txn.get("package_id")
         points = txn.get("preorder_points") or txn.get("points") or POINT_PACKAGES.get(package_id, {}).get("points", 0)
-        
+        loot_pack = get_loot_piece_pack(package_id)
+
+        if loot_pack:
+            if not user_id:
+                raise HTTPException(status_code=400, detail="Invalid transaction: missing user_id")
+            pieces = int(loot_pack["loot_box_pieces"])
+            spins = int(loot_pack["wheel_bonus_free_spins"])
+            user = await db.users.find_one({"id": user_id}, {"_id": 0, "points": 1, "username": 1})
+            points_before = int(user.get("points") or 0) if user else 0
+            await db.payment_transactions.update_one(
+                {"session_id": body.session_id},
+                {
+                    "$set": {
+                        "points_before": points_before,
+                        "points_after": points_before,
+                        "loot_box_pieces": pieces,
+                        "wheel_bonus_free_spins": spins,
+                    }
+                },
+            )
+            user_inc: Dict[str, int] = {"loot_box_pieces": pieces}
+            if spins:
+                user_inc["wheel_bonus_free_spins"] = spins
+            await db.users.update_one({"id": user_id}, {"$inc": user_inc})
+            spin_tail = _wheel_spins_notify_sentence(spins)
+            logger.info(
+                "Admin manual credit loot pack: session_id=%s user_id=%s package_id=%s pieces=%s wheel_bonus_spins=%s by=%s",
+                body.session_id,
+                user_id,
+                package_id,
+                pieces,
+                spins,
+                current_user.get("username"),
+            )
+            await send_notification(
+                user_id,
+                "Loot pieces credited",
+                f"Your purchase of {pieces:,} loot box pieces has been credited.{spin_tail}",
+                "loot_pieces_credited",
+                category="system",
+            )
+            return {
+                "message": f"Credited {pieces:,} loot box pieces to {user.get('username', 'user')}",
+                "credited": True,
+                "loot_box_pieces": pieces,
+                "wheel_bonus_free_spins": spins,
+                "username": (user or {}).get("username"),
+            }
+
         if not user_id or points <= 0:
             raise HTTPException(status_code=400, detail="Invalid transaction: missing user_id or points")
         

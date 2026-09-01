@@ -42,6 +42,7 @@ from server import (
     log_activity,
     log_minigame_payout
 )
+from utils.game_pass_micro_rewards import apply_game_pass_wait_hours
 from utils.point_provenance import log_points_event
 from utils.civilian_protection import raise_if_civilian_protected_asset_recipient
 from utils.speakeasy_rewards import (
@@ -1057,19 +1058,28 @@ async def claim_bullet_factory(
     if factory.get("owner_id"):
         raise HTTPException(status_code=400, detail="The armoury in this state already has an owner")
     cc = await load_claim_costs(db)
-    claim_cost = cc["armoury"]
+    claim_cost = int(cc.get("armoury") or 0)
     now = datetime.now(timezone.utc).isoformat()
-    result = await db.users.update_one(
-        {"id": current_user["id"], "money": {"$gte": claim_cost}},
-        {"$inc": {"money": -claim_cost}},
-    )
-    if result.modified_count == 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"You need ${claim_cost:,} to claim the armoury",
+    # MongoDB does not count $inc: 0 as a modification, so a $0 claim must skip the debit.
+    if claim_cost > 0:
+        result = await db.users.update_one(
+            {"id": current_user["id"], "money": {"$gte": claim_cost}},
+            {"$inc": {"money": -claim_cost}},
         )
-    await db.bullet_factory.update_one(
-        {"state": state},
+        if result.modified_count == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"You need ${claim_cost:,} to claim the armoury",
+            )
+    claimed = await db.bullet_factory.update_one(
+        {
+            "state": state,
+            "$or": [
+                {"owner_id": None},
+                {"owner_id": {"$exists": False}},
+                {"owner_id": ""},
+            ],
+        },
         {"$set": {
             "owner_id": current_user["id"],
             "owner_username": current_user.get("username"),
@@ -1078,6 +1088,10 @@ async def claim_bullet_factory(
             "bullet_stock": 0,
         }},
     )
+    if claimed.modified_count == 0:
+        if claim_cost > 0:
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": claim_cost}})
+        raise HTTPException(status_code=400, detail="The armoury in this state already has an owner")
     return {
         "message": f"You now own the armoury in {state} (bullets, armour & weapons). It produces {BULLET_FACTORY_PROD_PER_HOUR_MIN}–{BULLET_FACTORY_PROD_PER_HOUR_MAX} bullets per hour.",
         "state": state,
@@ -3461,7 +3475,9 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
                 last_dt = datetime.fromisoformat(last_collected.replace("Z", "+00:00"))
                 if last_dt.tzinfo is None:
                     last_dt = last_dt.replace(tzinfo=timezone.utc)
-                next_dt = last_dt + __import__("datetime").timedelta(hours=SPEAKEASY_COOLDOWN_HOURS)
+                next_dt = last_dt + __import__("datetime").timedelta(
+                    hours=apply_game_pass_wait_hours(SPEAKEASY_COOLDOWN_HOURS, current_user)
+                )
                 now = datetime.now(timezone.utc)
                 if now < next_dt:
                     can_collect = False
@@ -3473,7 +3489,7 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
             "daily_bullets": SPEAKEASY_DAILY_BULLETS,
             "daily_loot_pieces": SPEAKEASY_DAILY_LOOT_PIECES,
             "daily_points": SPEAKEASY_DAILY_POINTS,
-            "cooldown_hours": SPEAKEASY_COOLDOWN_HOURS,
+            "cooldown_hours": apply_game_pass_wait_hours(SPEAKEASY_COOLDOWN_HOURS, current_user),
             "can_collect": can_collect,
             "next_collect_at": next_collect_at,
             "last_collected_at": last_collected,

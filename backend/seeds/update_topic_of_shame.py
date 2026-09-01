@@ -25,7 +25,7 @@ load_dotenv(BACKEND_DIR / ".env")
 
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
-from utils.faq_topic_author import resolve_faq_topic_author_sync
+from utils.system_ai_inbox import system_ai_forum_author_fields
 
 TOPIC_TITLE = "Topic of Shame"
 SHAME_MD_PATH = PROJECT_ROOT / "docs" / "TOPIC_OF_SHAME.md"
@@ -59,15 +59,13 @@ def main():
 
     body = _load_shame_content()
     now = datetime.now(timezone.utc).isoformat()
-    author_id, author_username = resolve_faq_topic_author_sync(db)
     topic_id = str(uuid.uuid4())
     doc = {
         "id": topic_id,
         "title": TOPIC_TITLE,
         "content": body,
         "category": "general",
-        "author_id": author_id,
-        "author_username": author_username,
+        **system_ai_forum_author_fields(),
         "created_at": now,
         "updated_at": now,
         "views": 0,
@@ -78,7 +76,7 @@ def main():
     }
     db.forum_topics.insert_one(doc)
     print(
-        f"Created '{TOPIC_TITLE}' (id={topic_id}, author={author_username}) "
+        f"Created '{TOPIC_TITLE}' (id={topic_id}, author=System AI) "
         f"from {SHAME_MD_PATH.relative_to(PROJECT_ROOT)} at {now}"
     )
 

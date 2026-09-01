@@ -32,6 +32,7 @@ from pymongo.errors import DuplicateKeyError
 from utils.game_timezone import game_week_range_utc
 from utils.notepad_color import notepad_color_for_api_response, normalize_notepad_color_for_set
 from utils.point_provenance import log_points_event
+from utils.game_pass_micro_rewards import apply_game_pass_wait_hours
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.family_vault_log import log_family_vault_tx
 from utils.family_perks import (
@@ -374,6 +375,12 @@ async def _crew_oc_effective_cooldown_info(family_id: str, actor_user_id: Option
     perk_off = int(mods.get("crew_oc_hours_off") or 0)
     base_hours = CREW_OC_COOLDOWN_HOURS_REDUCED if has_store_timer else CREW_OC_COOLDOWN_HOURS
     hours = max(1, base_hours - perk_off) if perk_off > 0 else base_hours
+    if actor_user_id:
+        actor = await db.users.find_one(
+            {"id": actor_user_id},
+            {"_id": 0, "rank_xp_pass_rewards_granted": 1, "rank_xp_pass_token_expires_at": 1},
+        )
+        hours = apply_game_pass_wait_hours(hours, actor or {})
     return {
         "hours": hours,
         "base_hours": base_hours,
@@ -618,6 +625,8 @@ async def _racket_payout_breakdown(
     if now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
     income_after_global_event, cooldown_h = _racket_income_and_cooldown(racket_id, level, ev)
+    if actor:
+        cooldown_h = apply_game_pass_wait_hours(cooldown_h, actor)
     war_seconds = 0.0
     if last_collected_at and family_id:
         try:
@@ -632,6 +641,7 @@ async def _racket_payout_breakdown(
         ev,
         now=now,
         war_duration_seconds=war_seconds,
+        cooldown_h_override=cooldown_h,
     )
     war_bonus_pct = float((fam.get("racket_income_bonus_percent") or 0) or 0)
     perk_mods = await family_perk_modifiers(db, family_id)
@@ -722,11 +732,13 @@ WAR_WIN_RACKET_INCOME_BONUS_PERCENT = 2.5
 RACKET_INCOME_BONUS_CAP_PERCENT = 25.0
 
 
-def _racket_available_income(racket_id: str, level: int, last_collected_at: Optional[str], ev: dict, now=None, war_duration_seconds: float = 0):
+def _racket_available_income(racket_id: str, level: int, last_collected_at: Optional[str], ev: dict, now=None, war_duration_seconds: float = 0, cooldown_h_override: Optional[float] = None):
     """Income that would be collected now if the racket is off cooldown; 0 if on cooldown. war_duration_seconds extends the cooldown (rackets don't produce during war)."""
     if level <= 0:
         return 0
     income, cooldown_h = _racket_income_and_cooldown(racket_id, level, ev)
+    if cooldown_h_override is not None:
+        cooldown_h = cooldown_h_override
     if cooldown_h <= 0:
         return income
     if not last_collected_at:
@@ -4940,7 +4952,7 @@ async def _execute_crew_oc_commit(
         except Exception:
             pass
     cd_info = await _crew_oc_effective_cooldown_info(family_id, aid)
-    cooldown_hours = int(cd_info["hours"])
+    cooldown_hours = float(cd_info["hours"])
     new_cooldown_until = now + timedelta(hours=cooldown_hours)
     members = await db.family_members.find({"family_id": family_id}, {"_id": 0, "user_id": 1}).to_list(100)
     member_ids = [m["user_id"] for m in members]

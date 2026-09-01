@@ -1,7 +1,20 @@
 [center][size=2][b][color=#FFD700]:warning: TOPIC OF SHAME :warning:[/color][/b][/size][/center]
 
 [quote]
-[color=#AAAAAA]Posts here are automated. Staff kills, wipes, and IP bans — duration and reason when given. Anyone caught playing with a banned user will be modkilled (wipe). Proof is summarized so it does not help anyone copy the method. Staff only — this topic is locked.[/color]
+[color=#AAAAAA]Posted by System AI. Staff kills, wipes, and IP bans — duration and reason when given. Anyone caught playing with a banned user will be modkilled (wipe). Proof is summarized so it does not help anyone copy the method. Staff only — this topic is locked.[/color]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-08-31[/color][/b] — [b]5Fingers, Scratat1[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Action:[/b] Modkill (wipe) for duplicate accounts. Night one of AI Check Days.[/color]
+[*][color=#888888][b]What happened:[/b] Duplicate accounts. 5Fingers and Scratat1 were the same person. Both living. Caught in the dupe sweep. Casinos and properties relinquished.[/color]
+[*][color=#888888][b]Relinquished:[/b] Dice — New York.[/color]
+[*][color=#888888][b]Removed from family:[/b] Famiglia Veleno (associate) — 5Fingers.[/color]
+[*][color=#888888][b]Effect:[/b] Rank reset to Rat (prestige 0) on both. Honours, leaderboards, cash, points, and Game Pass stripped. Modkilled badge added. £10 Dead > Alive revive blocked.[/color]
+[/list]
 [/quote]
 
 [hr]

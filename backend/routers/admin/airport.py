@@ -476,11 +476,18 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
     airport_time_effective = max(0, TRAVEL_TIMES["airport"] - fam_time_red)
     user_cars = _merge_user_cars_for_travel(user_cars_bulk, immune_cars)
     cars_with_travel_times = []
+    from utils.loot_exclusive_540k import (
+        CAR_ID as CAR24_ID,
+        FAST_TRAVELS_PER_DAY,
+        fast_travels_remaining,
+        preview_catalog_seconds,
+    )
     for uc in user_cars:
         car_info = next((c for c in CARS if c["id"] == uc["car_id"]), None)
         if car_info:
             base_time = travel_seconds_for_car(car_info.get("id"), car_info.get("rarity"), 45)
-            travel_time = _effective_car_travel_seconds(base_time, current_user, now_utc, fam_time_red)
+            preview_base = preview_catalog_seconds(car_info.get("id"), base_time, current_user, now_utc)
+            travel_time = _effective_car_travel_seconds(preview_base, current_user, now_utc, fam_time_red)
             user_car_id = uc.get("id") or str(uc["_id"])
             name = car_info["name"]
             image = car_info.get("image", "")
@@ -501,6 +508,14 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
                 "image": image,
                 "damage_percent": damage_percent,
                 "can_travel": damage_percent < 100,
+                **(
+                    {
+                        "fast_travels_remaining": fast_travels_remaining(current_user, now_utc),
+                        "fast_travels_per_day": FAST_TRAVELS_PER_DAY,
+                    }
+                    if car_info["id"] == CAR24_ID
+                    else {}
+                ),
             })
 
     # Sort by effective travel time ascending (fastest first) so best cars show first in destination cards
@@ -692,6 +707,7 @@ async def _start_travel_impl(
     travel_time = 45
     method_name = "Walking"
     car_to_damage = None  # user_car doc to apply travel damage (2–4%) when travel_time > 0
+    car_info = None
 
     from routers.game.families import family_airport_crew_perk_context
 
@@ -810,6 +826,15 @@ async def _start_travel_impl(
         else:
             car_to_damage = user_car
 
+    car24_fast_set: Dict[str, Any] = {}
+    car24_fast_inc: Dict[str, int] = {}
+    if travel_method not in ("airport", "custom") and car_info:
+        from utils.loot_exclusive_540k import consume_fast_travel
+
+        travel_time, car24_fast_set, car24_fast_inc = consume_fast_travel(
+            car_info.get("id"), travel_time, user, now_utc
+        )
+
     if travel_method != "airport" and travel_time > 0:
         _base_car_seconds = travel_time
         travel_time = _effective_car_travel_seconds(travel_time, user, now_utc, fam_time_red)
@@ -829,15 +854,25 @@ async def _start_travel_impl(
     inc_travels = {} if booze_run or travel_method != "airport" else {"travels_this_hour": 1}
     arrives_at = None
     if travel_time <= 0:
-        await db.users.update_one(
-            {"id": user["id"]},
-            {"$set": {"current_state": destination}, **({"$inc": inc_travels} if inc_travels else {})}
-        )
+        instant_update: Dict[str, Any] = {"$set": {"current_state": destination}}
+        if car24_fast_set:
+            instant_update["$set"].update(car24_fast_set)
+        instant_inc = dict(inc_travels)
+        if car24_fast_inc:
+            instant_inc.update(car24_fast_inc)
+        if instant_inc:
+            instant_update["$inc"] = instant_inc
+        await db.users.update_one({"id": user["id"]}, instant_update)
     else:
         arrives_at = (now_utc + timedelta(seconds=travel_time)).isoformat()
         update = {"$set": {"traveling_to": destination, "travel_arrives_at": arrives_at}}
-        if inc_travels:
-            update["$inc"] = inc_travels
+        if car24_fast_set:
+            update["$set"].update(car24_fast_set)
+        merged_inc = dict(inc_travels)
+        if car24_fast_inc:
+            merged_inc.update(car24_fast_inc)
+        if merged_inc:
+            update["$inc"] = merged_inc
         await db.users.update_one({"id": user["id"]}, update)
         if car_to_damage:
             current_damage = min(100, max(0, float(car_to_damage.get("damage_percent", 0))))

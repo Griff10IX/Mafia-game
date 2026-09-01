@@ -13,6 +13,7 @@ from utils.last_man_standing import (
     entry_prize_ineligible,
     lives_after_wrong_pick,
     entry_lives,
+    teams_same,
 )
 
 
@@ -117,6 +118,23 @@ class LmsHelpersTests(unittest.TestCase):
         self.assertEqual(fx[-1]["away"], "Arsenal")
         self.assertEqual(slug_team("AFC Bournemouth"), "bournemouth")
         self.assertEqual(fx[2]["home_team_id"], "bournemouth")
+
+    def test_team_canon_matches_fd_short_names(self):
+        from utils.last_man_standing import _fd_match_for_fixture, teams_same
+        self.assertTrue(teams_same("Manchester City", "Man City"))
+        self.assertTrue(teams_same("Brighton and Hove Albion", "Brighton & Hove Albion"))
+        self.assertTrue(teams_same("AFC Bournemouth", "Bournemouth"))
+        self.assertTrue(teams_same("Tottenham Hotspur", "Spurs"))
+        fx = {"home": "Manchester City", "away": "AFC Bournemouth", "external_event_id": "pl-2026-gw1-x"}
+        fd = [{
+            "id": 12345,
+            "status": "FINISHED",
+            "homeTeam": {"name": "Manchester City FC", "shortName": "Man City", "tla": "MCI"},
+            "awayTeam": {"name": "AFC Bournemouth", "shortName": "Bournemouth", "tla": "BOU"},
+            "score": {"fullTime": {"home": 2, "away": 0}},
+        }]
+        m = _fd_match_for_fixture(fx, fd)
+        self.assertEqual(m["id"], 12345)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from server import db, get_current_user_verified, get_current_user, log_gambling, _get_staff_user_ids, _is_admin, send_notification
+from utils.game_pass_micro_rewards import apply_game_pass_wait_seconds
 from utils.game_timezone import game_week_start_date_str, game_week_start_utc
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 from utils.minigame_run_session import utc_rate_limit_window, RATE_LIMIT_PERIOD_HOURS
@@ -545,7 +546,8 @@ async def boxing_fight_npc(
         )
 
     # Fight slot reserved; if cooldown claim fails below, we roll this back.
-    cooldown_until = now + timedelta(seconds=NPC_FIGHT_COOLDOWN_SECONDS)
+    fight_cd = apply_game_pass_wait_seconds(NPC_FIGHT_COOLDOWN_SECONDS, current_user)
+    cooldown_until = now + timedelta(seconds=fight_cd)
     cooldown_iso = cooldown_until.isoformat().replace("+00:00", "Z")
     now_iso_cd = now.isoformat().replace("+00:00", "Z")
 
@@ -580,8 +582,8 @@ async def boxing_fight_npc(
                 secs = int((cd_dt - now).total_seconds())
                 raise _boxing_fight_throttle_429(f"Fight cooldown: wait {secs}s", cooldown_seconds=max(1, secs))
         raise _boxing_fight_throttle_429(
-            f"Fight cooldown: wait {NPC_FIGHT_COOLDOWN_SECONDS}s",
-            cooldown_seconds=NPC_FIGHT_COOLDOWN_SECONDS,
+            f"Fight cooldown: wait {fight_cd}s",
+            cooldown_seconds=fight_cd,
         )
 
     prof = await _ensure_profile(current_user["id"])

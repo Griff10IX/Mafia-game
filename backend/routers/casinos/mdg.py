@@ -50,11 +50,14 @@ MDG_MAX_FEE_MONEY = 50_000_000_000
 MDG_MAX_EXTRA_POT_POINTS = 100_000_000
 MDG_MAX_EXTRA_POT_MONEY = 50_000_000_000
 
-# --- Anti-bot join tokens (layer 1, always on) — same scheme as entertainer E-Game joins. ---
-# Issued per-user with the games list; joins must echo the token back. A minimum age check
-# means a script that fetches the list and joins in the same instant fails; single-use per join.
+# --- Anti-bot join tokens (layer 1) — same scheme as entertainer E-Game joins. ---
+# Issued per-user with the games list; joins must echo the token back (single-use).
+# No min-age delay: a 1.5s wait caused false too_fresh blocks on real taps (esp. mobile).
 MDG_JOIN_TOKEN_TTL_SECONDS = 600
-MDG_JOIN_TOKEN_MIN_AGE_SECONDS = 1.5
+MDG_JOIN_TOKEN_MIN_AGE_SECONDS = 0
+# After this many invalid/missing tokens in the window, lock joins until the next house cycle.
+MDG_JOIN_TOKEN_STRIKE_LIMIT = 2
+MDG_JOIN_TOKEN_STRIKE_WINDOW_SECONDS = 90
 
 # ── Automated MDG constants ──
 AUTO_MDG_CYCLE_HOURS = 3
@@ -711,8 +714,6 @@ async def _require_mdg_join_token(
             age = (datetime.now(timezone.utc) - issued_at).total_seconds() if issued_at else None
             if age is None or age > MDG_JOIN_TOKEN_TTL_SECONDS:
                 fail_reason = "expired"
-            elif age < MDG_JOIN_TOKEN_MIN_AGE_SECONDS:
-                fail_reason = "too_fresh"
             else:
                 # Atomic consume: only one concurrent join can win this token.
                 consumed = await db.mdg_table_seats.find_one_and_delete(
@@ -723,6 +724,10 @@ async def _require_mdg_join_token(
                     fail_reason = "invalid"
     if not fail_reason:
         return
+    try:
+        await _mdg_note_join_token_fail(uid, fail_reason)
+    except Exception:
+        _logger.exception("mdg join token strike failed")
     try:
         from utils.captcha_failure_log import log_captcha_turnstile_failure
 
@@ -751,9 +756,56 @@ async def _require_mdg_join_token(
         )
     except Exception:
         _logger.exception("mdg join token staff alert failed")
-    if fail_reason == "too_fresh":
-        raise HTTPException(status_code=400, detail="Please wait briefly before joining.")
     raise HTTPException(status_code=400, detail="Could not verify join — reload the table and try again.")
+
+
+async def _mdg_join_lock_until(uid: str) -> Optional[datetime]:
+    uid = str(uid or "").strip()
+    if not uid:
+        return None
+    row = await db.mdg_join_guards.find_one({"user_id": uid}, {"_id": 0, "locked_until": 1})
+    until = _mdg_parse_iso((row or {}).get("locked_until"))
+    if until and until > datetime.now(timezone.utc):
+        return until
+    return None
+
+
+async def _mdg_raise_if_join_locked(uid: str) -> None:
+    until = await _mdg_join_lock_until(uid)
+    if not until:
+        return
+    raise HTTPException(
+        status_code=400,
+        detail="Join is locked on this account until the next house games. Open the page and join yourself.",
+    )
+
+
+async def _mdg_note_join_token_fail(uid: str, reason: str) -> None:
+    """Two bad tokens in a short window (script spraying joins) lock MDG until the next house cycle."""
+    uid = str(uid or "").strip()
+    if not uid or reason not in ("invalid", "missing"):
+        return
+    now = datetime.now(timezone.utc)
+    cutoff = (now - timedelta(seconds=MDG_JOIN_TOKEN_STRIKE_WINDOW_SECONDS)).isoformat()
+    await db.mdg_join_guards.update_one(
+        {"user_id": uid},
+        {"$push": {"fails": {"at": now.isoformat(), "reason": reason}}},
+        upsert=True,
+    )
+    row = await db.mdg_join_guards.find_one({"user_id": uid}, {"_id": 0, "fails": 1, "locked_until": 1})
+    existing_lock = _mdg_parse_iso((row or {}).get("locked_until"))
+    if existing_lock and existing_lock > now:
+        return
+    recent = []
+    for f in (row or {}).get("fails") or []:
+        at = str((f or {}).get("at") or "")
+        if at >= cutoff:
+            recent.append(f)
+    set_doc = {"fails": recent[-20:]}
+    if len(recent) >= MDG_JOIN_TOKEN_STRIKE_LIMIT:
+        set_doc["locked_until"] = _next_cycle_boundary(now).isoformat()
+        _logger.info("mdg join locked user=%s until %s after %s token fails", uid, set_doc["locked_until"], len(recent))
+    await db.mdg_join_guards.update_one({"user_id": uid}, {"$set": set_doc})
 
 
 # ── Automated MDG helpers (module-level so ticker can call them) ──
@@ -1261,6 +1313,7 @@ def register(router):
         if not game:
             raise HTTPException(status_code=404, detail="Game not found or already closed")
         uid = current_user["id"]
+        await _mdg_raise_if_join_locked(uid)
         await _mdg_raise_if_blocked_from_asset_prize_game(uid, current_user, list(game.get("admin_prizes") or []))
         await _require_mdg_join_token(http_request, current_user, request.game_id, request.table_seat)
         from utils.minigame_captcha_gate import require_turnstile_for_ent_join
