@@ -107,6 +107,11 @@ class GTAMeltRequest(BaseModel):
     rarity_ids: Optional[List[str]] = None
 
 
+class GTADropAllRequest(BaseModel):
+    rarity_ids: List[str]
+    captcha_token: Optional[str] = None
+
+
 class GTABuyCarRequest(BaseModel):
     car_id: str
 
@@ -210,6 +215,7 @@ from server import (
     maybe_auto_relinquish_below_capo,
     _user_owns_any_property,
 )
+CARS_BY_ID: Dict[str, dict] = {str(c.get("id")): c for c in CARS if c.get("id")}
 from routers.account.objectives import update_objectives_progress
 from routers.admin.airport import _invalidate_travel_info_cache
 from routers.game.achievements import badge_bonuses_from_user
@@ -1322,6 +1328,9 @@ _DEALERSHIP_RARITIES = frozenset({"common", "uncommon", "rare", "ultra_rare", "l
 _VALID_GARAGE_RARITIES = frozenset(
     {"common", "uncommon", "rare", "ultra_rare", "legendary", "custom", "loot_exclusive", "exclusive", "vip_exclusive"}
 )
+# 0.1 rank points per dropped car (14,000 cars = 1,400 RP).
+DROP_RP_PER_CAR_NUM = 1
+DROP_RP_PER_CAR_DEN = 10
 
 
 def _normalize_melt_allowed_rarities(raw: Optional[List[str]]) -> Optional[set]:
@@ -1406,7 +1415,7 @@ def _garage_entry_from_user_car(user_car: Dict[str, Any]) -> Optional[dict]:
     if not car_id:
         return None
     user_car_id = user_car.get("id") or str(user_car.get("_id", ""))
-    car_info = next((c for c in CARS if c.get("id") == car_id), None)
+    car_info = CARS_BY_ID.get(str(car_id))
     if car_info:
         display_name = (user_car.get("custom_name") or user_car.get("car_name")) if car_id == "car_custom" else (user_car.get("car_name") or car_info.get("name"))
         damage = 0 if _is_damage_immune_car(car_id, car_info.get("rarity")) else min(100, max(0, float(user_car.get("damage_percent", 0))))
@@ -1477,25 +1486,22 @@ async def get_garage(current_user: dict = Depends(get_current_user)):
         },
         {"$set": {"damage_percent": 0}},
     )
-    always_car_ids = [cid for cid in _damage_immune_car_ids() if cid]
-    if always_car_ids:
-        immune_catalog_ids = [cid for cid in always_car_ids if cid != "car_custom"]
-        main_rows = await db.user_cars.find({"user_id": uid, "car_id": {"$nin": always_car_ids}}).sort(
-            "acquired_at", -1
-        ).to_list(GARAGE_FETCH_LIMIT)
-        if immune_catalog_ids:
-            extra_rows = await db.user_cars.find({"user_id": uid, "car_id": {"$in": immune_catalog_ids}}).sort(
-                "acquired_at", -1
-            ).to_list(GARAGE_SPECIAL_ROWS_MAX)
-        else:
-            extra_rows = []
-        custom_rows = await db.user_cars.find({"user_id": uid, "car_id": "car_custom"}).sort(
-            "acquired_at", -1
-        ).to_list(GARAGE_FETCH_LIMIT)
-    else:
-        main_rows = await db.user_cars.find({"user_id": uid}).sort("acquired_at", -1).to_list(GARAGE_FETCH_LIMIT)
-        extra_rows = []
-        custom_rows = []
+    always_car_ids = {cid for cid in _damage_immune_car_ids() if cid}
+    immune_catalog_ids = {cid for cid in always_car_ids if cid != "car_custom"}
+    all_rows = await db.user_cars.find({"user_id": uid}).sort("acquired_at", -1).to_list(GARAGE_FETCH_LIMIT)
+    main_rows: List[dict] = []
+    extra_rows: List[dict] = []
+    custom_rows: List[dict] = []
+    for uc in all_rows:
+        car_id = str(uc.get("car_id") or "")
+        if car_id == "car_custom":
+            custom_rows.append(uc)
+            continue
+        if car_id in immune_catalog_ids:
+            if len(extra_rows) < GARAGE_SPECIAL_ROWS_MAX:
+                extra_rows.append(uc)
+            continue
+        main_rows.append(uc)
     seen: set[str] = set()
     cars: List[dict] = []
     for uc in main_rows:
@@ -1605,7 +1611,7 @@ async def _melt_cars_impl(
             uc = cars_by_id.get(raw_id)
             if not uc:
                 continue
-            car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
+            car_info = CARS_BY_ID.get(str(uc.get("car_id") or ""))
             if car_info and car_info.get("rarity") in _MARKET_EXCLUSIVE_RARITIES:
                 return {
                     "success": False,
@@ -1659,82 +1665,100 @@ async def _melt_cars_impl(
     processed = 0
     melted_car20 = False
     melted_exclusive_cars: list = []
-    for car_id in car_ids:
-        if processed >= limit:
-            break
-        owned_filter = {**owner, "id": car_id, "listed_for_sale": {"$ne": True}}
+
+    # --- Build the list of cars that are valid to melt (using prefetched docs) ---
+    # Cars not in cars_by_id (not owned / listed) are simply skipped.
+    # Unknown-model cars (car_info missing) are skipped to avoid counting them —
+    # identical to the previous per-car behaviour.
+    valid_candidates: list = []  # list of (car_id, candidate_doc, car_info)
+    for car_id in car_ids[:limit]:
         candidate = cars_by_id.get(car_id)
         if not candidate:
+            # Fallback: ObjectId-keyed doc (rare legacy case). Fetch individually as before.
             try:
-                owned_filter = {**owner, "_id": ObjectId(car_id), "listed_for_sale": {"$ne": True}}
-                candidate = await db.user_cars.find_one(owned_filter)
+                oid_filter = {**owner, "_id": ObjectId(car_id), "listed_for_sale": {"$ne": True}}
+                candidate = await db.user_cars.find_one(oid_filter)
             except Exception:
                 candidate = None
         if not candidate:
             continue
         model_id = candidate.get("car_id")
-        car_info = next((c for c in CARS if c.get("id") == model_id), None)
+        car_info = CARS_BY_ID.get(str(model_id or ""))
         rarity_hint = (car_info or {}).get("rarity") if car_info else candidate.get("rarity")
         if _melt_should_skip_rarity(rarity_hint, allowed_rarities, manual_garage=manual_garage):
             continue
-        deleted_car = await db.user_cars.find_one_and_delete(owned_filter)
-        if deleted_car:
-            if model_id == GTA_EXCLUSIVE_CAR_ID:
-                melted_car20 = True
-            if car_info:
-                rarity_l = (car_info.get("rarity") or "").strip().lower()
-                if rarity_l in _MARKET_EXCLUSIVE_RARITIES:
-                    melted_exclusive_cars.append(
-                        {
-                            "car_id": model_id,
-                            "user_car_id": deleted_car.get("id"),
-                            "car_name": car_info.get("name") or model_id,
-                            "rarity": rarity_l,
-                        }
-                    )
-                if car_info.get("rarity") == "uncommon":
-                    uncommon_count += 1
-                catalog_value = int(car_info.get("value", 0) or 0)
-                if action == "bullets":
-                    rarity = (car_info.get("rarity") or "").strip().lower()
-                    car_value = _effective_catalog_value_for_melt_bullets(
-                        catalog_value,
-                        deleted_car.get("damage_percent", 0),
-                        model_id,
-                        car_info.get("rarity"),
-                    )
-                    melt_value = (car_value * MELT_BULLETS_VALUE_MULT_NUM) // MELT_BULLETS_VALUE_MULT_DEN
-                    car_bullets = melt_value // MELT_VALUE_PER_BULLET
-                    if car_info.get("rarity") == "common":
-                        if car_bullets < 5:
-                            car_bullets = 5
-                        elif car_bullets > 7:
-                            car_bullets = 7
-                    if rarity not in _MARKET_EXCLUSIVE_RARITIES:
-                        # +25% bullets for all but exclusive / loot_exclusive / vip_exclusive (floor-rounded).
-                        car_bullets = (int(car_bullets) * 125) // 100
-                    total_bullets += car_bullets
-                else:
-                    car_cash = int(catalog_value * 0.5)
-                    if _chop_shop_seal_applies(model_id, car_info.get("rarity")):
-                        try:
-                            from utils.loot_reclaimable_passives import (
-                                BUFF_CAR_SELL,
-                                get_reclaimable_passive_mults_from_user,
-                            )
+        if not car_info:
+            # Unknown model — skip (same as old behaviour which did insert_one back)
+            processed += 1
+            continue
+        valid_candidates.append((car_id, candidate, car_info))
 
-                            car_cash = int(
-                                car_cash
-                                * float(get_reclaimable_passive_mults_from_user(user).get(BUFF_CAR_SELL) or 1.0)
-                            )
-                        except Exception:
-                            pass
-                    total_value += car_cash
-                deleted_count += 1
-                processed += 1
-            else:
-                await db.user_cars.insert_one(deleted_car)
-                processed += 1
+    # --- Single bulk delete for all valid IDs (replaces N sequential find_one_and_delete) ---
+    if valid_candidates:
+        valid_ids = [c[0] for c in valid_candidates]
+        delete_result = await db.user_cars.delete_many(
+            {**owner, "id": {"$in": valid_ids}, "listed_for_sale": {"$ne": True}}
+        )
+        actually_deleted = delete_result.deleted_count
+    else:
+        actually_deleted = 0
+
+    # --- Tally values using the prefetched candidate docs ---
+    chop_sell_mult: Optional[float] = None
+    for car_id, candidate, car_info in valid_candidates:
+        if processed >= limit:
+            break
+        model_id = candidate.get("car_id")
+        rarity_l = (car_info.get("rarity") or "").strip().lower()
+        if model_id == GTA_EXCLUSIVE_CAR_ID:
+            melted_car20 = True
+        if rarity_l in _MARKET_EXCLUSIVE_RARITIES:
+            melted_exclusive_cars.append(
+                {
+                    "car_id": model_id,
+                    "user_car_id": candidate.get("id"),
+                    "car_name": car_info.get("name") or model_id,
+                    "rarity": rarity_l,
+                }
+            )
+        if rarity_l == "uncommon":
+            uncommon_count += 1
+        catalog_value = int(car_info.get("value", 0) or 0)
+        if action == "bullets":
+            rarity = rarity_l
+            car_value = _effective_catalog_value_for_melt_bullets(
+                catalog_value,
+                candidate.get("damage_percent", 0),
+                model_id,
+                car_info.get("rarity"),
+            )
+            melt_value = (car_value * MELT_BULLETS_VALUE_MULT_NUM) // MELT_BULLETS_VALUE_MULT_DEN
+            car_bullets = melt_value // MELT_VALUE_PER_BULLET
+            if rarity_l == "common":
+                if car_bullets < 5:
+                    car_bullets = 5
+                elif car_bullets > 7:
+                    car_bullets = 7
+            if rarity not in _MARKET_EXCLUSIVE_RARITIES:
+                # +25% bullets for all but exclusive / loot_exclusive / vip_exclusive (floor-rounded).
+                car_bullets = (int(car_bullets) * 125) // 100
+            total_bullets += car_bullets
+        else:
+            car_cash = int(catalog_value * 0.5)
+            if _chop_shop_seal_applies(model_id, car_info.get("rarity")):
+                try:
+                    from utils.loot_reclaimable_passives import (
+                        BUFF_CAR_SELL,
+                        get_reclaimable_passive_mults_from_user,
+                    )
+                    if chop_sell_mult is None:
+                        chop_sell_mult = float(get_reclaimable_passive_mults_from_user(user).get(BUFF_CAR_SELL) or 1.0)
+                    car_cash = int(car_cash * chop_sell_mult)
+                except Exception:
+                    pass
+            total_value += car_cash
+        deleted_count += 1
+        processed += 1
     if melted_car20:
         await _sync_gta_exclusive_pool_release_state()
     if melted_exclusive_cars:
@@ -2154,6 +2178,182 @@ async def melt_cars(
             status_code=400,
             detail=result.get("message") or result.get("detail") or "No cars were processed",
         )
+    return result
+
+
+def _catalog_car_ids_for_rarities(rarities: set) -> List[str]:
+    ids: List[str] = []
+    for c in CARS:
+        cid = c.get("id")
+        if not cid:
+            continue
+        if _normalize_garage_rarity_str(c.get("rarity")) in rarities:
+            ids.append(str(cid))
+    if "custom" in rarities:
+        ids.append("car_custom")
+    return list(dict.fromkeys(ids))
+
+
+async def _drop_cars_impl(user: dict, rarities: set) -> dict:
+    """Delete every unlisted garage car matching the ticked rarities. Awards 0.1 RP per car."""
+    if not rarities:
+        return {"success": False, "message": "Select at least one rarity to drop"}
+    owner = _user_car_owner_clause(user.get("id"))
+    catalog_ids = _catalog_car_ids_for_rarities(rarities)
+    if not catalog_ids:
+        return {"success": False, "message": "No car types match those rarities"}
+
+    family_id = await resolve_family_id(user.get("id") or "") or (str(user.get("family_id") or "").strip() or None)
+    in_war = bool(family_id and await _family_in_active_war(family_id))
+    skipped_war_exclusives = False
+    if in_war:
+        keep_ids = []
+        for cid in catalog_ids:
+            info = CARS_BY_ID.get(cid) or {}
+            if (info.get("rarity") or "").strip().lower() in _MARKET_EXCLUSIVE_RARITIES:
+                skipped_war_exclusives = True
+                continue
+            keep_ids.append(cid)
+        catalog_ids = keep_ids
+        if not catalog_ids:
+            return {
+                "success": False,
+                "message": EXCLUSIVE_CAR_WAR_LOCK_DETAIL,
+                "exclusive_war_lock": True,
+            }
+
+    drop_filter = {**owner, "car_id": {"$in": catalog_ids}, "listed_for_sale": {"$ne": True}}
+    exclusive_catalog = [cid for cid in catalog_ids if ((CARS_BY_ID.get(cid) or {}).get("rarity") or "").strip().lower() in _MARKET_EXCLUSIVE_RARITIES]
+    melted_exclusive_cars: list = []
+    melted_car20 = False
+    if exclusive_catalog:
+        ex_docs = await db.user_cars.find(
+            {**owner, "car_id": {"$in": exclusive_catalog}, "listed_for_sale": {"$ne": True}},
+            {"_id": 0, "id": 1, "car_id": 1, "car_name": 1},
+        ).to_list(max(GARAGE_SPECIAL_ROWS_MAX, 5000))
+        for row in ex_docs:
+            cid = str(row.get("car_id") or "")
+            info = CARS_BY_ID.get(cid) or {}
+            rarity_l = (info.get("rarity") or "").strip().lower()
+            if cid == GTA_EXCLUSIVE_CAR_ID:
+                melted_car20 = True
+            melted_exclusive_cars.append(
+                {
+                    "car_id": cid,
+                    "user_car_id": row.get("id"),
+                    "car_name": info.get("name") or row.get("car_name") or cid,
+                    "rarity": rarity_l,
+                }
+            )
+
+    delete_result = await db.user_cars.delete_many(drop_filter)
+    deleted_count = int(delete_result.deleted_count or 0)
+    if deleted_count < 1:
+        msg = "No matching unlisted cars to drop"
+        if skipped_war_exclusives:
+            msg = "No matching unlisted cars to drop (exclusives stay during crew war)"
+        return {"success": False, "message": msg}
+
+    if melted_car20:
+        await _sync_gta_exclusive_pool_release_state()
+    if melted_exclusive_cars:
+        try:
+            from utils.exclusive_car_events import log_exclusive_car_event
+
+            for row in melted_exclusive_cars:
+                await log_exclusive_car_event(
+                    db,
+                    event_type="dropped",
+                    car_id=row["car_id"],
+                    user_car_id=row.get("user_car_id"),
+                    from_user_id=user.get("id"),
+                    from_username=user.get("username") or "",
+                    car_name=row.get("car_name"),
+                    extra={"action": "drop_all", "rarity": row.get("rarity")},
+                )
+        except Exception:
+            logger.exception("Failed to log exclusive drop")
+        if any((row.get("rarity") or "") == "loot_exclusive" for row in melted_exclusive_cars):
+            try:
+                from routers.money.loot_box import resync_loot_exclusive_claimed_counts_from_live
+
+                await resync_loot_exclusive_claimed_counts_from_live()
+            except Exception:
+                logger.exception("Failed to return dropped loot exclusive to loot pool")
+
+    rank_points = (deleted_count * DROP_RP_PER_CAR_NUM) // DROP_RP_PER_CAR_DEN
+    rp_granted = 0
+    if rank_points > 0:
+        rp_before = int(user.get("rank_points") or 0)
+        drop_update = apply_season_rp_mirror_to_update({"$inc": {"rank_points": rank_points}}, user=user)
+        rp_granted = int(rank_points_in_update(drop_update) or rank_points)
+        await db.users.update_one({"id": user["id"]}, drop_update)
+        try:
+            await maybe_process_rank_up(
+                user.get("id") or "",
+                rp_before,
+                rp_granted,
+                user.get("username") or "",
+                user_prestige_rank_mult(user),
+            )
+        except Exception:
+            logger.exception("Rank up after garage drop failed user_id=%s", user.get("id"))
+
+    try:
+        await log_activity(
+            user.get("id") or "",
+            user.get("username") or "?",
+            "garage_drop",
+            {
+                "rarities": sorted(rarities),
+                "dropped_count": deleted_count,
+                "rank_points": rp_granted,
+            },
+        )
+    except Exception:
+        logger.exception("garage_drop activity log failed")
+
+    rarity_label = ", ".join(sorted(rarities))
+    msg = f"Dropped {deleted_count:,} car(s) ({rarity_label})"
+    if rp_granted > 0:
+        msg += f" · +{rp_granted:,} rank points"
+    if skipped_war_exclusives:
+        msg += ". Exclusives were kept (crew war)."
+    return {
+        "success": True,
+        "dropped_count": deleted_count,
+        "rank_points": rp_granted,
+        "rarities": sorted(rarities),
+        "message": msg,
+    }
+
+
+async def drop_cars_locked(user: dict, rarities: set) -> dict:
+    lock = await _get_gta_garage_lock(user.get("id") or "")
+    async with lock:
+        return await _drop_cars_impl(user, rarities)
+
+
+async def drop_all_cars(
+    body: GTADropAllRequest,
+    http_request: Request,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    await require_turnstile_for_game_action(
+        db,
+        request=http_request,
+        current_user=current_user,
+        captcha_token=body.captcha_token,
+        is_admin=_is_admin(current_user),
+    )
+    rarities = _normalize_melt_allowed_rarities(body.rarity_ids) or set()
+    if not rarities:
+        raise HTTPException(status_code=400, detail="Select at least one rarity to drop")
+    result = await drop_cars_locked(current_user, rarities)
+    if result.get("exclusive_war_lock"):
+        raise HTTPException(status_code=403, detail=result.get("message") or EXCLUSIVE_CAR_WAR_LOCK_DETAIL)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message") or "No cars were dropped")
     return result
 
 
@@ -3789,6 +3989,7 @@ def register(router):
     router.add_api_route("/gta/garage", get_garage, methods=["GET"], dependencies=_gta_rl_u)
     router.add_api_route("/gta/recent-stolen", get_recent_stolen, methods=["GET"], dependencies=_gta_rl_u)
     router.add_api_route("/gta/melt", melt_cars, methods=["POST"])
+    router.add_api_route("/gta/drop-all", drop_all_cars, methods=["POST"])
     router.add_api_route("/gta/cars-for-sale", get_cars_for_sale, methods=["GET"], dependencies=_gta_rl_u)
     router.add_api_route("/gta/buy-car", buy_car, methods=["POST"])
     router.add_api_route("/gta/buy-cars-bulk", buy_cars_bulk, methods=["POST"])

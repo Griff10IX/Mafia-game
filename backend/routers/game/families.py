@@ -5976,7 +5976,7 @@ async def families_war_stats(current_user: dict = Depends(get_current_user)):
                 "truce_offered_by_family_id": w.get("truce_offered_by_family_id"),
                 "truce_offered_at": w.get("truce_offered_at"),
                 "truce_cooldown_until": w.get("truce_cooldown_until"),
-                "truce_timeout_minutes": 30,
+                "truce_timeout_minutes": TRUCE_OFFER_TIMEOUT_MINUTES,
             },
             "stats": {
                 "my_family_totals": my_totals,
@@ -5990,8 +5990,25 @@ async def families_war_stats(current_user: dict = Depends(get_current_user)):
     return {"wars": out}
 
 
-TRUCE_OFFER_TIMEOUT_MINUTES = 30
+TRUCE_OFFER_TIMEOUT_HOURS = 24
+TRUCE_OFFER_TIMEOUT_MINUTES = TRUCE_OFFER_TIMEOUT_HOURS * 60
 TRUCE_COOLDOWN_HOURS = 24
+
+
+async def _lapse_truce_offer(war: dict) -> dict | None:
+    """Reset a pending truce to active and start the re-offer cooldown. Returns updated war or None."""
+    if war.get("status") != "truce_offered":
+        return None
+    now = datetime.now(timezone.utc)
+    cooldown_until = (now + timedelta(hours=TRUCE_COOLDOWN_HOURS)).isoformat()
+    await db.family_wars.update_one(
+        {"id": war["id"], "status": "truce_offered"},
+        {
+            "$set": {"status": "active", "truce_cooldown_until": cooldown_until},
+            "$unset": {"truce_offered_by_family_id": "", "truce_offered_at": ""},
+        },
+    )
+    return await db.family_wars.find_one({"id": war["id"]}, {"_id": 0})
 
 
 async def _check_and_expire_truce(war: dict) -> dict | None:
@@ -6006,13 +6023,8 @@ async def _check_and_expire_truce(war: dict) -> dict | None:
     except Exception:
         return None
     now = datetime.now(timezone.utc)
-    if now > offered_dt + timedelta(minutes=TRUCE_OFFER_TIMEOUT_MINUTES):
-        cooldown_until = (now + timedelta(hours=TRUCE_COOLDOWN_HOURS)).isoformat()
-        await db.family_wars.update_one(
-            {"id": war["id"], "status": "truce_offered"},
-            {"$set": {"status": "active", "truce_cooldown_until": cooldown_until}, "$unset": {"truce_offered_by_family_id": "", "truce_offered_at": ""}},
-        )
-        return await db.family_wars.find_one({"id": war["id"]}, {"_id": 0})
+    if now > offered_dt + timedelta(hours=TRUCE_OFFER_TIMEOUT_HOURS):
+        return await _lapse_truce_offer(war)
     return None
 
 
@@ -6054,7 +6066,12 @@ async def families_war_truce_offer(request: WarTruceRequest, current_user: dict 
     )
     if result.modified_count == 0:
         return {"message": "Truce already offered or war ended"}
-    await send_notification_to_family(war["family_a_id"] if war["family_b_id"] == family_id else war["family_b_id"], "Truce offered", f"The enemy family has offered a truce. Boss or Underboss has {TRUCE_OFFER_TIMEOUT_MINUTES} minutes to accept.", "system")
+    await send_notification_to_family(
+        war["family_a_id"] if war["family_b_id"] == family_id else war["family_b_id"],
+        "Truce offered",
+        f"The enemy family has offered a truce. Boss or Underboss has {TRUCE_OFFER_TIMEOUT_HOURS} hours to accept or decline.",
+        "system",
+    )
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
     return {"message": "Truce offered"}
@@ -6088,6 +6105,32 @@ async def families_war_truce_accept(request: WarTruceRequest, current_user: dict
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
     return {"message": "Truce accepted. War ended."}
+
+
+async def families_war_truce_decline(request: WarTruceRequest, current_user: dict = Depends(get_current_user)):
+    family_id, family_role = await _current_family_context(current_user)
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    if family_role not in ("boss", "underboss"):
+        raise HTTPException(status_code=403, detail="Only Boss or Underboss can decline truce")
+    war = await db.family_wars.find_one({"id": request.war_id}, {"_id": 0})
+    if not war or war.get("status") != "truce_offered":
+        raise HTTPException(status_code=404, detail="War not found or no truce offered")
+    if family_id not in (war["family_a_id"], war["family_b_id"]):
+        raise HTTPException(status_code=403, detail="Not your war")
+    if war.get("truce_offered_by_family_id") == family_id:
+        raise HTTPException(status_code=400, detail="You offered the truce; the other side must accept or decline")
+    expired = await _check_and_expire_truce(war)
+    if expired:
+        raise HTTPException(status_code=400, detail="Truce offer has expired. A new truce cannot be offered for 24 hours.")
+    updated = await _lapse_truce_offer(war)
+    if not updated:
+        raise HTTPException(status_code=400, detail="War already ended or truce withdrawn")
+    await send_notification_to_family(war["family_a_id"], "Truce declined", "The truce was declined. The war continues. A new offer cannot be made for 24 hours.", "system")
+    await send_notification_to_family(war["family_b_id"], "Truce declined", "The truce was declined. The war continues. A new offer cannot be made for 24 hours.", "system")
+    _invalidate_list_cache()
+    _invalidate_my_cache(current_user["id"])
+    return {"message": "Truce declined. War continues."}
 
 
 async def families_wars_history(current_user: dict = Depends(get_current_user)):
@@ -6585,6 +6628,7 @@ def register(router):
     router.add_api_route("/families/war/{war_id}/stats", families_war_public_stats, methods=["GET"], dependencies=_families_rl_u)
     router.add_api_route("/families/war/truce/offer", families_war_truce_offer, methods=["POST"])
     router.add_api_route("/families/war/truce/accept", families_war_truce_accept, methods=["POST"])
+    router.add_api_route("/families/war/truce/decline", families_war_truce_decline, methods=["POST"])
     router.add_api_route("/families/wars/history", families_wars_history, methods=["GET"], dependencies=_families_rl_u)
     router.add_api_route("/families/state-takeover/accept", state_takeover_accept, methods=["POST"])
     router.add_api_route("/families/state-takeover/reject", state_takeover_reject, methods=["POST"])

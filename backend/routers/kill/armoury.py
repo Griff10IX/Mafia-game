@@ -75,6 +75,23 @@ from utils.minigame_run_session import (
 )
 from utils.minigame_security import skip_minigame_session
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_ARMOURY
+from utils.bullet_factory_buy_guard import (
+    CODE_AT_FIELD,
+    CODE_FIELD,
+    TICKET_AT_FIELD,
+    TICKET_FIELD,
+    apply_factory_buy_lock,
+    buy_code_payload,
+    check_lot_ticket,
+    factory_buy_lock_until,
+    factory_client_blocked,
+    honeypot_filled,
+    is_definite_block_reason,
+    issue_buy_gate,
+    submitted_rotating_buy_token,
+    _LOCKED_DETAIL,
+    _RELOAD_DETAIL,
+)
 
 
 async def _armoury_sustained_rl_user(current_user: dict = Depends(get_current_user)):
@@ -93,7 +110,6 @@ BULLET_FACTORY_TOTAL_PER_24H = BULLET_FACTORY_STOCK_CAP
 BULLET_FACTORY_UNOWNED_TOTAL_PER_24H = BULLET_FACTORY_STOCK_CAP
 BULLET_FACTORY_PRODUCTION_PER_HOUR = (BULLET_FACTORY_PROD_PER_HOUR_MIN + BULLET_FACTORY_PROD_PER_HOUR_MAX) / 2
 BULLET_FACTORY_BUY_MAX_PER_PURCHASE = 5000  # max bullets per single purchase
-BULLET_FACTORY_BUY_COOLDOWN_MINUTES = 15  # must wait this long between purchases
 # Armoury claim cost: utils.claim_costs (key armoury)
 BULLET_FACTORY_PRICE_MIN = 1
 BULLET_FACTORY_PRICE_MAX = 100_000  # max $ per bullet (when owned)
@@ -548,8 +564,10 @@ class SellOnTradeRequest(BaseModel):
 
 
 class BuyBulletsRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
     amount: int
     state: Optional[str] = None
+    buy_code: Optional[str] = None
 
 
 class StartArmourProductionRequest(BaseModel):
@@ -887,6 +905,7 @@ async def _tick_bullet_stock(state: str, factory: dict) -> dict:
 
 
 async def get_bullet_factory(
+    http_request: Request,
     state: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
 ):
@@ -920,16 +939,10 @@ async def get_bullet_factory(
     else:
         can_buy = accumulated > 0
         effective_price = unowned_price
-    # Cooldown: when can this user buy again?
-    next_buy_available_at = None
-    buyer_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "last_bullet_factory_bought_at": 1})
-    last_bought = (buyer_doc or {}).get("last_bullet_factory_bought_at")
-    if last_bought:
-        last_dt = _parse_utc(last_bought)
-        if last_dt:
-            next_ok = last_dt + timedelta(minutes=BULLET_FACTORY_BUY_COOLDOWN_MINUTES)
-            if datetime.now(timezone.utc) < next_ok:
-                next_buy_available_at = next_ok.isoformat()
+    lock_until = await factory_buy_lock_until(db, current_user["id"])
+    client_blocked, _client_reason = factory_client_blocked(http_request.headers)
+    if lock_until or client_blocked:
+        can_buy = False
     out = {
         "state": state,
         "production_per_hour": prod_per_hour,
@@ -953,8 +966,6 @@ async def get_bullet_factory(
         "last_collected_at": factory.get("last_collected_at"),
         "is_owner": is_owner,
         "buy_max_per_purchase": buy_max,
-        "buy_cooldown_minutes": BULLET_FACTORY_BUY_COOLDOWN_MINUTES,
-        "next_buy_available_at": next_buy_available_at,
     }
     # Armoury (owner only): multi-production hours + produce-all costs
     if economy_owner_id:
@@ -1016,6 +1027,9 @@ async def get_bullet_factory(
             if w.get("price_money") is not None
         ]
         out["armoury_item_money_price_max"] = ARMOURY_ITEM_MONEY_PRICE_MAX
+    if not lock_until and not client_blocked:
+        gate = await issue_buy_gate(db, current_user["id"])
+        out.update(buy_code_payload(gate["lot_ticket"]))
     return out
 
 
@@ -1531,10 +1545,54 @@ async def bullet_factory_sell_on_trade(
 
 
 async def buy_bullets(
+    http_request: Request,
     request: BuyBulletsRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Buy bullets from the factory in this state. When unowned, pay system price ($2,500–$4,000). When owned, pay owner's price. Max 3000 per purchase, once every 15 minutes."""
+    """Buy bullets from the factory in this state. When unowned, pay system price ($2,500–$4,000). When owned, pay owner's price. Max per purchase is capped."""
+    uid = current_user["id"]
+    lock_until = await factory_buy_lock_until(db, uid)
+    if lock_until:
+        raise HTTPException(status_code=400, detail=_LOCKED_DETAIL)
+    client_blocked, ua_reason = factory_client_blocked(http_request.headers)
+    if client_blocked:
+        if is_definite_block_reason(ua_reason):
+            await apply_factory_buy_lock(db, uid, reason=ua_reason)
+            try:
+                from utils.staff_bot_client_alert import maybe_notify_staff_bot_client_blocked
+
+                await maybe_notify_staff_bot_client_blocked(
+                    db=db,
+                    request=http_request,
+                    internal_reason=ua_reason,
+                    source="auth_gameplay",
+                    context_note="bullet_factory_buy_definite_script",
+                )
+            except Exception:
+                logger.exception("factory buy definite-bot staff alert failed")
+            raise HTTPException(status_code=403, detail=_LOCKED_DETAIL)
+        await issue_buy_gate(db, uid)
+        raise HTTPException(status_code=400, detail=_RELOAD_DETAIL)
+    body: Dict[str, Any] = request.model_dump() if hasattr(request, "model_dump") else {}
+    try:
+        raw = await http_request.json()
+        if isinstance(raw, dict):
+            for k, v in raw.items():
+                if k not in body or body.get(k) is None:
+                    body[k] = v
+    except Exception:
+        pass
+    extras = getattr(request, "__pydantic_extra__", None) or {}
+    if isinstance(extras, dict):
+        body.update(extras)
+    if honeypot_filled(body):
+        await issue_buy_gate(db, uid)
+        raise HTTPException(status_code=400, detail=_RELOAD_DETAIL)
+    ticket = submitted_rotating_buy_token(body)
+    ticket_fail = await check_lot_ticket(db, uid, ticket)
+    if ticket_fail:
+        await issue_buy_gate(db, uid)
+        raise HTTPException(status_code=400, detail=_RELOAD_DETAIL)
     state = _normalize_state(request.state or current_user.get("current_state"))
     factory = await _get_or_create_factory(state)
     from utils.mdg_prize_holds import casino_economy_owner_id
@@ -1563,27 +1621,30 @@ async def buy_bullets(
         price = factory.get("unowned_price") or random.randint(BULLET_FACTORY_UNOWNED_PRICE_MIN, BULLET_FACTORY_UNOWNED_PRICE_MAX)
     total_cost = amount * price
     now_iso = datetime.now(timezone.utc).isoformat()
-    cooldown_threshold = (datetime.now(timezone.utc) - timedelta(minutes=BULLET_FACTORY_BUY_COOLDOWN_MINUTES)).isoformat()
     result = await db.users.update_one(
         {"id": current_user["id"], "money": {"$gte": total_cost},
-         "$or": [
-             {"last_bullet_factory_bought_at": {"$exists": False}},
-             {"last_bullet_factory_bought_at": None},
-             {"last_bullet_factory_bought_at": {"$lte": cooldown_threshold}},
-         ]},
-        {"$inc": {"money": -total_cost, "bullets": amount, "bullets_purchased_from_armoury": amount}, "$set": {"last_bullet_factory_bought_at": now_iso}},
+         TICKET_FIELD: ticket},
+        {
+            "$inc": {"money": -total_cost, "bullets": amount, "bullets_purchased_from_armoury": amount},
+            "$set": {"last_bullet_factory_bought_at": now_iso},
+            "$unset": {
+                TICKET_FIELD: "",
+                TICKET_AT_FIELD: "",
+                CODE_FIELD: "",
+                CODE_AT_FIELD: "",
+            },
+        },
     )
     if result.modified_count == 0:
-        user_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "last_bullet_factory_bought_at": 1, "money": 1})
-        last_bought = (user_doc or {}).get("last_bullet_factory_bought_at")
-        if last_bought and last_bought > cooldown_threshold:
-            last_dt = _parse_utc(last_bought)
-            elapsed = (datetime.now(timezone.utc) - last_dt).total_seconds() if last_dt else 0
-            wait_mins = max(1, int((BULLET_FACTORY_BUY_COOLDOWN_MINUTES * 60 - elapsed) / 60) + 1)
-            raise HTTPException(
-                status_code=400,
-                detail=f"You can only buy bullets from the factory once every {BULLET_FACTORY_BUY_COOLDOWN_MINUTES} minutes. Try again in {wait_mins} min.",
-            )
+        user_doc = await db.users.find_one(
+            {"id": current_user["id"]},
+            {"_id": 0, "last_bullet_factory_bought_at": 1, "money": 1, TICKET_FIELD: 1, CODE_FIELD: 1},
+        )
+        if str((user_doc or {}).get(TICKET_FIELD) or "") != ticket:
+            await issue_buy_gate(db, uid)
+            raise HTTPException(status_code=400, detail=_RELOAD_DETAIL)
+        if await factory_buy_lock_until(db, uid):
+            raise HTTPException(status_code=400, detail=_LOCKED_DETAIL)
         raise HTTPException(
             status_code=400,
             detail=f"You need ${total_cost:,} (${price:,} × {amount:,})",

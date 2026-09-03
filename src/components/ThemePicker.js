@@ -16,7 +16,7 @@ import {
   THEME_SIDEBAR_SPACING, THEME_SIDEBAR_LAYOUT, THEME_TOAST_POSITION, THEME_WRITING_COLOURS, THEME_TEXT_STYLES,
   THEME_COLOUR_SECTIONS, THEME_WRITING_SECTIONS, THEME_VARIANTS, THEME_MOBILE_LAYOUTS,
   THEME_RESET_CLASSIC_ID, THEME_RESET_MODERN_ID, THEME_RESET_DARK_MAFIA_ID, STARTING_LOOK_PRESET_IDS,
-  THEME_LAYOUT_RESET_DEFAULTS,
+  THEME_LAYOUT_RESET_DEFAULTS, MENU_THEME_CHOICES,
   getThemeColour, getThemePreset, EXPANDED_PRESET_CATEGORIES,
 } from '../constants/themes';
 import styles from '../styles/noir.module.css';
@@ -304,9 +304,11 @@ export default function ThemePicker({ open, onClose }) {
     colourId, textureId, buttonColourId, accentLineColourId, fontId,
     buttonStyleId, buttonShapeId, writingColourId, mutedWritingColourId,
     toastTextColourId, textStyleId, mobileNavStyle, mobileLayoutId, themeVariant, modernVisualQuality,
+    leftMenuTheme, rightMenuTheme,
     setColour, setTexture, setButtonColour, setAccentLineColour, setFont,
     setButtonStyle, setButtonShape, setWritingColour, setMutedWritingColour,
     setToastTextColour, setTextStyle, setMobileNavStyle, setMobileLayout, setThemeVariant, setModernVisualQuality,
+    setLeftMenuTheme, setRightMenuTheme,
     resetButtonToDefault, resetAccentLineToDefault, resetThemeToPreset,
     customThemes, addCustomTheme, removeCustomTheme,
   } = useTheme();
@@ -649,7 +651,7 @@ export default function ThemePicker({ open, onClose }) {
           {/* ════ PRESETS ════ */}
           {activeTab === 'presets' && (
             <>
-              <TabSection icon={PanelLeft} title="Layout mode" sub="Classic, Modern, Dark Mafia Wars, or Old School Mafia Theme chrome">
+              <TabSection icon={PanelLeft} title="Layout mode" sub="Page, forum, and both menus follow this. Mix left/right after if you want them different.">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {THEME_VARIANTS.map((variant) => {
                     const active = themeVariant === variant.id;
@@ -690,6 +692,29 @@ export default function ThemePicker({ open, onClose }) {
                   </p>
                 </div>
                 )}
+              </TabSection>
+
+              <TabSection
+                icon={PanelLeft}
+                title="Left menu"
+                sub="Follows Layout mode unless you pick a different look"
+              >
+                <Pills
+                  options={MENU_THEME_CHOICES.map((c) => ({ id: c.id, label: c.name }))}
+                  value={leftMenuTheme}
+                  onChange={setLeftMenuTheme}
+                />
+              </TabSection>
+              <TabSection
+                icon={PanelRight}
+                title="Right menu"
+                sub="Follows Layout mode unless you pick a different look"
+              >
+                <Pills
+                  options={MENU_THEME_CHOICES.map((c) => ({ id: c.id, label: c.name }))}
+                  value={rightMenuTheme}
+                  onChange={setRightMenuTheme}
+                />
               </TabSection>
 
               {activeFullPreset && (
@@ -1135,6 +1160,29 @@ export default function ThemePicker({ open, onClose }) {
           {/* ════ LAYOUT ════ */}
           {activeTab === 'layout' && (
             <div className="space-y-6">
+              <TabSection
+                icon={PanelLeft}
+                title="Left menu"
+                sub="Follows Layout mode unless you pick a different look"
+              >
+                <Pills
+                  options={MENU_THEME_CHOICES.map((c) => ({ id: c.id, label: c.name }))}
+                  value={leftMenuTheme}
+                  onChange={setLeftMenuTheme}
+                />
+              </TabSection>
+              <TabSection
+                icon={PanelRight}
+                title="Right menu"
+                sub="Follows Layout mode unless you pick a different look"
+              >
+                <Pills
+                  options={MENU_THEME_CHOICES.map((c) => ({ id: c.id, label: c.name }))}
+                  value={rightMenuTheme}
+                  onChange={setRightMenuTheme}
+                />
+              </TabSection>
+
               <TabSection icon={PanelLeft} title="Sidebar dividers" sub="Gold dividers between sidebar navigation items">
                 <Pills
                   options={[{ id: 'on', label: 'On' }, { id: 'off', label: 'Off' }]}

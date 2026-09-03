@@ -543,13 +543,49 @@ body[data-theme-variant="modern"] .themeGangsterModern .raisedHover {
   border-radius: 9999px !important;
 }
 
-/* Modern variant: futuristic neutral-gray shell, accent from theme (no blue wash) */
+[data-layout="pocket-dock"] {
+  background-color: var(--noir-content);
+}
+
+/* Modern variant: same zinc + theme-colour wash as the new left/right menus */
+body[data-theme-variant="modern"] {
+  --modern-fill:
+    radial-gradient(920px 360px at 50% -12%, rgba(var(--noir-primary-rgb), 0.2), transparent 62%),
+    linear-gradient(180deg, #1c1c22 0%, #16161b 48%, #101014 100%);
+  --modern-fill-border: rgba(var(--noir-primary-rgb), 0.22);
+  --modern-page-border: rgba(161, 161, 170, 0.22);
+  --modern-chip-radius: 10px;
+  --modern-header-strip: linear-gradient(90deg, rgba(var(--noir-primary-rgb), 0.2) 0%, rgba(var(--noir-primary-rgb), 0.05) 55%, transparent 100%);
+  --modern-panel-fill: linear-gradient(180deg, #22222a 0%, #1c1c22 55%, #18181b 100%);
+  --modern-page-fill:
+    radial-gradient(1200px 580px at 82% -22%, rgba(var(--noir-primary-rgb), 0.07), transparent 66%),
+    linear-gradient(180deg, #1c1c22 0%, #16161b 48%, #101014 100%);
+  --modern-surface-1: #16161b;
+  --modern-surface-2: #1c1c22;
+  --modern-surface-3: #22222a;
+  --modern-border-soft: rgba(161, 161, 170, 0.22);
+  --modern-divider: rgba(161, 161, 170, 0.16);
+  --modern-input-bg: rgba(16, 16, 20, 0.92);
+  --modern-input-border: rgba(161, 161, 170, 0.28);
+  --modern-input-border-focus: rgba(var(--noir-primary-rgb), 0.5);
+  --app-surface-radius: 10px;
+  --noir-bg: #101014;
+  --noir-background: var(--noir-bg);
+  --noir-panel: #1c1c22;
+  --noir-content: #16161b;
+  --noir-surface: #1c1c22;
+  --noir-raised: #22222a;
+  --noir-border: var(--modern-page-border);
+  --noir-border-light: rgba(161, 161, 170, 0.14);
+  --noir-border-mid: var(--modern-page-border);
+}
+
 body[data-theme-variant="modern"] .themeGangsterModern {
-  --gm-bg: #121214;
-  --gm-bg-top: #18181b;
-  --gm-card: var(--modern-surface-2, #1e1e22);
-  --gm-card-hover: #28282e;
-  --gm-border: var(--modern-border-soft, rgba(161, 161, 170, 0.18));
+  --gm-bg: #16161b;
+  --gm-bg-top: #1c1c22;
+  --gm-card: var(--modern-surface-2, #1c1c22);
+  --gm-card-hover: #27272a;
+  --gm-border: var(--modern-page-border);
   --gm-text: #e4e4e7;
   --gm-muted: rgba(161, 161, 170, 0.9);
   --gm-gold: var(--noir-primary);
@@ -558,19 +594,20 @@ body[data-theme-variant="modern"] .themeGangsterModern {
 body[data-theme-variant="modern"] .themeGangsterModern .topBar,
 body[data-theme-variant="modern"] .themeGangsterModern .sidebar {
   backdrop-filter: blur(10px);
-  background: linear-gradient(180deg, rgba(30, 30, 36, 0.98) 0%, rgba(16, 16, 20, 0.97) 100%);
-  border-color: var(--modern-divider, rgba(161, 161, 170, 0.22));
+  background: var(--modern-fill);
+  border-color: var(--modern-fill-border);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
   transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 body[data-theme-variant="modern"] .themeGangsterModern .topBar {
-  background: linear-gradient(180deg, rgba(32, 32, 38, 0.98) 0%, rgba(20, 20, 24, 0.96) 100%);
-  border-bottom-color: rgba(var(--noir-primary-rgb), 0.16);
+  background: var(--modern-header-strip), var(--modern-fill);
+  border-bottom-color: var(--modern-fill-border);
 }
 
 body[data-theme-variant="modern"] .themeGangsterModern .sidebar {
-  background: linear-gradient(180deg, #121216 0%, #0c0c10 55%, #0a0a0e 100%);
+  background: var(--modern-fill) !important;
+  border-color: var(--modern-fill-border);
 }
 
 body[data-theme-variant="modern"][data-modern-perf="on"] .themeGangsterModern .topBar,
@@ -582,14 +619,15 @@ body[data-theme-variant="modern"][data-modern-perf="on"] .themeGangsterModern .s
 body[data-theme-variant="modern"] .themeGangsterModern .panelHeader {
   padding-top: 0.6rem;
   padding-bottom: 0.6rem;
-  background: linear-gradient(90deg, rgba(var(--noir-primary-rgb), 0.1) 0%, rgba(var(--noir-primary-rgb), 0.03) 46%, transparent 100%);
+  background: var(--modern-header-strip);
 }
 
 body[data-theme-variant="modern"] .themeGangsterModern .panel,
 body[data-theme-variant="modern"] .themeGangsterModern .surface {
-  background: linear-gradient(180deg, rgba(45, 45, 50, 0.95) 0%, rgba(36, 36, 40, 0.95) 100%);
-  border-color: var(--modern-border-soft, rgba(161, 161, 170, 0.18));
-  box-shadow: var(--modern-glow-soft, 0 18px 48px rgba(12, 12, 14, 0.65));
+  background: var(--modern-panel-fill);
+  border-color: var(--modern-page-border);
+  border-radius: var(--modern-chip-radius);
+  box-shadow: 0 18px 48px rgba(12, 12, 14, 0.65);
   transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
@@ -603,9 +641,30 @@ body[data-theme-variant="modern"] .themeGangsterModern .input:focus {
   box-shadow: 0 0 0 1px rgba(var(--noir-primary-rgb), 0.25), 0 0 0 4px rgba(var(--noir-primary-rgb), 0.1);
 }
 
-body[data-theme-variant="modern"] [data-layout="sidebar"] {
+body[data-theme-variant="modern"] [data-layout="sidebar"],
+body[data-theme-variant="modern"] [data-layout="right-sidebar"],
+body[data-theme-variant="modern"] [data-layout="bottom-nav"] nav,
+body[data-theme-variant="modern"] [data-layout="bottom-nav-submenu"],
+body[data-theme-variant="modern"] [data-layout="pocket-dock"],
+body[data-theme-variant="modern"] [data-layout="pocket-menu-sheet"],
+body[data-theme-variant="modern"] [data-layout="pocket-stats-sheet"],
+body[data-theme-variant="modern"] [data-layout="pocket-actions-sheet"],
+body[data-theme-variant="modern"] [data-layout="pocket-combat-sheet"],
+body[data-theme-variant="modern"] [data-layout="pocket-money-sheet"],
+body[data-theme-variant="modern"] [data-layout="touch-ball-panel"],
+body[data-theme-variant="modern"] [data-layout="mobile-bottom-bar"] {
+  width: auto;
+  background: var(--modern-fill) !important;
+  border-color: var(--modern-fill-border);
+}
+
+body[data-theme-variant="modern"] [data-layout="sidebar"],
+body[data-theme-variant="modern"] [data-layout="right-sidebar"] {
   width: 15rem !important;
-  box-shadow: inset -1px 0 0 var(--modern-divider, rgba(161, 161, 170, 0.14));
+}
+
+body[data-theme-variant="modern"] [data-layout="sidebar"] {
+  box-shadow: inset -1px 0 0 var(--modern-fill-border);
 }
 
 body[data-theme-variant="modern"] [data-layout="topbar"] {
@@ -615,29 +674,30 @@ body[data-theme-variant="modern"] [data-layout="topbar"] {
   padding-top: 0.45rem !important;
   padding-bottom: 0.45rem !important;
   gap: 0.65rem !important;
-  box-shadow: inset 0 -1px 0 var(--modern-divider, rgba(161, 161, 170, 0.14));
+  background: var(--modern-header-strip), var(--modern-page-fill) !important;
+  border-bottom: 1px solid var(--modern-page-border) !important;
+  box-shadow: inset 0 -1px 0 var(--modern-page-border);
 }
 
 body[data-theme-variant="modern"] [data-layout="main"] {
   margin-top: 3.75rem !important;
   padding: 1.2rem !important;
-  background:
-    radial-gradient(1200px 580px at 82% -22%, rgba(var(--noir-primary-rgb), 0.07), transparent 66%),
-    linear-gradient(180deg, rgba(20, 20, 24, 0.98) 0%, rgba(16, 16, 19, 1) 100%);
+  background: var(--modern-page-fill);
 }
 
 body[data-theme-variant="modern"] [data-layout="right-sidebar"] {
-  width: 15rem !important;
-  border-left: 1px solid var(--modern-divider, rgba(161, 161, 170, 0.14));
-  background: linear-gradient(180deg, rgba(30, 30, 34, 0.95) 0%, rgba(24, 24, 28, 0.96) 100%);
+  border-left: 1px solid var(--modern-fill-border);
+  border-right: none !important;
 }
 
-body[data-theme-variant="modern"] [data-layout="sidebar"] .sidebarNavLink {
+body[data-theme-variant="modern"] [data-layout="sidebar"] .sidebarNavLink,
+body[data-theme-variant="modern"] [data-layout="right-sidebar"] .right-rail-link {
   border-radius: 10px;
   border: 1px solid transparent;
 }
 
-body[data-theme-variant="modern"] [data-layout="sidebar"] .sidebarNavLink:hover {
+body[data-theme-variant="modern"] [data-layout="sidebar"] .sidebarNavLink:hover,
+body[data-theme-variant="modern"] [data-layout="right-sidebar"] .right-rail-link:hover {
   border-color: rgba(var(--noir-primary-rgb), 0.28) !important;
   background: rgba(var(--noir-primary-rgb), 0.1) !important;
 }
@@ -676,33 +736,48 @@ body[data-theme-variant="modern"] [data-layout="sidebar"] .sidebarNavLink:hover 
   }
 }
 
-/* Unified modern chat visuals – neutral gray base, accent from theme */
+/* Modern: Forum / Inbox boxes stay zinc; theme colour is accents only */
+body[data-theme-variant="modern"] [data-layout="main"] :global(.rounded-xl),
+body[data-theme-variant="modern"] [data-layout="main"] :global(.rounded-lg),
+body[data-theme-variant="modern"] [data-layout="main"] :global(.rounded-2xl),
+body[data-theme-variant="modern"] [data-layout="main"] :global(.rounded-md) {
+  border-radius: var(--modern-chip-radius) !important;
+}
+
+body[data-theme-variant="modern"] [data-layout="main"] :global(.bg-zinc-900),
+body[data-theme-variant="modern"] [data-layout="main"] :global(.bg-zinc-900\/80),
+body[data-theme-variant="modern"] [data-layout="main"] :global(.bg-zinc-800) {
+  background: var(--modern-panel-fill) !important;
+}
+
+/* Unified modern chat – zinc shell, theme colour on the header strip */
 body[data-theme-variant="modern"] [data-chat-surface] {
-  border: 1px solid var(--modern-border-soft, rgba(161, 161, 170, 0.18));
-  background: linear-gradient(180deg, rgba(45, 45, 50, 0.96) 0%, rgba(36, 36, 40, 0.96) 100%);
-  box-shadow: var(--modern-glow-soft, 0 18px 48px rgba(12, 12, 14, 0.65));
+  border: 1px solid var(--modern-page-border);
+  border-radius: var(--modern-chip-radius);
+  background: var(--modern-page-fill);
+  box-shadow: 0 18px 48px rgba(12, 12, 14, 0.65);
 }
 
 body[data-theme-variant="modern"] [data-chat-part="header"] {
-  background: linear-gradient(90deg, rgba(var(--noir-primary-rgb), 0.1) 0%, rgba(var(--noir-primary-rgb), 0.03) 45%, transparent 100%) !important;
-  border-bottom-color: var(--modern-divider, rgba(161, 161, 170, 0.14)) !important;
+  background: var(--modern-header-strip) !important;
+  border-bottom-color: var(--modern-page-border) !important;
 }
 
 body[data-theme-variant="modern"] [data-chat-part="messages"] {
-  background: rgba(30, 30, 34, 0.85) !important;
+  background: transparent !important;
 }
 
 body[data-theme-variant="modern"] [data-chat-part="message-row"] {
-  border-color: rgba(161, 161, 170, 0.12) !important;
-  background: var(--modern-chat-row, rgba(39, 39, 42, 0.8));
-  border-radius: 10px;
+  border-color: var(--modern-page-border) !important;
+  background: rgba(39, 39, 42, 0.55);
+  border-radius: var(--modern-chip-radius);
   margin: 0.2rem 0.3rem;
   padding-left: 0.5rem;
   padding-right: 0.5rem;
 }
 
 body[data-theme-variant="modern"] [data-chat-own="true"] {
-  background: var(--modern-chat-row-own, rgba(var(--noir-primary-rgb), 0.1));
+  background: rgba(var(--noir-primary-rgb), 0.12);
 }
 
 body[data-theme-variant="modern"] [data-chat-part="message-text"] {
@@ -714,14 +789,14 @@ body[data-theme-variant="modern"] [data-chat-part="timestamp"] {
 }
 
 body[data-theme-variant="modern"] [data-chat-part="composer"] {
-  border-top-color: var(--modern-divider, rgba(161, 161, 170, 0.14)) !important;
-  background: var(--modern-composer-bg, rgba(24, 24, 27, 0.94)) !important;
+  border-top-color: var(--modern-page-border) !important;
+  background: var(--modern-panel-fill) !important;
 }
 
 body[data-theme-variant="modern"] [data-chat-part="input"] {
-  background: var(--modern-input-bg, rgba(24, 24, 27, 0.9)) !important;
-  border-color: var(--modern-input-border, rgba(var(--noir-primary-rgb), 0.22)) !important;
-  border-radius: 12px !important;
+  background: var(--modern-input-bg) !important;
+  border-color: var(--modern-input-border) !important;
+  border-radius: var(--modern-chip-radius) !important;
 }
 
 body[data-theme-variant="modern"] [data-chat-part="send"],
@@ -730,12 +805,11 @@ body[data-theme-variant="modern"] [data-chat-part="aux-btn"] {
   border-color: var(--modern-composer-btn-border, rgba(var(--noir-primary-rgb), 0.28)) !important;
 }
 
-/* Modern: bottom nav – frosted glass, soft shadow */
+/* Modern: bottom nav uses the same chrome fill as the side menus */
 body[data-theme-variant="modern"] [data-layout="bottom-nav"] nav {
-  background: linear-gradient(180deg, rgba(28, 28, 32, 0.94) 0%, rgba(22, 22, 26, 0.97) 100%) !important;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-top: 1px solid var(--modern-divider, rgba(161, 161, 170, 0.14));
+  border-top: 1px solid var(--modern-fill-border);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
     0 -8px 24px rgba(0, 0, 0, 0.35);
@@ -746,7 +820,7 @@ body[data-theme-variant="modern"][data-modern-perf="on"] [data-layout="bottom-na
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
 }
 body[data-theme-variant="modern"] [data-layout="bottom-nav-submenu"] {
-  border-color: var(--modern-divider, rgba(161, 161, 170, 0.14));
+  border-color: var(--modern-fill-border);
 }
 /* Modern: futuristic touch ball – frosted glass, soft glow, orbital feel */
 body[data-theme-variant="modern"] [data-layout="touch-ball"] button {
@@ -773,10 +847,10 @@ body[data-theme-variant="modern"] [data-layout="touch-ball"] button:active {
     0 4px 16px rgba(0, 0, 0, 0.5) !important;
 }
 body[data-theme-variant="modern"] [data-layout="touch-ball-panel"] {
-  background: linear-gradient(180deg, rgba(28, 28, 32, 0.96) 0%, rgba(22, 22, 26, 0.98) 100%) !important;
+  background: var(--modern-fill) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(var(--noir-primary-rgb), 0.2) !important;
+  border: 1px solid var(--modern-fill-border) !important;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.04) inset,
     0 0 30px rgba(var(--noir-primary-rgb), 0.06),
@@ -812,8 +886,9 @@ body[data-theme-variant="modern"] [data-page="armoury"] .armoury-stripe {
   height: 1px !important;
 }
 body[data-theme-variant="modern"] [data-page="armoury"] .armoury-main-card {
-  background: linear-gradient(180deg, rgba(45, 45, 50, 0.95) 0%, rgba(36, 36, 40, 0.95) 100%) !important;
-  border: 1px solid rgba(var(--noir-primary-rgb), 0.18) !important;
+  background: var(--modern-panel-fill) !important;
+  border: 1px solid var(--modern-page-border) !important;
+  border-radius: var(--modern-chip-radius);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03) inset, 0 18px 48px rgba(12, 12, 14, 0.4) !important;
 }
 body[data-theme-variant="modern"] [data-page="armoury"] .armoury-rivet {
@@ -970,10 +1045,24 @@ body[data-theme-variant="dark_mafia"] .themeGangsterModern .input:focus {
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.2);
 }
 
+body[data-theme-variant="dark_mafia"] [data-layout="sidebar"],
+body[data-theme-variant="dark_mafia"] [data-layout="right-sidebar"],
+body[data-theme-variant="dark_mafia"] [data-layout="bottom-nav"] nav,
+body[data-theme-variant="dark_mafia"] [data-layout="bottom-nav-submenu"],
+body[data-theme-variant="dark_mafia"] [data-layout="pocket-dock"],
+body[data-theme-variant="dark_mafia"] [data-layout="pocket-menu-sheet"],
+body[data-theme-variant="dark_mafia"] [data-layout="pocket-stats-sheet"],
+body[data-theme-variant="dark_mafia"] [data-layout="pocket-actions-sheet"],
+body[data-theme-variant="dark_mafia"] [data-layout="pocket-combat-sheet"],
+body[data-theme-variant="dark_mafia"] [data-layout="pocket-money-sheet"],
+body[data-theme-variant="dark_mafia"] [data-layout="touch-ball-panel"],
+body[data-theme-variant="dark_mafia"] [data-layout="mobile-bottom-bar"] {
+  background: #050505 !important;
+}
+
 body[data-theme-variant="dark_mafia"] [data-layout="sidebar"] {
   width: 15rem !important;
   box-shadow: inset -1px 0 0 rgba(var(--noir-primary-rgb), 0.16);
-  background: #050505 !important;
 }
 
 body[data-theme-variant="dark_mafia"] [data-layout="topbar"] {
@@ -998,15 +1087,17 @@ body[data-theme-variant="dark_mafia"] [data-layout="main"] {
 body[data-theme-variant="dark_mafia"] [data-layout="right-sidebar"] {
   width: 15rem !important;
   border-left: 1px solid rgba(var(--noir-primary-rgb), 0.2);
-  background: #050505 !important;
+  border-right: none !important;
 }
 
-body[data-theme-variant="dark_mafia"] [data-layout="sidebar"] .sidebarNavLink {
+body[data-theme-variant="dark_mafia"] [data-layout="sidebar"] .sidebarNavLink,
+body[data-theme-variant="dark_mafia"] [data-layout="right-sidebar"] .right-rail-link {
   border-radius: 4px;
   border: 1px solid transparent;
 }
 
-body[data-theme-variant="dark_mafia"] [data-layout="sidebar"] .sidebarNavLink:hover {
+body[data-theme-variant="dark_mafia"] [data-layout="sidebar"] .sidebarNavLink:hover,
+body[data-theme-variant="dark_mafia"] [data-layout="right-sidebar"] .right-rail-link:hover {
   border-color: rgba(var(--noir-primary-rgb), 0.28) !important;
   background: rgba(var(--noir-primary-rgb), 0.08) !important;
 }
@@ -1045,7 +1136,7 @@ body[data-theme-variant="dark_mafia"] [data-layout="sidebar"] .sidebarNavLink:ho
 
 body[data-theme-variant="dark_mafia"] [data-chat-surface] {
   border: 1px solid rgba(var(--noir-primary-rgb), 0.18);
-  background: #111111;
+  background: #050505;
   box-shadow: none;
 }
 
@@ -1395,9 +1486,14 @@ body[data-theme-variant="old_school"] [data-layout="touch-ball-panel"] {
   backdrop-filter: none !important;
 }
 
-/* Pocket Deck chrome */
 body[data-theme-variant="old_school"] [data-layout="pocket-dock"],
-body[data-theme-variant="old_school"] [data-layout="pocket-hud"] {
+body[data-theme-variant="old_school"] [data-layout="pocket-hud"],
+body[data-theme-variant="old_school"] [data-layout="pocket-menu-sheet"],
+body[data-theme-variant="old_school"] [data-layout="pocket-stats-sheet"],
+body[data-theme-variant="old_school"] [data-layout="pocket-actions-sheet"],
+body[data-theme-variant="old_school"] [data-layout="pocket-combat-sheet"],
+body[data-theme-variant="old_school"] [data-layout="pocket-money-sheet"],
+body[data-theme-variant="old_school"] [data-layout="mobile-bottom-bar"] {
   background: var(--os-metal-face) !important;
   border-color: var(--os-chrome) !important;
   box-shadow: var(--os-bevel) !important;
@@ -1421,4 +1517,178 @@ body[data-theme-variant="old_school"] [data-layout="main"] .rounded-2xl,
 body[data-theme-variant="old_school"] [data-layout="main"] .rounded-md {
   border-radius: 0 !important;
 }
+
+/* Per-rail menu chrome. Follows Layout mode by default; Theme Studio can mix left vs right. */
+html[data-left-menu="classic"] .themeGangsterModern [data-layout="sidebar"],
+html[data-right-menu="classic"] .themeGangsterModern [data-layout="right-sidebar"] {
+  background: var(--noir-bg) !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  border-color: var(--noir-border-mid) !important;
+}
+
+html[data-right-menu="classic"] .themeGangsterModern [data-layout="right-sidebar"] {
+  border-left: 1px solid var(--noir-border-mid) !important;
+  border-right: none !important;
+}
+
+html[data-left-menu="classic"] .themeGangsterModern [data-layout="sidebar"] .sidebarNavLink,
+html[data-right-menu="classic"] .themeGangsterModern [data-layout="right-sidebar"] .right-rail-link {
+  border-radius: 0.125rem;
+  border: 1px solid transparent;
+}
+
+html[data-left-menu="classic"] .themeGangsterModern [data-layout="sidebar"] .sidebarNavLink:hover,
+html[data-right-menu="classic"] .themeGangsterModern [data-layout="right-sidebar"] .right-rail-link:hover {
+  background-color: var(--noir-raised) !important;
+  border-color: transparent !important;
+}
+
+html[data-left-menu="modern"] .themeGangsterModern [data-layout="sidebar"],
+html[data-right-menu="modern"] .themeGangsterModern [data-layout="right-sidebar"] {
+  background:
+    radial-gradient(920px 360px at 50% -12%, rgba(var(--noir-primary-rgb), 0.2), transparent 62%),
+    linear-gradient(180deg, #1c1c22 0%, #16161b 48%, #101014 100%) !important;
+  border-color: rgba(var(--noir-primary-rgb), 0.22);
+  box-shadow: inset -1px 0 0 rgba(var(--noir-primary-rgb), 0.16);
+}
+
+html[data-right-menu="modern"] .themeGangsterModern [data-layout="right-sidebar"] {
+  box-shadow: inset 1px 0 0 rgba(var(--noir-primary-rgb), 0.22);
+  border-left: 1px solid rgba(var(--noir-primary-rgb), 0.22);
+  border-right: none !important;
+}
+
+html[data-left-menu="modern"] .themeGangsterModern [data-layout="sidebar"] .sidebarNavLink,
+html[data-right-menu="modern"] .themeGangsterModern [data-layout="right-sidebar"] .right-rail-link {
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+
+html[data-left-menu="modern"] .themeGangsterModern [data-layout="sidebar"] .sidebarNavLink:hover,
+html[data-right-menu="modern"] .themeGangsterModern [data-layout="right-sidebar"] .right-rail-link:hover {
+  border-color: rgba(var(--noir-primary-rgb), 0.28) !important;
+  background: rgba(var(--noir-primary-rgb), 0.1) !important;
+}
+
+html[data-left-menu="dark_mafia"] .themeGangsterModern [data-layout="sidebar"],
+html[data-right-menu="dark_mafia"] .themeGangsterModern [data-layout="right-sidebar"] {
+  background: #050505 !important;
+  border-color: rgba(var(--noir-primary-rgb), 0.2);
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-left-menu="dark_mafia"] .themeGangsterModern [data-layout="sidebar"] {
+  box-shadow: inset -1px 0 0 rgba(var(--noir-primary-rgb), 0.16);
+}
+
+html[data-right-menu="dark_mafia"] .themeGangsterModern [data-layout="right-sidebar"] {
+  border-left: 1px solid rgba(var(--noir-primary-rgb), 0.2);
+  border-right: none !important;
+}
+
+html[data-left-menu="dark_mafia"] .themeGangsterModern [data-layout="sidebar"] .sidebarNavLink,
+html[data-right-menu="dark_mafia"] .themeGangsterModern [data-layout="right-sidebar"] .right-rail-link {
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+
+html[data-left-menu="dark_mafia"] .themeGangsterModern [data-layout="sidebar"] .sidebarNavLink:hover,
+html[data-right-menu="dark_mafia"] .themeGangsterModern [data-layout="right-sidebar"] .right-rail-link:hover {
+  border-color: rgba(var(--noir-primary-rgb), 0.28) !important;
+  background: rgba(var(--noir-primary-rgb), 0.08) !important;
+}
+
+html[data-left-menu="old_school"] .themeGangsterModern [data-layout="sidebar"],
+html[data-right-menu="old_school"] .themeGangsterModern [data-layout="right-sidebar"] {
+  background: rgba(58, 58, 58, 0.96) !important;
+  border-color: var(--os-chrome) !important;
+  box-shadow: var(--os-bevel) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-radius: 0 !important;
+}
+
+html[data-left-menu="old_school"] .themeGangsterModern [data-layout="sidebar"] {
+  border-right: 1px solid var(--os-chrome) !important;
+}
+
+html[data-right-menu="old_school"] .themeGangsterModern [data-layout="right-sidebar"] {
+  border-left: 1px solid var(--os-chrome) !important;
+  border-right: none !important;
+}
+
+html[data-left-menu="old_school"] .themeGangsterModern [data-layout="sidebar"] .sidebarNavLink {
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+html[data-left-menu="old_school"] .themeGangsterModern [data-layout="sidebar"] .sidebarNavLink:hover,
+html[data-right-menu="old_school"] .themeGangsterModern [data-layout="right-sidebar"] .right-rail-link:hover {
+  background-color: #4a4a4a !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+}
+
+/* Modern menus: zinc panels, theme-colour wash, rounded chips (not classic gold rules / left bar). */
+.themeGangsterModern [data-layout="sidebar"][data-menu-theme="modern"],
+.themeGangsterModern [data-layout="right-sidebar"][data-menu-theme="modern"],
+body[data-theme-variant="modern"][data-left-menu="follow"] [data-layout="sidebar"],
+body[data-theme-variant="modern"][data-right-menu="follow"] [data-layout="right-sidebar"] {
+  background:
+    radial-gradient(920px 360px at 50% -12%, rgba(var(--noir-primary-rgb), 0.2), transparent 62%),
+    linear-gradient(180deg, #1c1c22 0%, #16161b 48%, #101014 100%) !important;
+  border-color: var(--modern-fill-border, rgba(var(--noir-primary-rgb), 0.22)) !important;
+}
+
+.themeGangsterModern [data-layout="sidebar"][data-menu-theme="modern"] :global(.sidebar-inline-rule)::before,
+.themeGangsterModern [data-layout="sidebar"][data-menu-theme="modern"] :global(.sidebar-inline-rule)::after,
+.themeGangsterModern [data-layout="right-sidebar"][data-menu-theme="modern"] :global(.sidebar-inline-rule)::before,
+.themeGangsterModern [data-layout="right-sidebar"][data-menu-theme="modern"] :global(.sidebar-inline-rule)::after {
+  content: none !important;
+}
+
+.themeGangsterModern [data-layout="sidebar"][data-menu-theme="modern"] .sidebarNavLink,
+.themeGangsterModern [data-layout="right-sidebar"][data-menu-theme="modern"] :global(.right-rail-link) {
+  color: #d4d4d8 !important;
+  border-radius: 10px !important;
+  border: 1px solid transparent !important;
+}
+
+.themeGangsterModern [data-layout="sidebar"][data-menu-theme="modern"] .sidebarNavLink:hover,
+.themeGangsterModern [data-layout="right-sidebar"][data-menu-theme="modern"] :global(.right-rail-link):hover {
+  background: rgba(var(--noir-primary-rgb), 0.12) !important;
+  border-color: rgba(var(--noir-primary-rgb), 0.28) !important;
+  color: #f4f4f5 !important;
+}
+
+.themeGangsterModern [data-layout="sidebar"][data-menu-theme="modern"] .navItemActive,
+.themeGangsterModern [data-layout="sidebar"][data-menu-theme="modern"] .navItemActivePage,
+.themeGangsterModern [data-layout="sidebar"][data-menu-theme="modern"] .navItemActivePage:hover {
+  border-left: none !important;
+  border-radius: 10px !important;
+  background: rgba(var(--noir-primary-rgb), 0.16) !important;
+  color: var(--noir-primary) !important;
+  box-shadow: inset 0 0 0 1px rgba(var(--noir-primary-rgb), 0.3);
+}
+
+body[data-theme-variant="dark_mafia"][data-left-menu="follow"] [data-layout="sidebar"],
+body[data-theme-variant="dark_mafia"][data-right-menu="follow"] [data-layout="right-sidebar"] {
+  background: #050505 !important;
+  border-color: rgba(var(--noir-primary-rgb), 0.2) !important;
+}
+
+body[data-theme-variant="old_school"][data-left-menu="follow"] [data-layout="sidebar"],
+body[data-theme-variant="old_school"][data-right-menu="follow"] [data-layout="right-sidebar"] {
+  background: rgba(58, 58, 58, 0.96) !important;
+  border-color: var(--os-chrome) !important;
+  box-shadow: var(--os-bevel) !important;
+}
+
+
+
 

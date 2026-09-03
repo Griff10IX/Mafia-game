@@ -1129,7 +1129,6 @@ const FORUM_TABS = [
 ];
 
 const FORUM_TOPICS_CACHE_PREFIX = 'forum_topics_cache_v1';
-const FORUM_TOPICS_CACHE_MAX_AGE_MS = 2 * 60 * 1000;
 
 function forumTopicsCacheKey(category, page) {
   return `${FORUM_TOPICS_CACHE_PREFIX}:${category || 'general'}:${Number(page) || 1}`;
@@ -1142,7 +1141,6 @@ function readForumTopicsCache(category, page) {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return null;
-    if (Date.now() - Number(parsed.ts || 0) > FORUM_TOPICS_CACHE_MAX_AGE_MS) return null;
     return parsed.data || null;
   } catch {
     return null;
@@ -1373,8 +1371,6 @@ export default function Forum() {
       setCanViewPage2(!!cached.can_view_page_2);
       return;
     }
-    // No cache for this tab: clear stale rows from another tab and paint chrome immediately
-    // (dark skeleton on dark bg looked like a black screen on mobile).
     setTopics([]);
     setCanViewPage2(false);
   }, [activeTab, forumPage]);

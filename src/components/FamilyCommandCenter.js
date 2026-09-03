@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users,
@@ -16,7 +16,7 @@ import {
   RefreshCw,
   ListChecks,
 } from 'lucide-react';
-import api from '../utils/api';
+import api, { apiRequestWith429Retry } from '../utils/api';
 import { getFamiliesPrefetch, setFamiliesPrefetch } from '../utils/prefetchCache';
 
 const POLL_INTERVAL_MS = 30000;
@@ -88,12 +88,14 @@ function StatRow({ icon, label, value, tone }) {
 
 export default function FamilyCommandCenter({ onCloseSidebar, hasFamily }) {
   const [isMinimized, setIsMinimized] = useState(getStoredMinimized);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !getFamiliesPrefetch()?.myFamily?.family);
   const [refreshing, setRefreshing] = useState(false);
   const [myFamily, setMyFamily] = useState(() => getFamiliesPrefetch()?.myFamily ?? null);
   const [activeWars, setActiveWars] = useState([]);
   const [dailyTask, setDailyTask] = useState(null);
   const [dailyTaskUnavailable, setDailyTaskUnavailable] = useState(false);
+  const myFamilyRef = useRef(myFamily);
+  myFamilyRef.current = myFamily;
 
   const toggleMinimized = () => {
     setIsMinimized((prev) => {
@@ -106,25 +108,35 @@ export default function FamilyCommandCenter({ onCloseSidebar, hasFamily }) {
   };
 
   const fetchData = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
+    const hadFamily = !!myFamilyRef.current?.family;
+    if (!silent && !hadFamily) setLoading(true);
     else setRefreshing(true);
     try {
-      const [myRes, warRes, taskRes] = await Promise.all([
-        api.get('/families/my'),
-        hasFamily !== false ? api.get('/families/war').catch(() => ({ data: { wars: [] } })) : Promise.resolve({ data: { wars: [] } }),
-        hasFamily !== false
-          ? api.get('/families/daily-objective', { params: { _: Date.now() } }).catch(() => null)
-          : Promise.resolve(null),
-      ]);
+      const myRes = await apiRequestWith429Retry(() => api.get('/families/my'));
       const payload = myRes.data || {};
       setMyFamily(payload);
+      const prev = getFamiliesPrefetch() || {};
+      setFamiliesPrefetch({ ...prev, myFamily: payload });
+      setLoading(false);
+
+      if (hasFamily === false && !payload.family) {
+        setActiveWars([]);
+        setDailyTask(null);
+        setDailyTaskUnavailable(false);
+        return;
+      }
+
+      const [warRes, taskRes] = await Promise.all([
+        api.get('/families/war').catch(() => ({ data: { wars: [] } })),
+        api.get('/families/daily-objective', { params: { _: Date.now() } }).catch(() => null),
+      ]);
       setActiveWars(warRes.data?.wars || []);
       setDailyTask(taskRes?.data || null);
       setDailyTaskUnavailable(!taskRes);
-      const prev = getFamiliesPrefetch() || {};
-      setFamiliesPrefetch({ ...prev, myFamily: payload });
     } catch (_) {
-      if (!silent) setMyFamily({ family: null, members: [], rackets: [], my_role: null });
+      if (!silent && !hadFamily) {
+        setMyFamily({ family: null, members: [], rackets: [], my_role: null });
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);

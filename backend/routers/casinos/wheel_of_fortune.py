@@ -661,5 +661,6 @@ def register(router):
             "prize_label": prize_label,
             "pay_with": pay,
             "recent_wins": await _recent_wheel_wins(),
+            "new_balance": int(refreshed.get("money") or 0),
             **status,
         }

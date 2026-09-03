@@ -19,7 +19,10 @@ import {
   THEME_LAYOUT_RESET_DEFAULTS,
   THEME_LAYOUT_RESET_OLD_SCHOOL,
   THEME_RESET_CLASSIC_ID,
+  MENU_THEME_FOLLOW,
   normalizeThemeVariant,
+  normalizeMenuThemeChoice,
+  resolveMenuTheme,
   normalizeMobileLayoutId,
 } from '../constants/themes';
 import api from '../utils/api';
@@ -42,9 +45,11 @@ const MOBILE_STATS_DISPLAY_LS = 'mobile_stats_display';
 const STORAGE_KEY_MOBILE_LAYOUT = 'app_theme_mobile_layout';
 const STORAGE_KEY_BUTTON_SHAPE = 'app_theme_button_shape';
 const STORAGE_KEY_THEME_VARIANT = 'app_theme_variant';
+const STORAGE_KEY_LEFT_MENU = 'app_theme_left_menu';
+const STORAGE_KEY_RIGHT_MENU = 'app_theme_right_menu';
 const STORAGE_KEY_MODERN_VISUAL_QUALITY = 'app_theme_modern_visual_quality';
 const STORAGE_KEY_BOOT = 'app_theme_boot';
-const THEME_BOOT_ATTRS = ['data-theme-variant', 'data-texture', 'data-button-style', 'data-button-shape', 'data-mobile-layout', 'data-modern-perf'];
+const THEME_BOOT_ATTRS = ['data-theme-variant', 'data-texture', 'data-button-style', 'data-button-shape', 'data-mobile-layout', 'data-modern-perf', 'data-left-menu', 'data-right-menu'];
 
 const LS_TOPBAR_GAP = 'topbar_gap';
 const LS_TOPBAR_SIZE = 'topbar_size';
@@ -432,6 +437,17 @@ function applyThemeVariantToDocument(themeVariant) {
   }
 }
 
+function menuThemeAttr(choice, themeVariant) {
+  const c = normalizeMenuThemeChoice(choice);
+  if (c === MENU_THEME_FOLLOW) return 'follow';
+  return resolveMenuTheme(c, themeVariant);
+}
+
+function applyMenuThemesToDocument(themeVariant, leftChoice, rightChoice) {
+  applyAttrToRootAndBody('data-left-menu', menuThemeAttr(leftChoice, themeVariant));
+  applyAttrToRootAndBody('data-right-menu', menuThemeAttr(rightChoice, themeVariant));
+}
+
 function applyMobileLayoutToDocument(mobileLayoutId) {
   const id = normalizeMobileLayoutId(mobileLayoutId);
   if (id === 'pocket_deck') {
@@ -542,6 +558,8 @@ function readStoredThemeState() {
     textStyleId: ls(STORAGE_KEY_TEXT_STYLE) || DEFAULT_TEXT_STYLE_ID,
     customThemes,
     themeVariant,
+    leftMenuTheme: normalizeMenuThemeChoice(ls(STORAGE_KEY_LEFT_MENU)),
+    rightMenuTheme: normalizeMenuThemeChoice(ls(STORAGE_KEY_RIGHT_MENU)),
     modernVisualQuality: storedQuality === 'high' ? 'high' : 'performance',
     mobileLayoutId: normalizeMobileLayoutId(ls(STORAGE_KEY_MOBILE_LAYOUT)),
     buttonShapeId: storedShape === 'sharp' || storedShape === 'pill' ? storedShape : 'rounded',
@@ -573,6 +591,7 @@ function applyStoredThemeState(state) {
   applyTextStyleToDocument(getThemeTextStyle(state.textStyleId));
   applyTextureToDocument(state.textureId);
   applyThemeVariantToDocument(state.themeVariant);
+  applyMenuThemesToDocument(state.themeVariant, state.leftMenuTheme, state.rightMenuTheme);
   applyMobileLayoutToDocument(state.mobileLayoutId);
   applyModernPerfFlagToDocument(state.themeVariant, state.modernVisualQuality);
   applyMobileCompositorSafeToDocument();
@@ -738,6 +757,18 @@ export function ThemeProvider({ children }) {
     } catch (_) {}
     return DEFAULT_THEME_VARIANT;
   });
+  const [leftMenuTheme, setLeftMenuThemeState] = useState(() => {
+    try {
+      return normalizeMenuThemeChoice(localStorage.getItem(STORAGE_KEY_LEFT_MENU));
+    } catch (_) {}
+    return MENU_THEME_FOLLOW;
+  });
+  const [rightMenuTheme, setRightMenuThemeState] = useState(() => {
+    try {
+      return normalizeMenuThemeChoice(localStorage.getItem(STORAGE_KEY_RIGHT_MENU));
+    } catch (_) {}
+    return MENU_THEME_FOLLOW;
+  });
   const [modernVisualQuality, setModernVisualQualityState] = useState(() => {
     try {
       const v = localStorage.getItem(STORAGE_KEY_MODERN_VISUAL_QUALITY);
@@ -830,8 +861,9 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     applyThemeVariantToDocument(themeVariant);
+    applyMenuThemesToDocument(themeVariant, leftMenuTheme, rightMenuTheme);
     applyModernPerfFlagToDocument(themeVariant, modernVisualQuality);
-  }, [themeVariant, modernVisualQuality]);
+  }, [themeVariant, modernVisualQuality, leftMenuTheme, rightMenuTheme]);
 
   useEffect(() => {
     applyMobileLayoutToDocument(mobileLayoutId);
@@ -847,7 +879,7 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     persistThemeBootSnapshot();
-  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, modernVisualQuality, mobileLayoutId, buttonShapeId]);
+  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, leftMenuTheme, rightMenuTheme, modernVisualQuality, mobileLayoutId, buttonShapeId]);
 
   const themeLoadedRef = useRef(false);
   const serverThemePcRef = useRef(null);
@@ -1129,6 +1161,8 @@ export function ThemeProvider({ children }) {
   const setThemeVariant = useCallback((variant) => {
     const v = normalizeThemeVariant(variant);
     setThemeVariantState(v);
+    setLeftMenuThemeState(MENU_THEME_FOLLOW);
+    setRightMenuThemeState(MENU_THEME_FOLLOW);
     if (v === 'modern') {
       setTextureIdState('modern-soft');
       try {
@@ -1142,8 +1176,30 @@ export function ThemeProvider({ children }) {
     }
     try {
       localStorage.setItem(STORAGE_KEY_THEME_VARIANT, v);
+      localStorage.setItem(STORAGE_KEY_LEFT_MENU, MENU_THEME_FOLLOW);
+      localStorage.setItem(STORAGE_KEY_RIGHT_MENU, MENU_THEME_FOLLOW);
     } catch (_) {}
+    applyThemeVariantToDocument(v);
+    applyMenuThemesToDocument(v, MENU_THEME_FOLLOW, MENU_THEME_FOLLOW);
   }, []);
+
+  const setLeftMenuTheme = useCallback((choice) => {
+    const v = normalizeMenuThemeChoice(choice);
+    setLeftMenuThemeState(v);
+    try {
+      localStorage.setItem(STORAGE_KEY_LEFT_MENU, v);
+    } catch (_) {}
+    applyMenuThemesToDocument(themeVariant, v, rightMenuTheme);
+  }, [themeVariant, rightMenuTheme]);
+
+  const setRightMenuTheme = useCallback((choice) => {
+    const v = normalizeMenuThemeChoice(choice);
+    setRightMenuThemeState(v);
+    try {
+      localStorage.setItem(STORAGE_KEY_RIGHT_MENU, v);
+    } catch (_) {}
+    applyMenuThemesToDocument(themeVariant, leftMenuTheme, v);
+  }, [themeVariant, leftMenuTheme]);
 
   const setModernVisualQuality = useCallback((quality) => {
     const v = quality === 'high' ? 'high' : 'performance';
@@ -1189,6 +1245,8 @@ export function ThemeProvider({ children }) {
     setMobileNavStyleState(mobileNav);
     setMobileLayoutIdState(mobileLayout);
     setThemeVariantState(variant);
+    setLeftMenuThemeState(MENU_THEME_FOLLOW);
+    setRightMenuThemeState(MENU_THEME_FOLLOW);
     setButtonShapeIdState(buttonShape === 'sharp' || buttonShape === 'pill' ? buttonShape : 'rounded');
 
     try {
@@ -1205,6 +1263,8 @@ export function ThemeProvider({ children }) {
       localStorage.setItem(STORAGE_KEY_MOBILE_NAV, mobileNav);
       localStorage.setItem(STORAGE_KEY_MOBILE_LAYOUT, mobileLayout);
       localStorage.setItem(STORAGE_KEY_THEME_VARIANT, variant);
+      localStorage.setItem(STORAGE_KEY_LEFT_MENU, MENU_THEME_FOLLOW);
+      localStorage.setItem(STORAGE_KEY_RIGHT_MENU, MENU_THEME_FOLLOW);
       localStorage.setItem(STORAGE_KEY_BUTTON_SHAPE, buttonShape === 'sharp' || buttonShape === 'pill' ? buttonShape : 'rounded');
 
       localStorage.setItem('mobile_stats_display', mobileStats);
@@ -1313,6 +1373,10 @@ export function ThemeProvider({ children }) {
     setMobileLayout,
     themeVariant,
     setThemeVariant,
+    leftMenuTheme,
+    rightMenuTheme,
+    setLeftMenuTheme,
+    setRightMenuTheme,
     modernVisualQuality,
     setModernVisualQuality,
     themeServerHydrated,

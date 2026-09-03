@@ -23,19 +23,6 @@ function isChunkLoadError(message) {
   );
 }
 
-function hardReloadForNewBuild() {
-  // Do NOT clear CHUNK_ERROR_RELOAD_KEY here — that caused an infinite reload loop.
-  try {
-    const path = window.location.pathname || "/";
-    const params = new URLSearchParams(window.location.search || "");
-    params.set("_mw", String(Date.now()));
-    const q = params.toString();
-    window.location.replace(`${path}?${q}${window.location.hash || ""}`);
-  } catch (_) {
-    window.location.reload();
-  }
-}
-
 function tryReloadForChunkError() {
   const attempt = () => {
     try {
@@ -60,8 +47,7 @@ function tryReloadForChunkError() {
       const now = Date.now();
       if (last && now - parseInt(last, 10) < CHUNK_ERROR_RELOAD_COOLDOWN_MS) return;
       sessionStorage.setItem(CHUNK_ERROR_RELOAD_KEY, String(now));
-      // Cache-bust so phones do not keep a stale index.html pointing at deleted chunks.
-      hardReloadForNewBuild();
+      window.location.reload();
     } catch (_) {}
   };
   // Brief delay so Safari's networking can wake after background discard.

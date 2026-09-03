@@ -87,10 +87,21 @@ export function clearDashboardSessionCache() {
 /** Keep Layout / Dashboard session paint in sync after /auth/me + rank-progress. */
 export function writeDashboardSessionUserProgress(user, rankProgress) {
   const prev = readDashboardSessionCache() || {};
+  const nextUser = sanitizeDashboardUser(user) ?? prev.user ?? null;
+  if (nextUser && prev.user) {
+    const incomingProfit = Number(nextUser.casino_profit);
+    const incomingHas = !!nextUser.has_casino_or_property;
+    const looksLikeAuthMeStub = !incomingHas && (!Number.isFinite(incomingProfit) || incomingProfit === 0);
+    if (looksLikeAuthMeStub && (prev.user.has_casino_or_property || Number(prev.user.casino_profit) !== 0 || Number(prev.user.property_profit) !== 0)) {
+      nextUser.casino_profit = prev.user.casino_profit;
+      nextUser.property_profit = prev.user.property_profit;
+      nextUser.has_casino_or_property = prev.user.has_casino_or_property;
+    }
+  }
   writeSessionJson(DASHBOARD_SESSION_CACHE_KEY, {
     ...prev,
-    user: sanitizeDashboardUser(user) ?? prev.user ?? null,
-    rankProgress: rankProgress ?? null,
+    user: nextUser,
+    rankProgress: rankProgress ?? prev.rankProgress ?? null,
   });
 }
 

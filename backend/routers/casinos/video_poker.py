@@ -955,6 +955,7 @@ def register(router):
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
         dk, dname, dmult = _evaluate_hand(hand, pay_table)
+        new_balance = int((debit_res.get("money") or 0) or 0) - bet
         return {
             "status": "deal",
             "bet": bet,
@@ -963,6 +964,7 @@ def register(router):
             "hand_key": dk,
             "hand_name": dname,
             "multiplier": dmult,
+            "new_balance": new_balance,
         }
 
     @router.post("/casino/videopoker/draw")

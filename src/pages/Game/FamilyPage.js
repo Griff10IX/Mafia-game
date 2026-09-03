@@ -2511,7 +2511,7 @@ const WarHistoryTab = ({ wars, onDetails }) => (
   </div>
 );
 
-const ActiveWarTab = ({ wars, family, canManage, onDetails, onOfferTruce, onAcceptTruce }) => (
+const ActiveWarTab = ({ wars, family, canManage, onDetails, onOfferTruce, onAcceptTruce, onDeclineTruce }) => (
   <div className="space-y-3">
     <div className="rounded-lg border border-red-500/25 bg-red-500/8 px-3 py-2">
       <div className="flex items-center gap-2">
@@ -2519,7 +2519,7 @@ const ActiveWarTab = ({ wars, family, canManage, onDetails, onOfferTruce, onAcce
         <div>
           <p className="text-[11px] font-heading font-bold uppercase tracking-wider text-red-400">War room</p>
           <p className="text-[9px] text-zinc-500 font-heading">
-            Active family wars and truce options are shown here so leaders can act quickly.
+            Active family wars and truce options are shown here so leaders can act. Truce offers last 24 hours.
           </p>
         </div>
       </div>
@@ -2556,8 +2556,8 @@ const ActiveWarTab = ({ wars, family, canManage, onDetails, onOfferTruce, onAcce
                       {war.other_family_tag ? <span className="text-primary/60 ml-1">[{war.other_family_tag}]</span> : null}
                     </h3>
                     {weOffered && <p className="text-[10px] text-primary/80 font-heading mt-1">You offered a truce. Waiting for the enemy family to accept.</p>}
-                    {theyOffered && <p className="text-[10px] text-emerald-300/90 font-heading mt-1">Enemy offered a truce. Boss or Underboss can accept it here.</p>}
-                    {!canManage && <p className="text-[9px] text-zinc-500 font-heading mt-1">Only Boss or Underboss can offer or accept a truce.</p>}
+                    {theyOffered && <p className="text-[10px] text-emerald-300/90 font-heading mt-1">Enemy offered a truce. Boss or Underboss can accept or decline it here (24 hours).</p>}
+                    {!canManage && <p className="text-[9px] text-zinc-500 font-heading mt-1">Only Boss or Underboss can offer, accept, or decline a truce.</p>}
                   </div>
                   <button
                     type="button"
@@ -2592,6 +2592,7 @@ const ActiveWarTab = ({ wars, family, canManage, onDetails, onOfferTruce, onAcce
                 canManage={canManage}
                 onOfferTruce={() => onOfferTruce(idx)}
                 onAcceptTruce={() => onAcceptTruce(idx)}
+                onDeclineTruce={() => onDeclineTruce(idx)}
                 compact
               />
             </div>
@@ -2820,7 +2821,7 @@ const TruceOfferBanner = ({ war, family }) => {
 
   useEffect(() => {
     if (!war.truce_offered_at) return;
-    const timeoutMinutes = war.truce_timeout_minutes || 30;
+    const timeoutMinutes = war.truce_timeout_minutes || 1440;
     const offeredAt = new Date(war.truce_offered_at).getTime();
     const deadline = offeredAt + timeoutMinutes * 60 * 1000;
 
@@ -2834,7 +2835,8 @@ const TruceOfferBanner = ({ war, family }) => {
     return () => clearInterval(interval);
   }, [war.truce_offered_at, war.truce_timeout_minutes]);
 
-  const mins = secondsLeft !== null ? Math.floor(secondsLeft / 60) : '--';
+  const hours = secondsLeft !== null ? Math.floor(secondsLeft / 3600) : 0;
+  const mins = secondsLeft !== null ? Math.floor((secondsLeft % 3600) / 60) : '--';
   const secs = secondsLeft !== null ? String(secondsLeft % 60).padStart(2, '0') : '--';
 
   return (
@@ -2842,11 +2844,11 @@ const TruceOfferBanner = ({ war, family }) => {
       {weOffered ? (
         <>✋ You offered a truce — waiting for response</>
       ) : (
-        <>🤝 Enemy offered a truce — Boss/Underboss can accept</>
+        <>🤝 Enemy offered a truce — Boss/Underboss can accept or decline</>
       )}
       {secondsLeft !== null && secondsLeft > 0 && (
         <div className="mt-1 text-[9px] text-primary/70">
-          Expires in {mins}:{secs}
+          Expires in {hours > 0 ? `${hours}h ${mins}m` : `${mins}:${secs}`}
         </div>
       )}
       {secondsLeft === 0 && (
@@ -2887,7 +2889,7 @@ const TruceCooldownBanner = ({ cooldownUntil }) => {
   );
 };
 
-function WarTruceActions({ war, family, canManage, onOfferTruce, onAcceptTruce, compact = false }) {
+function WarTruceActions({ war, family, canManage, onOfferTruce, onAcceptTruce, onDeclineTruce, compact = false }) {
   if (!war || !canManage) return null;
   const canOffer = war.status === 'active';
   const canAccept = war.status === 'truce_offered' && war.truce_offered_by_family_id !== family?.id;
@@ -2909,13 +2911,22 @@ function WarTruceActions({ war, family, canManage, onOfferTruce, onAcceptTruce, 
         </button>
       )}
       {canAccept && (
-        <button
-          type="button"
-          onClick={onAcceptTruce}
-          className="flex-1 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30 transition-all min-h-[44px] touch-manipulation"
-        >
-          ✓ Accept Truce
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={onAcceptTruce}
+            className="flex-1 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30 transition-all min-h-[44px] touch-manipulation"
+          >
+            ✓ Accept Truce
+          </button>
+          <button
+            type="button"
+            onClick={onDeclineTruce}
+            className="flex-1 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-zinc-800/60 border-zinc-700/40 text-zinc-400 hover:border-red-400/40 hover:text-red-300 transition-all min-h-[44px] touch-manipulation"
+          >
+            Decline
+          </button>
+        </>
       )}
     </div>
   );
@@ -2925,7 +2936,7 @@ function WarTruceActions({ war, family, canManage, onOfferTruce, onAcceptTruce, 
 // WAR MODAL — Boxing Match Card
 // ============================================================================
 
-const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcceptTruce }) => {
+const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcceptTruce, onDeclineTruce }) => {
   const [modalTab, setModalTab] = useState('fighters');
   const [feed, setFeed] = useState(null);
   const [feedLoading, setFeedLoading] = useState(false);
@@ -3014,12 +3025,13 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
           canManage={canManage}
           onOfferTruce={onOfferTruce}
           onAcceptTruce={onAcceptTruce}
+          onDeclineTruce={onDeclineTruce}
           compact
         />
 
         {!canManage && (war.status === 'active' || war.status === 'truce_offered') && (
           <p className="mx-4 mt-2 text-[9px] text-zinc-500 font-heading text-center">
-            Only Boss or Underboss can offer or accept a truce.
+            Only Boss or Underboss can offer, accept, or decline a truce.
           </p>
         )}
 
@@ -4231,8 +4243,22 @@ export default function FamilyPage() {
       toast.error(apiDetail(e));
     }
   };
+  const handleDeclineTruceAtIndex = async (idx) => {
+    const entry = activeWars[idx];
+    if (!entry?.war?.id) return;
+    if (!window.confirm('Decline this truce? The war continues and neither side can offer again for 24 hours.')) return;
+    try {
+      await api.post('/families/war/truce/decline', { war_id: entry.war.id });
+      toast.success('Truce declined');
+      fetchData();
+      setShowWarModal(false);
+    } catch (e) {
+      toast.error(apiDetail(e));
+    }
+  };
   const handleOfferTruce = () => handleOfferTruceAtIndex(selectedWarIndex);
   const handleAcceptTruce = () => handleAcceptTruceAtIndex(selectedWarIndex);
+  const handleDeclineTruce = () => handleDeclineTruceAtIndex(selectedWarIndex);
 
   const openWarModalById = (warId) => {
     const idx = activeWars.findIndex((entry) => entry.war?.id === warId);
@@ -4797,6 +4823,7 @@ export default function FamilyPage() {
                   onDetails={(idx) => { setSelectedWarIndex(idx); setShowWarModal(true); }}
                   onOfferTruce={handleOfferTruceAtIndex}
                   onAcceptTruce={handleAcceptTruceAtIndex}
+                  onDeclineTruce={handleDeclineTruceAtIndex}
                 />
               )}
               {activeTab === 'families' && (
@@ -4864,7 +4891,7 @@ export default function FamilyPage() {
         <WarModal 
           war={activeWars[selectedWarIndex].war} stats={activeWars[selectedWarIndex].stats} 
           family={family} canManage={canManage} onClose={() => setShowWarModal(false)} 
-          onOfferTruce={handleOfferTruce} onAcceptTruce={handleAcceptTruce} 
+          onOfferTruce={handleOfferTruce} onAcceptTruce={handleAcceptTruce} onDeclineTruce={handleDeclineTruce} 
         />
       )}
     </div>

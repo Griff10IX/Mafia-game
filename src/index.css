@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Cormorant+Garamond:wght@400;500;600;700&family=Oswald:wght@300;400;500;600;700&family=Nunito:wght@300;400;500;600;700&family=Courier+Prime:wght@400;700&family=Lato:wght@300;400;700&family=Montserrat:wght@400;500;600;700;800&family=Bebas+Neue&family=Caveat:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&family=Merriweather:wght@300;400;700&family=Poppins:wght@300;400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&family=Roboto+Slab:wght@300;400;500;600;700&display=swap');
+/* Theme fonts load non-blocking from public/index.html so first paint is not gated on Google Fonts. */
 
 @layer base {
   :root {
@@ -58,38 +58,63 @@ body {
 
 body[data-theme-variant="modern"] {
   background-color: var(--noir-bg);
-  --app-surface-radius: 14px;
+  --app-surface-radius: 10px;
   --app-surface-padding: 1.1rem;
   --app-page-gutter: 1rem;
   --app-card-shadow: 0 12px 36px rgba(0, 0, 0, 0.38);
-  /* Override base noir vars so Layout, bottom nav, touch ball, and page components use modern palette */
-  --noir-bg: #0c0c0e;
+  /* Same zinc + theme-colour wash as the Modern left/right menus */
+  --noir-bg: #101014;
   --noir-background: var(--noir-bg);
-  --noir-panel: #101012;
-  --noir-content: #151518;
-  --noir-surface: var(--modern-surface-2, #1c1c21);
-  --noir-raised: #2a2a31;
-  --noir-border: var(--modern-border-soft, rgba(161, 161, 170, 0.22));
+  --noir-panel: #1c1c22;
+  --noir-content: #16161b;
+  --noir-surface: #1c1c22;
+  --noir-raised: #22222a;
+  --noir-border: rgba(161, 161, 170, 0.22);
   --noir-border-light: rgba(161, 161, 170, 0.14);
-  --noir-border-mid: var(--modern-divider, rgba(161, 161, 170, 0.18));
-  --modern-surface-1: #151518;
-  --modern-surface-2: #1c1c21;
-  --modern-surface-3: #2a2a31;
+  --noir-border-mid: rgba(161, 161, 170, 0.18);
+  --modern-surface-1: #16161b;
+  --modern-surface-2: #1c1c22;
+  --modern-surface-3: #22222a;
   --modern-border-soft: rgba(161, 161, 170, 0.22);
-  --modern-border-strong: rgba(var(--noir-primary-rgb), 0.38);
-  --modern-divider: rgba(161, 161, 170, 0.18);
-  --modern-glow-soft: 0 0 0 1px rgba(var(--noir-primary-rgb), 0.14), 0 18px 48px rgba(8, 8, 10, 0.7);
+  --modern-border-strong: rgba(161, 161, 170, 0.32);
+  --modern-divider: rgba(161, 161, 170, 0.16);
+  --modern-glow-soft: 0 18px 48px rgba(8, 8, 10, 0.7);
   --modern-panel-shadow: 0 20px 56px rgba(8, 8, 10, 0.75);
-  --modern-input-bg: rgba(24, 24, 27, 0.9);
-  --modern-input-border: rgba(var(--noir-primary-rgb), 0.2);
-  --modern-input-border-focus: rgba(var(--noir-primary-rgb), 0.4);
-  --modern-chat-row: rgba(39, 39, 42, 0.8);
-  --modern-chat-row-own: rgba(var(--noir-primary-rgb), 0.1);
+  --modern-input-bg: rgba(16, 16, 20, 0.92);
+  --modern-input-border: rgba(161, 161, 170, 0.28);
+  --modern-input-border-focus: rgba(var(--noir-primary-rgb), 0.5);
+  --modern-chat-row: rgba(39, 39, 42, 0.55);
+  --modern-chat-row-own: rgba(var(--noir-primary-rgb), 0.12);
   --modern-chat-muted: rgba(228, 228, 231, 0.88);
   --modern-chat-time: rgba(161, 161, 170, 0.78);
-  --modern-composer-bg: rgba(24, 24, 27, 0.94);
+  --modern-composer-bg: #1c1c22;
   --modern-composer-btn: rgba(var(--noir-primary-rgb), 0.1);
-  --modern-composer-btn-border: rgba(var(--noir-primary-rgb), 0.22);
+  --modern-composer-btn-border: rgba(var(--noir-primary-rgb), 0.28);
+  --modern-fill:
+    radial-gradient(920px 360px at 50% -12%, rgba(var(--noir-primary-rgb), 0.2), transparent 62%),
+    linear-gradient(180deg, #1c1c22 0%, #16161b 48%, #101014 100%);
+  --modern-fill-border: rgba(var(--noir-primary-rgb), 0.22);
+  --modern-page-border: rgba(161, 161, 170, 0.22);
+  --modern-chip-radius: 10px;
+  --modern-header-strip: linear-gradient(90deg, rgba(var(--noir-primary-rgb), 0.2) 0%, rgba(var(--noir-primary-rgb), 0.05) 55%, transparent 100%);
+  --modern-panel-fill: linear-gradient(180deg, #22222a 0%, #1c1c22 55%, #18181b 100%);
+  --modern-page-fill:
+    radial-gradient(1200px 580px at 82% -22%, rgba(var(--noir-primary-rgb), 0.07), transparent 66%),
+    linear-gradient(180deg, #1c1c22 0%, #16161b 48%, #101014 100%);
+}
+
+/* Modern: Forum / Inbox boxes stay zinc; theme colour is accents only */
+body[data-theme-variant="modern"] [data-layout="main"] .rounded-xl,
+body[data-theme-variant="modern"] [data-layout="main"] .rounded-lg,
+body[data-theme-variant="modern"] [data-layout="main"] .rounded-2xl,
+body[data-theme-variant="modern"] [data-layout="main"] .rounded-md {
+  border-radius: var(--modern-chip-radius) !important;
+}
+
+body[data-theme-variant="modern"] [data-layout="main"] .bg-zinc-900,
+body[data-theme-variant="modern"] [data-layout="main"] .bg-zinc-900\/80,
+body[data-theme-variant="modern"] [data-layout="main"] .bg-zinc-800 {
+  background: var(--modern-panel-fill) !important;
 }
 
 body[data-theme-variant="modern"] .app-dialog-overlay {

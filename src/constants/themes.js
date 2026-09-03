@@ -785,6 +785,28 @@ export function normalizeThemeVariant(variant) {
   return 'classic';
 }
 
+/** Left/right menu chrome. `follow` tracks Layout mode. */
+export const MENU_THEME_FOLLOW = 'follow';
+export const MENU_THEME_CHOICES = [
+  { id: 'follow', name: 'Follow layout' },
+  { id: 'classic', name: 'Classic' },
+  { id: 'modern', name: 'Modern' },
+  { id: 'dark_mafia', name: 'Dark Mafia' },
+  { id: 'old_school', name: 'Old School' },
+];
+
+export function normalizeMenuThemeChoice(choice) {
+  if (choice === 'classic' || choice === 'modern' || choice === 'dark_mafia' || choice === 'old_school') return choice;
+  if (choice === 'wars2026') return 'dark_mafia';
+  return MENU_THEME_FOLLOW;
+}
+
+export function resolveMenuTheme(choice, themeVariant) {
+  const c = normalizeMenuThemeChoice(choice);
+  if (c === MENU_THEME_FOLLOW) return normalizeThemeVariant(themeVariant);
+  return normalizeThemeVariant(c);
+}
+
 /** Mobile-only shell layouts (≤767px). Orthogonal to themeVariant colours/chrome. */
 export const DEFAULT_MOBILE_LAYOUT_ID = 'classic';
 export const THEME_MOBILE_LAYOUTS = [

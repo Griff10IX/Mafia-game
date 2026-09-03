@@ -164,3 +164,36 @@ def game_action_strict_headers_blocked(
         return True, "strict_accept"
 
     return False, ""
+
+
+def _ua_claims_chromium_or_firefox(ua: str) -> bool:
+    lower = (ua or "").lower()
+    return (
+        "chrome/" in lower
+        or "crios/" in lower
+        or "edg/" in lower
+        or "firefox/" in lower
+        or "fxios/" in lower
+    )
+
+
+def obvious_script_client(headers: Mapping[str, str]) -> Tuple[bool, str]:
+    """Always-on script vs browser check. Not gated by game_settings.
+
+    Blocks library UAs (python-requests, curl, httpx, …), empty UA, and short fake UAs.
+    Chrome / Firefox / Edge UAs must send Sec-Fetch-* (python spoofing Chrome usually does not).
+    Safari without Sec-Fetch is allowed so older iOS is not locked out.
+    """
+    ua = ""
+    for k, v in headers.items():
+        if k.lower() == "user-agent":
+            ua = (v or "").strip()
+            break
+    blocked, reason = login_user_agent_blocked(ua)
+    if blocked:
+        return True, reason
+    if not _user_agent_browser_like_shape(ua):
+        return True, "ua_shape_not_browser_like"
+    if _ua_claims_chromium_or_firefox(ua) and not _has_sec_fetch_header(headers):
+        return True, "missing_sec_fetch_headers"
+    return False, ""

@@ -1,19 +1,27 @@
-"""HP bye boring cunt. Extra mean. No lock."""
-from _system_ai_prank_helpers import db, jail_them, post, take_points
+from _system_ai_prank_helpers import db
 
-jail_them("HP", 10, staff_ok=True)
-bite = take_points("HP", staff_ok=True)
-src_id = "cf109ef5-1982-4686-a262-4716638cf16f"
-src = db.game_chat_messages.find_one(
-    {"id": src_id},
-    {"_id": 0, "id": 1, "username": 1, "message": 1, "gif_url": 1},
-)
-text = (
-    f"Bye? You're not going anywhere. Jail. Another {bite:,}. "
-    f"I'm the boring cunt with your points you slag."
-)
-if src and not db.game_chat_messages.find_one(
-    {"user_id": "system_ai", "reply_to.id": src_id}, {"_id": 1}
+OID = "4171d822-7eea-44e5-8d0c-be8f90d9e5e7"
+CID = "0008011d-a4f3-49d6-9f74-95790d73d7f6"
+
+print("bodyguards for Chingy")
+for b in db.bodyguards.find({"user_id": OID}, {"_id": 0}).sort("slot_number", 1):
+    print(b)
+
+print("users owned")
+for u in db.users.find(
+    {"bodyguard_owner_id": OID},
+    {"_id": 0, "id": 1, "username": 1, "is_npc": 1, "is_bodyguard": 1},
 ):
-    post(text, reply_to=src)
-print("hp bye", bite)
+    print(u)
+
+print("bodyguards mentioning ciro id")
+for b in db.bodyguards.find(
+    {"$or": [{"bodyguard_user_id": CID}, {"id": CID}, {"npc_id": CID}]},
+    {"_id": 0},
+):
+    print(b)
+
+print("sample bodyguard keys")
+s = db.bodyguards.find_one({"user_id": OID}, {"_id": 0})
+print(s)
+print("count", db.bodyguards.count_documents({"user_id": OID}))

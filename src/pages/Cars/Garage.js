@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Car, Flame, DollarSign, CheckSquare, Square, Filter, Settings, Wrench } from 'lucide-react';
+import { Car, Flame, DollarSign, CheckSquare, Square, Filter, Settings, Wrench, Trash2 } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -31,6 +31,9 @@ const MELT_VALUE_MULTIPLIER_DEN = 100;
 /** Applied to sum of per-car bullets in one melt; keep in sync with `gta.py` MELT_BULLETS_TOTAL_PAYOUT_* */
 const MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM = 125;
 const MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN = 100;
+/** Keep in sync with `gta.py` DROP_RP_PER_CAR_* (0.1 RP per dropped car). */
+const DROP_RP_PER_CAR_NUM = 1;
+const DROP_RP_PER_CAR_DEN = 10;
 /** Match `gta.REPAIR_COST_FRACTION` (repair-car / repair-all). */
 const REPAIR_COST_FRACTION = 0.6;
 const ALL_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive', 'vip_exclusive'];
@@ -91,6 +94,11 @@ function previewBulletsForCarValue(value, rarity, damagePercent = 0, carId = '')
   // +25% bullets for all but exclusive / loot_exclusive (floor-rounded), keep in sync with backend melt rewards.
   if (r !== 'exclusive' && r !== 'loot_exclusive' && r !== 'vip_exclusive') bullets = Math.floor((bullets * 125) / 100);
   return bullets;
+}
+
+function previewDropRankPoints(count) {
+  const n = Math.max(0, Math.floor(Number(count) || 0));
+  return Math.floor((n * DROP_RP_PER_CAR_NUM) / DROP_RP_PER_CAR_DEN);
 }
 
 function loadMeltScrapRarities() {
@@ -251,6 +259,7 @@ const ActionsBar = ({
   repairAllTotal,
   onRepairAll,
   repairingAll,
+  onOpenDropAll,
 }) => {
   const meltOnCooldown = meltBulletsSecondsRemaining != null && meltBulletsSecondsRemaining > 0;
   return (
@@ -273,7 +282,7 @@ const ActionsBar = ({
             </span>
           )}
           
-          {(displayedCount > 0 || repairAllCount > 0) && (
+          {(displayedCount > 0 || repairAllCount > 0 || onOpenDropAll) && (
             <div className="flex items-center gap-1.5 flex-wrap">
               {displayedCount > 0 && (
                 <>
@@ -334,6 +343,16 @@ const ActionsBar = ({
                   {repairingAll ? 'Repairing…' : `Repair all $${repairAllTotal.toLocaleString()}`}
                 </button>
               )}
+              <button
+                type="button"
+                onClick={onOpenDropAll}
+                title="Drop every unlisted car of the rarities you tick. No cash or bullets — you get 0.1 rank points per car."
+                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-rose-500/40 text-rose-300 hover:border-rose-400/60 hover:bg-rose-500/10 text-[10px] font-heading font-bold uppercase tracking-wide transition-all active:scale-95"
+                data-testid="garage-drop-all"
+              >
+                <Trash2 size={12} />
+                Drop all
+              </button>
             </div>
           )}
         </div>
@@ -557,6 +576,102 @@ const SettingsModal = ({
   );
 };
 
+const DropAllModal = ({
+  isOpen,
+  onClose,
+  draft,
+  onToggleRarity,
+  onClear,
+  onConfirm,
+  dropping,
+  countsByRarity,
+  getRarityColor,
+}) => {
+  if (!isOpen) return null;
+  const dropCount = draft.reduce((sum, r) => sum + (countsByRarity[r] || 0), 0);
+  const predictedRp = previewDropRankPoints(dropCount);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={dropping ? undefined : onClose}>
+      <div className={`${styles.panel} border border-rose-500/30 rounded-lg shadow-2xl max-w-sm w-full overflow-hidden`} onClick={(e) => e.stopPropagation()}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-rose-500/50 to-transparent" />
+        <div className="px-4 py-3 bg-rose-500/8 border-b border-rose-500/20 flex items-center justify-between">
+          <h3 className="text-[10px] font-heading font-bold text-rose-300 uppercase tracking-[0.15em] flex items-center gap-2">
+            <Trash2 size={16} />
+            Drop all
+          </h3>
+          <button type="button" onClick={onClose} disabled={dropping} className="text-mutedForeground hover:text-rose-300 transition-colors disabled:opacity-40">
+            <span className="text-lg">×</span>
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3">
+          <p className="text-xs text-mutedForeground font-heading">
+            Tick rarities to dump. Listed cars stay. No cash or bullets — you get 0.1 rank points per car dropped (14,000 cars = 1,400 RP). This cannot be undone.
+          </p>
+
+          <div className="space-y-1 max-h-56 overflow-y-auto">
+            {ALL_RARITIES.map((rarity) => {
+              const n = countsByRarity[rarity] || 0;
+              return (
+                <label
+                  key={rarity}
+                  className={`flex items-center gap-2 p-1.5 rounded transition-colors ${n > 0 ? 'cursor-pointer hover:bg-secondary/30' : 'opacity-40'}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={draft.includes(rarity)}
+                    onChange={() => onToggleRarity(rarity)}
+                    disabled={dropping || n === 0}
+                    className="w-3.5 h-3.5 rounded border-border text-rose-400 focus:ring-rose-400/50 cursor-pointer"
+                  />
+                  <span className={`text-xs font-heading font-bold capitalize ${getRarityColor(rarity)}`}>
+                    {RARITY_LABELS[rarity] || rarity.replace('_', ' ')}
+                  </span>
+                  <span className="ml-auto text-[10px] font-heading text-mutedForeground">{n.toLocaleString()}</span>
+                </label>
+              );
+            })}
+          </div>
+
+          <p className="text-[10px] font-heading text-rose-200/90">
+            {dropCount > 0
+              ? `Will drop ${dropCount.toLocaleString()} car${dropCount === 1 ? '' : 's'} → +${predictedRp.toLocaleString()} rank points.`
+              : 'Tick a rarity that has unlisted cars.'}
+          </p>
+
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClear}
+              disabled={dropping}
+              className="px-3 py-1.5 text-xs font-heading text-mutedForeground hover:text-foreground transition-colors disabled:opacity-40"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={dropping}
+              className="px-3 py-1.5 text-xs font-heading text-mutedForeground hover:text-foreground transition-colors disabled:opacity-40"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={dropping || dropCount < 1}
+              className="flex-1 bg-rose-500/20 text-rose-200 rounded px-3 py-1.5 font-heading font-bold uppercase tracking-wide text-xs border border-rose-500/40 hover:bg-rose-500/30 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+              data-testid="garage-drop-all-confirm"
+            >
+              {dropping ? 'Dropping…' : 'Confirm drop'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Main component
 export default function Garage() {
   const [bootGarage] = useState(() => readSessionJson(GARAGE_CACHE_KEY));
@@ -575,8 +690,18 @@ export default function Garage() {
   const [meltBulletsSecondsRemaining, setMeltBulletsSecondsRemaining] = useState(0);
   const [repairingCarId, setRepairingCarId] = useState(null);
   const [repairingAll, setRepairingAll] = useState(false);
+  const [dropAllOpen, setDropAllOpen] = useState(false);
+  const [dropAllDraft, setDropAllDraft] = useState([]);
+  const [droppingAll, setDroppingAll] = useState(false);
   const [user, setUser] = useState(null);
   const { getCaptchaToken, captchaModal } = useGameActionsTurnstile();
+
+  const syncGarageCache = useCallback((nextCars, cooldownUntil) => {
+    writeSessionJson(GARAGE_CACHE_KEY, {
+      cars: nextCars,
+      melt_bullets_cooldown_until: cooldownUntil ?? null,
+    });
+  }, []);
 
   const fetchGarage = useCallback(async (silent = false) => {
     try {
@@ -585,7 +710,7 @@ export default function Garage() {
       const cd = response.data?.melt_bullets_cooldown_until ?? null;
       setCars(nextCars);
       setMeltBulletsCooldownUntil(cd);
-      writeSessionJson(GARAGE_CACHE_KEY, { cars: nextCars, melt_bullets_cooldown_until: cd });
+      syncGarageCache(nextCars, cd);
     } catch (error) {
       if (!silent) {
         toast.error('Failed to load garage');
@@ -593,7 +718,7 @@ export default function Garage() {
         setMeltBulletsCooldownUntil(null);
       }
     }
-  }, []);
+  }, [syncGarageCache]);
 
   useEffect(() => {
     const c = readSessionJson(GARAGE_CACHE_KEY);
@@ -718,6 +843,24 @@ export default function Garage() {
       count: counts[r] || 0,
     }));
   }, [cars]);
+  const carById = useMemo(() => {
+    const map = new Map();
+    cars.forEach((car) => {
+      if (car?.user_car_id) map.set(car.user_car_id, car);
+    });
+    return map;
+  }, [cars]);
+  const selectedCarsSet = useMemo(() => new Set(selectedCars), [selectedCars]);
+  const meltScrapRaritiesSet = useMemo(() => new Set(meltScrapRarities), [meltScrapRarities]);
+  const droppableByRarity = useMemo(() => {
+    const counts = {};
+    cars.forEach((c) => {
+      if (c.listed_for_sale) return;
+      const r = c.rarity || 'common';
+      counts[r] = (counts[r] || 0) + 1;
+    });
+    return counts;
+  }, [cars]);
 
   const totalCount = allFilteredCars.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_VISIBLE));
@@ -820,8 +963,8 @@ export default function Garage() {
   const meltCars = async () => {
     const eligibleIds = meltScrapRarities.length > 0
       ? selectedCars.filter((id) => {
-          const c = cars.find((car) => car.user_car_id === id);
-          return c && !c.listed_for_sale && meltScrapRarities.includes(c.rarity);
+          const c = carById.get(id);
+          return c && !c.listed_for_sale && meltScrapRaritiesSet.has(c.rarity);
         })
       : [];
     if (eligibleIds.length === 0) {
@@ -860,8 +1003,13 @@ export default function Garage() {
         setMeltBulletsCooldownUntil(response.data.melt_bullets_cooldown_until);
       }
       setSelectedCars((prev) => prev.filter((id) => !idsToSend.includes(id)));
+      setCars((prev) => {
+        const nextCars = prev.filter((car) => !idsToSend.includes(car.user_car_id));
+        syncGarageCache(nextCars, response.data?.melt_bullets_cooldown_until ?? meltBulletsCooldownUntil);
+        return nextCars;
+      });
       refreshUser();
-      fetchGarage();
+      fetchGarage(true);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || 'Failed to melt cars');
     }
@@ -870,8 +1018,8 @@ export default function Garage() {
   const scrapCars = async () => {
     const eligibleIds = meltScrapRarities.length > 0
       ? selectedCars.filter((id) => {
-          const c = cars.find((car) => car.user_car_id === id);
-          return c && !c.listed_for_sale && meltScrapRarities.includes(c.rarity);
+          const c = carById.get(id);
+          return c && !c.listed_for_sale && meltScrapRaritiesSet.has(c.rarity);
         })
       : [];
     if (eligibleIds.length === 0) {
@@ -906,10 +1054,75 @@ export default function Garage() {
       }
       toast.success(response.data.message);
       setSelectedCars((prev) => prev.filter((id) => !idsToSend.includes(id)));
+      setCars((prev) => {
+        const nextCars = prev.filter((car) => !idsToSend.includes(car.user_car_id));
+        syncGarageCache(nextCars, meltBulletsCooldownUntil);
+        return nextCars;
+      });
       refreshUser();
-      fetchGarage();
+      fetchGarage(true);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || 'Failed to scrap cars');
+    }
+  };
+
+  const openDropAll = () => {
+    setDropAllDraft([]);
+    setDropAllOpen(true);
+  };
+
+  const toggleDropAllRarity = (rarity) => {
+    setDropAllDraft((prev) =>
+      prev.includes(rarity) ? prev.filter((r) => r !== rarity) : [...prev, rarity]
+    );
+  };
+
+  const dropAllCars = async () => {
+    const rarities = normalizeMeltScrapRarityList(dropAllDraft).filter((r) => (droppableByRarity[r] || 0) > 0);
+    if (rarities.length === 0) {
+      toast.error('Tick at least one rarity to drop');
+      return;
+    }
+    const dropCount = rarities.reduce((sum, r) => sum + (droppableByRarity[r] || 0), 0);
+    if (dropCount < 1) {
+      toast.error('No unlisted cars match those rarities');
+      return;
+    }
+    let captchaToken = null;
+    try {
+      captchaToken = await getCaptchaToken();
+    } catch (e) {
+      if (e?.message === 'captcha_cancelled') return;
+      throw e;
+    }
+    setDroppingAll(true);
+    try {
+      const response = await api.post('/gta/drop-all', {
+        rarity_ids: rarities,
+        ...(captchaToken ? { captcha_token: captchaToken } : {}),
+      });
+      if (response.data?.success === false) {
+        toast.error(response.data.message || response.data.detail || 'Failed to drop cars');
+        return;
+      }
+      toast.success(response.data.message);
+      const droppedSet = new Set(rarities);
+      setCars((prev) => {
+        const nextCars = prev.filter((car) => car.listed_for_sale || !droppedSet.has(car.rarity));
+        syncGarageCache(nextCars, meltBulletsCooldownUntil);
+        return nextCars;
+      });
+      setSelectedCars((prev) => prev.filter((id) => {
+        const c = carById.get(id);
+        return !c || c.listed_for_sale || !droppedSet.has(c.rarity);
+      }));
+      setDropAllOpen(false);
+      refreshUser();
+      fetchGarage(true);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error) || 'Failed to drop cars');
+    } finally {
+      setDroppingAll(false);
     }
   };
 
@@ -927,20 +1140,20 @@ export default function Garage() {
     return allFilteredCars
       .filter((c) => {
         if (c.listed_for_sale) return false;
-        if (filterActive) return meltScrapRarities.includes(c.rarity);
+        if (filterActive) return meltScrapRaritiesSet.has(c.rarity);
         return true;
       })
       .map((c) => c.user_car_id);
-  }, [allFilteredCars, filterActive, meltScrapRarities]);
+  }, [allFilteredCars, filterActive, meltScrapRaritiesSet]);
   const bulkSelectCount = bulkSelectIds.length;
   const allBulkSelected =
-    bulkSelectCount > 0 && bulkSelectIds.every((id) => selectedCars.includes(id));
+    bulkSelectCount > 0 && bulkSelectIds.every((id) => selectedCarsSet.has(id));
   const noBulkSelectable = bulkSelectCount === 0;
   const noMeltMatchInList = filterActive && bulkSelectCount === 0;
 
   const meltScrapBatchMax = GARAGE_MELT_SCRAP_BATCH_MAX;
   const selectedCarsForMelt = allFilteredCars.filter(
-    (c) => selectedCars.includes(c.user_car_id) && !c.listed_for_sale && meltScrapRarities.length > 0 && meltScrapRarities.includes(c.rarity)
+    (c) => selectedCarsSet.has(c.user_car_id) && !c.listed_for_sale && meltScrapRaritiesSet.size > 0 && meltScrapRaritiesSet.has(c.rarity)
   );
   const predictedMeltBullets = Math.floor(
     (selectedCarsForMelt
@@ -957,7 +1170,9 @@ export default function Garage() {
         const drop = new Set(bulkSelectIds);
         return prev.filter((id) => !drop.has(id));
       }
-      return [...new Set([...prev, ...bulkSelectIds])];
+      const next = new Set(prev);
+      bulkSelectIds.forEach((id) => next.add(id));
+      return [...next];
     });
   };
 
@@ -1031,6 +1246,7 @@ export default function Garage() {
             repairAllTotal={repairAllPreview.total}
             onRepairAll={handleRepairAll}
             repairingAll={repairingAll}
+            onOpenDropAll={openDropAll}
           />
 
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
@@ -1038,7 +1254,7 @@ export default function Garage() {
               <CarCard
                 key={car.user_car_id || car._id}
                 car={car}
-                isSelected={selectedCars.includes(car.user_car_id)}
+                isSelected={selectedCarsSet.has(car.user_car_id)}
                 onToggle={toggleSelect}
                 onOpenCustomModal={openCustomCarModal}
                 onRepair={handleRepair}
@@ -1115,6 +1331,18 @@ export default function Garage() {
         onToggleRarity={toggleDraftRarity}
         onClear={() => setMeltScrapSettingsDraft([])}
         onSave={saveMeltScrapSettings}
+        getRarityColor={getRarityColor}
+      />
+
+      <DropAllModal
+        isOpen={dropAllOpen}
+        onClose={() => { if (!droppingAll) setDropAllOpen(false); }}
+        draft={dropAllDraft}
+        onToggleRarity={toggleDropAllRarity}
+        onClear={() => setDropAllDraft([])}
+        onConfirm={dropAllCars}
+        dropping={droppingAll}
+        countsByRarity={droppableByRarity}
         getRarityColor={getRarityColor}
       />
 

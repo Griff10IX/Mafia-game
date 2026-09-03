@@ -28,7 +28,7 @@ _MINIGAME_PREFIXES = (
 )
 
 # Crimes, GTA (steal, garage, melt/scrap, repair-car, marketplace), jail, crew OC, solo organised crime,
-# bodyguards (player routes), attack, booze run (buy/sell/config).
+# bodyguards (player routes), attack, booze run (buy/sell/config), bullet factory.
 _GAME_ACTION_PREFIXES = (
     "/api/crimes",
     "/api/gta",
@@ -38,6 +38,7 @@ _GAME_ACTION_PREFIXES = (
     "/api/bodyguards",
     "/api/attack",
     "/api/booze-run",
+    "/api/bullet-factory",
     "/api/account/gambling-self-ban",
     "/api/casino",
     "/api/sports-betting",
@@ -135,6 +136,13 @@ class MinigameClientGuardMiddleware(BaseHTTPMiddleware):
                     )
                 except Exception:
                     logger.exception("Game action client guard: staff inbox notify failed")
+                if path.rstrip("/").endswith("/bullet-factory/buy"):
+                    try:
+                        from utils.bullet_factory_buy_guard import maybe_lock_factory_buy_from_request
+
+                        await maybe_lock_factory_buy_from_request(self.db, request, reason)
+                    except Exception:
+                        logger.exception("factory buy 6h lock from middleware failed")
                 return JSONResponse(status_code=403, content={"detail": _FORBIDDEN_DETAIL})
             strict_blocked, strict_reason = game_action_strict_headers_blocked(
                 request.headers,

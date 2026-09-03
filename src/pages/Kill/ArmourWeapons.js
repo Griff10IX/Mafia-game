@@ -8,6 +8,36 @@ import styles from '../../styles/noir.module.css';
 
 const formatMoney = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 
+/** Hidden rotating buy token — same pattern as kill execute. Players never type it. */
+const _BF_HINT_RE = /^bfn_[a-f0-9]{12}$/i;
+const _BF_FIELD_RE = /^bfc_[a-f0-9]{16}$/i;
+
+function getFactoryBuyCodePayload(data) {
+  if (!data || typeof data !== 'object') return {};
+  const fieldPayload = (name, hintKey) => {
+    if (typeof name !== 'string' || !_BF_FIELD_RE.test(name)) return null;
+    const val = data[name];
+    if (typeof val !== 'string' || val.trim().length < 16) return null;
+    const out = { [name]: val.trim() };
+    if (hintKey) out[hintKey] = name;
+    return out;
+  };
+  for (const key of Object.keys(data)) {
+    if (!_BF_HINT_RE.test(key) || typeof data[key] !== 'string') continue;
+    const got = fieldPayload(data[key], key);
+    if (got) return got;
+  }
+  const legacyName = String(data.buy_code_name || '').trim();
+  const legacy = fieldPayload(legacyName, 'buy_code_name');
+  if (legacy) return legacy;
+  for (const key of Object.keys(data)) {
+    if (!_BF_FIELD_RE.test(key)) continue;
+    const got = fieldPayload(key, null);
+    if (got) return got;
+  }
+  return {};
+}
+
 /** Worst → best for combat (same as bullets-to-kill tier): non-loot by damage, loot-exclusive last. */
 function sortWeaponsByPower(list) {
   if (!Array.isArray(list)) return [];
@@ -589,13 +619,18 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
     }
     setBuying(true);
     try {
-      const res = await api.post('/bullet-factory/buy', { amount, state: data?.state || currentState });
+      const res = await api.post('/bullet-factory/buy', {
+        amount,
+        state: data?.state || currentState,
+        ...getFactoryBuyCodePayload(data),
+      });
       toast.success(res.data?.message || 'Bullets purchased');
       refreshUser();
       setBuyAmount('');
       fetchData();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to buy bullets');
+      fetchData();
     } finally {
       setBuying(false);
     }
@@ -683,23 +718,12 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
   const priceMin = data?.price_min ?? 1;
   const priceMax = data?.price_max ?? 100000;
   const buyMaxPerPurchase = data?.buy_max_per_purchase ?? 5000;
-  const buyCooldownMinutes = data?.buy_cooldown_minutes ?? 15;
-  const nextBuyAvailableAt = data?.next_buy_available_at ?? null;
   const effectiveBuyMax = Math.min(accumulated, buyMaxPerPurchase);
   const userMoney = Number(me?.money ?? 0);
   const canAffordClaim = userMoney >= claimCost;
   const buyAmountNum = parseInt(buyAmount, 10) || 0;
   const buyTotal = buyAmountNum > 0 && pricePerBullet != null ? buyAmountNum * pricePerBullet : 0;
   const canAffordBuy = buyTotal > 0 && userMoney >= buyTotal;
-  const inBuyCooldown = !!nextBuyAvailableAt;
-  const minutesUntilCanBuy = (() => {
-    if (!nextBuyAvailableAt) return 0;
-    try {
-      const next = new Date(nextBuyAvailableAt).getTime();
-      const diff = Math.max(0, Math.ceil((next - Date.now()) / 60000));
-      return diff;
-    } catch { return 0; }
-  })();
 
   // Calculate armour & weapon production rates
   const armourHoursRemaining = data?.armour_production_hours_remaining ?? 0;
@@ -791,7 +815,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                 <ArmSection
                   icon={Crosshair}
                   title="Buy bullets"
-                  subtitle={`${accumulated.toLocaleString()} in stock · max ${buyMaxPerPurchase.toLocaleString()} / ${buyCooldownMinutes}min`}
+                  subtitle={`${accumulated.toLocaleString()} in stock · max ${buyMaxPerPurchase.toLocaleString()}`}
                 >
                   <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 mb-3">
                     {QUICK_BUYS.filter((amt) => amt <= buyMaxPerPurchase).map((amt) => (
@@ -799,7 +823,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                         key={amt}
                         type="button"
                         onClick={() => setBuyAmount(String(Math.min(amt, effectiveBuyMax)))}
-                        disabled={inBuyCooldown || amt > effectiveBuyMax}
+                        disabled={amt > effectiveBuyMax}
                         className={`py-2 rounded-md text-[11px] font-heading font-bold border tabular-nums transition-colors disabled:opacity-40 ${
                           buyAmountNum === amt
                             ? 'bg-primary/25 border-primary/55 text-primary'
@@ -811,7 +835,38 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                     ))}
                   </div>
 
-                  <form onSubmit={buyBullets} className="space-y-2.5">
+                  <form onSubmit={buyBullets} className="relative space-y-2.5">
+                    {(() => {
+                      const payload = getFactoryBuyCodePayload(data);
+                      const fieldName = Object.keys(payload).find((k) => _BF_FIELD_RE.test(k));
+                      if (!fieldName) return null;
+                      return (
+                      <input
+                        type="hidden"
+                        name={fieldName}
+                        value={payload[fieldName]}
+                        readOnly
+                      />
+                      );
+                    })()}
+                    <input
+                      type="text"
+                      name="buy_code"
+                      tabIndex={-1}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      aria-hidden="true"
+                      defaultValue=""
+                      style={{
+                        position: 'absolute',
+                        left: '-10000px',
+                        top: 'auto',
+                        width: '1px',
+                        height: '1px',
+                        overflow: 'hidden',
+                      }}
+                    />
                     <input
                       type="number"
                       min={1}
@@ -830,17 +885,11 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                       </div>
                     )}
 
-                    {inBuyCooldown && (
-                      <p className="text-[11px] text-amber-400/90 font-heading">
-                        Next purchase in {minutesUntilCanBuy} min
-                      </p>
-                    )}
-
                     <button
                       type="submit"
-                      disabled={buying || buyAmountNum <= 0 || !canAffordBuy || buyAmountNum > effectiveBuyMax || inBuyCooldown}
+                      disabled={buying || buyAmountNum <= 0 || !canAffordBuy || buyAmountNum > effectiveBuyMax}
                       className={`w-full py-3 font-heading font-bold text-[11px] sm:text-xs uppercase tracking-wide rounded-lg border-2 transition-all disabled:opacity-45 ${
-                        canAffordBuy && buyAmountNum > 0 && buyAmountNum <= effectiveBuyMax && !inBuyCooldown
+                        canAffordBuy && buyAmountNum > 0 && buyAmountNum <= effectiveBuyMax
                           ? 'bg-emerald-500/15 border-emerald-500/45 text-emerald-300 hover:bg-emerald-500/25 active:scale-[0.99]'
                           : 'bg-black/30 border-white/10 text-mutedForeground cursor-not-allowed'
                       }`}

@@ -345,6 +345,15 @@ function isRequestCanceled(error) {
 api.interceptors.response.use(
   (response) => {
     _resetServerUnavailableStrikes();
+    const data = response?.data;
+    const method = String(response?.config?.method || 'get').toLowerCase();
+    if (method !== 'get' && data && typeof data === 'object' && !Array.isArray(data)) {
+      const rawBal = data.new_balance ?? data.new_money;
+      const n = rawBal != null ? Number(rawBal) : NaN;
+      if (Number.isFinite(n)) {
+        refreshUser({ money: n, skipFetch: true });
+      }
+    }
     return response;
   },
   (error) => {

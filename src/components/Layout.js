@@ -16,6 +16,7 @@ import { setToastMutedPages } from '../utils/toastPageMutes';
 import { clearStaffPortalSession, isStaffPortalTokenValid, setStaffPortalToken, getOrCreateStaffPortalDeviceId } from '../utils/staffPortalSession';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readDashboardSessionCache, writeDashboardSessionUserProgress, clearDashboardSessionCache } from '../utils/dashboardSessionCache';
+import { readSessionJson, writeSessionJson } from '../utils/sessionPageCache';
 import { SLOTS_FEATURE_ENABLED } from '../config/gameFeatures';
 import { buildLayoutStaffNavItems } from '../pages/StaffRole/adminToolMap';
 import { preloadRoute, preloadRouteHandlers } from '../utils/routePreload';
@@ -40,7 +41,7 @@ import { useTheme } from '../context/ThemeContext';
 import ThemePicker from './ThemePicker';
 import FirstTimeThemeModal from './FirstTimeThemeModal';
 import TutorialCoach, { markTutorialThemeDoneAndAdvance } from './TutorialCoach';
-import { getThemePreset } from '../constants/themes';
+import { getThemePreset, resolveMenuTheme } from '../constants/themes';
 import ErrorBoundary from './ErrorBoundary';
 import FindWordHuntLayer from './entertainer/FindWordHuntLayer';
 import { NotificationMessage } from './NotificationMessage';
@@ -54,13 +55,62 @@ const LazyGameChat = lazy(() => import('./GameChat'));
 function readLayoutBootFromDashboardCache() {
   const row = readDashboardSessionCache();
   if (!row?.user?.id) return { user: null, rankProgress: null };
-  // Never hydrate the rank bar from session cache — stale Godfather 100% flashes on refresh
-  // after prestige / RP changes until /user/rank-progress returns. User stats still boot warm.
-  return { user: row.user, rankProgress: null };
+  const rankProgress = row.rankProgress && typeof row.rankProgress === 'object' ? row.rankProgress : null;
+  return { user: row.user, rankProgress };
 }
 
 function isChromeTabHidden() {
   return typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden');
+}
+
+function readMatchMedia(query) {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia(query).matches;
+}
+
+const MQ_MOBILE_VIEWPORT = '(max-width: 767px)';
+const MQ_LANDSCAPE_COMPACT = '(max-width: 1024px) and (orientation: landscape) and (max-height: 520px)';
+const NAV_ITEM_FLAGS_KEY = 'layout_nav_item_flags';
+const LAYOUT_CHROME_KEY = 'layout_chrome_v1';
+
+function loadNavItemFlags() {
+  const j = readSessionJson(NAV_ITEM_FLAGS_KEY);
+  if (!j || typeof j !== 'object') return { hitman: false, weed: false };
+  return { hitman: !!j.hitman, weed: !!j.weed };
+}
+
+function saveNavItemFlags(hitman, weed) {
+  writeSessionJson(NAV_ITEM_FLAGS_KEY, { hitman: !!hitman, weed: !!weed });
+}
+
+function loadLayoutChrome(userId) {
+  if (!userId) return {};
+  const j = readSessionJson(LAYOUT_CHROME_KEY);
+  if (!j || typeof j !== 'object' || j.userId !== userId) return {};
+  return j;
+}
+
+function saveLayoutChrome(userId, partial) {
+  if (!userId) return;
+  writeSessionJson(LAYOUT_CHROME_KEY, { ...loadLayoutChrome(userId), userId, ...partial });
+}
+
+function staffFlagsFromChrome(chrome) {
+  if (!chrome || typeof chrome !== 'object') {
+    return { isAdmin: false, isModerator: false, hasAdminEmail: false, adminPreviewAsMod: false, staffLoginSession: false, staffPortalEnabled: false };
+  }
+  return {
+    isAdmin: !!chrome.is_admin,
+    isModerator: !!chrome.is_moderator,
+    hasAdminEmail: !!chrome.has_admin_email,
+    adminPreviewAsMod: !!chrome.admin_preview_as_mod,
+    staffLoginSession: !!chrome.staff_login_session,
+    staffPortalEnabled: !!chrome.staff_portal_enabled,
+  };
+}
+
+function clearLayoutChrome() {
+  try { sessionStorage.removeItem(LAYOUT_CHROME_KEY); } catch (_) { /* ignore */ }
 }
 
 /** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
@@ -68,7 +118,7 @@ function buildModStaffNavItems() {
   return buildLayoutStaffNavItems({ isAdmin: false, isModerator: true });
 }
 
-function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator, staffToolsNavVisible, hitmanForHireVisible, weedEmpireNavVisible) {
+function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator, staffToolsNavVisible, _hitmanForHireVisible, weedEmpireNavVisible) {
   const goItems = [
     { path: '/game/travel', label: 'Travel' },
     { path: '/game/states', label: 'States' },
@@ -98,7 +148,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/kill/attempts', label: 'Attempts' },
         { path: '/kill/combat-timeline', label: 'Combat timeline' },
         { path: '/kill/hitlist', label: 'Hitlist' },
-        ...(hitmanForHireVisible ? [{ path: '/kill/hitman', label: 'Hitman for Hire' }] : []),
+        { path: '/kill/hitman', label: 'Hitman for Hire' },
         { path: '/kill/bodyguards', label: 'Bodyguards' },
         { path: '/kill/armour-weapons', label: 'Armoury' },
       ],
@@ -356,11 +406,24 @@ function SidebarCatHeader({ label, classic }) {
   );
 }
 
-function RightStatGroup({ label, children, ruleStyle }) {
+function RightSectionTitle({ label, isOldSchool, isModern }) {
+  return (
+    <div className={`sidebar-inline-rule${isOldSchool || isModern ? ' sidebar-inline-rule--plain' : ''} px-0 py-1`}>
+      <span
+        className={`text-[8px] font-heading uppercase tracking-[0.14em] shrink-0 leading-none ${isModern ? 'px-1.5 py-1 rounded-md' : ''}`}
+        style={{
+          color: isModern ? 'rgba(228,228,231,0.78)' : 'var(--noir-muted)',
+          background: isModern ? 'rgba(var(--noir-primary-rgb), 0.1)' : undefined,
+        }}
+      >{label}</span>
+    </div>
+  );
+}
+
+function RightStatGroup({ label, children, isOldSchool, isModern }) {
   return (
     <div className="space-y-0.5">
-      {ruleStyle ? <div className="-mx-2" style={ruleStyle} aria-hidden="true" /> : null}
-      <p className="text-[8px] font-heading uppercase tracking-[0.14em] px-1 pb-0.5 pt-1.5" style={{ color: 'var(--noir-muted)' }}>{label}</p>
+      <RightSectionTitle label={label} isOldSchool={isOldSchool} isModern={isModern} />
       {children}
     </div>
   );
@@ -374,7 +437,7 @@ function RightStatRow({ row, closeOnMobile }) {
       <SameRouteAwareLink
         to={row.to}
         onClick={closeOnMobile}
-        className={`flex justify-between gap-1 text-[9px] font-heading px-1 py-1 rounded-sm transition-colors min-w-0 ${row.wrapValue ? 'items-start' : 'items-center'}`}
+        className={`right-rail-link flex justify-between gap-1 text-[9px] font-heading px-1 py-1 rounded-sm transition-colors min-w-0 ${row.wrapValue ? 'items-start' : 'items-center'}`}
         style={{ color: 'var(--noir-foreground)' }}
         onMouseEnter={hoverOn}
         onMouseLeave={hoverOff}
@@ -485,12 +548,18 @@ export default function Layout({ children }) {
   const userInJailRef = useRef(!!layoutBootRef.current.user?.in_jail);
   const wasInJailRef = useRef(!!layoutBootRef.current.user?.in_jail);
   const [rankProgress, setRankProgress] = useState(() => layoutBootRef.current.rankProgress);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [updateLogUnread, setUpdateLogUnread] = useState(0);
+  const chromeBootRef = useRef(null);
+  if (chromeBootRef.current === null) {
+    chromeBootRef.current = loadLayoutChrome(layoutBootRef.current.user?.id);
+  }
+  const [unreadCount, setUnreadCount] = useState(() => Number(chromeBootRef.current.unreadCount) || 0);
+  const [updateLogUnread, setUpdateLogUnread] = useState(() => Number(chromeBootRef.current.updateLogUnread) || 0);
   const [updateLogTopicId, setUpdateLogTopicId] = useState(null);
-  const [helpDeskOpenCount, setHelpDeskOpenCount] = useState(0);
+  const [helpDeskOpenCount, setHelpDeskOpenCount] = useState(() => Number(chromeBootRef.current.helpDeskOpenCount) || 0);
   /** Sidebar: total from GET /users/online (null = unknown / failed). */
-  const [usersOnlineCount, setUsersOnlineCount] = useState(null);
+  const [usersOnlineCount, setUsersOnlineCount] = useState(() => (
+    typeof chromeBootRef.current.usersOnlineCount === 'number' ? chromeBootRef.current.usersOnlineCount : null
+  ));
   const [statOrder, setStatOrder] = useState(loadStatOrder);
   const [topBarGap, setTopBarGap] = useState(loadTopBarGap);
   const [topBarSize, setTopBarSize] = useState(loadTopBarSize);
@@ -527,26 +596,38 @@ export default function Layout({ children }) {
   const [pocketStatsOpen, setPocketStatsOpen] = useState(false);
   const [pocketMenuTab, setPocketMenuTab] = useState('you');
   const [pocketMoneyTab, setPocketMoneyTab] = useState('cash');
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isModerator, setIsModerator] = useState(false);
-  const [hasAdminEmail, setHasAdminEmail] = useState(false);
-  const [adminPreviewAsMod, setAdminPreviewAsMod] = useState(false);
-  const [staffLoginSession, setStaffLoginSession] = useState(false);
+  const staffBoot = staffFlagsFromChrome(chromeBootRef.current);
+  const [isAdmin, setIsAdmin] = useState(staffBoot.isAdmin);
+  const [isModerator, setIsModerator] = useState(staffBoot.isModerator);
+  const [hasAdminEmail, setHasAdminEmail] = useState(staffBoot.hasAdminEmail);
+  const [adminPreviewAsMod, setAdminPreviewAsMod] = useState(staffBoot.adminPreviewAsMod);
+  const [staffLoginSession, setStaffLoginSession] = useState(staffBoot.staffLoginSession);
   /** When true (env STAFF_PORTAL_PASSWORD), Layout hides staff tool links until portal JWT is valid. */
-  const [staffPortalEnabled, setStaffPortalEnabled] = useState(false);
+  const [staffPortalEnabled, setStaffPortalEnabled] = useState(staffBoot.staffPortalEnabled);
   const [portalNavTick, setPortalNavTick] = useState(0);
   const [portalUnlockOpen, setPortalUnlockOpen] = useState(false);
   const [portalUnlockPwd, setPortalUnlockPwd] = useState('');
   const [portalUnlockBusy, setPortalUnlockBusy] = useState(false);
   const [portalUnlockErr, setPortalUnlockErr] = useState('');
   const portalUnlockWrapRef = useRef(null);
-  const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
+  const [rankingCounts, setRankingCounts] = useState(() => ({
+    crimes: Number(chromeBootRef.current.crimes) || 0,
+    gta: Number(chromeBootRef.current.gta) || 0,
+    jail: Number(chromeBootRef.current.jail) || 0,
+  }));
   const [sportsBettingEventCount, setSportsBettingEventCount] = useState(0);
-  const [weedEmpireReadyCount, setWeedEmpireReadyCount] = useState(0);
+  const [weedEmpireReadyCount, setWeedEmpireReadyCount] = useState(() => Number(chromeBootRef.current.weedEmpireReadyCount) || 0);
   const [gtaExclusiveInPool, setGtaExclusiveInPool] = useState(false);
   const [ocStatus, setOcStatus] = useState(null);
-  const [atWar, setAtWar] = useState(false);
-  const [autoRankPrefs, setAutoRankPrefs] = useState({ auto_rank_enabled: false, auto_rank_crimes: false, auto_rank_gta: false, auto_rank_oc: false, auto_rank_bust_every_5_sec: false, auto_rank_booze: false });
+  const [atWar, setAtWar] = useState(() => !!chromeBootRef.current.atWar);
+  const [autoRankPrefs, setAutoRankPrefs] = useState(() => ({
+    auto_rank_enabled: !!chromeBootRef.current.auto_rank_enabled,
+    auto_rank_crimes: false,
+    auto_rank_gta: false,
+    auto_rank_oc: false,
+    auto_rank_bust_every_5_sec: false,
+    auto_rank_booze: false,
+  }));
   const [flashNews, setFlashNews] = useState([]);
   const [flashIndex, setFlashIndex] = useState(0);
   const [travelStatus, setTravelStatus] = useState(null);
@@ -562,18 +643,19 @@ export default function Layout({ children }) {
   const [topBarCustomizeOpen, setTopBarCustomizeOpen] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [findUserQuery, setFindUserQuery] = useState('');
-  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(() => readMatchMedia(MQ_MOBILE_VIEWPORT));
   /** Width ≥ md but short landscape (typical phone sideways) — keep drawer nav, no persistent sidebar. */
-  const [isLandscapeCompactLayout, setIsLandscapeCompactLayout] = useState(false);
+  const [isLandscapeCompactLayout, setIsLandscapeCompactLayout] = useState(() => readMatchMedia(MQ_LANDSCAPE_COMPACT));
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState([]);
   const [userSearchOpen, setUserSearchOpen] = useState(false);
   const [userSearchExpanded, setUserSearchExpanded] = useState(false);
   const [userSearchLoading, setUserSearchLoading] = useState(false);
   const [pageLocks, setPageLocks] = useState({});
-  const [hitmanForHireLive, setHitmanForHireLive] = useState(false);
-  const [weedEmpireVisible, setWeedEmpireVisible] = useState(false);
+  const [hitmanForHireLive, setHitmanForHireLive] = useState(() => loadNavItemFlags().hitman);
+  const [weedEmpireVisible, setWeedEmpireVisible] = useState(() => loadNavItemFlags().weed);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const moneyFreshRef = useRef({ value: null, at: 0 });
   const userSearchRef = useRef(null);
   const userSearchInputRef = useRef(null);
   const userSearchDebounceRef = useRef(null);
@@ -599,6 +681,8 @@ export default function Layout({ children }) {
     mobileNavStyle,
     mobileLayoutId,
     themeVariant,
+    leftMenuTheme,
+    rightMenuTheme,
     setColour,
     setTexture,
     setButtonColour,
@@ -867,7 +951,7 @@ export default function Layout({ children }) {
   }, []);
 
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
+    const mq = window.matchMedia(MQ_MOBILE_VIEWPORT);
     const fn = () => setIsMobileViewport(mq.matches);
     fn();
     mq.addEventListener('change', fn);
@@ -875,7 +959,7 @@ export default function Layout({ children }) {
   }, []);
 
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 1024px) and (orientation: landscape) and (max-height: 520px)');
+    const mq = window.matchMedia(MQ_LANDSCAPE_COMPACT);
     const fn = () => setIsLandscapeCompactLayout(mq.matches);
     fn();
     mq.addEventListener('change', fn);
@@ -1079,11 +1163,8 @@ export default function Layout({ children }) {
   }, [userSearchQuery]);
 
   useEffect(() => {
-    const tAdmin = setTimeout(() => checkAdmin(), 400);
+    checkAdmin();
     fetchData();
-    return () => {
-      clearTimeout(tAdmin);
-    };
   }, []); // eslint-disable-line
 
   useEffect(() => {
@@ -1193,7 +1274,11 @@ export default function Layout({ children }) {
     const handler = (event) => {
       const detail = event.detail || {};
       if (detail.money != null) {
-        setUser((prev) => (prev ? { ...prev, money: Number(detail.money) } : null));
+        const n = Number(detail.money);
+        if (Number.isFinite(n)) {
+          moneyFreshRef.current = { value: n, at: Date.now() };
+          setUser((prev) => (prev ? { ...prev, money: n } : null));
+        }
       }
       if (detail.in_jail === true) {
         setClientJailed(true);
@@ -1229,6 +1314,7 @@ export default function Layout({ children }) {
           setTravelStatus({ traveling: true, destination: dest, seconds_remaining: secs, arrives_at: arrivesMs });
         }
       }
+      if (detail.skipFetch) return;
       if (refreshUserDebounceRef.current) clearTimeout(refreshUserDebounceRef.current);
       // AFK wake: lighter refresh + longer debounce so Safari networking can come up.
       const resume = !!detail.resume;
@@ -1369,6 +1455,7 @@ export default function Layout({ children }) {
     try {
       const res = await api.get('/auto-rank/me');
       setAutoRankPrefs({ auto_rank_enabled: !!res.data?.auto_rank_enabled, auto_rank_crimes: !!res.data?.auto_rank_crimes, auto_rank_gta: !!res.data?.auto_rank_gta, auto_rank_oc: !!res.data?.auto_rank_oc, auto_rank_bust_every_5_sec: !!res.data?.auto_rank_bust_every_5_sec, auto_rank_booze: !!res.data?.auto_rank_booze });
+      saveLayoutChrome(user?.id, { auto_rank_enabled: !!res.data?.auto_rank_enabled });
     } catch { setAutoRankPrefs({ auto_rank_enabled: false, auto_rank_crimes: false, auto_rank_gta: false, auto_rank_oc: false, auto_rank_bust_every_5_sec: false, auto_rank_booze: false }); }
   };
 
@@ -1399,8 +1486,7 @@ export default function Layout({ children }) {
     if (!userId) return;
     if (!casinoPropertyFetchedRef.current) {
       casinoPropertyFetchedRef.current = true;
-      const t = setTimeout(() => fetchCasinoProperty(), 80);
-      return () => clearTimeout(t);
+      fetchCasinoProperty();
     }
   }, [userId]); // eslint-disable-line
   useEffect(() => { if (location.pathname === '/my-properties') fetchCasinoProperty(); }, [location.pathname]); // eslint-disable-line
@@ -1450,16 +1536,15 @@ export default function Layout({ children }) {
     const pollNotifications = async () => {
       try {
         const response = await apiGetWithResumeRetries('/notifications');
-        setUnreadCount(response.data.unread_count ?? 0);
+        const n = response.data.unread_count ?? 0;
+        setUnreadCount(n);
+        saveLayoutChrome(userId || layoutBootRef.current.user?.id, { unreadCount: n });
         if (notificationPanelOpenRef.current) setNotificationList(response.data.notifications || []);
       } catch { }
     };
-    let intervalId;
-    const deferred = setTimeout(() => {
-      pollNotifications();
-      intervalId = setInterval(() => { if (!isChromeTabHidden()) pollNotifications(); }, 30000);
-    }, 2000);
-    return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
+    pollNotifications();
+    const intervalId = setInterval(() => { if (!isChromeTabHidden()) pollNotifications(); }, 30000);
+    return () => clearInterval(intervalId);
   }, []); // eslint-disable-line
 
   useEffect(() => {
@@ -1573,6 +1658,7 @@ export default function Layout({ children }) {
   }, [flashNews.length, isMobileViewport]);
 
   const fetchData = async () => {
+    const startedAt = Date.now();
     try {
       const sinkProgress = (p) => {
         p.catch(() => {});
@@ -1599,24 +1685,21 @@ export default function Layout({ children }) {
       delete authUserData.casino_profit;
       delete authUserData.property_profit;
       delete authUserData.has_casino_or_property;
-      setUser((prev) => ({
-        ...authUserData,
-        casino_profit: prev?.casino_profit ?? 0,
-        property_profit: prev?.property_profit ?? 0,
-        has_casino_or_property: prev?.has_casino_or_property ?? false,
-      }));
+      setUser((prev) => {
+        const fresh = moneyFreshRef.current;
+        const keepCash = Number.isFinite(fresh.value) && fresh.at >= startedAt;
+        return {
+          ...authUserData,
+          money: keepCash ? fresh.value : authUserData.money,
+          casino_profit: prev?.casino_profit ?? 0,
+          property_profit: prev?.property_profit ?? 0,
+          has_casino_or_property: prev?.has_casino_or_property ?? false,
+        };
+      });
       if (userRes.data?.username) setProfileSessionLastMeUsername(userRes.data.username);
       setRankProgress(progressRes.data);
       try {
-        writeDashboardSessionUserProgress(
-          {
-            ...authUserData,
-            casino_profit: 0,
-            property_profit: 0,
-            has_casino_or_property: false,
-          },
-          progressRes.data,
-        );
+        writeDashboardSessionUserProgress(authUserData, progressRes.data);
       } catch (_) { /* ignore */ }
       try {
         setToastMutedPages(userRes.data?.toast_muted_pages);
@@ -1630,6 +1713,7 @@ export default function Layout({ children }) {
         localStorage.removeItem('token');
         clearProfileSessionLastMeUsername();
         clearStaffPortalSession();
+        try { clearLayoutChrome(); } catch (_) { /* ignore */ }
         navigate('/');
       } else {
         if (!shouldSuppressResumeNetworkToast(error)) {
@@ -1651,7 +1735,9 @@ export default function Layout({ children }) {
         (async () => {
           try {
             const r = await apiGetWithResumeRetries('/notifications');
-            setUnreadCount(r.data?.unread_count ?? 0);
+            const n = r.data?.unread_count ?? 0;
+            setUnreadCount(n);
+            saveLayoutChrome(userId || layoutBootRef.current.user?.id, { unreadCount: n });
             if (notificationPanelOpenRef.current) {
               setNotificationList(r.data?.notifications || []);
             }
@@ -1675,7 +1761,9 @@ export default function Layout({ children }) {
           },
           () => {
             api.get('/weed-empire/ready-count').then((res) => {
-              setWeedEmpireReadyCount(Math.max(0, Number(res.data?.ready_count) || 0));
+              const n = Math.max(0, Number(res.data?.ready_count) || 0);
+              setWeedEmpireReadyCount(n);
+              saveLayoutChrome(userId, { weedEmpireReadyCount: n });
             }).catch(() => {});
           },
         ];
@@ -1692,7 +1780,9 @@ export default function Layout({ children }) {
   const fetchWarStatus = async () => {
     try {
       const res = await apiRequestWith429Retry(() => api.get('/families/war'));
-      setAtWar(!!(res.data?.wars?.length > 0));
+      const next = !!(res.data?.wars?.length > 0);
+      setAtWar(next);
+      saveLayoutChrome(userId, { atWar: next });
     } catch {
       setAtWar(false);
     }
@@ -1700,19 +1790,28 @@ export default function Layout({ children }) {
   const fetchUnreadCount = async () => {
     try {
       const response = await apiGetWithResumeRetries('/notifications');
-      setUnreadCount(response.data.unread_count ?? 0);
+      const n = response.data.unread_count ?? 0;
+      setUnreadCount(n);
+      saveLayoutChrome(userId || layoutBootRef.current.user?.id, { unreadCount: n });
     } catch (error) {
       console.error('Failed to fetch notifications');
     }
   };
   const fetchHelpDeskOpenCount = async () => {
-    try { const res = await api.get('/help-desk/open-count'); setHelpDeskOpenCount(res.data?.open_tickets_count ?? 0); } catch { setHelpDeskOpenCount(0); }
+    try {
+      const res = await api.get('/help-desk/open-count');
+      const n = res.data?.open_tickets_count ?? 0;
+      setHelpDeskOpenCount(n);
+      saveLayoutChrome(userId, { helpDeskOpenCount: n });
+    } catch { setHelpDeskOpenCount(0); }
   };
   const fetchUpdateLogUnread = async () => {
     try {
       const res = await api.get('/forum/update-log/status');
-      setUpdateLogUnread(Number(res.data?.unread_count) || 0);
+      const n = Number(res.data?.unread_count) || 0;
+      setUpdateLogUnread(n);
       setUpdateLogTopicId(res.data?.topic_id || null);
+      saveLayoutChrome(userId, { updateLogUnread: n });
     } catch {
       /* keep previous */
     }
@@ -1722,6 +1821,7 @@ export default function Layout({ children }) {
       const res = await api.get('/users/online');
       const n = res.data?.total_online;
       setUsersOnlineCount(typeof n === 'number' ? n : 0);
+      saveLayoutChrome(userId, { usersOnlineCount: typeof n === 'number' ? n : 0 });
       try {
         const { cacheUsersOnlineResponse } = await import('../utils/usersOnlineWarm');
         cacheUsersOnlineResponse(res.data);
@@ -1733,7 +1833,15 @@ export default function Layout({ children }) {
     }
   };
   const fetchCasinoProperty = async () => {
-    try { const res = await api.get('/user/casino-property'); if (res.data) setUser((prev) => (prev ? { ...prev, ...res.data } : prev)); } catch { }
+    try {
+      const res = await api.get('/user/casino-property');
+      if (!res.data) return;
+      setUser((prev) => (prev ? { ...prev, ...res.data } : prev));
+      try {
+        const prev = readDashboardSessionCache() || {};
+        writeDashboardSessionUserProgress({ ...(prev.user || {}), ...res.data }, prev.rankProgress);
+      } catch (_) { /* ignore */ }
+    } catch { }
   };
 
   const openNotificationPanel = async () => {
@@ -1750,18 +1858,34 @@ export default function Layout({ children }) {
   };
 
   const markAllNotificationsRead = async () => {
-    try { await api.post('/notifications/read-all'); setUnreadCount(0); setNotificationList((prev) => prev.map((n) => ({ ...n, read: true }))); } catch (_) {}
+    try {
+      await api.post('/notifications/read-all');
+      setUnreadCount(0);
+      saveLayoutChrome(userId || layoutBootRef.current.user?.id, { unreadCount: 0 });
+      setNotificationList((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch (_) {}
   };
 
   const checkAdmin = async () => {
     try {
       const response = await api.get('/auth/staff-flags');
-      setIsAdmin(!!response.data.is_admin); setIsModerator(!!response.data.is_moderator); setHasAdminEmail(!!response.data.has_admin_email);
-      setAdminPreviewAsMod(!!response.data.admin_preview_as_mod);
-      setStaffLoginSession(!!response.data.staff_login_session);
-      setStaffPortalEnabled(!!response.data.staff_portal_enabled);
+      const flags = {
+        is_admin: !!response.data.is_admin,
+        is_moderator: !!response.data.is_moderator,
+        has_admin_email: !!response.data.has_admin_email,
+        admin_preview_as_mod: !!response.data.admin_preview_as_mod,
+        staff_login_session: !!response.data.staff_login_session,
+        staff_portal_enabled: !!response.data.staff_portal_enabled,
+      };
+      setIsAdmin(flags.is_admin);
+      setIsModerator(flags.is_moderator);
+      setHasAdminEmail(flags.has_admin_email);
+      setAdminPreviewAsMod(flags.admin_preview_as_mod);
+      setStaffLoginSession(flags.staff_login_session);
+      setStaffPortalEnabled(flags.staff_portal_enabled);
+      saveLayoutChrome(userId || layoutBootRef.current.user?.id, flags);
     } catch (error) {
-      setIsAdmin(false); setIsModerator(false); setHasAdminEmail(false); setAdminPreviewAsMod(false); setStaffLoginSession(false); setStaffPortalEnabled(false);
+      /* keep last-known staff chrome — a failed flags call must not hide the lock */
     }
   };
 
@@ -1772,20 +1896,17 @@ export default function Layout({ children }) {
         setPageLocks(typeof paths === 'object' && paths !== null ? paths : {});
       }).catch(() => setPageLocks({}));
     }, 1500);
-    const tHitman = setTimeout(() => {
-      api.get('/store/item-flags').then((r) => {
-        setHitmanForHireLive(!!r.data?.flags?.hitman_for_hire);
-        const weedLive = !!r.data?.flags?.weed_empire;
-        // Staff can always see Weed Empire while flag is off (preview).
-        setWeedEmpireVisible(weedLive);
-      }).catch(() => {
-        setHitmanForHireLive(false);
-        setWeedEmpireVisible(false);
-      });
-    }, 1600);
+    api.get('/store/item-flags').then((r) => {
+      const hitman = !!r.data?.flags?.hitman_for_hire;
+      const weedLive = !!r.data?.flags?.weed_empire;
+      setHitmanForHireLive(hitman);
+      setWeedEmpireVisible(weedLive);
+      saveNavItemFlags(hitman, weedLive);
+    }).catch(() => {
+      /* keep cached flags so a failed fetch does not yank rows out of the sidebar */
+    });
     return () => {
       clearTimeout(t);
-      clearTimeout(tHitman);
     };
   }, []);
 
@@ -1823,11 +1944,15 @@ export default function Layout({ children }) {
       const jailCount = onJailPage
         ? undefined
         : (jailPlayersRes && Array.isArray(jailPlayersRes.data?.players) ? jailPlayersRes.data.players.length : 0);
-      setRankingCounts((prev) => ({
-        crimes: jailed ? prev.crimes : crimesAvailable,
-        gta: jailed ? prev.gta : gtaAvailable,
-        jail: jailCount === undefined ? prev.jail : jailCount,
-      }));
+      setRankingCounts((prev) => {
+        const next = {
+          crimes: jailed ? prev.crimes : crimesAvailable,
+          gta: jailed ? prev.gta : gtaAvailable,
+          jail: jailCount === undefined ? prev.jail : jailCount,
+        };
+        saveLayoutChrome(userId, next);
+        return next;
+      });
     } catch (error) { }
   };
 
@@ -1946,6 +2071,7 @@ export default function Layout({ children }) {
   const handleLogout = () => {
     localStorage.removeItem('token');
     try { clearDashboardSessionCache(); } catch (_) { /* ignore */ }
+    try { clearLayoutChrome(); } catch (_) { /* ignore */ }
     clearStaffPortalSession();
     clearProfileSessionLastMeUsername();
     clearDeadAliveEstateNudgePending();
@@ -2114,47 +2240,78 @@ export default function Layout({ children }) {
   const StaffTopBarIcon = staffTopBarEntry?.icon;
 
   const isOldSchool = themeVariant === 'old_school';
+  const leftMenuResolved = resolveMenuTheme(leftMenuTheme, themeVariant);
+  const rightMenuResolved = resolveMenuTheme(rightMenuTheme, themeVariant);
+  const isLeftOldSchool = leftMenuResolved === 'old_school';
+  const isRightOldSchool = rightMenuResolved === 'old_school';
+  const isLeftModern = leftMenuResolved === 'modern';
+  const isRightModern = rightMenuResolved === 'modern';
+  const leftRulePlain = isLeftOldSchool || isLeftModern;
   const isPocketDeck = isMobileViewport && mobileLayoutId === 'pocket_deck';
-  const sidebarBgStyle = isOldSchool
+  const leftSidebarBgStyle = isLeftOldSchool
     ? { backgroundColor: 'rgba(58,58,58,0.96)', borderColor: '#c8c8c8' }
-    : { backgroundColor: 'var(--noir-content)' };
-  const sidebarActiveStyle = isOldSchool
+    : isLeftModern
+      ? {
+        background: 'linear-gradient(180deg, #1c1c22 0%, #141418 55%, #101014 100%)',
+        borderColor: 'rgba(var(--noir-primary-rgb), 0.22)',
+      }
+      : undefined;
+  const rightSidebarBgStyle = isRightOldSchool
+    ? { backgroundColor: 'rgba(58,58,58,0.96)', borderColor: '#c8c8c8' }
+    : isRightModern
+      ? {
+        background: 'linear-gradient(180deg, #1c1c22 0%, #141418 55%, #101014 100%)',
+        borderColor: 'rgba(var(--noir-primary-rgb), 0.22)',
+      }
+      : undefined;
+  const sidebarActiveStyle = isLeftOldSchool
     ? { background: '#2a3a55', backgroundImage: 'none', borderLeft: 'none', color: '#ffffff', borderRadius: 0 }
-    : { background: 'var(--noir-raised)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
-  const sidebarActiveGroupStyle = isOldSchool
+    : isLeftModern
+      ? { background: 'rgba(var(--noir-primary-rgb), 0.16)', backgroundImage: 'none', borderLeft: 'none', color: 'var(--noir-primary)', borderRadius: 10, boxShadow: 'inset 0 0 0 1px rgba(var(--noir-primary-rgb), 0.3)' }
+      : { background: 'var(--noir-raised)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
+  const sidebarActiveGroupStyle = isLeftOldSchool
     ? { background: '#334866', backgroundImage: 'none', borderLeft: 'none', color: '#ffffff', borderRadius: 0 }
-    : { background: 'var(--noir-surface)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
+    : isLeftModern
+      ? { background: 'rgba(var(--noir-primary-rgb), 0.12)', backgroundImage: 'none', borderLeft: 'none', color: 'var(--noir-primary)', borderRadius: 10 }
+      : { background: 'var(--noir-surface)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
   const dividerMarginClass = sidebarSpacing === 'compact' ? 'my-0.5' : sidebarSpacing === 'relaxed' ? 'my-1.5' : 'my-1';
   const dividerStyle = sidebarDividerStyle === 'solid'
-    ? { height: '1px', backgroundColor: isOldSchool ? '#6a6a6a' : 'rgba(var(--noir-primary-rgb), 0.35)' }
-    : { height: 0, borderTop: `1px ${sidebarDividerStyle} ${isOldSchool ? '#6a6a6a' : 'rgba(var(--noir-primary-rgb), 0.35)'}` };
-  const categoryHeaderStyle = isOldSchool
+    ? { height: '1px', backgroundColor: isLeftOldSchool ? '#6a6a6a' : 'rgba(var(--noir-primary-rgb), 0.35)' }
+    : { height: 0, borderTop: `1px ${sidebarDividerStyle} ${isLeftOldSchool ? '#6a6a6a' : 'rgba(var(--noir-primary-rgb), 0.35)'}` };
+  const rightDividerStyle = sidebarDividerStyle === 'solid'
+    ? { height: '1px', backgroundColor: isRightOldSchool ? '#6a6a6a' : 'rgba(var(--noir-primary-rgb), 0.35)' }
+    : { height: 0, borderTop: `1px ${sidebarDividerStyle} ${isRightOldSchool ? '#6a6a6a' : 'rgba(var(--noir-primary-rgb), 0.35)'}` };
+  const categoryHeaderStyle = isLeftOldSchool
     ? { background: 'linear-gradient(180deg, #5e5e5e 0%, #3a3a3a 55%, #2e2e2e 100%)', color: '#f2f2f2', borderRadius: 0, border: '1px solid #c8c8c8', boxShadow: 'inset 1px 1px 0 #ebebeb' }
-    : { backgroundColor: 'rgba(var(--noir-primary-rgb), 0.12)', color: 'var(--noir-primary)' };
+    : isLeftModern
+      ? { background: 'rgba(var(--noir-primary-rgb), 0.1)', color: '#e4e4e7', borderRadius: 8, border: '1px solid rgba(var(--noir-primary-rgb), 0.2)' }
+      : { backgroundColor: 'rgba(var(--noir-primary-rgb), 0.12)', color: 'var(--noir-primary)' };
   /* Classic blue underlined category labels (img-1 Main Menu sections) */
-  const osSectionBtnStyle = isOldSchool
+  const osSectionBtnStyle = isLeftOldSchool
     ? { padding: '3px 6px 2px', marginTop: 4, background: 'transparent', borderRadius: 0, borderBottom: '1px solid rgba(91,155,213,0.55)' }
-    : { padding: '6px 8px', marginTop: 0, flexWrap: 'nowrap' };
+    : isLeftModern
+      ? { padding: '7px 10px', marginTop: 6, background: 'rgba(255,255,255,0.04)', borderRadius: 8, border: '1px solid rgba(var(--noir-primary-rgb), 0.14)' }
+      : { padding: '6px 8px', marginTop: 0, flexWrap: 'nowrap' };
   const osSectionLabelStyle = (active) => ({
     fontFamily: 'var(--font-heading, "Cinzel", serif)',
-    fontSize: 8,
+    fontSize: isLeftModern ? 9 : 8,
     lineHeight: 1,
-    letterSpacing: '0.14em',
+    letterSpacing: isLeftModern ? '0.16em' : '0.14em',
     textTransform: 'uppercase',
-    color: isOldSchool ? '#5b9bd5' : (active ? 'var(--noir-primary)' : 'var(--noir-muted)'),
+    color: isLeftOldSchool ? '#5b9bd5' : (active ? 'var(--noir-primary)' : (isLeftModern ? '#a1a1aa' : 'var(--noir-muted)')),
     whiteSpace: 'nowrap',
-    ...(isOldSchool ? { flex: 1, textAlign: 'left', textDecoration: 'underline', textUnderlineOffset: '2px' } : {}),
+    ...(isLeftOldSchool ? { flex: 1, textAlign: 'left', textDecoration: 'underline', textUnderlineOffset: '2px' } : {}),
   });
-  const osSectionChevronStyle = isOldSchool
+  const osSectionChevronStyle = isLeftOldSchool
     ? { color: '#5b9bd5', opacity: 0.85, display: 'block' }
-    : { color: 'var(--noir-primary)', opacity: 0.5, display: 'block' };
+    : { color: 'var(--noir-primary)', opacity: isLeftModern ? 0.7 : 0.5, display: 'block' };
   const navDividerEl = (key) => showSidebarDividers ? <div key={key} className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" /> : null;
 
   const isRankingPath = (p) => p === '/game/ranking' || (p && (p.startsWith('/game/ranking/') || p.startsWith('/crime/') || p === '/organised-crime' || p === '/account/prestige'));
   const rankingNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-ranking-group" onClick={() => setRankingOpen((v) => { const next = !v; setNavSectionOpen('ranking', next); return next; })}
-        className={`sidebar-inline-rule${isOldSchool ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isRankingPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+        className={`sidebar-inline-rule${leftRulePlain ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isRankingPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={osSectionBtnStyle}>
         <span style={osSectionLabelStyle(isRankingPath(location.pathname))}>Ranking</span>
         {!rankingOpen && (rankingCounts.crimes > 0 || rankingCounts.gta > 0) && (
@@ -2222,7 +2379,7 @@ export default function Layout({ children }) {
   const combatNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-combat-group" onClick={() => setCombatOpen((v) => { const next = !v; setNavSectionOpen('combat', next); return next; })}
-        className={`sidebar-inline-rule${isOldSchool ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCombatPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+        className={`sidebar-inline-rule${leftRulePlain ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCombatPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={osSectionBtnStyle}>
         <span style={osSectionLabelStyle(isCombatPath(location.pathname))}>Combat</span>
         {combatOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
@@ -2235,9 +2392,7 @@ export default function Layout({ children }) {
             { to: '/kill/attempts', label: 'Attempts', testId: 'nav-attempts', Icon: Crosshair },
             { to: '/kill/combat-timeline', label: 'Combat timeline', testId: 'nav-combat-timeline', Icon: Crosshair },
             { to: '/kill/hitlist', label: 'Hitlist', testId: 'nav-hitlist', Icon: ScrollText },
-            ...(hitmanForHireVisible
-              ? [{ to: '/kill/hitman', label: 'Hitman for Hire', testId: 'nav-hitman', Icon: Crosshair }]
-              : []),
+            { to: '/kill/hitman', label: 'Hitman for Hire', testId: 'nav-hitman', Icon: Crosshair },
             { to: '/kill/bodyguards', label: 'Bodyguards', testId: 'nav-bodyguards', Icon: Shield },
             { to: '/kill/armour-weapons', label: 'Armoury', testId: 'nav-armoury', Icon: Sword },
           ].map((item, idx) => {
@@ -2301,7 +2456,7 @@ export default function Layout({ children }) {
           type="button"
           data-testid="nav-messaging-menu-group"
           onClick={() => setMessagingMenuOpen((v) => { const next = !v; setNavSectionOpen('messaging-menu', next); return next; })}
-          className={`sidebar-inline-rule${isOldSchool ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isMessagingPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+          className={`sidebar-inline-rule${leftRulePlain ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isMessagingPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
           style={osSectionBtnStyle}
         >
           <span style={osSectionLabelStyle(isMessagingPath(location.pathname))}>
@@ -2375,7 +2530,7 @@ export default function Layout({ children }) {
   const casinoNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-casino-group" onClick={() => setCasinoOpen((v) => { const next = !v; setNavSectionOpen('casino', next); return next; })}
-        className={`sidebar-inline-rule${isOldSchool ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCasinoPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+        className={`sidebar-inline-rule${leftRulePlain ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCasinoPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={osSectionBtnStyle}>
         <span style={osSectionLabelStyle(isCasinoPath(location.pathname))}>Casino</span>
         {casinoOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
@@ -2429,7 +2584,7 @@ export default function Layout({ children }) {
   const miniGamesNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-minigames-group" onClick={() => setMiniGamesOpen((v) => { const next = !v; setNavSectionOpen('minigames', next); return next; })}
-        className={`sidebar-inline-rule${isOldSchool ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isMiniGamesPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+        className={`sidebar-inline-rule${leftRulePlain ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isMiniGamesPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={osSectionBtnStyle}>
         <span style={osSectionLabelStyle(isMiniGamesPath(location.pathname))}>Mini games</span>
         {miniGamesOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
@@ -2518,12 +2673,13 @@ export default function Layout({ children }) {
               At war
             </span>
           )}
-          {typeof item.countBadge === 'number' && (
+          {(typeof item.countBadge === 'number' || item.path === '/game/users-online') && (
             <span
-              className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30 tabular-nums shrink-0"
+              className={`bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30 tabular-nums shrink-0 min-w-[1.75rem] text-center ${typeof item.countBadge === 'number' ? '' : 'invisible'}`}
               title="Players online"
+              aria-hidden={typeof item.countBadge !== 'number'}
             >
-              {item.countBadge.toLocaleString()}
+              {typeof item.countBadge === 'number' ? item.countBadge.toLocaleString() : '0'}
             </span>
           )}
           {item.badge > 0 && (
@@ -2771,20 +2927,24 @@ export default function Layout({ children }) {
       <div
         data-layout="sidebar"
         className={`fixed left-0 top-0 h-full ${themeVariant === 'modern' ? 'w-40' : 'w-48'} ${styles.sidebar} z-50 transform transition-transform duration-300 ${mobileNavStyle === 'bottom' || isPocketDeck ? 'hidden md:translate-x-0 md:block' : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}`}
-        style={sidebarBgStyle}
+        style={leftSidebarBgStyle}
+        data-menu-theme={leftMenuResolved}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div
             className="h-12 flex items-center px-2.5 shrink-0"
-            style={isOldSchool ? {
+            style={isLeftOldSchool ? {
               background: 'linear-gradient(180deg, #5e5e5e 0%, #3a3a3a 55%, #2e2e2e 100%)',
               borderColor: '#c8c8c8',
               boxShadow: 'inset 1px 1px 0 #ebebeb',
+            } : isLeftModern ? {
+              background: 'linear-gradient(90deg, rgba(var(--noir-primary-rgb), 0.2) 0%, rgba(var(--noir-primary-rgb), 0.05) 55%, transparent 100%)',
+              borderBottom: '1px solid rgba(var(--noir-primary-rgb), 0.22)',
             } : undefined}
           >
-            <div className={`sidebar-inline-rule sidebar-inline-rule--logo${isOldSchool ? ' sidebar-inline-rule--plain' : ''}`}>
-              <h1 className={`text-base font-heading font-bold tracking-widest leading-none truncate min-w-0 ${styles.sidebarHeaderTitle}`} data-testid="app-logo" style={isOldSchool ? { color: '#f2f2f2', fontSize: 11, letterSpacing: '0.12em' } : undefined}>{isOldSchool ? 'MAIN MENU' : 'MAFIA WARS'}</h1>
+            <div className={`sidebar-inline-rule sidebar-inline-rule--logo${leftRulePlain ? ' sidebar-inline-rule--plain' : ''}`}>
+              <h1 className={`text-base font-heading font-bold tracking-widest leading-none truncate min-w-0 ${styles.sidebarHeaderTitle}`} data-testid="app-logo" style={isLeftOldSchool ? { color: '#f2f2f2', fontSize: 11, letterSpacing: '0.12em' } : isLeftModern ? { color: '#f4f4f5', fontSize: 12, letterSpacing: '0.18em' } : undefined}>{isLeftOldSchool ? 'MAIN MENU' : 'MAFIA WARS'}</h1>
               {autoRankPrefs.auto_rank_enabled && (
                 <TooltipProvider>
                   <Tooltip>
@@ -2824,7 +2984,7 @@ export default function Layout({ children }) {
                     return (
                       <Fragment key={cat.id}>
                         {isBlockCategory ? null : (
-                          <button type="button" onClick={() => setOpen((o) => !o)} className={`sidebar-inline-rule${isOldSchool ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent opacity-90 hover:opacity-100`} style={cat.id === 'information' ? osSectionBtnStyle : { ...osSectionBtnStyle, marginTop: 8 }} aria-expanded={open}>
+                          <button type="button" onClick={() => setOpen((o) => !o)} className={`sidebar-inline-rule${leftRulePlain ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent opacity-90 hover:opacity-100`} style={cat.id === 'information' ? osSectionBtnStyle : { ...osSectionBtnStyle, marginTop: 8 }} aria-expanded={open}>
                             <span style={osSectionLabelStyle(false)}>{cat.label}</span>
                             {open ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
                           </button>
@@ -2898,12 +3058,12 @@ export default function Layout({ children }) {
           {user && (
             <div className={`px-2 py-1 border-t ${styles.borderGoldLight} shrink-0 space-y-0.5`}>
               <button type="button" onClick={() => setThemePickerOpen(true)}
-              className="w-full flex items-center justify-center gap-1 px-2 py-1 rounded-sm transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
+              className={`w-full flex items-center justify-center gap-1 px-2 py-1 transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 ${isLeftModern ? 'rounded-lg' : 'rounded-sm'}`}
                 data-testid="theme-picker-button">
                 <Palette size={12} />Theme
               </button>
               <button onClick={handleLogout} data-testid="logout-button"
-                className="w-full flex items-center justify-center gap-1 px-2 py-1 bg-gradient-to-r from-red-700 to-red-900 text-white border border-red-600/50 rounded-sm hover:opacity-90 transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold">
+                className={`w-full flex items-center justify-center gap-1 px-2 py-1 bg-gradient-to-r from-red-700 to-red-900 text-white border border-red-600/50 hover:opacity-90 transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold ${isLeftModern ? 'rounded-lg' : 'rounded-sm'}`}>
                 <LogOut size={12} />Logout
               </button>
             </div>
@@ -2929,7 +3089,7 @@ export default function Layout({ children }) {
 
           {/* Flash news — show on desktop; on mobile hide when top bar stats selected (moved to bottom). */}
           <div className={`${(!isMobileViewport || isPocketDeck || (mobileNavStyle === 'bottom' && mobileStatsDisplay !== 'top_bar')) ? 'flex' : 'hidden'} items-center flex-1 min-w-0 max-w-sm md:max-w-md`}>
-            {flashNews.length > 0 && (
+            {flashNews.length > 0 ? (
               <div className="flex items-center gap-1 md:gap-2 min-w-0 w-full min-h-[1.5rem] md:min-h-[2rem] rounded px-1.5 py-0.5 md:px-2 md:py-1 border border-primary/15 bg-primary/5">
                 <Newspaper className="shrink-0 text-primary/70 self-center w-3 h-3 md:w-3.5 md:h-3.5" aria-hidden />
                 <div className="flex items-baseline gap-1 min-w-0 flex-1 overflow-hidden">
@@ -2937,6 +3097,8 @@ export default function Layout({ children }) {
                   {flashNews.length > 1 && <span className="text-[9px] md:text-[10px] text-primary/50 shrink-0 font-heading leading-none tabular-nums">{flashIndex + 1}/{flashNews.length}</span>}
                 </div>
               </div>
+            ) : (
+              <div className="min-w-0 w-full min-h-[1.5rem] md:min-h-[2rem]" aria-hidden />
             )}
           </div>
 
@@ -3220,7 +3382,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
-      <main data-layout="main" className={`${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:ml-40' : 'md:ml-48') : ''} mt-main-below-topbar min-h-[100dvh] p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' || isPocketDeck ? 'pb-safe-bottom-nav md:pb-6' : ''} ${isPocketDeck ? 'pt-9 md:pt-0' : ''} ${(isMobileViewport || isLandscapeCompactLayout) && !isPocketDeck && mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && mobileNavStyle !== 'bottom' ? 'pb-16 md:pb-6' : ''} ${user && mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout && !isPocketDeck ? (themeVariant === 'modern' ? 'md:mr-60' : 'md:mr-52') : ''}`}>
+      <main data-layout="main" className={`${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:ml-40' : 'md:ml-48') : ''} mt-main-below-topbar min-h-[100dvh] p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' || isPocketDeck ? 'pb-safe-bottom-nav md:pb-6' : ''} ${isPocketDeck ? 'pt-9 md:pt-0' : ''} ${(isMobileViewport || isLandscapeCompactLayout) && !isPocketDeck && mobileStatsDisplay === 'top_bar' && mobileNavStyle !== 'bottom' ? 'pb-16 md:pb-6' : ''} ${user && mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout && !isPocketDeck ? (themeVariant === 'modern' ? 'md:mr-60' : 'md:mr-52') : ''}`}>
         {needsEmailVerification && (
           <div className="mb-3 px-3 py-2 rounded-sm flex items-center gap-2 flex-wrap" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', border: '1px solid rgba(var(--noir-primary-rgb), 0.4)' }}>
             <Mail size={16} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
@@ -3282,22 +3444,25 @@ export default function Layout({ children }) {
               <PanelRight size={18} style={{ color: 'var(--noir-primary)' }} />
             </button>
           )}
-          <div data-layout="right-sidebar" className={`fixed right-0 w-52 flex flex-col z-40 overflow-y-auto border-l ${styles.sidebar} transition-transform duration-300 ${isMobileViewport ? (rightSidebarOpen ? 'translate-x-0 pointer-events-auto' : 'translate-x-full pointer-events-none') : 'translate-x-0'} ${isMobileViewport ? 'top-0 h-full' : 'md:top-0 md:h-full'}`} style={sidebarBgStyle}>
+          <div data-layout="right-sidebar" className={`fixed right-0 w-52 flex flex-col z-40 overflow-y-auto border-l ${styles.sidebar} transition-transform duration-300 ${isMobileViewport ? (rightSidebarOpen ? 'translate-x-0 pointer-events-auto' : 'translate-x-full pointer-events-none') : 'translate-x-0'} ${isMobileViewport ? 'top-0 h-full' : 'md:top-0 md:h-full'}`} style={rightSidebarBgStyle} data-menu-theme={rightMenuResolved}>
 
             {/* IMPROVEMENT 4: username + rank in header; page + user for logs */}
             <div
               className="h-12 flex flex-col justify-center px-2.5 shrink-0 gap-0.5"
-              style={isOldSchool ? {
+              style={isRightOldSchool ? {
                 background: 'linear-gradient(180deg, #5e5e5e 0%, #3a3a3a 55%, #2e2e2e 100%)',
                 borderColor: '#c8c8c8',
                 boxShadow: 'inset 1px 1px 0 #ebebeb',
+              } : isRightModern ? {
+                background: 'linear-gradient(90deg, rgba(var(--noir-primary-rgb), 0.2) 0%, rgba(var(--noir-primary-rgb), 0.05) 55%, transparent 100%)',
+                borderBottom: '1px solid rgba(var(--noir-primary-rgb), 0.22)',
               } : undefined}
             >
               <div className="flex items-center justify-between gap-2 min-h-[28px]">
-                <div className="inline-flex items-center gap-1.5 min-w-0">
-                  <User size={13} className="shrink-0 block" style={{ color: isOldSchool ? '#f2f2f2' : 'var(--noir-primary)' }} />
-                  <span className="text-[11px] font-heading font-bold truncate leading-none" style={{ color: isOldSchool ? '#f2f2f2' : 'var(--noir-primary)' }}>
-                    {isOldSchool ? 'PLAYERSTATS' : (user.username || 'Profile')}
+                <div className={`sidebar-inline-rule sidebar-inline-rule--logo${isRightOldSchool || isRightModern ? ' sidebar-inline-rule--plain' : ''} min-w-0`}>
+                  <User size={13} className="shrink-0 block" style={{ color: isRightOldSchool ? '#f2f2f2' : 'var(--noir-primary)' }} />
+                  <span className="text-[11px] font-heading font-bold truncate leading-none" style={{ color: isRightOldSchool ? '#f2f2f2' : (isRightModern ? '#f4f4f5' : 'var(--noir-primary)') }}>
+                    {isRightOldSchool ? 'PLAYERSTATS' : (user.username || 'Profile')}
                   </span>
                   {portalNeedsUnlock ? (
                     <div ref={portalUnlockWrapRef} className="relative shrink-0 inline-flex items-center">
@@ -3344,8 +3509,8 @@ export default function Layout({ children }) {
                       )}
                     </div>
                   ) : (
-                    <span className="text-[9px] font-heading uppercase tracking-wider shrink-0 leading-none" style={{ color: isOldSchool ? '#c8c8c8' : 'var(--noir-muted)' }}>
-                      {isOldSchool ? (user.username || 'Profile') : (user.rank_name || rankProgress?.current_rank_name || '')}
+                    <span className="text-[9px] font-heading uppercase tracking-wider shrink-0 leading-none" style={{ color: isRightOldSchool ? '#c8c8c8' : 'var(--noir-muted)' }}>
+                      {isRightOldSchool ? (user.username || 'Profile') : (user.rank_name || rankProgress?.current_rank_name || '')}
                     </span>
                   )}
                 </div>
@@ -3354,41 +3519,41 @@ export default function Layout({ children }) {
                     onPointerUp={(e) => { e.preventDefault(); closeRightSidebar(); }}
                     onTouchEnd={(e) => { e.preventDefault(); closeRightSidebar(); }}
                     className="min-w-[44px] min-h-[44px] -m-1 flex items-center justify-center rounded touch-manipulation active:scale-95 transition-transform"
-                    style={{ color: isOldSchool ? '#c8c8c8' : 'var(--noir-primary)' }} aria-label="Close stats panel"><X size={22} /></button>
+                    style={{ color: isRightOldSchool ? '#c8c8c8' : 'var(--noir-primary)' }} aria-label="Close stats panel"><X size={22} /></button>
                 )}
               </div>
             </div>
-            <div className="h-px w-full shrink-0" style={dividerStyle} aria-hidden="true" />
+            <div className="h-px w-full shrink-0" style={rightDividerStyle} aria-hidden="true" />
 
             <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2 min-h-0">
               {/* IMPROVEMENT 4: rank progress at top */}
-              {rankProgress && (
-                <div className="pt-1 pb-1">
-                  <p className="text-[9px] font-heading uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-muted)' }}>Rank Progress</p>
-                  <div className="h-2 w-full rounded-full overflow-hidden mb-1" style={{ backgroundColor: 'var(--noir-raised)' }}>
-                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
-                  </div>
-                  <p className="text-[9px] font-heading" style={{ color: 'var(--noir-primary)' }}>{(user?.premium_rank_bar ? (Number(rankProgress.rank_points_progress) || 0).toFixed(2) : (Number(rankProgress.rank_points_progress) || 0).toFixed(0))}% · {rankProgress.current_rank_name}</p>
+              <div className="pt-1 pb-1 min-h-[52px]">
+                <RightSectionTitle label="Rank Progress" isOldSchool={isRightOldSchool} isModern={isRightModern} />
+                <div className="h-2 w-full rounded-full overflow-hidden mb-1" style={{ backgroundColor: 'var(--noir-raised)' }}>
+                  <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress?.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
                 </div>
-              )}
+                <p className="text-[9px] font-heading" style={{ color: 'var(--noir-primary)' }}>
+                  {rankProgress
+                    ? `${(user?.premium_rank_bar ? (Number(rankProgress.rank_points_progress) || 0).toFixed(2) : (Number(rankProgress.rank_points_progress) || 0).toFixed(0))}% · ${rankProgress.current_rank_name}`
+                    : '\u00a0'}
+                </p>
+              </div>
 
               {/* Stat rows — grouped so the list is scannable */}
               <div className="space-y-2.5">
-                <RightStatGroup label="Money" ruleStyle={dividerStyle}>
+                <RightStatGroup label="Money" isOldSchool={isRightOldSchool} isModern={isRightModern}>
                   {[
                     { label: 'Cash', value: formatMoney(user.money), className: 'text-primary', isLink: true, to: '/bank' },
                     { label: 'Points', value: formatInt(user.points), isLink: true, to: '/game/store?tab=points' },
                     { label: 'Respect', value: formatInt(user.respect_points ?? 0), isLink: true, to: '/game/store?tab=upgrades' },
                     { label: 'Bullets', value: formatInt(user.bullets), isLink: true, to: '/game/store?tab=bullets' },
-                    ...(hasCasinoOrProperty ? [
-                      { label: 'Casino', value: formatMoney(user.casino_profit ?? 0), className: (user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400', isLink: true, to: '/my-properties' },
-                      { label: 'Property', value: `${formatInt(user.property_profit ?? 0)} pts`, isLink: true, to: '/my-properties' },
-                    ] : []),
+                    { label: 'Casino', value: (hasCasinoOrProperty || Number(user.casino_profit) !== 0) ? formatMoney(user.casino_profit ?? 0) : '—', className: (user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400', isLink: true, to: '/my-properties' },
+                    { label: 'Property', value: (hasCasinoOrProperty || Number(user.property_profit) !== 0) ? `${formatInt(user.property_profit ?? 0)} pts` : '—', isLink: true, to: '/my-properties' },
                   ].map((row) => (
                     <RightStatRow key={row.label} row={row} closeOnMobile={() => isMobileViewport && setRightSidebarOpen(false)} />
                   ))}
                 </RightStatGroup>
-                <RightStatGroup label="Combat" ruleStyle={dividerStyle}>
+                <RightStatGroup label="Combat" isOldSchool={isRightOldSchool} isModern={isRightModern}>
                   {[
                     { label: 'Health', value: Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%', className: Number(user.health) > 50 ? 'text-emerald-400' : Number(user.health) > 25 ? 'text-amber-400' : 'text-red-400', isLink: true, to: '/game/store?tab=upgrades' },
                     { label: 'Kills', value: formatInt(user.total_kills), className: 'text-red-400', isLink: true, to: '/kill/attack' },
@@ -3399,7 +3564,7 @@ export default function Layout({ children }) {
                     <RightStatRow key={row.label} row={row} closeOnMobile={() => isMobileViewport && setRightSidebarOpen(false)} />
                   ))}
                 </RightStatGroup>
-                <RightStatGroup label="Location" ruleStyle={dividerStyle}>
+                <RightStatGroup label="Location" isOldSchool={isRightOldSchool} isModern={isRightModern}>
                   {[
                     { label: 'Location', value: user.current_state || user.location || '—', truncate: true, isLink: true, to: '/travel' },
                     {
@@ -3413,6 +3578,8 @@ export default function Layout({ children }) {
                               size={14}
                               className="shrink-0"
                             />
+                          ) : user.family_id ? (
+                            <span className="inline-block shrink-0" style={{ width: 14, height: 14 }} aria-hidden />
                           ) : null}
                           <span className="min-w-0 break-words leading-snug">{user.gang_name || 'None'}</span>
                         </span>
@@ -3429,7 +3596,7 @@ export default function Layout({ children }) {
 
               {/* Find user — under stats / property */}
               <div className="pt-1.5">
-                <label className="block text-[8px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em] mb-1" style={{ color: 'var(--noir-muted)' }}>Find user</label>
+                <RightSectionTitle label="Find user" isOldSchool={isRightOldSchool} isModern={isRightModern} />
                 <form
                   className="flex gap-1"
                   onSubmit={(e) => {
@@ -3462,18 +3629,18 @@ export default function Layout({ children }) {
                 </form>
               </div>
 
-              <div className="h-px -mx-2 shrink-0" style={dividerStyle} aria-hidden="true" />
+              <div className="h-px -mx-2 shrink-0" style={rightDividerStyle} aria-hidden="true" />
 
               <div className="space-y-1 pt-1">
                 <SameRouteAwareLink to="/game/leaderboard" onClick={() => isMobileViewport && setRightSidebarOpen(false)}
                   onMouseEnter={prefetchMainLeaderboard}
                   onFocus={prefetchMainLeaderboard}
-                  className="flex items-center gap-1.5 text-[10px] font-heading font-bold py-0.5 px-1 rounded-sm"
+                  className="right-rail-link flex items-center gap-1.5 text-[10px] font-heading font-bold py-0.5 px-1 rounded-sm"
                   style={{ color: 'var(--noir-primary)' }}>
                   <Trophy size={12} /> Leaderboard
                 </SameRouteAwareLink>
                 <SameRouteAwareLink to="/social/inbox" onClick={() => isMobileViewport && setRightSidebarOpen(false)}
-                  className="flex items-center justify-between gap-1 text-[10px] font-heading py-0.5 px-1 rounded-sm"
+                  className="right-rail-link flex items-center justify-between gap-1 text-[10px] font-heading py-0.5 px-1 rounded-sm"
                   style={{ color: 'var(--noir-foreground)' }}>
                   <span className="flex items-center gap-1.5">
                     <Newspaper size={12} style={{ color: 'var(--noir-primary)' }} /> Notifications
@@ -3482,15 +3649,12 @@ export default function Layout({ children }) {
                 </SameRouteAwareLink>
               </div>
 
-              {/* IMPROVEMENT 4: Theme button in right sidebar too */}
               <button type="button" onClick={() => { setThemePickerOpen(true); isMobileViewport && setRightSidebarOpen(false); }}
-                className="w-full flex justify-between items-center gap-1 text-[10px] font-heading py-1 px-1 rounded-sm mt-1"
-                style={{ color: 'var(--noir-primary)' }}>
-                <span className="flex items-center gap-1.5"><Palette size={12} /> Theme</span>
-                <span>Change</span>
+                className={`w-full flex items-center justify-center gap-1 px-2 py-1 transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 mt-1 ${isRightModern ? 'rounded-lg' : 'rounded-sm'}`}>
+                <Palette size={12} /> Theme
               </button>
               <button type="button" onClick={() => setGameChatVisiblePersist(!gameChatVisible)}
-                className="w-full flex justify-between items-center gap-1 text-[10px] font-heading py-1 px-1 rounded-sm"
+                className="right-rail-link w-full flex justify-between items-center gap-1 text-[10px] font-heading py-1 px-1 rounded-sm"
                 style={{ color: gameChatVisible ? 'var(--noir-muted)' : '#22d3ee' }}>
                 <span className="flex items-center gap-1.5"><MessageSquare size={12} /> Game Chat</span>
                 <span>{gameChatVisible ? 'Hide' : 'Show'}</span>
@@ -3654,7 +3818,7 @@ export default function Layout({ children }) {
                   { path: '/kill/witness-statements', label: 'Witness', Icon: FileText },
                   { path: '/kill/attempts', label: 'Attempts', Icon: Crosshair },
                   { path: '/kill/hitlist', label: 'Hitlist', Icon: Target },
-                  ...(hitmanForHireVisible ? [{ path: '/kill/hitman', label: 'Hitman', Icon: Crosshair }] : []),
+                  { path: '/kill/hitman', label: 'Hitman', Icon: Crosshair },
                   { path: '/kill/bodyguards', label: 'Bodyguards', Icon: Shield },
                   { path: '/kill/armour-weapons', label: 'Armoury', Icon: Package },
                   { path: '/kill/combat-timeline', label: 'Timeline', Icon: Activity },
@@ -3842,7 +4006,7 @@ export default function Layout({ children }) {
             );
           })()}
 
-          <div data-layout="pocket-dock" className="md:hidden fixed bottom-0 left-0 right-0 z-[51] safe-area-pb" style={{ backgroundColor: 'var(--noir-content)', borderTop: '1px solid rgba(var(--noir-primary-rgb), 0.28)' }}>
+          <div data-layout="pocket-dock" className="md:hidden fixed bottom-0 left-0 right-0 z-[51] safe-area-pb" style={{ borderTop: '1px solid rgba(var(--noir-primary-rgb), 0.28)' }}>
             <nav className="flex items-stretch gap-1 px-1 py-1" aria-label="Pocket Deck navigation">
               <SameRouteAwareLink
                 to="/account/dashboard"
@@ -3953,7 +4117,7 @@ export default function Layout({ children }) {
       )}
 
       {/* ── MOBILE BOTTOM AREA (nav + news/casino bar when top bar stats) ─────── */}
-      {!isPocketDeck && isMobileViewport && (mobileNavStyle === 'bottom' || (mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)))) && (
+      {!isPocketDeck && isMobileViewport && (mobileNavStyle === 'bottom' || (mobileStatsDisplay === 'top_bar' && mobileNavStyle !== 'bottom')) && (
         <>
       {mobileNavStyle === 'bottom' && mobileBottomMenuOpen && (
         <div
@@ -3965,10 +4129,10 @@ export default function Layout({ children }) {
       )}
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex flex-col-reverse touch-manipulation">
           {/* News + casino bar — above nav when top bar stats selected */}
-          {mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && (
+          {mobileStatsDisplay === 'top_bar' && (
             <div data-layout="mobile-bottom-bar" className="flex items-stretch gap-2 px-3 py-2 safe-area-pb"
               style={{ backgroundColor: 'var(--noir-content)', borderTop: '1px solid var(--noir-border-mid)' }}>
-              {flashNews.length > 0 && (
+              {flashNews.length > 0 ? (
                 <div className="flex min-w-0 flex-1 basis-0 items-center gap-1 overflow-hidden rounded px-2 py-1.5 border border-primary/15 bg-primary/5">
                   <Newspaper className="shrink-0 text-primary/70 self-center w-3 h-3" aria-hidden />
                   <div className="flex min-w-0 flex-1 items-baseline gap-1 overflow-hidden">
@@ -3976,6 +4140,8 @@ export default function Layout({ children }) {
                     {flashNews.length > 1 && <span className="shrink-0 font-heading text-[9px] tabular-nums leading-none text-primary/50">{flashIndex + 1}/{flashNews.length}</span>}
                   </div>
                 </div>
+              ) : (
+                <div className="min-h-[1.5rem] min-w-0 flex-1 basis-0 py-1.5" aria-hidden />
               )}
               {user && hasCasinoOrProperty && (
                 <SameRouteAwareLink
@@ -4279,20 +4445,20 @@ export default function Layout({ children }) {
                 )}
                 {/* Stats grid */}
                 <div className="grid grid-cols-2 gap-2">
-                  {rankProgress && (
-                    <div className="col-span-2 flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
-                      <TrendingUp size={18} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-heading text-xs truncate" style={{ color: 'var(--noir-muted)' }}>{rankProgress.current_rank_name}</p>
-                        <div className="h-1.5 w-full rounded-full mt-1 overflow-hidden" style={{ backgroundColor: 'var(--noir-raised)' }}>
-                          <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
-                        </div>
+                  <div className="col-span-2 flex items-center gap-2 py-2 px-3 rounded-lg border min-h-[52px]" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
+                    <TrendingUp size={18} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-heading text-xs truncate" style={{ color: 'var(--noir-muted)' }}>{rankProgress?.current_rank_name || '\u00a0'}</p>
+                      <div className="h-1.5 w-full rounded-full mt-1 overflow-hidden" style={{ backgroundColor: 'var(--noir-raised)' }}>
+                        <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress?.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
                       </div>
-                      <span className="font-heading text-xs font-bold shrink-0" style={{ color: 'var(--noir-primary)' }}>
-                        {(user?.premium_rank_bar ? (Number(rankProgress.rank_points_progress) || 0).toFixed(2) : (Number(rankProgress.rank_points_progress) || 0).toFixed(0))}%
-                      </span>
                     </div>
-                  )}
+                    <span className="font-heading text-xs font-bold shrink-0" style={{ color: 'var(--noir-primary)' }}>
+                      {rankProgress
+                        ? `${(user?.premium_rank_bar ? (Number(rankProgress.rank_points_progress) || 0).toFixed(2) : (Number(rankProgress.rank_points_progress) || 0).toFixed(0))}%`
+                        : ''}
+                    </span>
+                  </div>
                   {[
                     { icon: <DollarSign size={18} style={{ color: 'var(--noir-primary)' }} />, value: formatMoney(user.money) },
                     { icon: <Zap size={18} style={{ color: 'var(--noir-foreground)' }} />, value: `${formatInt(user.points)} pts` },
@@ -4305,12 +4471,14 @@ export default function Layout({ children }) {
                       <span className="font-heading text-sm truncate" style={{ color: 'var(--noir-foreground)' }}>{s.value}</span>
                     </div>
                   ))}
-                  {hasCasinoOrProperty && (
-                  <div className="col-span-2 flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
+                  <div className="col-span-2 flex items-center gap-2 py-2 px-3 rounded-lg border min-h-[40px]" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
                     <Building2 size={18} className="shrink-0 text-emerald-400" />
-                    <span className="font-heading text-xs truncate" style={{ color: 'var(--noir-foreground)' }}>C {formatMoneyCompact(user.casino_profit ?? 0)} · P {formatCompact(user.property_profit ?? 0)} pts</span>
+                    <span className="font-heading text-xs truncate" style={{ color: 'var(--noir-foreground)' }}>
+                      {(hasCasinoOrProperty || Number(user.casino_profit) !== 0)
+                        ? `C ${formatMoneyCompact(user.casino_profit ?? 0)} · P ${formatCompact(user.property_profit ?? 0)} pts`
+                        : '—'}
+                    </span>
                   </div>
-                  )}
                 </div>
                 {/* Family command center — same panel slot as desktop sidebar */}
                 <div className="pt-2 border-t flex flex-col min-h-0 overflow-hidden" style={{ borderColor: 'var(--noir-border)', maxHeight: '320px' }}>

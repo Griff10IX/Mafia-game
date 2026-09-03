@@ -2825,7 +2825,12 @@ async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dic
         "created_at": now,
     })
     await log_gambling(current_user.get("id") or "", current_user.get("username") or "?", "sports_bet", {"bet_id": bet_id, "event_name": ev.get("name"), "option_name": opt.get("name"), "odds": float(opt.get("odds", 1)), "stake": stake, "status": "open"})
-    return {"message": f"Bet placed: ${stake:,} on {opt.get('name')}", "bet_id": bet_id}
+    updated = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1})
+    return {
+        "message": f"Bet placed: ${stake:,} on {opt.get('name')}",
+        "bet_id": bet_id,
+        "new_balance": int((updated or {}).get("money") or 0),
+    }
 
 
 async def sports_betting_my_bets(current_user: dict = Depends(get_current_user_verified)):

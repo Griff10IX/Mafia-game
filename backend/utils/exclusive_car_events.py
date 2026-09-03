@@ -28,6 +28,7 @@ EVENT_LABELS = {
     "weekly_id_rotate": "Weekly instance id rotate",
     "scraped": "Scrapped",
     "melted": "Melted",
+    "dropped": "Dropped",
 }
 
 

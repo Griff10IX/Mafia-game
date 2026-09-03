@@ -6,16 +6,6 @@
 
 [hr]
 
-[size=1.5][b][color=#2ECC71]2026-09-03[/color][/b] — [b]Hitman counter vs protection[/b][/size]
-[quote]
-[list]
-[*][color=#888888][b]Fixed:[/b] If someone fails a Hitman contract on you and you get the [b]25% counter[/b], you can hire against them even if they have [b]anti-hitman protection[/b].[/color]
-[*][color=#888888][b]Changed:[/b] Hiring a hitman yourself [b]ends your anti-hitman protection[/b] (2h rebuy cooldown still applies). You cannot sit behind a shield while sending hitmen.[/color]
-[/list]
-[/quote]
-
-[hr]
-
 [size=1.5][b][color=#2ECC71]2026-09-03[/color][/b] — [b]Garage Drop All[/b][/size]
 [quote]
 [list]

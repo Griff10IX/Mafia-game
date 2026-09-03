@@ -417,7 +417,7 @@ export default function Blackjack() {
     try {
       const res = await api.post('/casino/blackjack/start', { bet: betNum });
       setGame(res.data);
-      if (res.data?.new_balance != null) refreshUser();
+      if (res.data?.new_balance != null) refreshUser(res.data.new_balance);
     } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
     finally { setLoading(false); }
   };

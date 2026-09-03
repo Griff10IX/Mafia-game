@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Mail, MailOpen, Send, X, ChevronRight, Bot, MessageCircle, Trophy, Skull, Bell } from 'lucide-react';
 import api, { apiGetWithResumeRetries } from '../../utils/api';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import { readDashboardSessionCache } from '../../utils/dashboardSessionCache';
 import { toast } from 'sonner';
 import { parseForumContent } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
@@ -23,6 +25,22 @@ import MessageComposer from './MessageComposer';
 import UserToField from './UserToField';
 
 const VALID_FILTERS = ['all', 'unread', 'sent', 'rank_up', 'reward', 'bodyguard', 'attack', 'system', 'user_message', 'staff_bot_client'];
+const INBOX_PAGE_CACHE_PREFIX = 'inbox_page_v1';
+
+function inboxCacheKey() {
+  const id = readDashboardSessionCache()?.user?.id;
+  return id ? `${INBOX_PAGE_CACHE_PREFIX}:${id}` : INBOX_PAGE_CACHE_PREFIX;
+}
+
+function readInboxPageCache() {
+  const j = readSessionJson(inboxCacheKey());
+  if (!j || typeof j !== 'object') return null;
+  return j;
+}
+
+function writeInboxPageCache(partial) {
+  writeSessionJson(inboxCacheKey(), { ...readInboxPageCache(), ...partial });
+}
 
 function getTimeAgo(dateString) {
   const date = new Date(dateString);
@@ -335,12 +353,17 @@ export default function Inbox() {
   const filterParam = searchParams.get('filter');
   const initialFilter = VALID_FILTERS.includes(filterParam) ? filterParam : 'all';
 
-  const [notifications, setNotifications] = useState([]);
-  const [sentMessages, setSentMessages] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const inboxBoot = readInboxPageCache();
+  const [notifications, setNotifications] = useState(() => (
+    Array.isArray(inboxBoot?.notifications) ? inboxBoot.notifications : []
+  ));
+  const [sentMessages, setSentMessages] = useState(() => (
+    Array.isArray(inboxBoot?.sentMessages) ? inboxBoot.sentMessages : []
+  ));
+  const [unreadCount, setUnreadCount] = useState(() => Number(inboxBoot?.unreadCount) || 0);
   const [readRetentionDays, setReadRetentionDays] = useState(5);
   const [unreadRetentionDays, setUnreadRetentionDays] = useState(60);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(() => Array.isArray(inboxBoot?.notifications));
   const [filter, setFilter] = useState(initialFilter);
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [showCompose, setShowCompose] = useState(false);
@@ -360,8 +383,11 @@ export default function Inbox() {
     const silent = opts.silent === true;
     try {
       const response = await apiGetWithResumeRetries('/notifications');
-      setNotifications(response.data?.notifications ?? []);
-      setUnreadCount(response.data?.unread_count ?? 0);
+      const list = response.data?.notifications ?? [];
+      const unread = response.data?.unread_count ?? 0;
+      setNotifications(list);
+      setUnreadCount(unread);
+      writeInboxPageCache({ notifications: list, unreadCount: unread });
       if (response.data?.read_retention_days != null) {
         setReadRetentionDays(response.data.read_retention_days);
       }
@@ -382,9 +408,9 @@ export default function Inbox() {
       const response = await apiGetWithResumeRetries('/notifications/sent');
       const sent = response.data?.sent_messages ?? [];
       setSentMessages(sent);
+      writeInboxPageCache({ sentMessages: sent });
       return sent;
     } catch (error) {
-      setSentMessages([]);
       return [];
     }
   }, []);

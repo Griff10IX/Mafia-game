@@ -852,6 +852,8 @@ def register(router):
             "shortfall": shortfall if win and owner_id else 0,
             "buy_back_offer": buy_back_offer if win and owner_id else None,
         }
+        updated_player = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "money": 1})
+        out["new_balance"] = int((updated_player or {}).get("money") or 0)
         if request.client_spin_id is not None:
             try:
                 out["client_spin_id"] = int(request.client_spin_id)

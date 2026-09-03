@@ -7,17 +7,13 @@ import styles from '../styles/noir.module.css';
 const CHUNK_ERROR_RELOAD_KEY = 'chunk_error_reload_at';
 const CHUNK_ERROR_RELOAD_COOLDOWN_MS = 15000;
 /** Never leave players on "Loading new version…" longer than this. */
-const CHUNK_LOADING_SAFETY_MS = 1500;
+const CHUNK_LOADING_SAFETY_MS = 3500;
 
 function hardReloadForNewBuild() {
-  // Do NOT clear CHUNK_ERROR_RELOAD_KEY here — clearing it caused an infinite
-  // "Loading new version…" reload loop (cooldown never stuck).
   try {
-    const path = window.location.pathname || '/';
-    const params = new URLSearchParams(window.location.search || '');
-    params.set('_mw', String(Date.now()));
-    const q = params.toString();
-    window.location.replace(`${path}?${q}${window.location.hash || ''}`);
+    const u = new URL(window.location.href);
+    u.searchParams.set('_mw', String(Date.now()));
+    window.location.replace(u.toString());
   } catch (_) {
     window.location.reload();
   }
@@ -179,20 +175,8 @@ export default class ErrorBoundary extends Component {
         }
         return (
           <div className={`${styles.pageContent} min-h-[40vh] flex items-center justify-center p-8`}>
-            <div className={`${styles.panel} rounded-md p-6 max-w-md text-center space-y-4`}>
+            <div className={`${styles.panel} rounded-md p-6 max-w-md text-center`}>
               <p className="text-sm text-mutedForeground font-heading">Loading new version…</p>
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    sessionStorage.removeItem(CHUNK_ERROR_RELOAD_KEY);
-                  } catch (_) {}
-                  hardReloadForNewBuild();
-                }}
-                className="px-4 py-2 rounded-sm font-heading font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/50 hover:bg-primary/30 transition-smooth"
-              >
-                Reload now
-              </button>
             </div>
           </div>
         );
