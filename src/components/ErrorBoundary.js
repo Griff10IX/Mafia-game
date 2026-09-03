@@ -14,8 +14,12 @@ function hardReloadForNewBuild() {
     sessionStorage.removeItem(CHUNK_ERROR_RELOAD_KEY);
   } catch (_) {}
   try {
-    // Land on a fresh shell URL so phones drop a stale deep-link + chunk map after deploy.
-    window.location.replace(`/?_mw=${Date.now()}`);
+    // Stay on the same route — `/?_mw=` dumps logged-in players onto the dashboard.
+    const path = window.location.pathname || '/';
+    const params = new URLSearchParams(window.location.search || '');
+    params.set('_mw', String(Date.now()));
+    const q = params.toString();
+    window.location.replace(`${path}?${q}${window.location.hash || ''}`);
   } catch (_) {
     window.location.reload();
   }
