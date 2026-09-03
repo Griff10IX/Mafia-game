@@ -11,9 +11,11 @@ const CHUNK_LOADING_SAFETY_MS = 3500;
 
 function hardReloadForNewBuild() {
   try {
-    const u = new URL(window.location.href);
-    u.searchParams.set('_mw', String(Date.now()));
-    window.location.replace(u.toString());
+    sessionStorage.removeItem(CHUNK_ERROR_RELOAD_KEY);
+  } catch (_) {}
+  try {
+    // Land on a fresh shell URL so phones drop a stale deep-link + chunk map after deploy.
+    window.location.replace(`/?_mw=${Date.now()}`);
   } catch (_) {
     window.location.reload();
   }

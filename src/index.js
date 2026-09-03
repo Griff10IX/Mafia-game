@@ -25,9 +25,10 @@ function isChunkLoadError(message) {
 
 function hardReloadForNewBuild() {
   try {
-    const u = new URL(window.location.href);
-    u.searchParams.set("_mw", String(Date.now()));
-    window.location.replace(u.toString());
+    sessionStorage.removeItem(CHUNK_ERROR_RELOAD_KEY);
+  } catch (_) {}
+  try {
+    window.location.replace(`/?_mw=${Date.now()}`);
   } catch (_) {
     window.location.reload();
   }

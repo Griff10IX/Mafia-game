@@ -52,6 +52,14 @@ server {
         add_header Cache-Control "public" always;
     }
 
+    # Hashed JS/CSS: never serve index.html for a missing chunk (that breaks the app with
+    # ChunkLoadError / "Could not load this page" after deploys).
+    location /static/ {
+        try_files $uri =404;
+        expires 1y;
+        add_header Cache-Control "public, immutable" always;
+    }
+
     # Required for SPA: /travel/, /account/dashboard, etc. must serve index.html so React Router
     # can run. Without try_files, deep links often 404/403. If you still see 503, the origin was
     # down, nginx misconfigured, or Cloudflare could not reach origin (orange-cloud proxy still
