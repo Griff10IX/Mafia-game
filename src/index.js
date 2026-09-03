@@ -23,6 +23,16 @@ function isChunkLoadError(message) {
   );
 }
 
+function hardReloadForNewBuild() {
+  try {
+    const u = new URL(window.location.href);
+    u.searchParams.set("_mw", String(Date.now()));
+    window.location.replace(u.toString());
+  } catch (_) {
+    window.location.reload();
+  }
+}
+
 function tryReloadForChunkError() {
   const attempt = () => {
     try {
@@ -47,7 +57,8 @@ function tryReloadForChunkError() {
       const now = Date.now();
       if (last && now - parseInt(last, 10) < CHUNK_ERROR_RELOAD_COOLDOWN_MS) return;
       sessionStorage.setItem(CHUNK_ERROR_RELOAD_KEY, String(now));
-      window.location.reload();
+      // Cache-bust so phones do not keep a stale index.html pointing at deleted chunks.
+      hardReloadForNewBuild();
     } catch (_) {}
   };
   // Brief delay so Safari's networking can wake after background discard.

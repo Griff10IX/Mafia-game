@@ -3,11 +3,34 @@ import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
-/** Same key/cooldown as src/index.js — avoid infinite reload when a lazy chunk (e.g. Keno) fails repeatedly. */
+/** Same key/cooldown as src/index.js — avoid infinite reload when a lazy chunk fails repeatedly. */
 const CHUNK_ERROR_RELOAD_KEY = 'chunk_error_reload_at';
 const CHUNK_ERROR_RELOAD_COOLDOWN_MS = 15000;
+/** Never leave players on "Loading new version…" longer than this. */
+const CHUNK_LOADING_SAFETY_MS = 3500;
 
-function scheduleChunkErrorReloadOnce() {
+function hardReloadForNewBuild() {
+  try {
+    const u = new URL(window.location.href);
+    u.searchParams.set('_mw', String(Date.now()));
+    window.location.replace(u.toString());
+  } catch (_) {
+    window.location.reload();
+  }
+}
+
+/**
+ * Schedule one cache-busting reload for a stale chunk after deploy.
+ * Always returns immediately; call onSkipped when the reload will not run
+ * (cooldown) so the UI is not stuck on "Loading new version…".
+ */
+function scheduleChunkErrorReloadOnce({ onSkipped } = {}) {
+  const notifySkipped = () => {
+    try {
+      if (typeof onSkipped === 'function') onSkipped();
+    } catch (_) {}
+  };
+
   const attempt = () => {
     try {
       if (typeof document !== 'undefined' && document.hidden) {
@@ -17,7 +40,7 @@ function scheduleChunkErrorReloadOnce() {
           setTimeout(attempt, 800);
         };
         document.addEventListener('visibilitychange', onVis);
-        return true;
+        return;
       }
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         const onOnline = () => {
@@ -25,26 +48,26 @@ function scheduleChunkErrorReloadOnce() {
           setTimeout(attempt, 600);
         };
         window.addEventListener('online', onOnline);
-        return true;
+        return;
       }
       const last = sessionStorage.getItem(CHUNK_ERROR_RELOAD_KEY);
       const now = Date.now();
       if (last && now - parseInt(last, 10) < CHUNK_ERROR_RELOAD_COOLDOWN_MS) {
-        return false;
+        notifySkipped();
+        return;
       }
       sessionStorage.setItem(CHUNK_ERROR_RELOAD_KEY, String(now));
-      window.location.reload();
-      return true;
+      hardReloadForNewBuild();
     } catch (_) {
-      return false;
+      notifySkipped();
     }
   };
   setTimeout(attempt, 700);
-  return true;
 }
 
 export default class ErrorBoundary extends Component {
   state = { hasError: false, error: null, reported: false, reportLoading: false, chunkReloadSkipped: false };
+  _chunkSafetyTimer = null;
 
   static getDerivedStateFromError(error) {
     return { hasError: true, error, chunkReloadSkipped: false };
@@ -54,14 +77,35 @@ export default class ErrorBoundary extends Component {
     console.error('ErrorBoundary caught:', error, info);
     const msg = error?.message || String(error);
     if (this.isChunkLoadError(msg)) {
-      const scheduled = scheduleChunkErrorReloadOnce();
-      if (!scheduled) {
+      scheduleChunkErrorReloadOnce({
+        onSkipped: () => {
+          if (this._chunkSafetyTimer) {
+            clearTimeout(this._chunkSafetyTimer);
+            this._chunkSafetyTimer = null;
+          }
+          this.setState({ chunkReloadSkipped: true });
+        },
+      });
+      // Safety net: if reload is waiting on visibility/online or never fires, unstick the UI.
+      if (this._chunkSafetyTimer) clearTimeout(this._chunkSafetyTimer);
+      this._chunkSafetyTimer = setTimeout(() => {
         this.setState({ chunkReloadSkipped: true });
-      }
+      }, CHUNK_LOADING_SAFETY_MS);
+    }
+  }
+
+  componentWillUnmount() {
+    if (this._chunkSafetyTimer) {
+      clearTimeout(this._chunkSafetyTimer);
+      this._chunkSafetyTimer = null;
     }
   }
 
   retry = () => {
+    if (this._chunkSafetyTimer) {
+      clearTimeout(this._chunkSafetyTimer);
+      this._chunkSafetyTimer = null;
+    }
     this.setState({ hasError: false, error: null, chunkReloadSkipped: false });
   };
 
@@ -102,7 +146,7 @@ export default class ErrorBoundary extends Component {
               <div className={`${styles.panel} rounded-md p-6 max-w-md text-center space-y-4`}>
                 <h2 className="text-lg font-heading font-bold text-primary">Could not load this page</h2>
                 <p className="text-sm text-mutedForeground font-heading">
-                  The game code bundle failed to load (often right after a deploy). An automatic reload was skipped so your tab would not loop forever.
+                  The game code bundle failed to load (often right after a deploy). Tap reload for a fresh copy.
                 </p>
                 <div className="flex flex-wrap gap-3 justify-center">
                   <button
@@ -111,7 +155,7 @@ export default class ErrorBoundary extends Component {
                       try {
                         sessionStorage.removeItem(CHUNK_ERROR_RELOAD_KEY);
                       } catch (_) {}
-                      window.location.reload();
+                      hardReloadForNewBuild();
                     }}
                     className="px-4 py-2 rounded-sm font-heading font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/50 hover:bg-primary/30 transition-smooth"
                   >
