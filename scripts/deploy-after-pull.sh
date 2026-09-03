@@ -82,6 +82,17 @@ if [ -d build ]; then
   mv build build.prev
 fi
 mv build.next build
+# Keep the previous build's hashed assets so tabs still running the old index.html can
+# finish loading their chunks instead of hitting a 404 mid-session.
+if [ -d build.prev/static ]; then
+  mkdir -p build/static
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --ignore-existing build.prev/static/ build/static/
+  else
+    cp -an build.prev/static/. build/static/ 2>/dev/null || true
+  fi
+  ok "Kept previous static assets for in-flight clients"
+fi
 rm -rf build.prev
 ok "build/ rotated - nginx will serve new bundle"
 echo
