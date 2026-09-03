@@ -24,11 +24,8 @@ function isChunkLoadError(message) {
 }
 
 function hardReloadForNewBuild() {
+  // Do NOT clear CHUNK_ERROR_RELOAD_KEY here — that caused an infinite reload loop.
   try {
-    sessionStorage.removeItem(CHUNK_ERROR_RELOAD_KEY);
-  } catch (_) {}
-  try {
-    // Stay on the same route — `/?_mw=` dumps logged-in players onto the dashboard.
     const path = window.location.pathname || "/";
     const params = new URLSearchParams(window.location.search || "");
     params.set("_mw", String(Date.now()));
