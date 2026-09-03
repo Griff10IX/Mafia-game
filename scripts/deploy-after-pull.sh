@@ -55,6 +55,15 @@ build_start=$(date +%s)
 info "npm run build - usually 2-5 minutes"
 echo
 
+# Snapshot live hashed assets BEFORE compile. BUILD_PATH should leave build/ alone, but if
+# anything wipes or replaces it mid-build we still have a copy to merge after rotate.
+rm -rf build.static.prev
+if [ -d build/static ]; then
+  mkdir -p build.static.prev
+  cp -a build/static/. build.static.prev/
+  ok "Snapshotted live static/ -> build.static.prev"
+fi
+
 rm -rf build.next
 
 cleanup_failed_build() {
@@ -70,6 +79,9 @@ if [ ! -f build.next/index.html ]; then
   exit 1
 fi
 
+# Bust Cloudflare/HTML caches that ignore query strings: unique comment changes ETag/size.
+printf '\n<!-- build %s -->\n' "$(date -u +%Y%m%dT%H%M%SZ)" >> build.next/index.html
+
 build_secs=$(( $(date +%s) - build_start ))
 ok "Build finished in ${build_secs}s"
 echo
@@ -82,18 +94,26 @@ if [ -d build ]; then
   mv build build.prev
 fi
 mv build.next build
-# Keep the previous build's hashed assets so tabs still running the old index.html can
-# finish loading their chunks instead of hitting a 404 mid-session.
-if [ -d build.prev/static ]; then
+
+merge_static_prev() {
+  local src="$1"
+  [ -d "$src" ] || return 0
   mkdir -p build/static
   if command -v rsync >/dev/null 2>&1; then
-    rsync -a --ignore-existing build.prev/static/ build/static/
+    rsync -a --ignore-existing "$src"/ build/static/
   else
-    cp -an build.prev/static/. build/static/ 2>/dev/null || true
+    cp -an "$src"/. build/static/ 2>/dev/null || true
   fi
-  ok "Kept previous static assets for in-flight clients"
+}
+
+# Prefer the pre-build snapshot; also merge build.prev in case snapshot was empty.
+merge_static_prev build.static.prev
+merge_static_prev build.prev/static
+if [ -d build.static.prev ] || [ -d build.prev/static ]; then
+  ok "Merged previous static assets for in-flight clients"
 fi
 rm -rf build.prev
+# Keep build.static.prev until the next deploy replaces it (extra safety net).
 ok "build/ rotated - nginx will serve new bundle"
 echo
 

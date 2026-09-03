@@ -11,6 +11,15 @@ const CHUNK_LOADING_SAFETY_MS = 3500;
 
 function hardReloadForNewBuild() {
   try {
+    if (typeof caches !== 'undefined' && caches.keys) {
+      caches.keys().then((keys) => {
+        keys.forEach((k) => {
+          try { caches.delete(k); } catch (_) {}
+        });
+      }).catch(() => {});
+    }
+  } catch (_) {}
+  try {
     const u = new URL(window.location.href);
     u.searchParams.set('_mw', String(Date.now()));
     window.location.replace(u.toString());
