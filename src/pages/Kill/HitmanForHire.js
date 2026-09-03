@@ -631,11 +631,15 @@ export default function HitmanForHire() {
           <li>Needs <span className="text-zinc-200">at least 2</span> bodyguards — cannot hit a lone Slot 1 guard.</li>
           <li>Success: silent kill (no witnesses). Owner learns a hitman struck — <span className="text-zinc-200">not who paid</span>.</li>
           <li>Victim locked from Hitman for <span className="text-zinc-200">24h</span> after a successful strike.</li>
-          <li>Fail: 10% free second attempt · target may get 25% off vs you for 24h · success has 25% chance of a free token.</li>
+          <li>
+            Fail: 10% free second attempt · target may get 25% off vs you for 24h (that counter{' '}
+            <span className="text-zinc-200">pierces</span> your anti-hitman protection) · success has 25% chance of a free token.
+          </li>
           <li>
             <span className="text-zinc-200">Anti-hitman protection</span>: {fmtPts(protectionCost)} or{' '}
-            {fmtRespect(protectionRespectCost)} for {protectionDays} days — blocks all contracts on you. Cannot stack.
-            After it ends: <span className="text-zinc-200">{protectionRebuyHours}h</span> before you can buy again.
+            {fmtRespect(protectionRespectCost)} for {protectionDays} days — blocks contracts on you. Cannot stack.
+            Hiring a hitman yourself <span className="text-zinc-200">ends your shield</span> (then{' '}
+            {protectionRebuyHours}h rebuy cooldown). After natural expiry: same {protectionRebuyHours}h wait.
           </li>
         </ul>
       </div>
@@ -680,10 +684,22 @@ export default function HitmanForHire() {
               <div className="font-bold uppercase tracking-wider text-[9px] opacity-80">
                 {lookup.username || username}
               </div>
-              <p className="mt-0.5 leading-snug">{lookup.hireable ? 'Contract available — pick a tier below.' : lookup.reason || 'Not hireable.'}</p>
-              {lookup.protected && lookup.protection_until && (
+              <p className="mt-0.5 leading-snug">
+                {lookup.hireable
+                  ? lookup.counter_bypass_protection
+                    ? lookup.reason || 'Counter-contract available — their shield does not block you.'
+                    : 'Contract available — pick a tier below.'
+                  : lookup.reason || 'Not hireable.'}
+              </p>
+              {lookup.protected && lookup.protection_until && !lookup.hireable && (
                 <p className="mt-1 flex items-center gap-1 text-[9px] text-zinc-400">
                   <Shield size={10} /> Protected until {new Date(lookup.protection_until).toLocaleString()}
+                </p>
+              )}
+              {lookup.counter_bypass_protection && lookup.protection_until && (
+                <p className="mt-1 flex items-center gap-1 text-[9px] text-zinc-400">
+                  <Shield size={10} /> They still have protection until{' '}
+                  {new Date(lookup.protection_until).toLocaleString()} — your counter ignores it.
                 </p>
               )}
               {lookup.on_cooldown && lookup.cooldown_until && (

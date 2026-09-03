@@ -71,6 +71,19 @@ def _parse_iso(val) -> Optional[datetime]:
         return None
 
 
+def _has_active_counter_discount(hirer: Optional[dict], target_id: str, now: Optional[datetime] = None) -> bool:
+    """True if this hirer has an active 25% counter-offer vs target (from a failed hit they took)."""
+    if not hirer or not target_id:
+        return False
+    now = now or _now()
+    until = _parse_iso(hirer.get("hitman_discount_until"))
+    return bool(
+        hirer.get("hitman_discount_vs_user_id") == target_id
+        and until
+        and until > now
+    )
+
+
 def _tiers_payload() -> List[dict]:
     return [
         {
@@ -492,8 +505,16 @@ async def _hitman_lookup_impl(username: str, current_user: dict):
             "reason": CIVILIAN_PROTECTION_HITMAN_BLOCKED_DETAIL,
         }
 
+    hirer_disc = await db.users.find_one(
+        {"id": current_user["id"]},
+        {"_id": 0, "hitman_discount_vs_user_id": 1, "hitman_discount_until": 1},
+    ) or {}
+    counter_bypass = _has_active_counter_discount(hirer_disc, target["id"])
+
+    now_lookup = _now()
     prot = _parse_iso(target.get("hitman_protection_until"))
-    if prot and prot > _now():
+    prot_active = bool(prot and prot > now_lookup)
+    if prot_active and not counter_bypass:
         return {
             "ok": True,
             "hireable": False,
@@ -504,7 +525,7 @@ async def _hitman_lookup_impl(username: str, current_user: dict):
         }
 
     cd = _parse_iso(target.get("hitman_victim_cooldown_until"))
-    if cd and cd > _now():
+    if cd and cd > now_lookup:
         return {
             "ok": True,
             "hireable": False,
@@ -514,7 +535,7 @@ async def _hitman_lookup_impl(username: str, current_user: dict):
             "reason": "A hitman recently struck this target — try again later.",
         }
 
-    today = _today_utc()
+    today = _today_utc(now_lookup)
     if await _hirer_success_today(current_user["id"], target["id"], today):
         return {
             "ok": True,
@@ -531,12 +552,17 @@ async def _hitman_lookup_impl(username: str, current_user: dict):
             "username": target.get("username"),
             "reason": reason,
         }
-    return {
+    out = {
         "ok": True,
         "hireable": True,
         "username": target.get("username"),
         "reason": None,
     }
+    if counter_bypass and prot_active:
+        out["counter_bypass_protection"] = True
+        out["protection_until"] = prot.isoformat()
+        out["reason"] = "Counter-contract: their anti-hitman protection does not block you."
+    return out
 
 
 async def _hitman_hire_impl(body: HireBody, current_user: dict):
@@ -559,24 +585,8 @@ async def _hitman_hire_impl(body: HireBody, current_user: dict):
         raise HTTPException(status_code=403, detail=CIVILIAN_PROTECTION_HITMAN_BLOCKED_DETAIL)
 
     now = _now()
-    prot = _parse_iso(target.get("hitman_protection_until"))
-    if prot and prot > now:
-        raise HTTPException(status_code=400, detail="This player has anti-hitman protection")
-
-    cd = _parse_iso(target.get("hitman_victim_cooldown_until"))
-    if cd and cd > now:
-        raise HTTPException(status_code=400, detail="A hitman recently struck this target — try again later")
-
-    today = _today_utc(now)
     hirer_id = current_user["id"]
-    if await _hirer_success_today(hirer_id, target["id"], today):
-        raise HTTPException(status_code=400, detail="You already landed a hitman kill on this player today")
-
-    visible, _filled, reason = await _visible_robot_bg(target["id"])
-    if reason or not visible:
-        raise HTTPException(status_code=400, detail=reason or "No valid robot bodyguard")
-
-    hirer = await db.users.find_one(
+    hirer_pre = await db.users.find_one(
         {"id": hirer_id},
         {
             "_id": 0,
@@ -589,23 +599,46 @@ async def _hitman_hire_impl(body: HireBody, current_user: dict):
             "hitman_hires": 1,
             "hitman_points_spent": 1,
             "hitman_kills": 1,
+            "hitman_protection_until": 1,
         },
     ) or {}
+    has_discount = _has_active_counter_discount(hirer_pre, target["id"], now)
 
+    prot = _parse_iso(target.get("hitman_protection_until"))
+    if prot and prot > now and not has_discount:
+        raise HTTPException(status_code=400, detail="This player has anti-hitman protection")
+
+    cd = _parse_iso(target.get("hitman_victim_cooldown_until"))
+    if cd and cd > now:
+        raise HTTPException(status_code=400, detail="A hitman recently struck this target — try again later")
+
+    today = _today_utc(now)
+    if await _hirer_success_today(hirer_id, target["id"], today):
+        raise HTTPException(status_code=400, detail="You already landed a hitman kill on this player today")
+
+    visible, _filled, reason = await _visible_robot_bg(target["id"])
+    if reason or not visible:
+        raise HTTPException(status_code=400, detail=reason or "No valid robot bodyguard")
+
+    hirer = hirer_pre
     free_tokens = int(hirer.get("hitman_free_tokens") or 0)
     free_token_spent = False
     charged = 0
     base_cost = int(tier["cost"])
-    discount_until = _parse_iso(hirer.get("hitman_discount_until"))
-    discount_vs = hirer.get("hitman_discount_vs_user_id")
-    has_discount = bool(
-        discount_vs == target["id"] and discount_until and discount_until > now
-    )
+    # Hiring drops your own shield (ends now → 2h rebuy cooldown still applies).
+    hirer_prot = _parse_iso(hirer.get("hitman_protection_until"))
+    protection_cleared = bool(hirer_prot and hirer_prot > now)
 
     if free_tokens >= 1:
         tok_update: Dict[str, Any] = {"$inc": {"hitman_free_tokens": -1, "hitman_hires": 1}}
+        unset_fields: Dict[str, str] = {}
         if has_discount:
-            tok_update["$unset"] = {"hitman_discount_vs_user_id": "", "hitman_discount_until": ""}
+            unset_fields["hitman_discount_vs_user_id"] = ""
+            unset_fields["hitman_discount_until"] = ""
+        if unset_fields:
+            tok_update["$unset"] = unset_fields
+        if protection_cleared:
+            tok_update["$set"] = {"hitman_protection_until": now.isoformat()}
         tok = await db.users.update_one(
             {"id": hirer_id, "hitman_free_tokens": {"$gte": 1}},
             tok_update,
@@ -618,8 +651,14 @@ async def _hitman_hire_impl(body: HireBody, current_user: dict):
         charged = int(base_cost * HITMAN_DISCOUNT_RATE) if has_discount else base_cost
         await _charge_points(hirer_id, charged)
         paid_update: Dict[str, Any] = {"$inc": {"hitman_hires": 1, "hitman_points_spent": charged}}
+        unset_fields = {}
         if has_discount:
-            paid_update["$unset"] = {"hitman_discount_vs_user_id": "", "hitman_discount_until": ""}
+            unset_fields["hitman_discount_vs_user_id"] = ""
+            unset_fields["hitman_discount_until"] = ""
+        if unset_fields:
+            paid_update["$unset"] = unset_fields
+        if protection_cleared:
+            paid_update["$set"] = {"hitman_protection_until": now.isoformat()}
         await db.users.update_one({"id": hirer_id}, paid_update)
 
     success = random.random() < float(tier["success_rate"])

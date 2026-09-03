@@ -6,6 +6,43 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-03[/color][/b] — [b]Hitman counter vs protection[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] If someone fails a Hitman contract on you and you get the [b]25% counter[/b], you can hire against them even if they have [b]anti-hitman protection[/b].[/color]
+[*][color=#888888][b]Changed:[/b] Hiring a hitman yourself [b]ends your anti-hitman protection[/b] (2h rebuy cooldown still applies). You cannot sit behind a shield while sending hitmen.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-09-03[/color][/b] — [b]Garage Drop All[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Garage[/b] has [b]Drop all[/b]. Tick the rarities you want (e.g. Common), confirm, and every unlisted car of those rarities is dumped. Cars listed for sale stay.[/color]
+[*][color=#888888][b]New:[/b] Dropping cars pays [b]0.1 rank points per car[/b] (14,000 cars = 1,400 rank points). No cash or bullets.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-09-02[/color][/b] — [b]Menus, refresh, casino cash[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] [b]Modern[/b] pages use grey zinc panels and borders again. Theme colour stays on buttons, names, and the left/right menus — not on every box.[/color]
+[*][color=#888888][b]New:[/b] [b]Modern[/b] pages, forum, game chat, and phone menus now match the new Modern left and right menus.[/color]
+[*][color=#888888][b]New:[/b] Left and right menus follow the [b]Layout mode[/b] you pick (Classic, Modern, Dark Mafia, Old School), same as the forum and the rest of the page. You can still set each menu to a different look in Theme Studio after that if you want them mixed.[/color]
+[*][color=#888888][b]Fixed:[/b] Crew war truce offers last [b]24 hours[/b] to accept or decline (was 30 minutes). Boss or Underboss can decline; after that a new offer is on a 24 hour cooldown.[/color]
+[*][color=#888888][b]Fixed:[/b] Rank progress, casino profit, notifications count, and the staff lock stay on the page when you refresh instead of flashing empty.[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Family HQ[/b] in the right menu keeps your crew (vault, rackets) while it refreshes instead of going blank on [b]Loading crew intel[/b].[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Inbox[/b] and [b]Forum[/b] keep the last list you saw while they reload, instead of going blank on refresh.[/color]
+[*][color=#888888][b]Fixed:[/b] Cash in the sidebar updates as soon as a casino bet settles. You do not need to refresh to see the new amount.[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Hitman for Hire[/b] stays in the Combat menu. It no longer pops in a moment after the page loads.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-31[/color][/b] — [b]Garage: faster bulk melt[/b][/size]
 [quote]
 [list]
