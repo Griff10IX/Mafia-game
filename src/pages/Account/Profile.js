@@ -613,10 +613,10 @@ const ProfileInfoCard = ({
                   className="w-full h-full p-0 border-0 bg-transparent cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-lg"
                   aria-label={`View ${profile.username} profile picture`}
                 >
-                  <img src={dossierAvatarUrl} alt="" className={`w-full h-full object-cover pointer-events-none ${isSystemAi ? 'object-[22%_14%]' : ''}`} />
+                  <img src={dossierAvatarUrl} alt="" className={`w-full h-full object-cover pointer-events-none ${isSystemAi ? 'object-[48%_22%]' : ''}`} />
                 </button>
               ) : (
-                <img src={dossierAvatarUrl} alt={`${profile.username} avatar`} className={`w-full h-full object-cover ${isSystemAi ? 'object-[22%_14%]' : ''}`} />
+                <img src={dossierAvatarUrl} alt={`${profile.username} avatar`} className={`w-full h-full object-cover ${isSystemAi ? 'object-[48%_22%]' : ''}`} />
               )
             ) : (
               <UserIcon size={26} className="text-mutedForeground" />
@@ -3564,7 +3564,7 @@ export default function Profile() {
                 <img
                   src={profile.profile_portrait_url}
                   alt="System AI"
-                  className="w-full max-h-[28rem] object-cover object-top"
+                  className="w-full aspect-[3/4] max-h-[36rem] object-cover object-[50%_42%]"
                 />
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent px-4 py-3">
                   <p className="text-[10px] font-heading font-bold uppercase tracking-[0.22em] text-amber-300">
