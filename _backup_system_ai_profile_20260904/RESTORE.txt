@@ -1,0 +1,10 @@
+﻿System AI profile backup — 2026-09-04
+
+To restore:
+  copy /Y _backup_system_ai_profile_20260904\system_ai_inbox.py backend\utils\system_ai_inbox.py
+  copy /Y _backup_system_ai_profile_20260904\profile.py backend\routers\account\profile.py
+  copy /Y _backup_system_ai_profile_20260904\system-ai-profile.jpg public\images\system-ai-profile.jpg
+  copy /Y _backup_system_ai_profile_20260904\Profile.js src\pages\Account\Profile.js
+  copy /Y _backup_system_ai_profile_20260904\SystemAiInboxMessage.js src\components\SystemAiInboxMessage.js
+
+Then: scripts\push-live.bat --restart "Revert System AI profile"

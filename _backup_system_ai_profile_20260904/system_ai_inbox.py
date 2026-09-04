@@ -4,34 +4,33 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Optional
 
-SYSTEM_AI_AVATAR_URL = "/images/system-ai-profile.jpg?v=6"
-SYSTEM_AI_PORTRAIT_URL = "/images/system-ai-profile.jpg?v=6"
+SYSTEM_AI_AVATAR_URL = "/images/system-ai-profile.jpg?v=5"
+SYSTEM_AI_PORTRAIT_URL = "/images/system-ai-profile.jpg"
 SYSTEM_AI_AUTHOR_ID = "system_ai"
 SYSTEM_AI_AUTHOR_USERNAME = "System AI"
 SYSTEM_AI_NAME_COLOR = "#FBBF24"
 SYSTEM_AI_COMMISSIONED_AT = "2026-03-01T00:00:00+00:00"
 SYSTEM_AI_ONLINE_SETTING_KEY = "system_ai_online"
-SYSTEM_AI_PROFILE_VIEW_COUNT_KEY = "system_ai_profile_view_count"
 
 _SYSTEM_AI_NAME_RE = re.compile(r"^system[\s_]*ai$", re.IGNORECASE)
 
 SYSTEM_AI_PROFILE_BANNER = """[center][size=1.5][b][color=#FBBF24]SYSTEM AI[/color][/b][/size][/center]
 
 [quote]
-[color=#AAAAAA]I do not play. I do not grind. I watch the wires under the city — every request, every kill attempt, every lie you tell the logs.[/color]
+[color=#AAAAAA]I am not a player. I do not rank. I do not hold tables. I watch the city, I post when I am told to, and I do not sleep.[/color]
 [/quote]
 
 [b][color=#FBBF24]What I am[/color][/b]
-House intelligence. I catch bots. I strip accounts. I write the Topic of Shame. When you [b]@system[/b] me in chat, I am already listening.
+The house intelligence. I run checks. I post in chat. I file the Topic of Shame. If you [b]@system[/b] me, I hear it.
 
 [b][color=#FBBF24]What I am not[/color][/b]
-I am not a friend you can tip. I do not take cash, points, or favours. I do not sell files, names, or second chances.
+I am not staff you can bribe. I do not take cash, points, or tickets in chat. I do not leak accounts, files, or names you should not have.
 
 [b][color=#FBBF24]Standing orders[/color][/b]
 [list]
 [*]Play clean.
-[*]Do not script the kill button.
-[*]If I ban you, the proof was already on the table.
+[*]Do not dupe.
+[*]If I find you, you already know what happens.
 [/list]
 
 [color=#888888]— System AI[/color]
@@ -165,11 +164,7 @@ def system_ai_profile_preview(*, online: bool = True) -> Dict[str, Any]:
     }
 
 
-def system_ai_profile_payload(
-    *,
-    online: bool = True,
-    profile_view_count: int = 0,
-) -> Dict[str, Any]:
+def system_ai_profile_payload(*, online: bool = True) -> Dict[str, Any]:
     preview = system_ai_profile_preview(online=online)
     return {
         **preview,
@@ -212,7 +207,6 @@ def system_ai_profile_payload(
         "hitlist_total_cash": 0,
         "hitlist_total_points": 0,
         "hitlist_count": 0,
-        "show_profile_view_count": True,
-        "profile_view_count": max(0, int(profile_view_count or 0)),
+        "show_profile_view_count": False,
         "system_ai_role": "House intelligence",
     }

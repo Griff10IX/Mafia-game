@@ -757,41 +757,13 @@ def register(router):
     ):
         """View a user's profile (requires auth). Pass include_honours=0 with GET .../profile/honours for faster parallel loads."""
         from utils.system_ai_inbox import (
-            SYSTEM_AI_AUTHOR_ID,
-            SYSTEM_AI_PROFILE_VIEW_COUNT_KEY,
             is_system_ai_profile_username,
             is_system_ai_shown_online,
             system_ai_profile_payload,
         )
 
         if is_system_ai_profile_username(username):
-            viewer_id = str(current_user.get("id") or "").strip()
-            view_count = 0
-            if (
-                count_view
-                and viewer_id
-                and viewer_id != SYSTEM_AI_AUTHOR_ID
-            ):
-                try:
-                    await db.game_settings.update_one(
-                        {"key": SYSTEM_AI_PROFILE_VIEW_COUNT_KEY},
-                        {"$inc": {"value": 1}},
-                        upsert=True,
-                    )
-                except Exception:
-                    logger.warning("system AI profile view increment failed", exc_info=True)
-            try:
-                vc_doc = await db.game_settings.find_one(
-                    {"key": SYSTEM_AI_PROFILE_VIEW_COUNT_KEY},
-                    {"_id": 0, "value": 1},
-                )
-                view_count = int((vc_doc or {}).get("value") or 0)
-            except Exception:
-                view_count = 0
-            return system_ai_profile_payload(
-                online=await is_system_ai_shown_online(db),
-                profile_view_count=view_count,
-            )
+            return system_ai_profile_payload(online=await is_system_ai_shown_online(db))
         user = await _find_user_by_profile_username(username, {"_id": 0, "password_hash": 0})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
