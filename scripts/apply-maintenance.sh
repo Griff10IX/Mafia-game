@@ -56,7 +56,7 @@ if by == "system_ai":
     headline = "System AI is updating"
     footer = "Posted by System AI"
     icon = (
-        '<img class="ai-avatar" src="/images/system-ai-profile.jpg?v=6" '
+        '<img class="ai-avatar" src="/images/system-ai-profile.jpg?v=7" '
         'alt="System AI" width="88" height="88" />'
     )
     line1 = f"Updating {what}." if what else "The streets are being patched."

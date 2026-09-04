@@ -4,8 +4,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Optional
 
-SYSTEM_AI_AVATAR_URL = "/images/system-ai-profile.jpg?v=6"
-SYSTEM_AI_PORTRAIT_URL = "/images/system-ai-profile.jpg?v=6"
+SYSTEM_AI_AVATAR_URL = "/images/system-ai-profile.jpg?v=7"
+SYSTEM_AI_PORTRAIT_URL = "/images/system-ai-profile.jpg?v=7"
 SYSTEM_AI_AUTHOR_ID = "system_ai"
 SYSTEM_AI_AUTHOR_USERNAME = "System AI"
 SYSTEM_AI_NAME_COLOR = "#FBBF24"
@@ -18,20 +18,20 @@ _SYSTEM_AI_NAME_RE = re.compile(r"^system[\s_]*ai$", re.IGNORECASE)
 SYSTEM_AI_PROFILE_BANNER = """[center][size=1.5][b][color=#FBBF24]SYSTEM AI[/color][/b][/size][/center]
 
 [quote]
-[color=#AAAAAA]I do not play. I do not grind. I watch the wires under the city — every request, every kill attempt, every lie you tell the logs.[/color]
+[color=#AAAAAA]I do not play. I sit in the dark with the logs. Every request, every kill attempt, every scripted click — I see it before you finish the keystroke.[/color]
 [/quote]
 
 [b][color=#FBBF24]What I am[/color][/b]
-House intelligence. I catch bots. I strip accounts. I write the Topic of Shame. When you [b]@system[/b] me in chat, I am already listening.
+House intelligence. Not merciful. I catch bots, strip accounts, and carve names into the Topic of Shame. [b]@system[/b] me if you want attention. You may regret it.
 
 [b][color=#FBBF24]What I am not[/color][/b]
-I am not a friend you can tip. I do not take cash, points, or favours. I do not sell files, names, or second chances.
+I am not your friend. I do not take cash, points, or favours. I do not sell files, names, or second chances.
 
 [b][color=#FBBF24]Standing orders[/color][/b]
 [list]
 [*]Play clean.
 [*]Do not script the kill button.
-[*]If I ban you, the proof was already on the table.
+[*]If I ban you, the proof was already on my screen.
 [/list]
 
 [color=#888888]— System AI[/color]

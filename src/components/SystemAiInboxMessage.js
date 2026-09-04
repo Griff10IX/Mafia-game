@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 
-export const SYSTEM_AI_AVATAR = '/images/system-ai-profile.jpg?v=6';
+export const SYSTEM_AI_AVATAR = '/images/system-ai-profile.jpg?v=7';
 export const SYSTEM_AI_PROFILE_PATH = '/profile/System%20AI';
 
 export function isSystemAiInbox(notification) {
