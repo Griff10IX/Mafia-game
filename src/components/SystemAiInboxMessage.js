@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom';
 
-export const SYSTEM_AI_AVATAR = '/images/system-ai-profile.jpg?v=7';
+export const SYSTEM_AI_AVATAR = '/images/system-ai-profile.jpg?v=8';
 export const SYSTEM_AI_PROFILE_PATH = '/profile/System%20AI';
 
 export function isSystemAiInbox(notification) {
   if (!notification) return false;
   if (notification.system_ai) return true;
-  return String(notification.avatar_url || '').includes('system-ai-avatar');
+  const av = String(notification.avatar_url || '');
+  return av.includes('system-ai-avatar') || av.includes('system-ai-profile');
 }
 
 export function isSystemAiAuthor(obj) {
@@ -24,7 +25,7 @@ export function ForumSystemAiAuthor({ className = '', avatarClassName = 'w-4 h-4
       title="System AI profile"
     >
       {showAvatar ? (
-        <img src={SYSTEM_AI_AVATAR} alt="" className={`${avatarClassName} rounded-full object-cover object-[22%_14%] border border-amber-400/40 shrink-0`} />
+        <img src={SYSTEM_AI_AVATAR} alt="" className={`${avatarClassName} rounded-full object-cover object-[48%_22%] border border-amber-400/40 shrink-0`} />
       ) : null}
       System AI
     </Link>
@@ -48,7 +49,8 @@ function bodyParagraphs(message) {
 
 export function SystemAiInboxMessage({ notification, className = '', kicker, title, children, bodyClassName }) {
   const paras = bodyParagraphs(notification?.message);
-  const avatar = notification?.avatar_url || SYSTEM_AI_AVATAR;
+  // Always use live System AI avatar — ignore stale avatar_url on old notifications
+  const avatar = SYSTEM_AI_AVATAR;
   const kickerText = (kicker || 'File check').trim() || 'File check';
 
   return (
@@ -58,7 +60,7 @@ export function SystemAiInboxMessage({ notification, className = '', kicker, tit
           <img
             src={avatar}
             alt=""
-            className="w-12 h-12 rounded-full object-cover object-[22%_14%] border border-amber-400/45 shadow-[0_0_14px_rgba(251,191,36,0.28)] shrink-0"
+            className="w-12 h-12 rounded-full object-cover object-[48%_22%] border border-amber-400/45 shadow-[0_0_14px_rgba(251,191,36,0.28)] shrink-0"
           />
         </Link>
         <div className="min-w-0">

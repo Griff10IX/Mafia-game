@@ -4,8 +4,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Optional
 
-SYSTEM_AI_AVATAR_URL = "/images/system-ai-profile.jpg?v=7"
-SYSTEM_AI_PORTRAIT_URL = "/images/system-ai-profile.jpg?v=7"
+SYSTEM_AI_AVATAR_URL = "/images/system-ai-profile.jpg?v=8"
+SYSTEM_AI_PORTRAIT_URL = "/images/system-ai-profile.jpg?v=8"
 SYSTEM_AI_AUTHOR_ID = "system_ai"
 SYSTEM_AI_AUTHOR_USERNAME = "System AI"
 SYSTEM_AI_NAME_COLOR = "#FBBF24"

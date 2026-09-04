@@ -586,7 +586,7 @@ const ProfileInfoCard = ({
 
   const isRobotBodyguard = Boolean(profile.is_npc && profile.is_bodyguard);
   const dossierAvatarUrl = isSystemAi
-    ? (profile.profile_portrait_url || profile.avatar_url || '/images/system-ai-profile.jpg?v=7')
+    ? (profile.profile_portrait_url || profile.avatar_url || '/images/system-ai-profile.jpg?v=8')
     : ((typeof profile?.avatar_url === 'string' && profile.avatar_url.trim())
       ? profile.avatar_url.trim()
       : (isRobotBodyguard

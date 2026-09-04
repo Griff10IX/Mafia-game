@@ -156,9 +156,9 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, isSent }) =
           <Send size={12} className="text-primary" />
         ) : isSystemAiInbox(notification) ? (
           <img
-            src={notification.avatar_url || SYSTEM_AI_AVATAR}
+            src={SYSTEM_AI_AVATAR}
             alt=""
-            className="w-5 h-5 rounded-full object-cover"
+            className="w-5 h-5 rounded-full object-cover object-[48%_22%]"
           />
         ) : (
           <Icon size={12} className={notification.read ? 'text-mutedForeground' : vis.icon} />
@@ -231,7 +231,13 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
       <div className="px-2.5 py-2 border-b border-primary/20 bg-primary/8">
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex items-start gap-2">
-            {notification.avatar_url ? (
+            {isSystemAiInbox(notification) ? (
+              <img
+                src={SYSTEM_AI_AVATAR}
+                alt=""
+                className="w-10 h-10 rounded-full object-cover object-[48%_22%] border border-amber-400/40 shrink-0"
+              />
+            ) : notification.avatar_url ? (
               <img
                 src={notification.avatar_url}
                 alt=""
