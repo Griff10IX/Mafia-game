@@ -473,12 +473,25 @@ function RightStatRow({ row, closeOnMobile }) {
   );
 }
 
+/** Normalize Link `to` so "/path?x=1" is pathname+search (not a fake pathname). */
+function normalizeLinkTo(to) {
+  if (typeof to !== 'string') return to;
+  const q = to.indexOf('?');
+  if (q === -1) return to;
+  const hash = to.indexOf('#', q);
+  if (hash === -1) return { pathname: to.slice(0, q), search: to.slice(q) };
+  return { pathname: to.slice(0, q), search: to.slice(q, hash), hash: to.slice(hash) };
+}
+
 function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown, onTouchStart, ...rest }) {
   const location = useLocation();
-  const requestedPath = typeof to === 'string' ? to : (to.pathname || '/');
+  const navigate = useNavigate();
+  const normalizedTo = normalizeLinkTo(to);
+  const requestedPath = typeof normalizedTo === 'string' ? normalizedTo : (normalizedTo.pathname || '/');
   const jailRedirect = !!(isClientJailed() && isJailBlockedFrontendPath(requestedPath));
-  const dest = jailRedirect ? '/crime/jail' : to;
+  const dest = jailRedirect ? '/crime/jail' : normalizedTo;
   const path = typeof dest === 'string' ? dest : (dest.pathname || '/');
+  const destSearch = jailRedirect ? '' : (typeof dest === 'string' ? '' : (dest.search || ''));
   const preload = preloadRouteHandlers(path);
   const warmTravel = path === '/game/travel' || path === '/travel';
   const warmMyStats = path === '/account/stats' || path === '/my-stats';
@@ -496,14 +509,32 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown,
     }
   };
   const mergeClick = (e) => {
-    const search = jailRedirect ? '' : (typeof to === 'string' ? '' : (to.search || ''));
     preloadRoute(path);
     if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
     if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
     if (warmJail) prefetchJailPageData({ force: false }).catch(() => {});
-    if (location.pathname === path && (location.search || '') === search) {
+
+    // Own the navigation for plain primary taps so iOS Safari / standalone
+    // never follows the raw <a href> (that breakout looks like a "new tab").
+    const isPlainPrimary =
+      !e.defaultPrevented
+      && e.button === 0
+      && !e.metaKey && !e.altKey && !e.ctrlKey && !e.shiftKey;
+    const targetAttr = (e.currentTarget && e.currentTarget.getAttribute)
+      ? e.currentTarget.getAttribute('target')
+      : null;
+    const opensNewContext = targetAttr && targetAttr !== '_self';
+
+    if (isPlainPrimary && !opensNewContext) {
       e.preventDefault();
-      window.dispatchEvent(new CustomEvent(SAME_ROUTE_NAV_CLICK, { detail: { pathname: path, search } }));
+      if (location.pathname === path && (location.search || '') === destSearch) {
+        window.dispatchEvent(new CustomEvent(SAME_ROUTE_NAV_CLICK, { detail: { pathname: path, search: destSearch } }));
+      } else {
+        navigate(dest);
+      }
+    } else if (location.pathname === path && (location.search || '') === destSearch) {
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent(SAME_ROUTE_NAV_CLICK, { detail: { pathname: path, search: destSearch } }));
     }
     if (onClick) onClick(e);
   };
@@ -517,7 +548,8 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown,
         if (onPointerDown) onPointerDown(e);
       }}
       onTouchStart={(e) => {
-        warmPointer();
+        // Modern iOS already fires pointerdown; skip double prefetch.
+        if (!(typeof window !== 'undefined' && window.PointerEvent)) warmPointer();
         if (onTouchStart) onTouchStart(e);
       }}
       onMouseEnter={(e) => {

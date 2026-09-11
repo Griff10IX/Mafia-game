@@ -566,6 +566,19 @@ input[type="button"],
   touch-action: manipulation;
 }
 
+/* Mobile chrome: reduce iOS long-press "Open in New Tab" on nav tiles */
+[data-layout="bottom-nav"] a,
+[data-layout="bottom-nav-submenu"] a,
+[data-layout="pocket-dock"] a,
+[data-layout="pocket-actions-sheet"] a,
+[data-layout="pocket-combat-sheet"] a,
+[data-layout="pocket-money-sheet"] a,
+[data-layout="pocket-menu-sheet"] a,
+[data-layout="sidebar"] a,
+[data-layout="right-sidebar"] a {
+  -webkit-touch-callout: none;
+}
+
 .tap-feedback {
   transition: transform 0.12s ease, opacity 0.12s ease, background-color 0.15s ease, border-color 0.15s ease;
 }

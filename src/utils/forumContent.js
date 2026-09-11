@@ -47,6 +47,20 @@ function safeUrl(url) {
   return '';
 }
 
+/** Same-origin game URLs should stay in-tab (iOS Safari + target=_blank feels like a "new tab"). */
+function forumAnchorAttrs(href) {
+  let sameOrigin = false;
+  try {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      const u = new URL(href, window.location.href);
+      sameOrigin = u.origin === window.location.origin;
+    }
+  } catch {
+    /* ignore */
+  }
+  return sameOrigin ? '' : ' target="_blank" rel="noopener noreferrer"';
+}
+
 function escapeHtml(s) {
   if (typeof s !== 'string') return '';
   return s
@@ -853,13 +867,13 @@ export function parseForumContent(content, options = {}) {
   s = s.replace(/\[url=(.*?)\]([\s\S]*?)\[\/url\]/gi, (_, href, text) => {
     const safe = safeUrl(href.trim());
     return safe
-      ? `<a href="${escapeAttr(safe)}" target="_blank" rel="noopener noreferrer" class="forum-content-link">${text}</a>`
+      ? `<a href="${escapeAttr(safe)}"${forumAnchorAttrs(safe)} class="forum-content-link">${text}</a>`
       : text;
   });
   s = s.replace(/\[url\]([\s\S]*?)\[\/url\]/gi, (_, url) => {
     const safe = safeUrl(url.trim());
     return safe
-      ? `<a href="${escapeAttr(safe)}" target="_blank" rel="noopener noreferrer" class="forum-content-link">${escapeHtml(url.trim())}</a>`
+      ? `<a href="${escapeAttr(safe)}"${forumAnchorAttrs(safe)} class="forum-content-link">${escapeHtml(url.trim())}</a>`
       : escapeHtml(url.trim());
   });
 
