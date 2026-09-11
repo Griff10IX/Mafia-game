@@ -97,7 +97,7 @@ def register(r) -> None:
         resize_meta,
         is_public_gallery: bool,
         source_url: Optional[str] = None,
-    ) -> str:
+    ) -> dict:
         ext = MIME_TO_FILE_EXT.get(mime)
         if not ext:
             raise HTTPException(status_code=400, detail="Unsupported image type")
@@ -146,7 +146,15 @@ def register(r) -> None:
                 "gallery_size_bytes": stored.get("size") or len(raw),
             })
             await db.image_host_uploads.insert_one(doc)
-            return public_id
+            return {
+                "public_id": public_id,
+                "url": stored.get("direct_url"),
+                "page_url": stored.get("page_url"),
+                "thumb_url": stored.get("thumb_url") or stored.get("direct_url"),
+                "pixgb_direct_url": stored.get("direct_url"),
+                "pixgb_page_url": stored.get("page_url"),
+                "pixgb_thumb_url": stored.get("thumb_url"),
+            }
 
         _ensure_upload_root()
         path = _disk_path(uid, public_id, ext)
@@ -174,7 +182,15 @@ def register(r) -> None:
             "gallery_size_bytes": len(gallery_raw),
         })
         await db.image_host_uploads.insert_one(doc)
-        return public_id
+        return {
+            "public_id": public_id,
+            "url": None,
+            "page_url": None,
+            "thumb_url": None,
+            "pixgb_direct_url": None,
+            "pixgb_page_url": None,
+            "pixgb_thumb_url": None,
+        }
 
     def _disk_path(user_id: str, public_id: str, ext: str) -> Path:
         user_dir = upload_root / user_id.replace("/", "_")
@@ -216,15 +232,39 @@ def register(r) -> None:
         except Exception:
             return None
 
+    def _attach_public_urls(doc: dict) -> dict:
+        """Prefer PixGB CDN URLs; MW /image-host/i/… remains as redirect fallback."""
+        if not doc:
+            return doc
+        direct = doc.get("pixgb_direct_url") or None
+        page = doc.get("pixgb_page_url") or None
+        thumb = doc.get("pixgb_thumb_url") or direct
+        doc["url"] = direct
+        doc["page_url"] = page
+        doc["thumb_url"] = thumb
+        return doc
+
     async def list_my_images(current_user: dict = Depends(get_current_user_verified)):
         uid = current_user.get("id") or ""
         cur = db.image_host_uploads.find(
             {"user_id": uid, "deleted_at": None},
-            {"_id": 0, "public_id": 1, "mime": 1, "size_bytes": 1, "original_filename": 1, "created_at": 1, "resize_max_edge": 1, "is_public_gallery": 1},
+            {
+                "_id": 0,
+                "public_id": 1,
+                "mime": 1,
+                "size_bytes": 1,
+                "original_filename": 1,
+                "created_at": 1,
+                "resize_max_edge": 1,
+                "is_public_gallery": 1,
+                "pixgb_direct_url": 1,
+                "pixgb_page_url": 1,
+                "pixgb_thumb_url": 1,
+            },
         ).sort("created_at", -1)
         items: List[dict] = []
         async for doc in cur:
-            items.append(doc)
+            items.append(_attach_public_urls(doc))
         return {"images": items, "count": len(items), "max": IMAGE_HOST_MAX_PER_USER}
 
     async def upload_image(
@@ -261,7 +301,7 @@ def register(r) -> None:
         except ValueError as e:
             raise HTTPException(status_code=400, detail=f"Image upload failed during resize: {str(e)}") from e
 
-        public_id = await _persist_hosted_image(
+        stored = await _persist_hosted_image(
             uid=uid,
             raw=raw,
             mime=mime,
@@ -269,7 +309,7 @@ def register(r) -> None:
             resize_meta=resize_meta,
             is_public_gallery=_coerce_bool(is_public_gallery),
         )
-        return {"public_id": public_id, "message": "Uploaded"}
+        return {"message": "Uploaded", **stored}
 
     async def import_from_url(
         body: ImageHostImportRequest,
@@ -299,7 +339,7 @@ def register(r) -> None:
         except ValueError as e:
             raise HTTPException(status_code=400, detail=f"Image import failed during resize: {str(e)}") from e
 
-        public_id = await _persist_hosted_image(
+        stored = await _persist_hosted_image(
             uid=uid,
             raw=data,
             mime=mime,
@@ -308,7 +348,7 @@ def register(r) -> None:
             is_public_gallery=bool(body.is_public_gallery),
             source_url=body.url.strip(),
         )
-        return {"public_id": public_id, "message": "Imported"}
+        return {"message": "Imported", **stored}
 
     async def delete_image(
         public_id: str,
@@ -447,6 +487,9 @@ def register(r) -> None:
                     "created_at": 1,
                     "gallery_max_edge": 1,
                     "user_id": 1,
+                    "pixgb_direct_url": 1,
+                    "pixgb_page_url": 1,
+                    "pixgb_thumb_url": 1,
                 },
             )
             .sort("created_at", -1)
@@ -455,7 +498,7 @@ def register(r) -> None:
         )
         rows: List[dict] = []
         async for doc in cur:
-            rows.append(doc)
+            rows.append(_attach_public_urls(doc))
 
         uids = list({r.get("user_id") for r in rows if r.get("user_id")})
         uname_by_id: dict = {}
@@ -501,6 +544,9 @@ def register(r) -> None:
                     "created_at": 1,
                     "resize_max_edge": 1,
                     "is_public_gallery": 1,
+                    "pixgb_direct_url": 1,
+                    "pixgb_page_url": 1,
+                    "pixgb_thumb_url": 1,
                 },
             )
             .sort("created_at", -1)
@@ -509,7 +555,7 @@ def register(r) -> None:
         )
         rows: List[dict] = []
         async for doc in cur:
-            rows.append(doc)
+            rows.append(_attach_public_urls(doc))
 
         uids = list({r.get("user_id") for r in rows if r.get("user_id")})
         uname_by_id: dict = {}

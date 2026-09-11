@@ -631,6 +631,28 @@ export function imageHostPublicUrl(publicId) {
   return path;
 }
 
+/** Prefer PixGB CDN URL when present; fall back to MW redirect URL for older local files. */
+export function imageHostDisplayUrl(imgOrPublicId) {
+  if (imgOrPublicId && typeof imgOrPublicId === 'object') {
+    const direct = imgOrPublicId.url || imgOrPublicId.pixgb_direct_url;
+    if (direct) return direct;
+    return imageHostPublicUrl(imgOrPublicId.public_id);
+  }
+  return imageHostPublicUrl(imgOrPublicId);
+}
+
+/** Gallery/thumb URL — PixGB thumb when available. */
+export function imageHostGalleryDisplayUrl(imgOrPublicId) {
+  if (imgOrPublicId && typeof imgOrPublicId === 'object') {
+    const thumb = imgOrPublicId.thumb_url || imgOrPublicId.pixgb_thumb_url || imgOrPublicId.url || imgOrPublicId.pixgb_direct_url;
+    if (thumb) return thumb;
+    const base = imageHostPublicUrl(imgOrPublicId.public_id);
+    return base.replace('/image-host/i/', '/image-host/g/');
+  }
+  const base = imageHostPublicUrl(imgOrPublicId);
+  return base.replace('/image-host/i/', '/image-host/g/');
+}
+
 /**
  * Dispatch to refresh top bar / user data in Layout (money, points, rank, etc.).
  * - Pass a number to set cash immediately (same as { money }).

@@ -1,7 +1,7 @@
 import { Fragment, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, ShieldAlert, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Grid3x3, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Leaf, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords, TrendingUp, ClipboardList, CircleDot, BookOpen } from 'lucide-react';
-import api, { imageHostPublicUrl, refreshUser } from '../../utils/api';
+import api, { imageHostDisplayUrl, refreshUser } from '../../utils/api';
 import { formatAdminDateTime, formatAdminDateOnly, formatAdminTimeOnly } from '../../utils/adminDateTime';
 import {
   fundedGameKindLabel,
@@ -25888,7 +25888,7 @@ export default function Admin() {
                     </thead>
                     <tbody>
                       {imageHostAdminData.items.map((row) => {
-                        const url = imageHostPublicUrl(row.public_id);
+                        const url = imageHostDisplayUrl(row);
                         return (
                           <tr key={row.public_id} className="border-b border-zinc-700/30 align-top">
                             <td className="py-1 px-1 w-20">

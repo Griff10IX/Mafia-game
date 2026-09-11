@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Image as ImageIcon, Upload, Link2, Trash2, Copy, Loader2 } from 'lucide-react';
-import api, { imageHostPublicUrl } from '../../utils/api';
+import api, { imageHostDisplayUrl, imageHostGalleryDisplayUrl } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
@@ -267,8 +267,12 @@ export default function ImageHost() {
     }
   };
 
-  const copyLink = (publicId) => {
-    const url = imageHostPublicUrl(publicId);
+  const copyLink = (img) => {
+    const url = imageHostDisplayUrl(img);
+    if (!url) {
+      toast.error('No link available');
+      return;
+    }
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(url).then(() => toast.success('Link copied')).catch(() => toast.error('Copy failed'));
     } else {
@@ -311,10 +315,7 @@ export default function ImageHost() {
     }
   };
 
-  const galleryUrl = (publicId) => {
-    const base = imageHostPublicUrl(publicId);
-    return base.replace('/image-host/i/', '/image-host/g/');
-  };
+  const galleryUrl = (img) => imageHostGalleryDisplayUrl(img);
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
@@ -417,7 +418,7 @@ export default function ImageHost() {
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {images.map((img) => {
-            const src = imageHostPublicUrl(img.public_id);
+            const src = imageHostDisplayUrl(img);
             return (
               <div
                 key={img.public_id}
@@ -451,7 +452,7 @@ export default function ImageHost() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => copyLink(img.public_id)}
+                      onClick={() => copyLink(img)}
                       className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-primary/15 text-primary text-[10px] font-heading font-bold uppercase border border-primary/40"
                     >
                       <Copy size={12} /> Copy link
@@ -478,7 +479,7 @@ export default function ImageHost() {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {publicItems.map((img) => {
-            const src = galleryUrl(img.public_id);
+            const src = galleryUrl(img);
             return (
               <div key={`pub-${img.public_id}`} className={`${styles.panel} rounded-md border border-primary/20 overflow-hidden mobile-panel`}>
                 <div className="aspect-square bg-zinc-950/90">
