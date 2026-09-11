@@ -179,7 +179,7 @@ SPORTS_BETTING_TRANSFER_TARGET_CONFLICT_DETAIL = (
 # ----- Constants -----
 # Max total stake locked in open sports bets per user (split across any number of bets).
 # Override persisted in game_settings key sports_bet_max_total_open_stake (see get_sports_bet_max_total_open_stake).
-SPORTS_BET_MAX_TOTAL_OPEN_STAKE = 1_000_000_000
+SPORTS_BET_MAX_TOTAL_OPEN_STAKE = 25_000_000_000  # $25B
 _SPORTS_BET_STAKE_CAP_CEILING = 10**15
 # Accumulator (acca) max cash payout per bet — combined odds × stake is capped at this.
 SPORTS_ACCA_MAX_PAYOUT = 200_000_000_000  # $200B
@@ -269,7 +269,7 @@ async def set_sports_bet_max_total_open_stake(value: int) -> int:
 
 async def ensure_sports_bet_max_total_open_stake_setting() -> None:
     """Seed or migrate legacy open-stake caps to the current default."""
-    _legacy_caps = {25_000_000, 150_000_000, 500_000_000}
+    _legacy_caps = {25_000_000, 150_000_000, 500_000_000, 1_000_000_000}
     doc = await db.game_settings.find_one({"key": "sports_bet_max_total_open_stake"}, {"_id": 0, "value": 1})
     if doc is None:
         await db.game_settings.update_one(

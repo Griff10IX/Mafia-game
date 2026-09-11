@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-11[/color][/b] — [b]Sports betting stake cap[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Casino → Sports betting[/b] — max total open stake per account is now [b]$25,000,000,000[/b] (was $1,000,000,000).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-11[/color][/b] — [b]New loot exclusives[/b][/size]
 [quote]
 [list]

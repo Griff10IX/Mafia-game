@@ -4,6 +4,7 @@ Looks like a standard registration — no staff flags / staff_topup markers.
 from __future__ import annotations
 
 import asyncio
+import os
 import random
 import secrets
 import string
@@ -80,8 +81,14 @@ async def main():
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
-    # Soft UK-ish looking IP (not GhostFace / server)
-    reg_ip = f"82.132.{random.randint(200, 245)}.{random.randint(10, 250)}"
+    # Soft Canada-looking IP (Bell/Rogers-ish) — override via FRESH_PLAYER_IP_REGION=us|ca|uk
+    region = (os.environ.get("FRESH_PLAYER_IP_REGION") or "ca").strip().lower()
+    if region == "us":
+        reg_ip = f"73.162.{random.randint(10, 240)}.{random.randint(10, 250)}"
+    elif region == "uk":
+        reg_ip = f"82.132.{random.randint(200, 245)}.{random.randint(10, 250)}"
+    else:
+        reg_ip = f"99.232.{random.randint(10, 240)}.{random.randint(10, 250)}"
 
     theme = {
         "colourId": "sky",
