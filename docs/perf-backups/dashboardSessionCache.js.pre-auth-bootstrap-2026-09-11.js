@@ -1,9 +1,8 @@
 /**
  * Session cache for /account/dashboard first paint + background prefetch after login.
  */
-import api, { apiRequestWith429Retry } from './api';
+import api, { apiGetWithResumeRetries, apiRequestWith429Retry } from './api';
 import { readSessionJson, writeSessionJson } from './sessionPageCache';
-import { fetchAuthMe } from './authMeBootstrap';
 
 export const DASHBOARD_SESSION_CACHE_KEY = 'mafia_dashboard_v1';
 
@@ -149,7 +148,7 @@ export async function prefetchDashboardData(options = {}) {
   lastDashboardPrefetchAt = now;
   try {
     const [userRes, progressRes] = await Promise.all([
-      fetchAuthMe({ force: false }),
+      apiGetWithResumeRetries('/auth/me'),
       apiRequestWith429Retry(() => api.get('/user/rank-progress')),
     ]);
     const dashRes = await api.get('/profile/dashboard').catch(() => ({ data: null }));

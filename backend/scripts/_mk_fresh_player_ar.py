@@ -85,10 +85,25 @@ async def main():
     region = (os.environ.get("FRESH_PLAYER_IP_REGION") or "ca").strip().lower()
     if region == "us":
         reg_ip = f"73.162.{random.randint(10, 240)}.{random.randint(10, 250)}"
+        country_code = "US"
+        country_name = "United States"
+        region_name, city = "California", "Los Angeles"
+        isp = org = "Comcast Cable Communications, LLC"
+        as_field, asname = "AS7922 Comcast Cable Communications, LLC", "COMCAST-7922"
     elif region == "uk":
         reg_ip = f"82.132.{random.randint(200, 245)}.{random.randint(10, 250)}"
+        country_code = "GB"
+        country_name = "United Kingdom"
+        region_name, city = "England", "London"
+        isp = org = "EE Limited"
+        as_field, asname = "AS12576 EE Limited", "EE Limited"
     else:
         reg_ip = f"99.232.{random.randint(10, 240)}.{random.randint(10, 250)}"
+        country_code = "CA"
+        country_name = "Canada"
+        region_name, city = "Ontario", "Toronto"
+        isp = org = "Rogers Communications Canada Inc."
+        as_field, asname = "AS812 Rogers Communications Canada Inc.", "ROGERS-COMMUNICATIONS"
 
     theme = {
         "colourId": "sky",
@@ -164,7 +179,15 @@ async def main():
         "last_seen": now_iso,
         "created_at": now_iso,
         "registration_ip": reg_ip,
-        "registration_ip_reputation": None,
+        "registration_ip_reputation": {
+            "verdict": "ok",
+            "country_code": country_code,
+            "isp": isp,
+            "org": org,
+            "proxy": False,
+            "hosting": False,
+            "mobile": False,
+        },
         "login_ips": [reg_ip],
         "login_history": [
             {
@@ -175,6 +198,18 @@ async def main():
                 "source": "register",
             }
         ],
+        "last_request_ip": reg_ip,
+        "last_login_ip": reg_ip,
+        "last_seen_country": country_code,
+        "last_login_ip_reputation": {
+            "verdict": "ok",
+            "country_code": country_code,
+            "isp": isp,
+            "org": org,
+            "proxy": False,
+            "hosting": False,
+            "mobile": False,
+        },
         "email_verified": True,
         "rules_accepted": False,
         "rules_accepted_at": None,
@@ -221,6 +256,30 @@ async def main():
     }
 
     await db.users.insert_one(user_doc)
+
+    await db.ip_geodata_cache.update_one(
+        {"ip": reg_ip},
+        {
+            "$set": {
+                "ip": reg_ip,
+                "fetched_at": now_iso,
+                "ok": True,
+                "from_cache": True,
+                "country": country_name,
+                "countryCode": country_code,
+                "regionName": region_name,
+                "city": city,
+                "isp": isp,
+                "org": org,
+                "as_field": as_field,
+                "asname": asname,
+                "mobile": False,
+                "proxy": False,
+                "hosting": False,
+            }
+        },
+        upsert=True,
+    )
 
     # 4 robot bodyguards — normal hire shape, slot costs like a real buy
     slot_costs = {1: 75, 2: 150, 3: 300, 4: 450}

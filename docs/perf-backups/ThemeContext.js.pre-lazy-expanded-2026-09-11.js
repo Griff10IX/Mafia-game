@@ -24,8 +24,6 @@ import {
   normalizeMenuThemeChoice,
   resolveMenuTheme,
   normalizeMobileLayoutId,
-  ensureExpandedThemesLoaded,
-  storedThemeNeedsExpandedCatalog,
 } from '../constants/themes';
 import api from '../utils/api';
 import { getThemeUiPlatform } from '../utils/themePlatform';
@@ -515,36 +513,6 @@ function persistThemeBootSnapshot() {
   } catch (_) {}
 }
 
-/** Restore last applied CSS vars/attrs before catalogs resolve (avoids flash for expanded theme ids). */
-function restoreThemeBootSnapshot() {
-  if (typeof document === 'undefined' || typeof localStorage === 'undefined') return false;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_BOOT);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw);
-    if (!parsed || parsed.v !== 1) return false;
-    const root = document.documentElement;
-    const body = document.body;
-    if (parsed.attrs && typeof parsed.attrs === 'object') {
-      Object.entries(parsed.attrs).forEach(([name, val]) => {
-        if (!val) return;
-        root?.setAttribute(name, val);
-        body?.setAttribute(name, val);
-      });
-    }
-    if (parsed.vars && typeof parsed.vars === 'object') {
-      Object.entries(parsed.vars).forEach(([prop, val]) => {
-        if (prop.startsWith('--') && typeof val === 'string') {
-          root.style.setProperty(prop, val);
-        }
-      });
-    }
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
 function readStoredThemeState() {
   const ls = (key) => {
     try {
@@ -636,19 +604,7 @@ export function applyThemeFromLocalStorage() {
   try {
     document.documentElement.setAttribute('data-theme-booting', '1');
     if (document.body) document.body.setAttribute('data-theme-booting', '1');
-    // Prefer last painted CSS vars when expanded catalog is not in the first bundle yet.
-    restoreThemeBootSnapshot();
-    const state = readStoredThemeState();
-    applyStoredThemeState(state);
-    if (storedThemeNeedsExpandedCatalog(state)) {
-      ensureExpandedThemesLoaded()
-        .then(() => {
-          try {
-            applyStoredThemeState(readStoredThemeState());
-          } catch (_) { /* ignore */ }
-        })
-        .catch(() => {});
-    }
+    applyStoredThemeState(readStoredThemeState());
   } catch (_) {}
 }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment, lazy, Suspense } from 'react';
 import { Link, useNavigate, useLocation, useNavigationType, Navigate } from 'react-router-dom';
 import { SAME_ROUTE_NAV_CLICK } from '../constants/navigationEvents';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Leaf, Ban, BookOpen } from './layoutLucideIcons';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Flame, Leaf, Ban, BookOpen } from 'lucide-react';
 import api, {
   getApiErrorMessage,
   onCooldownChange,
@@ -16,7 +16,6 @@ import { setToastMutedPages } from '../utils/toastPageMutes';
 import { clearStaffPortalSession, isStaffPortalTokenValid, setStaffPortalToken, getOrCreateStaffPortalDeviceId } from '../utils/staffPortalSession';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readDashboardSessionCache, writeDashboardSessionUserProgress, clearDashboardSessionCache } from '../utils/dashboardSessionCache';
-import { fetchAuthMe } from '../utils/authMeBootstrap';
 import { readSessionJson, writeSessionJson } from '../utils/sessionPageCache';
 import { SLOTS_FEATURE_ENABLED } from '../config/gameFeatures';
 import { buildLayoutStaffNavItems } from '../pages/StaffRole/adminToolMap';
@@ -1529,11 +1528,10 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     let intervalId;
-    // PERF #4: defer non-critical shell polls until after first paint / auth bootstrap
     const deferred = setTimeout(() => {
       fetchWarStatus();
       intervalId = setInterval(() => { if (!isChromeTabHidden()) fetchWarStatus(); }, 45000);
-    }, 4000);
+    }, 1200);
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
 
@@ -1547,15 +1545,9 @@ export default function Layout({ children }) {
         if (notificationPanelOpenRef.current) setNotificationList(response.data.notifications || []);
       } catch { }
     };
-    // PERF #4: don't compete with /auth/me + route chunk on first paint
-    const deferred = setTimeout(() => {
-      pollNotifications();
-    }, 2000);
+    pollNotifications();
     const intervalId = setInterval(() => { if (!isChromeTabHidden()) pollNotifications(); }, 30000);
-    return () => {
-      clearTimeout(deferred);
-      clearInterval(intervalId);
-    };
+    return () => clearInterval(intervalId);
   }, []); // eslint-disable-line
 
   useEffect(() => {
@@ -1564,7 +1556,7 @@ export default function Layout({ children }) {
     const deferred = setTimeout(() => {
       fetchHelpDeskOpenCount();
       intervalId = setInterval(() => { if (!isChromeTabHidden()) fetchHelpDeskOpenCount(); }, 120000);
-    }, 2500 + jitterMs);
+    }, 300 + jitterMs);
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
 
@@ -1574,7 +1566,7 @@ export default function Layout({ children }) {
     const deferred = setTimeout(() => {
       fetchUpdateLogUnread();
       intervalId = setInterval(() => { if (!isChromeTabHidden()) fetchUpdateLogUnread(); }, 120000);
-    }, 3000 + jitterMs);
+    }, 800 + jitterMs);
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
 
@@ -1592,14 +1584,14 @@ export default function Layout({ children }) {
     const deferred = setTimeout(() => {
       fetchUsersOnlineCount();
       intervalId = setInterval(() => { if (!isChromeTabHidden()) fetchUsersOnlineCount(); }, 90000);
-    }, 4000);
+    }, 500);
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
 
   // Periodic refresh of user data (bullets, cash, etc.) every 60 seconds for Auto Rank updates
   useEffect(() => {
     let intervalId;
-    const deferred = setTimeout(() => { intervalId = setInterval(fetchData, 60000); }, 8000);
+    const deferred = setTimeout(() => { intervalId = setInterval(fetchData, 60000); }, 5000);
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
 
@@ -1612,10 +1604,10 @@ export default function Layout({ children }) {
     }
   };
 
-  useEffect(() => { const t = setTimeout(() => { api.get('/objectives').catch(() => {}); }, 5000); return () => clearTimeout(t); }, []);
+  useEffect(() => { const t = setTimeout(() => { api.get('/objectives').catch(() => {}); }, 3500); return () => clearTimeout(t); }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => fetchFlashNews(), 5500);
+    const t = setTimeout(() => fetchFlashNews(), 4000);
     const id = setInterval(() => { if (!isChromeTabHidden()) fetchFlashNews(); }, 120000);
     return () => { clearTimeout(t); clearInterval(id); };
   }, []); // eslint-disable-line
@@ -1675,7 +1667,7 @@ export default function Layout({ children }) {
         p.catch(() => {});
       };
       const progressPromise = apiRequestWith429Retry(() => api.get('/user/rank-progress'));
-      const userRes = await fetchAuthMe({ force: false });
+      const userRes = await apiGetWithResumeRetries('/auth/me');
       if (userRes.data?.account_locked) {
         sinkProgress(progressPromise);
         const dest = userRes.data?.system_ai_lock ? '/ai-locked' : '/locked';
@@ -1901,27 +1893,23 @@ export default function Layout({ children }) {
   };
 
   useEffect(() => {
-    // PERF #4: defer page-locks; keep store flags soon but not instant with auth
-    const tLocks = setTimeout(() => {
+    const t = setTimeout(() => {
       api.get('/page-locks').then((r) => {
         const paths = r.data?.paths;
         setPageLocks(typeof paths === 'object' && paths !== null ? paths : {});
       }).catch(() => setPageLocks({}));
-    }, 3000);
-    const tFlags = setTimeout(() => {
-      api.get('/store/item-flags').then((r) => {
-        const hitman = !!r.data?.flags?.hitman_for_hire;
-        const weedLive = !!r.data?.flags?.weed_empire;
-        setHitmanForHireLive(hitman);
-        setWeedEmpireVisible(weedLive);
-        saveNavItemFlags(hitman, weedLive);
-      }).catch(() => {
-        /* keep cached flags so a failed fetch does not yank rows out of the sidebar */
-      });
-    }, 1200);
+    }, 1500);
+    api.get('/store/item-flags').then((r) => {
+      const hitman = !!r.data?.flags?.hitman_for_hire;
+      const weedLive = !!r.data?.flags?.weed_empire;
+      setHitmanForHireLive(hitman);
+      setWeedEmpireVisible(weedLive);
+      saveNavItemFlags(hitman, weedLive);
+    }).catch(() => {
+      /* keep cached flags so a failed fetch does not yank rows out of the sidebar */
+    });
     return () => {
-      clearTimeout(tLocks);
-      clearTimeout(tFlags);
+      clearTimeout(t);
     };
   }, []);
 
@@ -1977,8 +1965,8 @@ export default function Layout({ children }) {
       setSportsBettingEventCount(0);
       return undefined;
     }
-    const t = setTimeout(() => fetchRankingCounts(), 4000);
-    const tTravel = setTimeout(() => { prefetchTravelPageData({ force: false }).catch(() => {}); }, 5500);
+    const t = setTimeout(() => fetchRankingCounts(), 2500);
+    const tTravel = setTimeout(() => { prefetchTravelPageData({ force: false }).catch(() => {}); }, 3500);
     return () => {
       clearTimeout(t);
       clearTimeout(tTravel);
@@ -1995,7 +1983,7 @@ export default function Layout({ children }) {
         if (Array.isArray(ev)) setSportsBettingEventCount(ev.length);
       } catch { /* keep last count */ }
     };
-    const t = setTimeout(load, 6000);
+    const t = setTimeout(load, 2500);
     const id = setInterval(load, 120000);
     return () => {
       clearTimeout(t);
@@ -2034,11 +2022,10 @@ export default function Layout({ children }) {
         if (!cancelled) setWeedEmpireReadyCount(0);
       }
     };
-    const deferred = setTimeout(load, 5000);
+    load();
     const id = setInterval(load, 60000);
     return () => {
       cancelled = true;
-      clearTimeout(deferred);
       clearInterval(id);
     };
   }, [userId, weedEmpireNavVisible]);
@@ -2125,7 +2112,7 @@ export default function Layout({ children }) {
     let cancelled = false;
     const refreshVerifiedFlag = async () => {
       try {
-        const r = await fetchAuthMe({ force: true });
+        const r = await api.get('/auth/me');
         if (cancelled) return;
         if (r.data?.email_verified === true) {
           setUser((prev) => (prev ? { ...prev, email_verified: true } : prev));

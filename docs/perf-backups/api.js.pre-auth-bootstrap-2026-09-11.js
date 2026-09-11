@@ -68,12 +68,6 @@ api.get = function dedupingGet(url, config) {
 /** Clear in-flight GET dedupe so the next fetch is not tied to a stale promise (logout, token change). */
 export function invalidateApiCache() {
   clearInFlightGets();
-  // PERF #4: drop short-lived /auth/me bootstrap cache on logout / token change
-  import('./authMeBootstrap')
-    .then((m) => {
-      try { m.invalidateAuthMeBootstrap(); } catch (_) { /* ignore */ }
-    })
-    .catch(() => {});
 }
 
 function _sleep429Retry(ms) {

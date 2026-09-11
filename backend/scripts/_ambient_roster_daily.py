@@ -215,28 +215,37 @@ def _maybe_digits(base: str, chance: float = 0.45) -> str:
     return base + str(random.randint(10, 99)) + random.choice(["", "x", "z", "zz"])
 
 
-def _rand_username() -> str:
-    """Mix of real signup + other-game styles: pokemon, anime, RS, joke phrases, etc."""
-    style = random.random()
+# Name style groups — never reuse a group from the previous 2 ledger creates.
+NAME_GROUP_WEIGHTS: List[Tuple[str, float]] = [
+    ("first_digits", 0.18),
+    ("first_last", 0.12),
+    ("pokemon", 0.12),
+    ("anime", 0.12),
+    ("rs", 0.10),
+    ("phrase", 0.12),
+    ("loc_prefix", 0.08),
+    ("forum_mash", 0.08),
+    ("playful", 0.08),
+]
 
-    if style < 0.18:
+
+def _build_username_for_group(group: str) -> str:
+    if group == "first_digits":
         # Danny56 / deano14 / tony8669
         base = random.choice(FIRST)
         if random.random() < 0.12:
             base = base.lower()
         base = _maybe_digits(base, 0.85)
-    elif style < 0.30:
+    elif group == "first_last":
         # FirstLast / AnthonyTucker
         base = random.choice(FIRST) + random.choice(LAST)
         base = _maybe_digits(base, 0.4)
-    elif style < 0.42:
-        # Pokémon (+ digits / x)
+    elif group == "pokemon":
         base = random.choice(POKEMON)
         if random.random() < 0.25:
             base = base.lower()
         base = _maybe_digits(base, 0.55)
-    elif style < 0.54:
-        # Anime
+    elif group == "anime":
         base = random.choice(ANIME)
         if random.random() < 0.2:
             base = base.lower()
@@ -245,7 +254,7 @@ def _rand_username() -> str:
             i = random.randint(1, len(base) - 2)
             base = base[:i] + base[i] + base[i:]
         base = _maybe_digits(base, 0.5)
-    elif style < 0.64:
+    elif group == "rs":
         # RuneScape energy: Pure123, DharokPker, FireCape99
         base = random.choice(RS_STYLE)
         if random.random() < 0.35:
@@ -253,7 +262,7 @@ def _rand_username() -> str:
         if random.random() < 0.15:
             base = base.lower()
         base = _maybe_digits(base, 0.55)
-    elif style < 0.76:
+    elif group == "phrase":
         # AngryToaster / Cabbagehead / GhostKiller
         a, b = random.choice(PHRASE_A), random.choice(PHRASE_B)
         base = a + b
@@ -263,7 +272,7 @@ def _rand_username() -> str:
             base = base + random.choice(["zz", "x", "xx", "v2", "v3", "123"])
         else:
             base = _maybe_digits(base, 0.4)
-    elif style < 0.84:
+    elif group == "loc_prefix":
         # WelshCharlie / IrishNoel / eastendgeeza
         pref = random.choice(LOC_PREFIX)
         if random.random() < 0.55:
@@ -273,7 +282,7 @@ def _rand_username() -> str:
         if random.random() < 0.2:
             base = base.lower()
         base = _maybe_digits(base, 0.35)
-    elif style < 0.92:
+    elif group == "forum_mash":
         # Forum handle / mash: fruitcake, redfury, coldFox
         if random.random() < 0.55:
             base = random.choice(HANDLES)
@@ -286,20 +295,34 @@ def _rand_username() -> str:
             base = a + (b.capitalize() if random.random() < 0.65 else b)
         base = _maybe_digits(base, 0.5)
     else:
-        # joshboiiii / FoREvcR23 — playful stretch
+        # playful: joshboiiii / FoREvcR23
         base = random.choice(FIRST)
         if random.random() < 0.5:
             base = base.lower()
             if random.random() < 0.35:
                 base = base + random.choice(["boi", "boiiii", "yy", "xxx", "pls", "xd"])
         else:
-            # mixed caps vibe
             base = "".join(c.upper() if random.random() < 0.35 else c.lower() for c in base)
             if len(base) < 8:
                 base = base + random.choice(WORD_B)
         base = _maybe_digits(base, 0.7)
 
     return _sanitize_username(base)
+
+
+def _pick_name_group(exclude: Optional[set] = None) -> str:
+    exclude = {g for g in (exclude or set()) if g}
+    pool = [(g, w) for g, w in NAME_GROUP_WEIGHTS if g not in exclude]
+    if not pool:
+        pool = list(NAME_GROUP_WEIGHTS)
+    groups, weights = zip(*pool)
+    return random.choices(groups, weights=weights, k=1)[0]
+
+
+def _rand_username(exclude_groups: Optional[set] = None) -> Tuple[str, str]:
+    """Return (username, name_group). Skips groups used by the previous 2 creates."""
+    group = _pick_name_group(exclude_groups)
+    return _build_username_for_group(group), group
 
 
 COUNTRY_PROFILES: List[Dict[str, Any]] = [
@@ -461,6 +484,29 @@ def _ledger_slots_today(day: str) -> set:
     return slots
 
 
+def _ledger_recent_name_groups(n: int = 2) -> List[str]:
+    """Last n name_group values from the roster ledger (most recent last)."""
+    if not LEDGER_PATH.is_file() or n <= 0:
+        return []
+    rows: List[str] = []
+    try:
+        with LEDGER_PATH.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                g = row.get("name_group")
+                if isinstance(g, str) and g.strip():
+                    rows.append(g.strip())
+    except OSError:
+        return []
+    return rows[-n:]
+
+
 def _ledger_append(row: Dict[str, Any]) -> None:
     LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
     with LEDGER_PATH.open("a", encoding="utf-8") as f:
@@ -486,19 +532,25 @@ def _rand_theme() -> Dict[str, Any]:
     }
 
 
-async def _unique_username_email(db) -> Tuple[str, str]:
+async def _unique_username_email(
+    db, exclude_groups: Optional[set] = None
+) -> Tuple[str, str, str]:
+    """Return (username, email, name_group)."""
     username = None
+    name_group = "first_digits"
     for _ in range(50):
-        cand = _rand_username()
+        cand, group = _rand_username(exclude_groups)
         exists = await db.users.find_one(
             {"username": {"$regex": f"^{cand}$", "$options": "i"}},
             {"_id": 1},
         )
         if not exists:
             username = cand
+            name_group = group
             break
     if not username:
         username = "Player" + secrets.token_hex(3)
+        name_group = "fallback"
     email = None
     for _ in range(50):
         cand = _rand_email(username)
@@ -508,7 +560,7 @@ async def _unique_username_email(db) -> Tuple[str, str]:
             break
     if not email:
         email = f"{secrets.token_hex(6)}@gmail.com"
-    return username, email
+    return username, email, name_group
 
 
 async def create_one(*, mode: str) -> Dict[str, Any]:
@@ -516,7 +568,8 @@ async def create_one(*, mode: str) -> Dict[str, Any]:
     from utils.default_player_avatar import default_player_avatar_url
     from routers.kill.bodyguards import _create_robot_bodyguard_user, _invalidate_bodyguards_cache
 
-    username, email = await _unique_username_email(db)
+    exclude = set(_ledger_recent_name_groups(2))
+    username, email, name_group = await _unique_username_email(db, exclude)
     password = _rand_password()
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
@@ -766,6 +819,7 @@ async def create_one(*, mode: str) -> Dict[str, Any]:
         "slot": (SLOT if SLOT in ("morning", "afternoon") else "any"),
         "mode": mode,
         "username": username,
+        "name_group": name_group,
         "email": email,
         "password": password,
         "id": user_id,

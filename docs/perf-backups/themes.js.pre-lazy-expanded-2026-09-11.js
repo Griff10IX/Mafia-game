@@ -1,11 +1,19 @@
 /**
  * Theme presets: colours and textures for the app.
  * Changing theme updates Rank Progress bar, panel headers, buttons, sidebar, and all accent UI.
- *
- * PERF #3: themes-expanded.js is NOT imported statically — load via ensureExpandedThemesLoaded()
- * (ThemePicker open / ThemeContext when saved ids need the expanded catalog).
- * See docs/PERF_OPS_CHANGES.md
  */
+
+import {
+  EXPANDED_THEME_COLOURS,
+  EXPANDED_THEME_TEXTURES,
+  EXPANDED_THEME_FONTS,
+  EXPANDED_THEME_WRITING_COLOURS,
+  EXPANDED_QUICK_PRESETS,
+  EXPANDED_FULL_PRESETS,
+  EXPANDED_COLOUR_SECTION,
+  EXPANDED_WRITING_SECTION,
+  EXPANDED_PRESET_CATEGORIES,
+} from './themes-expanded.js';
 
 /** Hex colour presets: { id, name, primary, primaryBright, primaryDark, foregroundOnPrimary } */
 export const THEME_COLOURS = [
@@ -363,6 +371,7 @@ export const THEME_COLOURS = [
   { id: 'deep-bronze', name: 'Deep Bronze', primary: '#4a3620', primaryBright: '#684e30', primaryDark: '#342414', foregroundOnPrimary: '#ffffff' },
   { id: 'deep-charcoal', name: 'Deep Charcoal', primary: '#1c1c1e', primaryBright: '#2c2c2e', primaryDark: '#0e0e10', foregroundOnPrimary: '#ffffff' },
   { id: 'deep-sapphire', name: 'Deep Sapphire', primary: '#0c2461', primaryBright: '#133a8c', primaryDark: '#081840', foregroundOnPrimary: '#ffffff' },
+  ...EXPANDED_THEME_COLOURS,
 ];
 
 /** Display order: sections for main/button/line colours. Colours not listed go in "More". */
@@ -387,6 +396,7 @@ export const THEME_COLOUR_SECTIONS = [
   { label: 'Vintage', ids: ['retro-mustard', 'avocado-70s', 'burnt-sienna', 'faded-denim', 'harvest', 'parchment', 'rust-orange', 'old-rose', 'olive-drab', 'dusty-pink'] },
   { label: 'Luxury', ids: ['champagne', 'caviar', 'truffle', 'cognac', 'cashmere', 'ebony', 'ivory-lux', 'mink-fur'] },
   { label: 'More', ids: ['sunset', 'sunrise', 'pale-gold', 'antique-brass', 'lagoon', 'mulberry', 'steel-blue', 'deep-maroon', 'obsidian-blue', 'void', 'abyss', 'deep-olive', 'deep-teal', 'deep-amber', 'deep-rose', 'deep-violet', 'deep-copper', 'deep-slate-green', 'deep-burgundy', 'deep-bronze', 'deep-charcoal', 'deep-sapphire'] },
+  EXPANDED_COLOUR_SECTION,
 ];
 
 /** Texture presets: applied as body overlay. id used for body[data-texture] and swatch preview. */
@@ -398,6 +408,7 @@ export const THEME_TEXTURES = [
   { id: 'crosshatch', name: 'Crosshatch' },
   { id: 'hexagons', name: 'Hexagons' },
   { id: 'fine-lines', name: 'Fine Lines' },
+  ...EXPANDED_THEME_TEXTURES,
 ];
 
 /** Writing style: heading + body font family (CSS font-family value). */
@@ -422,6 +433,7 @@ export const THEME_FONTS = [
   { id: 'geometric', name: 'Geometric', heading: 'Poppins, "Century Gothic", sans-serif', body: 'Poppins, "Century Gothic", sans-serif' },
   { id: 'humanist', name: 'Humanist', heading: '"Source Sans 3", "Lucida Grande", sans-serif', body: '"Source Sans 3", "Lucida Grande", sans-serif' },
   { id: 'slab', name: 'Slab', heading: '"Roboto Slab", Rockwell, serif', body: '"Roboto Slab", Rockwell, serif' },
+  ...EXPANDED_THEME_FONTS,
 ];
 
 /** Text style: weight and slant (applies to body/heading base). */
@@ -724,6 +736,7 @@ export const THEME_WRITING_COLOURS = [
   { id: 'driftwood-text', name: 'Driftwood', foreground: '#c0a888', muted: '#9a8868' },
   { id: 'wheat-text', name: 'Wheat', foreground: '#e4bc72', muted: '#c09c50' },
   { id: 'ochre-text', name: 'Ochre', foreground: '#e09838', muted: '#b87820' },
+  ...EXPANDED_THEME_WRITING_COLOURS,
 ];
 
 /** Display order: sections for writing (text) colours. */
@@ -743,6 +756,7 @@ export const THEME_WRITING_SECTIONS = [
   { label: 'Metallics', ids: ['champagne-text', 'brass-text', 'chrome-text', 'platinum-text', 'bronze-metal-text', 'rose-metal-text'] },
   { label: 'Neon & cyber', ids: ['neon-cyan-text', 'neon-violet-text', 'synthwave-text', 'matrix-text', 'vaporwave-text', 'plasma-text'] },
   { label: 'Earth & nature', ids: ['sandstone-text', 'cinnamon-text', 'mahogany-text', 'driftwood-text', 'wheat-text', 'ochre-text'] },
+  EXPANDED_WRITING_SECTION,
 ];
 
 export const DEFAULT_COLOUR_ID = 'sky';
@@ -1144,81 +1158,11 @@ export const THEME_PRESETS = [
   { id: 'grad-dark-teal-warm', name: 'Gradient Dark Teal Warm', description: 'Dark teal to warm amber', colourId: 'tone-4-dark-teal-warm', textureId: 'modern-soft', buttonColourId: 'teal', accentLineColourId: null, writingColourId: 'cream-gold', mutedWritingColourId: 'aqua-text', buttonStyleId: 'flat', fontId: 'geometric', textStyleId: 'medium', toastTextColourId: 'cream-gold', mobileNavStyle: 'bottom', themeVariant: 'modern', isFullPreset: true, presetCategory: 'gradient' },
   { id: 'grad-ice', name: 'Gradient Ice', description: 'Cool ice blues', colourId: 'tone-4-ice', textureId: 'modern-soft', buttonColourId: 'glacier', accentLineColourId: null, writingColourId: 'cool-white', mutedWritingColourId: 'powder-blue', buttonStyleId: 'flat', fontId: 'clean', textStyleId: 'light', toastTextColourId: 'cool-white', mobileNavStyle: 'bottom', themeVariant: 'modern', isFullPreset: true, presetCategory: 'gradient' },
   { id: 'grad-wine', name: 'Gradient Wine', description: 'Deep wine gradient', colourId: 'tone-4-wine', textureId: 'modern-soft', buttonColourId: 'wine', accentLineColourId: null, writingColourId: 'burgundy-text', mutedWritingColourId: 'garnet-text', buttonStyleId: 'flat', fontId: 'elegant', textStyleId: 'medium', toastTextColourId: 'burgundy-text', mobileNavStyle: 'bottom', themeVariant: 'modern', isFullPreset: true, presetCategory: 'gradient' },
+
+  /* ── Expanded studio collection ─────────────────────────── */
+  ...EXPANDED_QUICK_PRESETS,
+  ...EXPANDED_FULL_PRESETS,
 ];
-
-/** Filled by ensureExpandedThemesLoaded() — ThemePicker categories for studio expansion. */
-export const EXPANDED_PRESET_CATEGORIES = [];
-
-let _expandedThemesLoaded = false;
-let _expandedThemesPromise = null;
-
-export function areExpandedThemesLoaded() {
-  return _expandedThemesLoaded;
-}
-
-function _pushUniqueById(target, items) {
-  if (!Array.isArray(items) || !items.length) return;
-  const seen = new Set(target.map((x) => x && x.id));
-  for (const item of items) {
-    if (!item || item.id == null || seen.has(item.id)) continue;
-    target.push(item);
-    seen.add(item.id);
-  }
-}
-
-/**
- * Dynamically import themes-expanded.js and merge into the live catalog arrays.
- * Safe to call many times; shares one in-flight promise.
- */
-export function ensureExpandedThemesLoaded() {
-  if (_expandedThemesLoaded) return Promise.resolve(true);
-  if (_expandedThemesPromise) return _expandedThemesPromise;
-  _expandedThemesPromise = import('./themes-expanded.js')
-    .then((mod) => {
-      if (_expandedThemesLoaded) return true;
-      _pushUniqueById(THEME_COLOURS, mod.EXPANDED_THEME_COLOURS);
-      _pushUniqueById(THEME_TEXTURES, mod.EXPANDED_THEME_TEXTURES);
-      _pushUniqueById(THEME_FONTS, mod.EXPANDED_THEME_FONTS);
-      _pushUniqueById(THEME_WRITING_COLOURS, mod.EXPANDED_THEME_WRITING_COLOURS);
-      _pushUniqueById(THEME_PRESETS, [
-        ...(mod.EXPANDED_QUICK_PRESETS || []),
-        ...(mod.EXPANDED_FULL_PRESETS || []),
-      ]);
-      if (mod.EXPANDED_COLOUR_SECTION && !THEME_COLOUR_SECTIONS.some((s) => s.label === mod.EXPANDED_COLOUR_SECTION.label)) {
-        THEME_COLOUR_SECTIONS.push(mod.EXPANDED_COLOUR_SECTION);
-      }
-      if (mod.EXPANDED_WRITING_SECTION && !THEME_WRITING_SECTIONS.some((s) => s.label === mod.EXPANDED_WRITING_SECTION.label)) {
-        THEME_WRITING_SECTIONS.push(mod.EXPANDED_WRITING_SECTION);
-      }
-      const cats = mod.EXPANDED_PRESET_CATEGORIES || [];
-      EXPANDED_PRESET_CATEGORIES.splice(0, EXPANDED_PRESET_CATEGORIES.length, ...cats);
-      _expandedThemesLoaded = true;
-      return true;
-    })
-    .catch((err) => {
-      _expandedThemesPromise = null;
-      console.warn('[themes] failed to load themes-expanded', err);
-      throw err;
-    });
-  return _expandedThemesPromise;
-}
-
-/** True when saved theme ids are not in the core catalog (need expanded pack or custom). */
-export function storedThemeNeedsExpandedCatalog(state) {
-  if (!state) return false;
-  const customs = new Set((state.customThemes || []).map((c) => c && c.id).filter(Boolean));
-  const missing = (id, list) => Boolean(id) && !customs.has(id) && !list.some((x) => x.id === id);
-  return (
-    missing(state.colourId, THEME_COLOURS)
-    || missing(state.buttonColourId, THEME_COLOURS)
-    || missing(state.accentLineColourId, THEME_COLOURS)
-    || missing(state.textureId, THEME_TEXTURES)
-    || missing(state.fontId, THEME_FONTS)
-    || missing(state.writingColourId, THEME_WRITING_COLOURS)
-    || missing(state.mutedWritingColourId, THEME_WRITING_COLOURS)
-    || missing(state.toastTextColourId, THEME_WRITING_COLOURS)
-  );
-}
 
 export function getThemeColour(id) {
   return THEME_COLOURS.find((c) => c.id === id) || THEME_COLOURS[0];
@@ -1247,3 +1191,5 @@ export function getThemeWritingColour(id) {
 export function getThemeTextStyle(id) {
   return THEME_TEXT_STYLES.find((t) => t.id === id) || THEME_TEXT_STYLES[0];
 }
+
+export { EXPANDED_PRESET_CATEGORIES };

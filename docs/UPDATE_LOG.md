@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-11[/color][/b] — [b]Faster page loading[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Improved:[/b] First load and returning to the game should feel snappier — scripts compress properly, the main menu shell loads after login instead of on the landing page, big theme packs stay off the critical path until you open Theme Studio, and the game stops double-fetching your account on boot.[/color]
+[*][color=#888888][b]Note:[/b] Gameplay rules are unchanged. Hard refresh once ([b]Ctrl+Shift+R[/b]) if an old cached page looks stuck after this update.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-11[/color][/b] — [b]Sports betting stake cap[/b][/size]
 [quote]
 [list]

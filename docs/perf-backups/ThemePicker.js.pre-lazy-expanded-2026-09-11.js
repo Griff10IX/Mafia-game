@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import api from '../utils/api';
 import { getThemeUiPlatform } from '../utils/themePlatform';
@@ -18,7 +18,6 @@ import {
   THEME_RESET_CLASSIC_ID, THEME_RESET_MODERN_ID, THEME_RESET_DARK_MAFIA_ID, STARTING_LOOK_PRESET_IDS,
   THEME_LAYOUT_RESET_DEFAULTS, MENU_THEME_CHOICES,
   getThemeColour, getThemePreset, EXPANDED_PRESET_CATEGORIES,
-  ensureExpandedThemesLoaded,
 } from '../constants/themes';
 import styles from '../styles/noir.module.css';
 
@@ -41,22 +40,20 @@ function swatchStyle(c) {
   return { backgroundColor: c.primary };
 }
 
-function buildFullPresetCategories() {
-  return [
-    { id: 'all', label: 'All' },
-    { id: 'cyberpunk', label: 'Cyberpunk' },
-    { id: 'luxury', label: 'Luxury' },
-    { id: 'nature', label: 'Nature' },
-    { id: 'retro', label: 'Retro' },
-    { id: 'minimalist', label: 'Minimalist' },
-    { id: 'winter', label: 'Winter' },
-    { id: 'metallic', label: 'Metallic' },
-    { id: 'dark-pro', label: 'Dark Pro' },
-    { id: 'gradient', label: 'Gradient' },
-    ...EXPANDED_PRESET_CATEGORIES,
-    { id: 'other', label: 'Other' },
-  ];
-}
+const FULL_PRESET_CATEGORIES = [
+  { id: 'all', label: 'All' },
+  { id: 'cyberpunk', label: 'Cyberpunk' },
+  { id: 'luxury', label: 'Luxury' },
+  { id: 'nature', label: 'Nature' },
+  { id: 'retro', label: 'Retro' },
+  { id: 'minimalist', label: 'Minimalist' },
+  { id: 'winter', label: 'Winter' },
+  { id: 'metallic', label: 'Metallic' },
+  { id: 'dark-pro', label: 'Dark Pro' },
+  { id: 'gradient', label: 'Gradient' },
+  ...EXPANDED_PRESET_CATEGORIES,
+  { id: 'other', label: 'Other' },
+];
 
 function matchesPresetSearch(preset, query) {
   if (!query.trim()) return true;
@@ -325,20 +322,6 @@ export default function ThemePicker({ open, onClose }) {
   const [customNumColours, setCustomNumColours] = useState(2);
   const [customHexes, setCustomHexes] = useState(['#d4af37', '#b8860b', '#0d9488', '#ea580c']);
   const [customTextLight, setCustomTextLight] = useState(true);
-  const [catalogTick, setCatalogTick] = useState(0);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    let cancelled = false;
-    ensureExpandedThemesLoaded()
-      .then(() => {
-        if (!cancelled) setCatalogTick((t) => t + 1);
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [open]);
-
-  const FULL_PRESET_CATEGORIES = useMemo(() => buildFullPresetCategories(), [catalogTick]);
 
   /* ── localStorage ── */
   const KEYS = {

@@ -86,7 +86,16 @@ async def user_has_armour_v2(user: Dict[str, Any]) -> bool:
 
 
 async def count_live_bar(db) -> int:
-    return int(await db.user_weapons.count_documents({"weapon_id": WEAPON_LOOT_BAR_ID, "quantity": {"$gte": 1}}))
+    """Player-held BARs only — admin test grants (admin_grant=True) do not consume the loot cap."""
+    return int(
+        await db.user_weapons.count_documents(
+            {
+                "weapon_id": WEAPON_LOOT_BAR_ID,
+                "quantity": {"$gte": 1},
+                "admin_grant": {"$ne": True},
+            }
+        )
+    )
 
 
 async def count_live_armour_v2(db) -> int:

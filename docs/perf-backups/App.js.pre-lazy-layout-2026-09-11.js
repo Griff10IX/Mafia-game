@@ -22,6 +22,7 @@ import ResetPassword from "./pages/Auth/ResetPassword";
 import VerifyEmail from "./pages/Auth/VerifyEmail";
 import VerifyComplete from "./pages/Auth/VerifyComplete";
 import SpotifyCallback from "./pages/Auth/SpotifyCallback";
+import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import GamblingSelfBanGate from "./components/GamblingSelfBanGate";
 import ServerUnavailableOverlay from "./components/ServerUnavailableOverlay";
@@ -36,9 +37,6 @@ import { isClientJailed, isJailBlockedFrontendPath } from "./utils/jailBlockedRo
 
 /** Flip `USE_LANDING_CLASSIC` in `src/config/landing.js` to restore the previous login UI. */
 const Landing = USE_LANDING_CLASSIC ? LandingClassic : LandingRedesign;
-
-// PERF #2: Layout (game chrome) only after auth — see docs/PERF_OPS_CHANGES.md
-const Layout = lazy(() => import("./components/Layout"));
 
 // Lazy-load authenticated pages to shrink initial bundle
 // Account pages
@@ -218,11 +216,9 @@ function JailBlockedOutlet() {
 
 function AuthenticatedShell() {
   return (
-    <Suspense fallback={<PageLoader />}>
-      <Layout>
-        <JailBlockedOutlet />
-      </Layout>
-    </Suspense>
+    <Layout>
+      <JailBlockedOutlet />
+    </Layout>
   );
 }
 
