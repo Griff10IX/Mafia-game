@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 
 const GUN_BASE = new THREE.Vector3(-0.34, 0.02, 0);
-const TARGET_CENTRE = new THREE.Vector3(1.9, 0.32, -1.15);
+const TARGET_CENTRE = new THREE.Vector3(2.7, 0.32, 0);
 const TARGET_NORMAL = GUN_BASE.clone().sub(TARGET_CENTRE).normalize();
 const TARGET_ROTATION = new THREE.Quaternion().setFromUnitVectors(
   new THREE.Vector3(0, 0, 1),
@@ -224,7 +224,7 @@ function buildStudio() {
   root.add(floor);
 
   const targetBoard = new THREE.Mesh(
-    new THREE.CircleGeometry(0.28, 32),
+    new THREE.CircleGeometry(0.38, 48),
     new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.9 }),
   );
   targetBoard.quaternion.copy(TARGET_ROTATION);
@@ -232,7 +232,7 @@ function buildStudio() {
   targetBoard.name = "target";
   root.add(targetBoard);
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.08, 0.16, 32),
+    new THREE.RingGeometry(0.11, 0.22, 48),
     new THREE.MeshBasicMaterial({ color: 0xb42318, side: THREE.DoubleSide }),
   );
   ring.quaternion.copy(TARGET_ROTATION);
@@ -240,7 +240,7 @@ function buildStudio() {
   ring.position.addScaledVector(TARGET_NORMAL, 0.004);
   root.add(ring);
   const bull = new THREE.Mesh(
-    new THREE.CircleGeometry(0.04, 24),
+    new THREE.CircleGeometry(0.055, 32),
     new THREE.MeshBasicMaterial({ color: 0x1a1208 }),
   );
   bull.quaternion.copy(TARGET_ROTATION);
@@ -289,6 +289,11 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
     const orbit = { yaw: 0.06, pitch: 0.18, dist: 3.65 };
     const focus = new THREE.Vector3(0.45, 0.03, -0.24);
     const applyCam = () => {
+      if (modeRef.current === "aim") {
+        camera.position.set(-1.52, 0.42, 1.18);
+        camera.lookAt(TARGET_CENTRE);
+        return;
+      }
       const cp = Math.cos(orbit.pitch);
       camera.position.set(
         focus.x + Math.sin(orbit.yaw) * cp * orbit.dist,
@@ -495,7 +500,7 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
       tracerGeo.setFromPoints([origin, hit]);
       tracerMat.opacity = 0.85;
       const targetDistance = Math.hypot(hit.y - targetCentre.y, hit.z - targetCentre.z);
-      if (targetDistance <= 0.28) {
+      if (targetDistance <= 0.38) {
         const hole = new THREE.Mesh(
           new THREE.CircleGeometry(0.009 + Math.random() * 0.004, 10),
           new THREE.MeshBasicMaterial({ color: 0x090909, side: THREE.DoubleSide }),
@@ -576,9 +581,6 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
           aim.pitch = 0;
           if (crosshairRef.current) crosshairRef.current.style.opacity = "0";
         } else {
-          orbit.yaw = 0.06;
-          orbit.pitch = 0.18;
-          orbit.dist = 3.65;
           applyCam();
         }
       },
@@ -613,7 +615,14 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
     <div className={className} style={{ position: "relative", width: "100%", height: "100%" }}>
       <div
         ref={wrapRef}
-        className={`absolute inset-0 touch-none ${mode === "aim" ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}`}
+        className={`absolute inset-0 touch-none ${mode === "aim" ? "cursor-crosshair" : "pointer-events-none"}`}
+      />
+      <iframe
+        title="Realistic Browning Automatic Rifle M1918A2 3D model"
+        src="https://sketchfab.com/models/1213683e58b14dd89fd4520489c7b732/embed?autostart=1&ui_theme=dark&ui_infos=0&ui_help=0&ui_settings=0&ui_annotations=0&ui_watermark_link=0"
+        className={`absolute inset-0 w-full h-full border-0 bg-[#17191d] ${mode === "inspect" ? "block" : "hidden"}`}
+        allow="autoplay; fullscreen; xr-spatial-tracking"
+        allowFullScreen
       />
       <div
         ref={crosshairRef}
@@ -661,9 +670,19 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
       </div>
       <div className="absolute top-2 left-2 right-2 pointer-events-none text-center text-[9px] font-heading text-mutedForeground">
         {mode === "inspect"
-          ? "Drag freely for full 360° inspection · scroll to zoom"
-          : "Move to point at the target · click / Fire / Space to shoot · right-drag to orbit"}
+          ? "Real M1918A2 model · drag freely for full 360° inspection · scroll to zoom"
+          : "Target is directly down-range · move to aim · click / Fire / Space to shoot"}
       </div>
+      {mode === "inspect" ? (
+        <a
+          href="https://sketchfab.com/3d-models/bar-m1918-a2-game-ready-rigged-1213683e58b14dd89fd4520489c7b732"
+          target="_blank"
+          rel="noreferrer"
+          className="absolute z-20 right-2 bottom-2 text-[8px] text-white/50 hover:text-white/80 font-heading"
+        >
+          M1918A2 model by Peanut_Butcher · CC BY 4.0
+        </a>
+      ) : null}
     </div>
   );
 }
