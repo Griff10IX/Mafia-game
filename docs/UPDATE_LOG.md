@@ -6,6 +6,18 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-11[/color][/b] — [b]New loot exclusives[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] Three new [b]Loot Box[/b] exclusives are live (cap [b]1 each[/b] worldwide). Check [b]Exclusive Scarcity[/b] on the Loot Boxes page for what’s still available.[/color]
+[*][color=#888888][b]New:[/b] [b]Browning Automatic Rifle M1918A2[/b] — loot-exclusive weapon (stronger than the Colt Monitor).[/color]
+[*][color=#888888][b]New:[/b] [b]Brewster Body Shield (1917)[/b] — loot-exclusive armour above the Steel Plate vest.[/color]
+[*][color=#888888][b]New:[/b] [b]Commissioner’s Pardon[/b] — mission perk: shorter ladder with rewards for skipped missions, monthly mission skips, and weekly points. Cannot be sold or gifted; moves on kill (limited transfers) then returns to the vault pool.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-05[/color][/b] — [b]Kill while target is traveling[/b][/size]
 [quote]
 [list]
