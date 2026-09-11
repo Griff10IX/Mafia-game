@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-11[/color][/b] — [b]Jarvis themes + Modern v2[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] Theme Studio Starting looks — [b]Jarvis[/b], [b]Jarvis v2[/b], and [b]Modern v2[/b] (PixGB HUD cyan + reactor-red atmosphere glow on void black). Original [b]Modern Full[/b] is unchanged.[/color]
+[*][color=#888888][b]Note:[/b] Hard refresh once if Theme Studio still shows the old list.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-11[/color][/b] — [b]iPhone menu navigation[/b][/size]
 [quote]
 [list]

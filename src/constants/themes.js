@@ -828,8 +828,10 @@ export const STARTING_LOOK_PRESET_IDS = [
   'old-default',
   'old-school-mafia-theme',
   'modern-full',
+  'modern-v2',
   'dark-mafia-wars',
   'pixgb-jarvis',
+  'pixgb-jarvis-v2',
   'noir-contrast-full',
   'crimson-mafia-full',
   'clean-steel-full',
@@ -854,6 +856,16 @@ export const THEME_LAYOUT_RESET_DEFAULTS = {
   buttonShapeId: DEFAULT_BUTTON_SHAPE_ID,
 };
 
+/** Extra layout defaults for Modern v2 (airier chrome). */
+export const THEME_LAYOUT_RESET_MODERN_V2 = {
+  ...THEME_LAYOUT_RESET_DEFAULTS,
+  topBarGap: 'spread',
+  topBarSize: 'medium',
+  sidebarSpacing: 'relaxed',
+  sidebarShowDividers: false,
+  buttonShapeId: 'rounded',
+};
+
 /** Extra layout defaults applied when resetting to Old School Mafia Theme. */
 export const THEME_LAYOUT_RESET_OLD_SCHOOL = {
   ...THEME_LAYOUT_RESET_DEFAULTS,
@@ -874,8 +886,10 @@ export const THEME_PRESETS = [
   { id: 'old-default', name: 'Old Default Theme', description: 'Full theme: gold accent, no texture, original buttons, default text & font', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'default', mutedWritingColourId: null, buttonStyleId: 'original', fontId: 'classic', textStyleId: 'normal', toastTextColourId: null, mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'classic', buttonShapeId: 'rounded', isFullPreset: true },
   { id: 'old-school-mafia-theme', name: 'Old School Mafia Theme', description: 'Classic early-browser look: navy canvas, silver chrome panels, metal tab headers, blue category labels', colourId: 'steel-blue', textureId: 'none', buttonColourId: 'dark-chrome', accentLineColourId: 'brushed-silver', writingColourId: 'cool-white', mutedWritingColourId: 'chrome-text', buttonStyleId: 'flat', fontId: 'compact', textStyleId: 'normal', toastTextColourId: 'cool-white', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'old_school', buttonShapeId: 'sharp', isFullPreset: true, presetCategory: 'mafia' },
   { id: 'modern-full', name: 'Modern Full', description: 'Modern layout with the Telegram sky-blue accent, cleaner typography and spacing', colourId: 'sky', textureId: 'modern-soft', buttonColourId: null, accentLineColourId: null, writingColourId: 'steel-text', mutedWritingColourId: 'slate-300', buttonStyleId: 'flat', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'steel-text', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'modern', buttonShapeId: 'rounded', isFullPreset: true },
+  { id: 'modern-v2', name: 'Modern v2', description: 'PixGB Jarvis atmosphere — void black, cyan + reactor-red corner glows, glossy HUD buttons, clean type, airier modern chrome', colourId: 'jarvis', textureId: 'modern-soft', buttonColourId: 'jarvis', accentLineColourId: 'jarvis-reactor', writingColourId: 'jarvis-ink', mutedWritingColourId: 'jarvis-ink', buttonStyleId: 'glossy', fontId: 'clean', textStyleId: 'medium', toastTextColourId: 'jarvis-ink', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'modern', buttonShapeId: 'rounded', layoutOverrides: THEME_LAYOUT_RESET_MODERN_V2, isFullPreset: true },
   { id: 'dark-mafia-wars', name: 'Dark Mafia Wars', description: 'Command-center chrome: near-black panels, sky accent rail, dense layout', colourId: 'sky', textureId: 'none', buttonColourId: 'sky', accentLineColourId: 'sky', writingColourId: 'cool-white', mutedWritingColourId: 'slate-300', buttonStyleId: 'flat', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'cool-white', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'dark_mafia', buttonShapeId: 'sharp', isFullPreset: true },
   { id: 'pixgb-jarvis', name: 'Jarvis', description: 'PixGB Iron Man HUD — arc-reactor cyan on void black, tech chrome (from PixGB.com)', colourId: 'jarvis', textureId: 'mesh', buttonColourId: 'jarvis', accentLineColourId: 'jarvis-reactor', writingColourId: 'jarvis-ink', mutedWritingColourId: 'jarvis-ink', buttonStyleId: 'flat', fontId: 'tech', textStyleId: 'medium', toastTextColourId: 'jarvis-ink', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'dark_mafia', buttonShapeId: 'sharp', isFullPreset: true, presetCategory: 'cyberpunk' },
+  { id: 'pixgb-jarvis-v2', name: 'Jarvis v2', description: 'Modern PixGB Jarvis — HUD cyan + reactor-red atmosphere glow, soft panels, glossy buttons', colourId: 'jarvis', textureId: 'modern-soft', buttonColourId: 'jarvis', accentLineColourId: 'jarvis', writingColourId: 'jarvis-ink', mutedWritingColourId: 'jarvis-ink', buttonStyleId: 'glossy', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'jarvis-ink', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'modern', buttonShapeId: 'rounded', isFullPreset: true, presetCategory: 'cyberpunk' },
   { id: 'noir-contrast-full', name: 'High Contrast Noir', description: 'Charcoal + gold buttons, carbon texture, sharp industrial type', colourId: 'charcoal', textureId: 'carbon', buttonColourId: 'dark-gold', accentLineColourId: 'gold', writingColourId: 'snow', mutedWritingColourId: 'zinc-400', buttonStyleId: 'outline', fontId: 'industrial', textStyleId: 'medium', toastTextColourId: 'snow', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'classic', buttonShapeId: 'sharp', isFullPreset: true, presetCategory: 'dark-pro' },
   { id: 'crimson-mafia-full', name: 'Crimson Mafia', description: 'Deep blood accent, warm parchment text, grain texture', colourId: 'blood', textureId: 'grain', buttonColourId: null, accentLineColourId: null, writingColourId: 'parchment', mutedWritingColourId: 'warm-gray', buttonStyleId: 'shaded', fontId: 'elegant', textStyleId: 'semibold', toastTextColourId: 'parchment', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized', themeVariant: 'classic', buttonShapeId: 'rounded', isFullPreset: true, presetCategory: 'dark-pro' },
   { id: 'clean-steel-full', name: 'Clean Steel', description: 'Cool steel accent, modern layout, mesh texture', colourId: 'steel', textureId: 'mesh', buttonColourId: null, accentLineColourId: null, writingColourId: 'cool-white', mutedWritingColourId: 'slate-300', buttonStyleId: 'flat', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'cool-white', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'modern', buttonShapeId: 'rounded', isFullPreset: true, presetCategory: 'metallic' },

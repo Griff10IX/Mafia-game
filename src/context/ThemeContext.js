@@ -51,7 +51,7 @@ const STORAGE_KEY_LEFT_MENU = 'app_theme_left_menu';
 const STORAGE_KEY_RIGHT_MENU = 'app_theme_right_menu';
 const STORAGE_KEY_MODERN_VISUAL_QUALITY = 'app_theme_modern_visual_quality';
 const STORAGE_KEY_BOOT = 'app_theme_boot';
-const THEME_BOOT_ATTRS = ['data-theme-variant', 'data-texture', 'data-button-style', 'data-button-shape', 'data-mobile-layout', 'data-modern-perf', 'data-left-menu', 'data-right-menu'];
+const THEME_BOOT_ATTRS = ['data-theme-variant', 'data-texture', 'data-button-style', 'data-button-shape', 'data-mobile-layout', 'data-modern-perf', 'data-left-menu', 'data-right-menu', 'data-atmosphere'];
 
 const LS_TOPBAR_GAP = 'topbar_gap';
 const LS_TOPBAR_SIZE = 'topbar_size';
@@ -439,6 +439,15 @@ function applyThemeVariantToDocument(themeVariant) {
   }
 }
 
+/** PixGB Jarvis HUD atmosphere (cyan + reactor-red corner glows). */
+function applyAtmosphereToDocument(colourId) {
+  if (colourId === 'jarvis') {
+    applyAttrToRootAndBody('data-atmosphere', 'jarvis');
+  } else {
+    applyAttrToRootAndBody('data-atmosphere', '');
+  }
+}
+
 function menuThemeAttr(choice, themeVariant) {
   const c = normalizeMenuThemeChoice(choice);
   if (c === MENU_THEME_FOLLOW) return 'follow';
@@ -623,6 +632,7 @@ function applyStoredThemeState(state) {
   applyTextStyleToDocument(getThemeTextStyle(state.textStyleId));
   applyTextureToDocument(state.textureId);
   applyThemeVariantToDocument(state.themeVariant);
+  applyAtmosphereToDocument(state.colourId);
   applyMenuThemesToDocument(state.themeVariant, state.leftMenuTheme, state.rightMenuTheme);
   applyMobileLayoutToDocument(state.mobileLayoutId);
   applyModernPerfFlagToDocument(state.themeVariant, state.modernVisualQuality);
@@ -823,6 +833,7 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     const colour = getResolvedColour(colourId, customThemes);
     applyColourToDocument(colour);
+    applyAtmosphereToDocument(colourId);
     const buttonColour = buttonColourId
       ? getResolvedColour(buttonColourId, customThemes)
       : { ...colour, stops: [colour.primary, colour.primary, colour.primary, colour.primary] };
@@ -1266,7 +1277,8 @@ export function ThemeProvider({ children }) {
     const writing = p.writingColourId || DEFAULT_WRITING_COLOUR_ID;
     const textStyle = p.textStyleId || DEFAULT_TEXT_STYLE_ID;
     const variant = normalizeThemeVariant(p.themeVariant);
-    const layout = variant === 'old_school' ? THEME_LAYOUT_RESET_OLD_SCHOOL : THEME_LAYOUT_RESET_DEFAULTS;
+    const baseLayout = variant === 'old_school' ? THEME_LAYOUT_RESET_OLD_SCHOOL : THEME_LAYOUT_RESET_DEFAULTS;
+    const layout = { ...baseLayout, ...(p.layoutOverrides || {}) };
     const mobileNav = p.mobileNavStyle === 'sidebar' ? 'sidebar' : 'bottom';
     const mobileLayout = normalizeMobileLayoutId(p.mobileLayoutId);
     const buttonShape = p.buttonShapeId || layout.buttonShapeId || DEFAULT_BUTTON_SHAPE_ID;

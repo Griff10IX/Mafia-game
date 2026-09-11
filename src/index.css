@@ -103,6 +103,123 @@ body[data-theme-variant="modern"] {
     linear-gradient(180deg, #1c1c22 0%, #16161b 48%, #101014 100%);
 }
 
+/*
+ * PixGB Jarvis atmosphere (from pixgb wwwroot/css):
+ *   body background:
+ *     radial-gradient(... var(--glow-a) ...) cyan top-left
+ *     radial-gradient(... var(--glow-b) ...) reactor red top-right
+ *   jarvis tokens: --glow-a rgba(79,210,255,.22) / --glow-b rgba(196,30,58,.14)
+ *   bg #05070c → #0a1018 → #02040a
+ */
+body[data-atmosphere="jarvis"] {
+  --jarvis-glow-a: rgba(79, 210, 255, 0.22);
+  --jarvis-glow-b: rgba(196, 30, 58, 0.14);
+  --jarvis-bg0: #05070c;
+  --jarvis-bg1: #0a1018;
+  --jarvis-bg2: #121a28;
+  --jarvis-bg-end: #02040a;
+  --jarvis-line: rgba(79, 210, 255, 0.18);
+  --noir-bg: var(--jarvis-bg0);
+  --noir-background: var(--jarvis-bg0);
+  --noir-content: var(--jarvis-bg1);
+  --noir-panel: var(--jarvis-bg2);
+  --noir-surface: rgba(10, 16, 28, 0.92);
+  --noir-raised: var(--jarvis-bg2);
+  --noir-border: var(--jarvis-line);
+  --noir-border-light: rgba(79, 210, 255, 0.1);
+  --noir-border-mid: rgba(79, 210, 255, 0.14);
+  background-color: var(--jarvis-bg0) !important;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 10% -10%, var(--jarvis-glow-a), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 90% 0%, var(--jarvis-glow-b), transparent 45%),
+    linear-gradient(180deg, var(--jarvis-bg0), var(--jarvis-bg1) 40%, var(--jarvis-bg-end)) !important;
+  background-attachment: fixed;
+}
+
+html[data-atmosphere="jarvis"] {
+  background-color: #05070c;
+}
+
+body[data-atmosphere="jarvis"][data-theme-variant="modern"] {
+  --modern-surface-1: #0a1018;
+  --modern-surface-2: #121a28;
+  --modern-surface-3: #182234;
+  --modern-border-soft: rgba(79, 210, 255, 0.16);
+  --modern-border-strong: rgba(79, 210, 255, 0.28);
+  --modern-divider: rgba(79, 210, 255, 0.12);
+  --modern-glow-soft: 0 0 28px rgba(79, 210, 255, 0.08), 0 18px 48px rgba(2, 4, 10, 0.75);
+  --modern-panel-shadow: 0 0 32px rgba(79, 210, 255, 0.07), 0 20px 56px rgba(2, 4, 10, 0.8);
+  --modern-input-bg: rgba(5, 7, 12, 0.92);
+  --modern-input-border: rgba(79, 210, 255, 0.22);
+  --modern-fill:
+    radial-gradient(ellipse 70% 45% at 12% -8%, rgba(79, 210, 255, 0.16), transparent 55%),
+    radial-gradient(ellipse 55% 40% at 92% 0%, rgba(196, 30, 58, 0.12), transparent 50%),
+    linear-gradient(180deg, #121a28 0%, #0a1018 48%, #05070c 100%);
+  --modern-fill-border: rgba(79, 210, 255, 0.28);
+  --modern-page-border: rgba(79, 210, 255, 0.18);
+  --modern-header-strip: linear-gradient(90deg, rgba(79, 210, 255, 0.22) 0%, rgba(196, 30, 58, 0.1) 45%, transparent 100%);
+  --modern-panel-fill: linear-gradient(180deg, rgba(18, 26, 40, 0.96) 0%, rgba(10, 16, 28, 0.94) 100%);
+  --modern-page-fill:
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(79, 210, 255, 0.14), transparent 52%),
+    radial-gradient(ellipse 60% 40% at 90% 0%, rgba(196, 30, 58, 0.12), transparent 48%),
+    linear-gradient(180deg, #0a1018 0%, #05070c 55%, #02040a 100%);
+  --app-card-shadow: 0 0 20px rgba(79, 210, 255, 0.06), 0 12px 36px rgba(0, 0, 0, 0.5);
+  --app-surface-radius: 12px;
+}
+
+/* Texture overlay becomes PixGB corner bloom instead of white wash */
+body[data-atmosphere="jarvis"][data-texture="modern-soft"]::before {
+  opacity: 1;
+  background:
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(79, 210, 255, 0.2), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 90% 0%, rgba(196, 30, 58, 0.16), transparent 45%);
+  mix-blend-mode: screen;
+}
+
+body[data-atmosphere="jarvis"][data-theme-variant="modern"][data-modern-perf="on"][data-texture="modern-soft"]::before {
+  opacity: 0.85;
+}
+
+/* Header cyan rail like PixGB .site-header */
+body[data-atmosphere="jarvis"] [data-layout="topbar"] {
+  border-bottom-color: rgba(79, 210, 255, 0.25) !important;
+  box-shadow: 0 0 24px rgba(79, 210, 255, 0.06);
+}
+
+body[data-atmosphere="jarvis"][data-theme-variant="modern"] [data-layout="sidebar"],
+body[data-atmosphere="jarvis"][data-theme-variant="modern"] [data-layout="right-sidebar"] {
+  border-color: rgba(79, 210, 255, 0.16);
+  box-shadow: 0 0 28px rgba(79, 210, 255, 0.04);
+}
+
+/* Primary buttons — PixGB jarvis .btn glow */
+body[data-atmosphere="jarvis"] button.bg-primary,
+body[data-atmosphere="jarvis"] button.from-primary,
+body[data-atmosphere="jarvis"] a.bg-primary,
+body[data-atmosphere="jarvis"] a.from-primary {
+  box-shadow: 0 0 16px rgba(79, 210, 255, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+
+body[data-atmosphere="jarvis"] button.bg-primary:hover,
+body[data-atmosphere="jarvis"] button.from-primary:hover,
+body[data-atmosphere="jarvis"] a.bg-primary:hover,
+body[data-atmosphere="jarvis"] a.from-primary:hover {
+  box-shadow: 0 0 22px rgba(79, 210, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+/* Ghost / outline controls — soft cyan halo */
+body[data-atmosphere="jarvis"] button.border-primary,
+body[data-atmosphere="jarvis"] a.border-primary {
+  box-shadow: 0 0 14px rgba(79, 210, 255, 0.18);
+}
+
+body[data-atmosphere="jarvis"][data-theme-variant="modern"] [data-layout="main"] .rounded-xl,
+body[data-atmosphere="jarvis"][data-theme-variant="modern"] [data-layout="main"] .rounded-lg,
+body[data-atmosphere="jarvis"][data-theme-variant="modern"] [data-layout="main"] .rounded-2xl {
+  border-color: rgba(79, 210, 255, 0.16) !important;
+  box-shadow: 0 0 18px rgba(79, 210, 255, 0.05), 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
 /* Modern: Forum / Inbox boxes stay zinc; theme colour is accents only */
 body[data-theme-variant="modern"] [data-layout="main"] .rounded-xl,
 body[data-theme-variant="modern"] [data-layout="main"] .rounded-lg,
@@ -414,6 +531,20 @@ a.from-primary {
 [data-button-style="glossy"] a.bg-primary:hover,
 [data-button-style="glossy"] a.from-primary:hover {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Jarvis + glossy: keep PixGB cyan bloom over generic glossy shadow */
+body[data-atmosphere="jarvis"][data-button-style="glossy"] button.bg-primary,
+body[data-atmosphere="jarvis"][data-button-style="glossy"] button.from-primary,
+body[data-atmosphere="jarvis"][data-button-style="glossy"] a.bg-primary,
+body[data-atmosphere="jarvis"][data-button-style="glossy"] a.from-primary {
+  box-shadow: 0 0 16px rgba(79, 210, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+}
+body[data-atmosphere="jarvis"][data-button-style="glossy"] button.bg-primary:hover,
+body[data-atmosphere="jarvis"][data-button-style="glossy"] button.from-primary:hover,
+body[data-atmosphere="jarvis"][data-button-style="glossy"] a.bg-primary:hover,
+body[data-atmosphere="jarvis"][data-button-style="glossy"] a.from-primary:hover {
+  box-shadow: 0 0 24px rgba(79, 210, 255, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
 }
 
 /* Shaded */
