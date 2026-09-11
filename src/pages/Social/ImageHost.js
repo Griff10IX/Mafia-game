@@ -329,7 +329,7 @@ export default function ImageHost() {
               Image host
             </h1>
             <p className="text-[10px] font-heading text-mutedForeground mt-0.5">
-              Host up to {max} pictures (JPEG, PNG, GIF, WebP). Copy direct links for forums, custom cars, etc. Leave Save size on <span className="text-foreground">Original size</span> to keep full quality; optional max side only shrinks if you pick it. Animated GIFs keep the original file if you pick a size.
+              Hosted via <span className="text-foreground">PixGB</span> — up to {max} pictures each (JPEG, PNG, GIF, WebP). Copy links for forums, custom cars, etc. Leave Save size on <span className="text-foreground">Original size</span> for full quality. Animated GIFs keep the original if you pick a size.
             </p>
           </div>
         </div>

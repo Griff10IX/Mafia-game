@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field, field_validator
 
 from utils.image_host_resize import maybe_resize_for_host, normalize_max_edge
@@ -17,6 +17,7 @@ from utils.image_upload_security import (
     download_remote_image_full,
     verify_uploaded_file_bytes,
 )
+from utils.pixgb_client import PixGbError, delete_short_code, enabled as pixgb_enabled, upload_bytes as pixgb_upload_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,102 @@ def register(r) -> None:
 
     async def _count_active(user_id: str) -> int:
         return await db.image_host_uploads.count_documents({"user_id": user_id, "deleted_at": None})
+
+    async def _delete_pixgb(doc: dict) -> None:
+        code = (doc or {}).get("pixgb_short_code")
+        if code:
+            try:
+                await delete_short_code(code)
+            except Exception as e:
+                logger.warning("image_host pixgb delete failed: %s", e)
+
+    async def _persist_hosted_image(
+        *,
+        uid: str,
+        raw: bytes,
+        mime: str,
+        original_filename: Optional[str],
+        resize_meta,
+        is_public_gallery: bool,
+        source_url: Optional[str] = None,
+    ) -> str:
+        ext = MIME_TO_FILE_EXT.get(mime)
+        if not ext:
+            raise HTTPException(status_code=400, detail="Unsupported image type")
+
+        public_id = await _unique_public_id()
+        now = datetime.now(timezone.utc).isoformat()
+        doc = {
+            "id": str(uuid.uuid4()),
+            "public_id": public_id,
+            "user_id": uid,
+            "mime": mime,
+            "size_bytes": len(raw),
+            "original_filename": (original_filename or "")[:200] or None,
+            "is_public_gallery": bool(is_public_gallery),
+            "created_at": now,
+            "deleted_at": None,
+            "resize_max_edge": resize_meta,
+            "gallery_max_edge": gallery_max_edge,
+        }
+        if source_url:
+            doc["source_url"] = source_url[:2048]
+
+        if pixgb_enabled():
+            try:
+                stored = await pixgb_upload_bytes(
+                    raw,
+                    original_filename or f"{public_id}.{ext}",
+                    mime,
+                    custom_slug=f"mw-{public_id.lower()}",
+                )
+            except PixGbError as e:
+                status = e.status_code if e.status_code in (400, 401, 403, 409, 413, 429) else 400
+                if e.status_code >= 500:
+                    status = 502
+                raise HTTPException(status_code=status, detail=e.message) from e
+            doc.update({
+                "pixgb_short_code": stored.get("short_code"),
+                "pixgb_custom_slug": stored.get("custom_slug"),
+                "pixgb_page_url": stored.get("page_url"),
+                "pixgb_direct_url": stored.get("direct_url"),
+                "pixgb_thumb_url": stored.get("thumb_url"),
+                "pixgb_delete_url": stored.get("delete_url"),
+                "rel_path": None,
+                "rel_path_gallery": None,
+                "gallery_mime": mime,
+                "gallery_size_bytes": stored.get("size") or len(raw),
+            })
+            await db.image_host_uploads.insert_one(doc)
+            return public_id
+
+        _ensure_upload_root()
+        path = _disk_path(uid, public_id, ext)
+        try:
+            path.write_bytes(raw)
+        except OSError as e:
+            logger.exception("image_host write failed: %s", e)
+            raise HTTPException(status_code=500, detail="Failed to save image")
+
+        gallery_raw, gallery_mime = _build_gallery_variant_bytes(raw, mime)
+        gallery_ext = MIME_TO_FILE_EXT.get(gallery_mime)
+        if not gallery_ext:
+            raise HTTPException(status_code=400, detail="Unsupported image type for gallery variant")
+        gallery_path = _gallery_disk_path(uid, public_id, gallery_ext)
+        try:
+            gallery_path.write_bytes(gallery_raw)
+        except OSError as e:
+            logger.exception("image_host gallery write failed: %s", e)
+            raise HTTPException(status_code=500, detail="Failed to save gallery image")
+
+        doc.update({
+            "rel_path": str(path.relative_to(ROOT_DIR)).replace("\\", "/"),
+            "rel_path_gallery": str(gallery_path.relative_to(ROOT_DIR)).replace("\\", "/"),
+            "gallery_mime": gallery_mime,
+            "gallery_size_bytes": len(gallery_raw),
+        })
+        await db.image_host_uploads.insert_one(doc)
+        return public_id
 
     def _disk_path(user_id: str, public_id: str, ext: str) -> Path:
         user_dir = upload_root / user_id.replace("/", "_")
@@ -164,48 +261,14 @@ def register(r) -> None:
         except ValueError as e:
             raise HTTPException(status_code=400, detail=f"Image upload failed during resize: {str(e)}") from e
 
-        ext = MIME_TO_FILE_EXT.get(mime)
-        if not ext:
-            raise HTTPException(status_code=400, detail="Unsupported image type")
-
-        public_id = await _unique_public_id()
-        path = _disk_path(uid, public_id, ext)
-        try:
-            path.write_bytes(raw)
-        except OSError as e:
-            logger.exception("image_host write failed: %s", e)
-            raise HTTPException(status_code=500, detail="Failed to save image")
-
-        gallery_raw, gallery_mime = _build_gallery_variant_bytes(raw, mime)
-        gallery_ext = MIME_TO_FILE_EXT.get(gallery_mime)
-        if not gallery_ext:
-            raise HTTPException(status_code=400, detail="Unsupported image type for gallery variant")
-        gallery_path = _gallery_disk_path(uid, public_id, gallery_ext)
-        try:
-            gallery_path.write_bytes(gallery_raw)
-        except OSError as e:
-            logger.exception("image_host gallery write failed: %s", e)
-            raise HTTPException(status_code=500, detail="Failed to save gallery image")
-
-        now = datetime.now(timezone.utc).isoformat()
-        doc = {
-            "id": str(uuid.uuid4()),
-            "public_id": public_id,
-            "user_id": uid,
-            "mime": mime,
-            "size_bytes": len(raw),
-            "original_filename": (file.filename or "")[:200] or None,
-            "rel_path": str(path.relative_to(ROOT_DIR)).replace("\\", "/"),
-            "rel_path_gallery": str(gallery_path.relative_to(ROOT_DIR)).replace("\\", "/"),
-            "gallery_mime": gallery_mime,
-            "gallery_size_bytes": len(gallery_raw),
-            "gallery_max_edge": gallery_max_edge,
-            "is_public_gallery": _coerce_bool(is_public_gallery),
-            "created_at": now,
-            "deleted_at": None,
-            "resize_max_edge": resize_meta,
-        }
-        await db.image_host_uploads.insert_one(doc)
+        public_id = await _persist_hosted_image(
+            uid=uid,
+            raw=raw,
+            mime=mime,
+            original_filename=file.filename,
+            resize_meta=resize_meta,
+            is_public_gallery=_coerce_bool(is_public_gallery),
+        )
         return {"public_id": public_id, "message": "Uploaded"}
 
     async def import_from_url(
@@ -236,49 +299,15 @@ def register(r) -> None:
         except ValueError as e:
             raise HTTPException(status_code=400, detail=f"Image import failed during resize: {str(e)}") from e
 
-        ext = MIME_TO_FILE_EXT.get(mime)
-        if not ext:
-            raise HTTPException(status_code=400, detail="Unsupported image type")
-
-        public_id = await _unique_public_id()
-        path = _disk_path(uid, public_id, ext)
-        try:
-            path.write_bytes(data)
-        except OSError as e:
-            logger.exception("image_host import write failed: %s", e)
-            raise HTTPException(status_code=500, detail="Failed to save image")
-
-        gallery_raw, gallery_mime = _build_gallery_variant_bytes(data, mime)
-        gallery_ext = MIME_TO_FILE_EXT.get(gallery_mime)
-        if not gallery_ext:
-            raise HTTPException(status_code=400, detail="Unsupported image type for gallery variant")
-        gallery_path = _gallery_disk_path(uid, public_id, gallery_ext)
-        try:
-            gallery_path.write_bytes(gallery_raw)
-        except OSError as e:
-            logger.exception("image_host import gallery write failed: %s", e)
-            raise HTTPException(status_code=500, detail="Failed to save gallery image")
-
-        now = datetime.now(timezone.utc).isoformat()
-        doc = {
-            "id": str(uuid.uuid4()),
-            "public_id": public_id,
-            "user_id": uid,
-            "mime": mime,
-            "size_bytes": len(data),
-            "original_filename": None,
-            "source_url": body.url.strip()[:2048],
-            "rel_path": str(path.relative_to(ROOT_DIR)).replace("\\", "/"),
-            "rel_path_gallery": str(gallery_path.relative_to(ROOT_DIR)).replace("\\", "/"),
-            "gallery_mime": gallery_mime,
-            "gallery_size_bytes": len(gallery_raw),
-            "gallery_max_edge": gallery_max_edge,
-            "is_public_gallery": bool(body.is_public_gallery),
-            "created_at": now,
-            "deleted_at": None,
-            "resize_max_edge": resize_meta,
-        }
-        await db.image_host_uploads.insert_one(doc)
+        public_id = await _persist_hosted_image(
+            uid=uid,
+            raw=data,
+            mime=mime,
+            original_filename=None,
+            resize_meta=resize_meta,
+            is_public_gallery=bool(body.is_public_gallery),
+            source_url=body.url.strip(),
+        )
         return {"public_id": public_id, "message": "Imported"}
 
     async def delete_image(
@@ -290,6 +319,7 @@ def register(r) -> None:
         if not doc:
             raise HTTPException(status_code=404, detail="Image not found")
 
+        await _delete_pixgb(doc)
         rel = doc.get("rel_path")
         if rel:
             try:
@@ -323,8 +353,8 @@ def register(r) -> None:
         if not doc:
             raise HTTPException(status_code=404, detail="Image not found")
 
-        # Backfill gallery variant for legacy items if needed before publishing.
-        if body.is_public_gallery and not doc.get("rel_path_gallery"):
+        # Backfill gallery variant for legacy local items if needed before publishing.
+        if body.is_public_gallery and not doc.get("rel_path_gallery") and not doc.get("pixgb_thumb_url") and not doc.get("pixgb_direct_url"):
             src_abs = _safe_rel_to_abs(doc.get("rel_path"))
             if not src_abs or not src_abs.is_file():
                 raise HTTPException(status_code=400, detail="Original image file missing; re-upload to publish publicly.")
@@ -361,8 +391,10 @@ def register(r) -> None:
     async def serve_image(public_id: str):
         doc = await db.image_host_uploads.find_one(
             {"public_id": public_id, "deleted_at": None},
-            {"_id": 0, "rel_path": 1, "mime": 1},
+            {"_id": 0, "rel_path": 1, "mime": 1, "pixgb_direct_url": 1},
         )
+        if doc and doc.get("pixgb_direct_url"):
+            return RedirectResponse(url=doc["pixgb_direct_url"], status_code=302)
         if not doc or not doc.get("rel_path"):
             raise HTTPException(status_code=404, detail="Not found")
         fp = (ROOT_DIR / doc["rel_path"]).resolve()
@@ -383,10 +415,13 @@ def register(r) -> None:
     async def serve_gallery_image(public_id: str):
         doc = await db.image_host_uploads.find_one(
             {"public_id": public_id, "deleted_at": None},
-            {"_id": 0, "rel_path_gallery": 1, "gallery_mime": 1, "rel_path": 1, "mime": 1},
+            {"_id": 0, "rel_path_gallery": 1, "gallery_mime": 1, "rel_path": 1, "mime": 1, "pixgb_thumb_url": 1, "pixgb_direct_url": 1},
         )
         if not doc:
             raise HTTPException(status_code=404, detail="Not found")
+        pixgb_url = doc.get("pixgb_thumb_url") or doc.get("pixgb_direct_url")
+        if pixgb_url:
+            return RedirectResponse(url=pixgb_url, status_code=302)
         rel = doc.get("rel_path_gallery") or doc.get("rel_path")
         fp = _safe_rel_to_abs(rel)
         if not fp or not fp.is_file():
@@ -495,6 +530,7 @@ def register(r) -> None:
         if not doc:
             raise HTTPException(status_code=404, detail="Image not found")
 
+        await _delete_pixgb(doc)
         rel = doc.get("rel_path")
         if rel:
             try:

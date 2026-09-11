@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-11[/color][/b] — [b]Image host → PixGB[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Social → Image host[/b] now stores new uploads on [b]PixGB.com[/b] (same 10 images per player). Old local uploads still work.[/color]
+[*][color=#888888][b]Note:[/b] Shared free-plan storage/bandwidth applies across the game account — if the host is full you may see an upload error until space frees up.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-11[/color][/b] — [b]Jarvis themes + Modern v2[/b][/size]
 [quote]
 [list]
