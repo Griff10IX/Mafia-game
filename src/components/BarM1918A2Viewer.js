@@ -2,9 +2,33 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
 function woodMat() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  const gradient = ctx.createLinearGradient(0, 0, 0, 64);
+  gradient.addColorStop(0, "#8a5932");
+  gradient.addColorStop(0.5, "#5d351d");
+  gradient.addColorStop(1, "#7a4928");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 256, 64);
+  for (let i = 0; i < 34; i += 1) {
+    const y = (i / 34) * 64 + Math.sin(i * 1.7) * 2;
+    ctx.strokeStyle = `rgba(35, 14, 5, ${0.08 + (i % 4) * 0.025})`;
+    ctx.lineWidth = 0.7 + (i % 3) * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.bezierCurveTo(70, y + Math.sin(i) * 4, 170, y - Math.cos(i) * 3, 256, y + 1);
+    ctx.stroke();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(2.2, 1);
   return new THREE.MeshStandardMaterial({
-    color: 0x6d4324,
-    roughness: 0.78,
+    color: 0xffffff,
+    map: texture,
+    roughness: 0.64,
     metalness: 0.04,
   });
 }
@@ -38,10 +62,27 @@ export function buildBarM1918A2() {
     return m;
   };
 
-  // Buttstock
-  add(new THREE.BoxGeometry(0.28, 0.105, 0.046), wood, [-0.52, -0.01, 0]);
-  add(new THREE.BoxGeometry(0.09, 0.12, 0.05), wood, [-0.66, 0.0, 0]);
-  add(new THREE.BoxGeometry(0.08, 0.07, 0.044), wood, [-0.38, -0.02, 0], [0, 0, -0.18]);
+  // Sculpted walnut buttstock
+  const stockShape = new THREE.Shape();
+  stockShape.moveTo(-0.72, -0.045);
+  stockShape.bezierCurveTo(-0.69, 0.015, -0.68, 0.072, -0.62, 0.075);
+  stockShape.lineTo(-0.43, 0.07);
+  stockShape.bezierCurveTo(-0.37, 0.06, -0.34, 0.025, -0.35, -0.01);
+  stockShape.lineTo(-0.42, -0.055);
+  stockShape.bezierCurveTo(-0.52, -0.075, -0.63, -0.08, -0.72, -0.045);
+  const stock = add(
+    new THREE.ExtrudeGeometry(stockShape, {
+      depth: 0.052,
+      bevelEnabled: true,
+      bevelSegments: 3,
+      bevelSize: 0.008,
+      bevelThickness: 0.006,
+      curveSegments: 12,
+    }),
+    wood,
+    [0, 0, -0.026],
+  );
+  stock.name = "walnut_stock";
   add(new THREE.BoxGeometry(0.055, 0.012, 0.048), steel, [-0.695, 0.01, 0]); // butt plate
 
   // Receiver
@@ -62,10 +103,16 @@ export function buildBarM1918A2() {
   // Magazine
   add(new THREE.BoxGeometry(0.045, 0.16, 0.028), magSteel, [0.02, -0.07, 0], [0.12, 0, 0]);
   add(new THREE.BoxGeometry(0.042, 0.018, 0.026), magSteel, [0.02, -0.155, 0]);
+  for (let i = 0; i < 5; i += 1) {
+    add(new THREE.BoxGeometry(0.047, 0.003, 0.031), steel, [0.02, -0.105 - i * 0.022, 0]);
+  }
 
   // Forend
   add(new THREE.BoxGeometry(0.22, 0.055, 0.048), wood, [0.18, -0.012, 0]);
   add(new THREE.BoxGeometry(0.08, 0.04, 0.044), wood, [0.30, 0.0, 0]);
+  for (let i = 0; i < 7; i += 1) {
+    add(new THREE.BoxGeometry(0.004, 0.058, 0.052), steel, [0.085 + i * 0.029, -0.012, 0]);
+  }
 
   // Barrel (long)
   const barrel = add(new THREE.CylinderGeometry(0.011, 0.013, 0.62, 14), blued, [0.58, 0.028, 0], [0, 0, Math.PI / 2]);
@@ -84,6 +131,13 @@ export function buildBarM1918A2() {
   // Front sight
   add(new THREE.BoxGeometry(0.018, 0.032, 0.012), steel, [0.78, 0.055, 0]);
   add(new THREE.BoxGeometry(0.004, 0.02, 0.004), steel, [0.78, 0.072, 0]);
+
+  // Receiver pins, selector and ejection port
+  [-0.16, -0.08, 0.01].forEach((x) => {
+    add(new THREE.CylinderGeometry(0.007, 0.007, 0.056, 12), steel, [x, 0.03, 0], [Math.PI / 2, 0, 0]);
+  });
+  add(new THREE.BoxGeometry(0.082, 0.026, 0.003), steelMat(0x050607), [-0.03, 0.045, 0.027]);
+  add(new THREE.CylinderGeometry(0.004, 0.004, 0.04, 8), steel, [-0.19, 0.025, 0.03], [Math.PI / 2, 0, 0]);
 
   // Carry handle
   add(new THREE.TorusGeometry(0.035, 0.004, 8, 16, Math.PI), steel, [0.12, 0.09, 0], [Math.PI / 2, 0, 0]);
@@ -143,23 +197,36 @@ function buildStudio() {
     new THREE.CircleGeometry(0.28, 32),
     new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.9 }),
   );
-  targetBoard.position.set(0.2, 0.35, -2.4);
+  targetBoard.rotation.y = -Math.PI / 2;
+  targetBoard.position.set(2.42, 0.32, 0);
   targetBoard.name = "target";
   root.add(targetBoard);
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(0.08, 0.16, 32),
     new THREE.MeshBasicMaterial({ color: 0xb42318, side: THREE.DoubleSide }),
   );
+  ring.rotation.y = -Math.PI / 2;
   ring.position.copy(targetBoard.position);
-  ring.position.z += 0.01;
+  ring.position.x -= 0.004;
   root.add(ring);
   const bull = new THREE.Mesh(
     new THREE.CircleGeometry(0.04, 24),
     new THREE.MeshBasicMaterial({ color: 0x1a1208 }),
   );
+  bull.rotation.y = -Math.PI / 2;
   bull.position.copy(targetBoard.position);
-  bull.position.z += 0.012;
+  bull.position.x -= 0.006;
   root.add(bull);
+
+  const targetPostMaterial = new THREE.MeshStandardMaterial({ color: 0x49301e, roughness: 0.88 });
+  const post = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.78, 0.05), targetPostMaterial);
+  post.position.set(2.45, -0.16, 0);
+  post.castShadow = true;
+  root.add(post);
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.035, 0.45), targetPostMaterial);
+  base.position.set(2.45, -0.56, 0);
+  base.castShadow = true;
+  root.add(base);
 
   root.userData.target = targetBoard;
   return root;
@@ -167,6 +234,7 @@ function buildStudio() {
 
 export default function BarM1918A2Viewer({ className = "", onShot = null }) {
   const wrapRef = useRef(null);
+  const crosshairRef = useRef(null);
   const apiRef = useRef(null);
   const onShotRef = useRef(onShot);
   onShotRef.current = onShot;
@@ -176,46 +244,51 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
     if (!wrap) return undefined;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0b0c10);
-    scene.fog = new THREE.Fog(0x0b0c10, 4.5, 9);
+    scene.background = new THREE.Color(0x17191d);
+    scene.fog = new THREE.Fog(0x17191d, 6, 12);
 
-    const camera = new THREE.PerspectiveCamera(38, 16 / 10, 0.05, 40);
-    const orbit = { yaw: 0.85, pitch: 0.22, dist: 2.15 };
+    const camera = new THREE.PerspectiveCamera(40, 16 / 10, 0.05, 40);
+    const orbit = { yaw: 0.06, pitch: 0.18, dist: 3.25 };
+    const focus = new THREE.Vector3(0.72, 0.03, 0);
     const applyCam = () => {
       const cp = Math.cos(orbit.pitch);
       camera.position.set(
-        Math.sin(orbit.yaw) * cp * orbit.dist,
-        Math.sin(orbit.pitch) * orbit.dist + 0.12,
+        focus.x + Math.sin(orbit.yaw) * cp * orbit.dist,
+        focus.y + Math.sin(orbit.pitch) * orbit.dist,
         Math.cos(orbit.yaw) * cp * orbit.dist,
       );
-      camera.lookAt(0, 0.02, 0);
+      camera.lookAt(focus);
     };
     applyCam();
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.45;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     wrap.appendChild(renderer.domElement);
 
-    const key = new THREE.SpotLight(0xfff2dd, 3.2, 12, 0.55, 0.35);
-    key.position.set(2.2, 2.4, 1.6);
+    const key = new THREE.SpotLight(0xfff2dd, 6.2, 12, 0.72, 0.32);
+    key.position.set(0.8, 3.2, 2.4);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
     scene.add(key);
-    scene.add(new THREE.AmbientLight(0x6a7280, 0.35));
-    const fill = new THREE.DirectionalLight(0x88a0c8, 0.55);
+    scene.add(new THREE.HemisphereLight(0xd6deee, 0x332012, 1.6));
+    const fill = new THREE.DirectionalLight(0xaac4ee, 1.4);
     fill.position.set(-2.4, 1.4, -1.2);
     scene.add(fill);
-    const rim = new THREE.PointLight(0xffd9a0, 0.8, 6);
+    const rim = new THREE.PointLight(0xffd9a0, 2.2, 6);
     rim.position.set(-0.4, 1.1, 1.4);
     scene.add(rim);
 
     const studio = buildStudio();
     scene.add(studio);
     const gun = buildBarM1918A2();
-    gun.position.set(-0.06, 0.02, 0);
-    gun.rotation.y = -0.12;
+    const gunBase = new THREE.Vector3(-0.34, 0.02, 0);
+    gun.position.copy(gunBase);
+    gun.scale.setScalar(1.22);
     scene.add(gun);
 
     const muzzleFlash = new THREE.Mesh(
@@ -237,8 +310,14 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
     const casingGeo = new THREE.CylinderGeometry(0.004, 0.004, 0.018, 6);
     const casingMat = steelMat(0xc4a35a, { metalness: 0.7, roughness: 0.4 });
 
-    const drag = { on: false, x: 0, y: 0, yaw: orbit.yaw, pitch: orbit.pitch };
+    const drag = { on: false, moved: false, x: 0, y: 0, yaw: orbit.yaw, pitch: orbit.pitch };
     const recoil = { kick: 0, flashUntil: 0 };
+    const aim = { yaw: 0, pitch: 0, point: new THREE.Vector3(2.4, 0.32, 0) };
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const targetPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 2.39);
+    const targetCentre = new THREE.Vector3(2.42, 0.32, 0);
+    const holes = [];
     let raf = 0;
     let last = performance.now();
 
@@ -253,8 +332,32 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
     const ro = new ResizeObserver(sizeToWrap);
     ro.observe(wrap);
 
+    const updateAim = (e) => {
+      const rect = wrap.getBoundingClientRect();
+      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const point = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(targetPlane, point)) return;
+      point.y = THREE.MathUtils.clamp(point.y, -0.45, 1.15);
+      point.z = THREE.MathUtils.clamp(point.z, -0.9, 0.9);
+      aim.point.copy(point);
+      const delta = point.clone().sub(gunBase);
+      aim.yaw = Math.atan2(-delta.z, delta.x);
+      aim.pitch = Math.atan2(delta.y, Math.hypot(delta.x, delta.z));
+      if (crosshairRef.current) {
+        crosshairRef.current.style.left = `${e.clientX - rect.left}px`;
+        crosshairRef.current.style.top = `${e.clientY - rect.top}px`;
+        crosshairRef.current.style.opacity = "1";
+      }
+    };
     const onDown = (e) => {
+      if (e.button !== 2 && !e.shiftKey) {
+        updateAim(e);
+        return;
+      }
       drag.on = true;
+      drag.moved = false;
       drag.x = e.clientX;
       drag.y = e.clientY;
       drag.yaw = orbit.yaw;
@@ -262,9 +365,13 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
       wrap.setPointerCapture?.(e.pointerId);
     };
     const onMove = (e) => {
-      if (!drag.on) return;
+      if (!drag.on) {
+        updateAim(e);
+        return;
+      }
       const dx = e.clientX - drag.x;
       const dy = e.clientY - drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
       orbit.yaw = drag.yaw - dx * 0.008;
       orbit.pitch = Math.max(-0.35, Math.min(0.85, drag.pitch + dy * 0.006));
       applyCam();
@@ -272,6 +379,14 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
     const onUp = () => {
       drag.on = false;
     };
+    const onClick = (e) => {
+      if (e.button === 0 && !drag.moved) {
+        updateAim(e);
+        fire();
+      }
+      drag.moved = false;
+    };
+    const onContextMenu = (e) => e.preventDefault();
     const onWheel = (e) => {
       e.preventDefault();
       orbit.dist = Math.max(1.15, Math.min(3.6, orbit.dist + e.deltaY * 0.0022));
@@ -290,9 +405,28 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
       const origin = new THREE.Vector3();
       muzzle.getWorldPosition(origin);
       const dir = new THREE.Vector3(1, 0, 0).applyQuaternion(muzzle.getWorldQuaternion(new THREE.Quaternion())).normalize();
-      const hit = origin.clone().add(dir.multiplyScalar(3.4));
+      const shotRay = new THREE.Ray(origin, dir);
+      const hit = new THREE.Vector3();
+      if (!shotRay.intersectPlane(targetPlane, hit)) hit.copy(origin).add(dir.multiplyScalar(4));
       tracerGeo.setFromPoints([origin, hit]);
       tracerMat.opacity = 0.85;
+      const targetDistance = Math.hypot(hit.y - targetCentre.y, hit.z - targetCentre.z);
+      if (targetDistance <= 0.28) {
+        const hole = new THREE.Mesh(
+          new THREE.CircleGeometry(0.009 + Math.random() * 0.004, 10),
+          new THREE.MeshBasicMaterial({ color: 0x090909, side: THREE.DoubleSide }),
+        );
+        hole.rotation.y = -Math.PI / 2;
+        hole.position.set(2.409, hit.y, hit.z);
+        scene.add(hole);
+        holes.push(hole);
+        if (holes.length > 40) {
+          const old = holes.shift();
+          scene.remove(old);
+          old.geometry.dispose();
+          old.material.dispose();
+        }
+      }
       const casing = new THREE.Mesh(casingGeo, casingMat);
       casing.position.copy(origin);
       casing.position.y -= 0.02;
@@ -310,6 +444,8 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
     wrap.addEventListener("pointermove", onMove);
     wrap.addEventListener("pointerup", onUp);
     wrap.addEventListener("pointercancel", onUp);
+    wrap.addEventListener("click", onClick);
+    wrap.addEventListener("contextmenu", onContextMenu);
     wrap.addEventListener("wheel", onWheel, { passive: false });
     const onKey = (e) => {
       if (e.code === "Space" || e.key === " ") {
@@ -323,8 +459,10 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       recoil.kick *= Math.pow(0.08, dt * 8);
-      gun.rotation.z = recoil.kick;
-      gun.position.x = -0.06 - recoil.kick * 0.35;
+      gun.rotation.y += (aim.yaw - gun.rotation.y) * Math.min(1, dt * 12);
+      gun.rotation.z += (aim.pitch + recoil.kick - gun.rotation.z) * Math.min(1, dt * 18);
+      gun.position.copy(gunBase);
+      gun.position.x -= recoil.kick * 0.35;
       if (now > recoil.flashUntil) {
         muzzleFlash.visible = false;
         muzzleLight.intensity = Math.max(0, muzzleLight.intensity - dt * 40);
@@ -354,6 +492,8 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
       wrap.removeEventListener("pointermove", onMove);
       wrap.removeEventListener("pointerup", onUp);
       wrap.removeEventListener("pointercancel", onUp);
+      wrap.removeEventListener("click", onClick);
+      wrap.removeEventListener("contextmenu", onContextMenu);
       wrap.removeEventListener("wheel", onWheel);
       window.removeEventListener("keydown", onKey);
       renderer.dispose();
@@ -371,7 +511,18 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
 
   return (
     <div className={className} style={{ position: "relative", width: "100%", height: "100%" }}>
-      <div ref={wrapRef} className="absolute inset-0 cursor-grab active:cursor-grabbing touch-none" />
+      <div ref={wrapRef} className="absolute inset-0 cursor-crosshair touch-none" />
+      <div
+        ref={crosshairRef}
+        className="absolute z-10 pointer-events-none w-6 h-6 -translate-x-1/2 -translate-y-1/2 opacity-0"
+        aria-hidden
+      >
+        <span className="absolute left-1/2 top-0 w-px h-2 bg-red-400/90" />
+        <span className="absolute left-1/2 bottom-0 w-px h-2 bg-red-400/90" />
+        <span className="absolute top-1/2 left-0 h-px w-2 bg-red-400/90" />
+        <span className="absolute top-1/2 right-0 h-px w-2 bg-red-400/90" />
+        <span className="absolute left-1/2 top-1/2 w-1 h-1 rounded-full bg-red-400 -translate-x-1/2 -translate-y-1/2" />
+      </div>
       <button
         type="button"
         className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 px-4 py-1.5 rounded-md border border-amber-500/50 bg-black/70 text-[10px] font-heading font-bold uppercase tracking-widest text-amber-300 hover:bg-amber-500/20"
@@ -380,7 +531,7 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
         Fire
       </button>
       <div className="absolute top-2 left-2 right-2 pointer-events-none text-center text-[9px] font-heading text-mutedForeground">
-        Drag to orbit · scroll to zoom · Fire / Space to shoot
+        Move to aim · click / Fire / Space to shoot · right-drag to orbit · scroll to zoom
       </div>
     </div>
   );
