@@ -31,8 +31,8 @@ LOOT_COUNTS_KEY_BAR = "weapon_bar"
 LOOT_COUNTS_KEY_ARMOUR8 = "armour_v2"
 LOOT_COUNTS_KEY_PARDON = "mission_perk"
 
-NEW_EXCLUSIVE_CAP_BAR = 2
-NEW_EXCLUSIVE_CAP_ARMOUR8 = 2
+NEW_EXCLUSIVE_CAP_BAR = 1
+NEW_EXCLUSIVE_CAP_ARMOUR8 = 1
 NEW_EXCLUSIVE_CAP_PARDON = 1
 
 # Secret: first N lifetime opens cannot drop new exclusives; then this chance.
@@ -271,15 +271,36 @@ async def _apply_pardon_on_grant_missions(db, user: Dict[str, Any]) -> Dict[str,
     return meta_out
 
 
+async def _safe_apply_pardon_on_grant(db, user_id: str) -> Dict[str, Any]:
+    user = await db.users.find_one({"id": user_id}, {"_id": 0}) or {"id": user_id}
+    try:
+        return await _apply_pardon_on_grant_missions(db, user)
+    except Exception as e:
+        logger.exception("pardon on-grant missions failed user=%s", user_id)
+        return {"error": True, "detail": f"{type(e).__name__}: {e}"}
+
+
 async def grant_pardon(db, user_id: str, *, now: Optional[datetime] = None, run_on_grant: bool = True) -> Dict[str, Any]:
     now = now or datetime.now(timezone.utc)
     if await count_live_pardon(db) >= NEW_EXCLUSIVE_CAP_PARDON:
         existing = await get_pardon_doc(db)
         if existing and existing.get("owner_id") == user_id:
-            return {"ok": True, "already": True, "name": PARDON_NAME}
+            # Same owner: still (re)apply mission effects if on-grant was skipped/failed earlier
+            mission_meta = {}
+            if run_on_grant:
+                u = await db.users.find_one({"id": user_id}, {"_id": 0, "pardon_auto_skip_mission_ids": 1}) or {}
+                if not (u.get("pardon_auto_skip_mission_ids") or []):
+                    await db.users.update_one({"id": user_id}, {"$set": {"has_commissioners_pardon": True}})
+                    mission_meta = await _safe_apply_pardon_on_grant(db, user_id)
+            return {"ok": True, "already": True, "name": PARDON_NAME, "mission_meta": mission_meta}
         return {"ok": False, "detail": "Commissioner's Pardon already claimed"}
     if await user_has_pardon(db, user_id):
-        return {"ok": True, "already": True, "name": PARDON_NAME}
+        mission_meta = {}
+        if run_on_grant:
+            u = await db.users.find_one({"id": user_id}, {"_id": 0, "pardon_auto_skip_mission_ids": 1}) or {}
+            if not (u.get("pardon_auto_skip_mission_ids") or []):
+                mission_meta = await _safe_apply_pardon_on_grant(db, user_id)
+        return {"ok": True, "already": True, "name": PARDON_NAME, "mission_meta": mission_meta}
 
     doc = {
         "id": PARDON_ITEM_ID,
@@ -297,12 +318,7 @@ async def grant_pardon(db, user_id: str, *, now: Optional[datetime] = None, run_
     )
     mission_meta = {}
     if run_on_grant:
-        user = await db.users.find_one({"id": user_id}, {"_id": 0}) or {"id": user_id}
-        try:
-            mission_meta = await _apply_pardon_on_grant_missions(db, user)
-        except Exception:
-            logger.exception("pardon on-grant missions failed user=%s", user_id)
-            mission_meta = {"error": True}
+        mission_meta = await _safe_apply_pardon_on_grant(db, user_id)
     return {"ok": True, "name": PARDON_NAME, "mission_meta": mission_meta}
 
 
@@ -320,6 +336,7 @@ async def reclaim_pardon_to_pool(db, *, reason: str = "reclaim") -> Optional[str
                 "$unset": {
                     "has_commissioners_pardon": "",
                     "pardon_auto_skip_mission_ids": "",
+                    "pardon_near_finish_mission_id": "",
                 }
             },
         )
@@ -367,7 +384,7 @@ async def handle_pardon_on_kill(
     )
     await db.users.update_one(
         {"id": victim_id},
-        {"$unset": {"has_commissioners_pardon": "", "pardon_auto_skip_mission_ids": ""}},
+        {"$unset": {"has_commissioners_pardon": "", "pardon_auto_skip_mission_ids": "", "pardon_near_finish_mission_id": ""}},
     )
     await db.users.update_one(
         {"id": killer_id},

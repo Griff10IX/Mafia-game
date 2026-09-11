@@ -761,6 +761,29 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
     claimed = await _get_claimed_counts()
     claimed["car_sj"] = await _model_sj_claimed_live()
     claimed["car_540k"] = await _catalog_loot_exclusive_claimed_live(LOOT_EXCLUSIVE_540K_CAR_ID)
+    from utils.commissioners_pardon import (
+        ARMOUR_LEVEL_8_NAME,
+        NEW_EXCLUSIVE_CAP_ARMOUR8,
+        NEW_EXCLUSIVE_CAP_BAR,
+        NEW_EXCLUSIVE_CAP_PARDON,
+        PARDON_NAME,
+        WEAPON_LOOT_BAR_NAME,
+        count_live_armour_v2,
+        count_live_bar,
+        count_live_pardon,
+        get_pardon_doc,
+        new_exclusives_live,
+    )
+
+    claimed["weapon_bar"] = await count_live_bar(db)
+    claimed["armour_v2"] = await count_live_armour_v2(db)
+    claimed["mission_perk"] = await count_live_pardon(db)
+    pardon_holder = None
+    pdoc = await get_pardon_doc(db)
+    if pdoc and pdoc.get("owner_id"):
+        pu = await db.users.find_one({"id": pdoc["owner_id"]}, {"_id": 0, "username": 1})
+        pardon_holder = (pu or {}).get("username")
+    new_ex_live = await new_exclusives_live(db)
     reclaimable = await claimed_counts_live(db)
     owned_relics = sorted(await user_owned_item_ids(db, current_user.get("id") or ""))
     active_rewards = _active_rewards_from_user(current_user)
@@ -791,7 +814,17 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
             "armour": _exclusive_cap("armour"),
             "property": _exclusive_cap("property"),
             "weed_strain": _exclusive_cap("weed_strain"),
+            "weapon_bar": NEW_EXCLUSIVE_CAP_BAR,
+            "armour_v2": NEW_EXCLUSIVE_CAP_ARMOUR8,
+            "mission_perk": NEW_EXCLUSIVE_CAP_PARDON,
         },
+        "new_exclusives_live": new_ex_live,
+        "new_exclusives_labels": {
+            "weapon_bar": WEAPON_LOOT_BAR_NAME,
+            "armour_v2": ARMOUR_LEVEL_8_NAME,
+            "mission_perk": PARDON_NAME,
+        },
+        "mission_perk_holder": pardon_holder,
         "reclaimable_passives": list(reclaimable.values()),
         "reclaimable_passives_catalog": catalog_public(),
         "owned_reclaimable_passive_ids": owned_relics,
@@ -1009,10 +1042,22 @@ def _loot_token_amount_range(box_quality: str) -> Tuple[int, int]:
 
 def _loot_public_reward_info() -> Dict[str, Any]:
     """Static ranges + lists for Loot Box UI (must match open_loot_box / _loot_tier_profile)."""
+    from utils.commissioners_pardon import (
+        ARMOUR_LEVEL_8_NAME,
+        NEW_EXCLUSIVE_CAP_ARMOUR8,
+        NEW_EXCLUSIVE_CAP_BAR,
+        NEW_EXCLUSIVE_CAP_PARDON,
+        PARDON_NAME,
+        WEAPON_LOOT_BAR_NAME,
+    )
+
     standard_prizes = [{"id": k, "label": STANDARD_PRIZE_LABELS.get(k, k)} for k, _ in STANDARD_REWARD_WEIGHTS]
     exclusives = [
         {"id": "weapon", "label": "Exclusive weapon", "cap_global": _exclusive_cap("weapon")},
+        {"id": "weapon_bar", "label": WEAPON_LOOT_BAR_NAME, "cap_global": NEW_EXCLUSIVE_CAP_BAR},
         {"id": "armour", "label": f"Exclusive armour ({ARMOUR_LEVEL_7_NAME})", "cap_global": _exclusive_cap("armour")},
+        {"id": "armour_v2", "label": ARMOUR_LEVEL_8_NAME, "cap_global": NEW_EXCLUSIVE_CAP_ARMOUR8},
+        {"id": "mission_perk", "label": PARDON_NAME, "cap_global": NEW_EXCLUSIVE_CAP_PARDON},
         {"id": "property", "label": "Speakeasy (exclusive property)", "cap_global": _exclusive_cap("property")},
         {
             "id": "weed_strain",
@@ -1080,13 +1125,18 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         "exclusives": exclusives,
         "exclusive_note": (
             f"Global caps (all players): weapon {_exclusive_cap('weapon')}, "
-            f"armour {_exclusive_cap('armour')}, Speakeasy {_exclusive_cap('property')}, "
+            f"{WEAPON_LOOT_BAR_NAME} {NEW_EXCLUSIVE_CAP_BAR}, "
+            f"armour {_exclusive_cap('armour')}, "
+            f"{ARMOUR_LEVEL_8_NAME} {NEW_EXCLUSIVE_CAP_ARMOUR8}, "
+            f"{PARDON_NAME} {NEW_EXCLUSIVE_CAP_PARDON}, "
+            f"Speakeasy {_exclusive_cap('property')}, "
             f"Weed Empire special strains {_exclusive_cap('weed_strain')} (1 of each; "
             "loot can grant you at most one — more only by killing holders), "
             "Duesenberg Model SJ 1 (Rare boxes 5% / Ultra Rare 10% only; 2s travel), "
             "Mercedes-Benz 540K Special Roadster 1 (Ultra Rare boxes only; 2s travel). "
             "If a type is full or you already own that exclusive, the roll tries another exclusive or becomes a standard prize. "
-            "Weed exclusives, Model SJ, and 540K transfer on PvP kill once claimed."
+            "Weed exclusives, Model SJ, and 540K transfer on PvP kill once claimed. "
+            f"{PARDON_NAME} transfers on kill (max 2) then returns to the vault pool."
         ),
         "standard_token_note": (
             "Ultra Rare boxes can also roll Mission Skip and Free Robot Bodyguard from the token prize pool."

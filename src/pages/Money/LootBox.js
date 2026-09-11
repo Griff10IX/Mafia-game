@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Gift, X, Package, Swords, Car, Shield, Building2, Coins, Zap, Save, Puzzle, Leaf, Gem } from 'lucide-react';
+import { Gift, X, Package, Swords, Car, Shield, Building2, Coins, Zap, Save, Puzzle, Leaf, Gem, ScrollText } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import {
@@ -1123,8 +1123,11 @@ export default function LootBox() {
   const freeUltraOpens = Number(status?.loot_box_free_ultra_opens || 0);
   const tierCost = resolveOpenCost(status, selectedTier);
   const tierTheme = LOOT_TIER_THEME[selectedTier] || LOOT_TIER_THEME.common;
-  const claimed = status?.claimed_counts ?? { weapon: 0, car: 0, car_sj: 0, car_540k: 0, armour: 0, property: 0, weed_strain: 0 };
-  const exclusiveCaps = status?.exclusive_caps ?? { weapon: 1, car: 1, car_sj: 1, car_540k: 1, armour: 1, property: 1, weed_strain: 5 };
+  const claimed = status?.claimed_counts ?? { weapon: 0, car: 0, car_sj: 0, car_540k: 0, armour: 0, property: 0, weed_strain: 0, weapon_bar: 0, armour_v2: 0, mission_perk: 0 };
+  const exclusiveCaps = status?.exclusive_caps ?? { weapon: 1, car: 1, car_sj: 1, car_540k: 1, armour: 1, property: 1, weed_strain: 5, weapon_bar: 1, armour_v2: 1, mission_perk: 1 };
+  const newExLive = Boolean(status?.new_exclusives_live);
+  const newExLabels = status?.new_exclusives_labels || {};
+  const missionPerkHolder = status?.mission_perk_holder || null;
   const reclaimableCatalog = status?.reclaimable_passives_catalog ?? [];
   const reclaimableLive = status?.reclaimable_passives ?? [];
   const reclaimableById = Object.fromEntries(
@@ -1289,10 +1292,35 @@ export default function LootBox() {
                 </p>
                 <ul className="list-none p-0 m-0 flex flex-col gap-0.5">
                   <ScarcityRow icon={Swords} label="Exclusive Weapon" claimed={claimed.weapon} cap={exclusiveCaps.weapon} />
+                  {newExLive && (
+                    <ScarcityRow
+                      icon={Swords}
+                      label={newExLabels.weapon_bar || 'Browning Automatic Rifle M1918A2'}
+                      claimed={claimed.weapon_bar ?? 0}
+                      cap={exclusiveCaps.weapon_bar ?? 1}
+                    />
+                  )}
                   <ScarcityRow icon={Car} label="Cadillac V-16 (exclusive pool)" claimed={claimed.car} cap={exclusiveCaps.car} />
                   <ScarcityRow icon={Car} label="Model SJ (Rare 5% / UR 10%)" claimed={claimed.car_sj} cap={exclusiveCaps.car_sj ?? 1} />
                   <ScarcityRow icon={Car} label="540K (Ultra Rare only)" claimed={claimed.car_540k} cap={exclusiveCaps.car_540k ?? 1} />
                   <ScarcityRow icon={Shield} label="Exclusive Armour" claimed={claimed.armour} cap={exclusiveCaps.armour} />
+                  {newExLive && (
+                    <ScarcityRow
+                      icon={Shield}
+                      label={newExLabels.armour_v2 || 'Brewster Body Shield (1917)'}
+                      claimed={claimed.armour_v2 ?? 0}
+                      cap={exclusiveCaps.armour_v2 ?? 1}
+                    />
+                  )}
+                  {newExLive && (
+                    <ScarcityRow
+                      icon={ScrollText}
+                      label={newExLabels.mission_perk || "Commissioner's Pardon"}
+                      claimed={claimed.mission_perk ?? 0}
+                      cap={exclusiveCaps.mission_perk ?? 1}
+                      holder={missionPerkHolder}
+                    />
+                  )}
                   <ScarcityRow icon={Building2} label="Speakeasy" claimed={claimed.property} cap={exclusiveCaps.property} />
                   <ScarcityRow icon={Leaf} label="Weed Empire specials" claimed={claimed.weed_strain} cap={exclusiveCaps.weed_strain} />
                 </ul>
