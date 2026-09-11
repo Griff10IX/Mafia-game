@@ -33,24 +33,196 @@ LEDGER_PATH = Path(
     or "/opt/mafia-app/backups/.ops_roster.jsonl"
 )
 DAILY_COUNT = int(os.environ.get("AMBIENT_ROSTER_DAILY") or "2")
-# Gap between the two creates within a run (seconds)
+# Each timer fire creates this many (morning + afternoon timers = 1 each)
+BATCH_PER_RUN = int(os.environ.get("AMBIENT_ROSTER_BATCH") or "1")
+# Legacy same-run gap (only if batch>1); prefer separate morning/afternoon timers
 GAP_SEC_RANGE = (120, 720)
+# Slot: morning | afternoon | any — set by systemd unit
+SLOT = (os.environ.get("AMBIENT_ROSTER_SLOT") or "any").strip().lower()
 
-# Italian / English / mixed — looks like real signup variety
+# Broad pools — forum handles, first names, surnames (hundreds of combos)
 FIRST = [
-    "Rico", "Nico", "Vince", "Marco", "Dante", "Luca", "Enzo", "Sal", "Tony", "Frankie",
-    "Carlo", "Rocco", "Vito", "Angelo", "Sonny", "Mickey", "Joey", "Pauly", "Dom", "Gino",
+    # EN / US / CA
     "Jack", "Ryan", "Connor", "Liam", "Noah", "Ethan", "Owen", "Cole", "Blake", "Chase",
-    "Sean", "Patrick", "Declan", "Ciaran", "Finn", "Kai", "Max", "Leo", "Sam", "Ben",
+    "Jake", "Luke", "Matt", "Chris", "Dan", "Danny", "Dave", "Tom", "Tommy", "Sam",
+    "Ben", "Alex", "Adam", "Aaron", "Josh", "James", "Jamie", "Joe", "Joey", "John",
+    "Jon", "Jay", "Jordan", "Justin", "Kevin", "Kyle", "Leo", "Logan", "Mark", "Mike",
+    "Nick", "Paul", "Pete", "Phil", "Rob", "Scott", "Sean", "Steve", "Tim", "Will",
+    "Zach", "Cody", "Dylan", "Tyler", "Hunter", "Austin", "Brandon", "Cameron", "Derek",
+    "Eric", "Evan", "Garrett", "Grant", "Ian", "Isaac", "Jason", "Jeffrey", "Jeremy",
+    "Nathan", "Neil", "Oliver", "Parker", "Patrick", "Quinn", "Riley", "Seth", "Shane",
+    "Spencer", "Travis", "Trevor", "Troy", "Victor", "Wade", "Warren", "Wayne", "Wesley",
+    # IE / UK
+    "Declan", "Ciaran", "Finn", "Sean", "Conor", "Padraig", "Eoin", "Niall", "Rory", "Aidan",
+    "Callum", "Craig", "Darren", "Dean", "Gareth", "Greg", "Harry", "Henry", "Hugh", "Keith",
+    "Lewis", "Martin", "Murray", "Owen", "Rhys", "Ross", "Stuart", "Wayne", "Alfie", "Archie",
+    "Charlie", "Freddie", "George", "Harry", "Ollie", "Theo", "Arthur", "Edward", "Oscar",
+    # NL / DE / EU
+    "Lars", "Niels", "Bram", "Daan", "Finn", "Jasper", "Sven", "Tim", "Tom", "Max",
+    "Hans", "Jan", "Karl", "Klaus", "Lukas", "Markus", "Niklas", "Paul", "Peter", "Stefan",
+    "Felix", "Jonas", "Leon", "Moritz", "Tobias", "Erik", "Bjorn", "Henrik", "Anders",
+    # IT (light touch — not the only style)
+    "Marco", "Luca", "Antonio", "Giovanni", "Francesco", "Alessandro", "Matteo", "Andrea",
+    "Rico", "Nico", "Vince", "Tony", "Frankie", "Sonny", "Dom", "Sal",
+    # Fem / unisex (games handles often mix)
+    "Amy", "Anna", "Ash", "Casey", "Dana", "Elle", "Emma", "Grace", "Jade", "Kate",
+    "Kim", "Lisa", "Lucy", "Maya", "Nina", "Pam", "Rose", "Sara", "Sophie", "Zoe",
 ]
+
 LAST = [
-    "Moretti", "Romano", "Bianchi", "Esposito", "Conti", "Greco", "Russo", "Ferrari",
-    "Lombardi", "Marino", "Costa", "Ricci", "Gallo", "Bruno", "DeLuca", "Vitale",
-    "Murphy", "Kelly", "Walsh", "Byrne", "OBrien", "Ryan", "Doyle", "McCarthy",
-    "Smith", "Jones", "Wilson", "Taylor", "Brown", "Miller", "Davis", "Clark",
-    "Bakker", "deVries", "Jansen", "Visser", "Meijer", "Smit",
-    "Mueller", "Schmidt", "Schneider", "Fischer", "Weber", "Wagner",
+    "Smith", "Jones", "Wilson", "Taylor", "Brown", "Miller", "Davis", "Clark", "Lewis", "Walker",
+    "Hall", "Allen", "Young", "King", "Wright", "Scott", "Green", "Baker", "Adams", "Nelson",
+    "Hill", "Ramsey", "Porter", "Reed", "Cook", "Morgan", "Bell", "Murphy", "Kelly", "Walsh",
+    "Byrne", "OBrien", "Ryan", "Doyle", "McCarthy", "Sullivan", "Burke", "Flynn", "Quinn", "Gallagher",
+    "Campbell", "Stewart", "Robertson", "Thomson", "Anderson", "Mitchell", "Murray", "Reid",
+    "Hughes", "Watson", "Wood", "Brooks", "Price", "Bennett", "Gray", "James", "Watson",
+    "Bakker", "deVries", "Jansen", "Visser", "Meijer", "Smit", "deBoer", "Mulder", "Bos",
+    "Mueller", "Schmidt", "Schneider", "Fischer", "Weber", "Wagner", "Becker", "Hoffmann",
+    "Schulz", "Koch", "Richter", "Klein", "Wolf", "Schroeder", "Neumann", "Schwarz",
+    "Moretti", "Romano", "Bianchi", "Esposito", "Conti", "Russo", "Ferrari", "Marino",
+    "Martin", "Bernard", "Dubois", "Thomas", "Robert", "Richard", "Petit", "Durand",
+    "Garcia", "Rodriguez", "Martinez", "Lopez", "Gonzalez", "Hernandez", "Perez", "Sanchez",
+    "Lee", "Kim", "Park", "Nguyen", "Patel", "Singh", "Khan", "Ali", "Chen", "Wang",
 ]
+
+# Single-token forum / chat handles (no surname needed)
+HANDLES = [
+    "pulse", "atom", "fruitcake", "shadow", "ghost", "raven", "wolf", "fox", "hawk", "crow",
+    "blaze", "frost", "storm", "thunder", "spark", "ember", "ash", "smoke", "vapor", "neon",
+    "pixel", "byte", "nova", "orbit", "comet", "lunar", "solar", "cosmic", "void", "null",
+    "echo", "static", "signal", "radio", "wave", "drift", "glide", "surge", "rush", "dash",
+    "ace", "king", "rook", "pawn", "knight", "bishop", "check", "mate", "bluff", "fold",
+    "cash", "chips", "vault", "safe", "lock", "key", "cipher", "code", "hack", "glitch",
+    "bug", "patch", "mod", "skin", "loot", "crate", "drop", "spawn", "respawn", "lag",
+    "ping", "packet", "proxy", "relay", "node", "hub", "grid", "matrix", "core", "shell",
+    "root", "guest", "anon", "incog", "masked", "veiled", "cloak",
+    "dagger", "blade", "razor", "spike", "thorn", "needle", "bullet", "shells", "clip", "mag",
+    "diesel", "nitro", "turbo", "drift", "skid", "burnout", "wheelie", "clutch", "gear", "axle",
+    "mocha", "latte", "brew", "toast", "crumble", "biscuit", "waffle", "pretzel", "pickle", "olive",
+    "mango", "kiwi", "peach", "berry", "grape", "melon", "cocoa", "sugar", "spice", "honey",
+    "buddy", "pal", "matey", "chap", "lad", "bloke", "dude", "homie", "chief",
+    "skip", "bossman", "bigdog", "lilguy", "tiny", "jumbo", "mega", "ultra", "hyper",
+    "quiet", "loud", "silent", "whisper", "murmur", "hum", "buzz", "click", "snap",
+    "zipper", "button", "pocket", "wallet", "ticket", "stamp", "label", "tag", "badge", "pin",
+    "rocket", "cannon", "rifle", "pistol", "revolver", "sniper",
+    "bandit", "outlaw", "fugitive", "warden", "agent",
+    "spy", "mole", "witness", "jury", "judge",
+    "dealer", "runner", "courier", "smuggler", "bootleg", "moonshine", "whiskey", "bourbon",
+    "gin", "rum", "vodka", "tequila", "scotch", "ale", "stout", "lager", "cider", "mead",
+    "redfox", "bluejay", "greydog", "blackcat", "whitecrow", "goldfish", "silverfox",
+    "steeltoe", "hardluck", "easystreet", "lowkey", "highroll", "sideline", "backseat", "frontrow",
+    "midlane", "jungle", "carry", "casual", "grinder", "farmer", "miner", "crafter",
+    "builder", "breaker", "fixer", "mender", "stitch", "sew", "knit", "weave", "braid", "twist",
+    "donut", "bagel", "crumpet", "scone", "flapjack", "pancake", "crepe", "taco", "burrito",
+    "nacho", "salsa", "guac", "fries", "nugget", "brisket",
+    "smokehouse", "pitmaster", "chefboy", "souschef", "linecook",
+    "janitor", "mailman", "postie", "cabbie", "cyclist", "jogger",
+    "hiker", "climber", "diver", "surfer", "skater", "bmxer", "scooter",
+    "zeppelin", "biplane", "jetski", "speedboat", "yachtie", "sailor", "firstmate",
+    "deckhand", "corsair", "buccaneer", "cutlass",
+    "treasure", "doubloon", "galleon", "kraken", "mermaid", "siren", "trident",
+    "lighthouse", "harbor", "dockyard", "shipyard", "boathouse", "marina", "pier",
+    "alley", "avenue", "boulevard", "highway", "freeway", "subway",
+    "uptown", "downtown", "midtown", "oldtown", "newtown",
+    "broadway", "wallstreet", "mainstreet", "highstreet", "backstreet",
+    "corner", "crossroad", "junction", "roundabout", "overpass", "underpass",
+    "tunnel", "canal", "creek", "brook", "stream", "pond", "lake", "bay", "cove",
+    "cliff", "ridge", "peak", "summit", "valley", "canyon", "gully", "ravine", "mesa", "dune",
+    "oasis", "tundra", "glacier", "iceberg", "frostbite", "heatwave", "monsoon",
+    "typhoon", "cyclone", "twister", "blizzard", "whiteout", "blackout",
+    "fadein", "closeup", "longshot", "widescreen", "panorama",
+    "snapshot", "polaroid", "negative", "exposure", "aperture", "shutter", "tripod",
+    "softbox", "ringlight", "flashlight", "headlamp", "lantern", "candle", "matchstick",
+    "flint", "steel", "tinder", "kindling", "bonfire", "campfire", "fireplace", "hearth",
+    "chimney", "rooftop", "attic", "basement", "cellar", "pantry", "closet", "wardrobe",
+    "drawer", "shelf", "cabinet", "cupboard", "bookcase", "nightstand",
+    "pillow", "blanket", "duvet", "quilt", "comforter", "cushion", "ottoman",
+    "recliner", "loveseat", "sofa", "couch", "futon", "hammock", "beanbag",
+    "stool", "bench", "bleacher", "grandstand", "endzone", "goalpost",
+    "halftime", "overtime", "kickoff", "touchdown", "homerun", "hattrick",
+]
+
+# Extra short words for mashups (pulseAtom, fruitCake style)
+WORD_A = [
+    "cold", "hot", "dark", "bright", "fast", "slow", "loud", "soft", "raw", "real",
+    "fake", "true", "wild", "mild", "keen", "dull", "sharp", "blunt", "sly", "bold",
+    "calm", "mad", "glad", "sad", "bad", "good", "evil", "holy", "pure", "vile",
+    "iron", "gold", "ruby", "jade", "onyx", "opal", "pearl", "coral", "amber", "ivory",
+]
+WORD_B = [
+    "fox", "dog", "cat", "owl", "bat", "rat", "pig", "cow", "elk", "ram",
+    "bee", "ant", "fly", "bug", "worm", "fish", "crab", "seal", "bear", "boar",
+    "man", "boy", "kid", "guy", "lad", "gal", "sis", "bro", "pal", "foe",
+    "day", "night", "dusk", "dawn", "noon", "moon", "sun", "star", "sky", "sea",
+]
+
+
+def _utc_day(now: Optional[datetime] = None) -> str:
+    now = now or datetime.now(timezone.utc)
+    return now.strftime("%Y-%m-%d")
+
+
+def _sanitize_username(raw: str) -> str:
+    s = "".join(c for c in raw if c.isalnum() or c in ("_", "-"))
+    s = s.strip("_-")
+    if not s:
+        s = "player" + secrets.token_hex(2)
+    return s[:20]
+
+
+def _rand_username() -> str:
+    """Mostly normal: Danny56, JakeWilson19 — some forum handles. Avoids botty patterns."""
+    style = random.random()
+
+    if style < 0.38:
+        # First + digits: Danny56, Jake420, Liam7
+        base = random.choice(FIRST)
+        if random.random() < 0.5:
+            base += str(random.randint(10, 99))
+        elif random.random() < 0.7:
+            base += str(random.randint(1, 9))
+        else:
+            base += str(random.randint(100, 9999))
+    elif style < 0.62:
+        # FirstLast / FirstLast99 (common signup)
+        base = random.choice(FIRST) + random.choice(LAST)
+        if random.random() < 0.45:
+            base += str(random.randint(10, 99))
+    elif style < 0.78:
+        # Forum handle: fruitcake, pulse, atom19
+        base = random.choice(HANDLES)
+        if random.random() < 0.5:
+            base += str(random.randint(10, 99) if random.random() < 0.7 else random.randint(1, 9999))
+    elif style < 0.88:
+        # Mash: coldFox, darkMoon
+        a, b = random.choice(WORD_A), random.choice(WORD_B)
+        base = a + (b.capitalize() if random.random() < 0.6 else b)
+        if random.random() < 0.35:
+            base += str(random.randint(1, 99))
+    else:
+        # Last + digits or LastFirst
+        if random.random() < 0.55:
+            base = random.choice(LAST) + str(random.randint(10, 999))
+        else:
+            base = random.choice(LAST) + random.choice(FIRST)
+            if random.random() < 0.4:
+                base += str(random.randint(1, 99))
+
+    # Rare First_Last style only (not mid-syllable cuts)
+    if (
+        random.random() < 0.03
+        and "_" not in base
+        and any(base.startswith(f) and len(base) > len(f) + 2 for f in FIRST)
+    ):
+        for f in sorted(FIRST, key=len, reverse=True):
+            if base.startswith(f) and len(base) > len(f) + 2:
+                rest = base[len(f) :]
+                if rest[:1].isalpha():
+                    base = f + "_" + rest
+                break
+
+    return _sanitize_username(base)
+
 
 COUNTRY_PROFILES: List[Dict[str, Any]] = [
     {
@@ -135,29 +307,6 @@ THEME_VARIANTS = ["modern", "classic", "dark"]
 START_CITIES = ["Chicago", "New York", "Detroit", "Las Vegas", "Los Angeles"]
 
 
-def _utc_day(now: Optional[datetime] = None) -> str:
-    now = now or datetime.now(timezone.utc)
-    return now.strftime("%Y-%m-%d")
-
-
-def _rand_username() -> str:
-    style = random.random()
-    if style < 0.55:
-        base = random.choice(FIRST) + random.choice(LAST)
-        if random.random() < 0.6:
-            base += str(random.randint(10, 99))
-    elif style < 0.8:
-        base = random.choice(FIRST) + str(random.randint(100, 9999))
-    else:
-        base = random.choice(LAST) + random.choice(FIRST)
-        if random.random() < 0.5:
-            base += str(random.randint(1, 99))
-    # occasional underscore (human-ish)
-    if random.random() < 0.08 and len(base) < 18:
-        base = base[:10] + "_" + base[10:]
-    return base.replace(" ", "")[:20]
-
-
 def _rand_email(username: str) -> str:
     domains = [
         "gmail.com", "icloud.com", "outlook.com", "yahoo.com", "proton.me",
@@ -211,6 +360,27 @@ def _ledger_count_today(day: str) -> int:
     except OSError:
         return 0
     return n
+
+
+def _ledger_slots_today(day: str) -> set:
+    slots = set()
+    if not LEDGER_PATH.is_file():
+        return slots
+    try:
+        with LEDGER_PATH.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if row.get("day") == day and row.get("slot"):
+                    slots.add(str(row["slot"]).lower())
+    except OSError:
+        return slots
+    return slots
 
 
 def _ledger_append(row: Dict[str, Any]) -> None:
@@ -515,6 +685,7 @@ async def create_one(*, mode: str) -> Dict[str, Any]:
     out = {
         "day": _utc_day(now),
         "at": now_iso,
+        "slot": (SLOT if SLOT in ("morning", "afternoon") else "any"),
         "mode": mode,
         "username": username,
         "email": email,
@@ -533,18 +704,35 @@ async def create_one(*, mode: str) -> Dict[str, Any]:
 async def run_daily(*, force: bool = False) -> List[Dict[str, Any]]:
     day = _utc_day()
     already = _ledger_count_today(day)
-    need = DAILY_COUNT if force else max(0, DAILY_COUNT - already)
-    if need <= 0:
-        print(f"SKIP day={day} already={already} cap={DAILY_COUNT}")
-        return []
+    slots_done = _ledger_slots_today(day)
+    slot = SLOT if SLOT in ("morning", "afternoon") else "any"
+
+    if not force:
+        if already >= DAILY_COUNT:
+            print(f"SKIP day={day} already={already} cap={DAILY_COUNT}")
+            return []
+        if slot in ("morning", "afternoon") and slot in slots_done:
+            print(f"SKIP day={day} slot={slot} already done")
+            return []
+
+    # One account per timer fire (morning + afternoon = 2/day, hours apart)
+    need = 1
+    if force:
+        need = max(1, BATCH_PER_RUN)
+    elif slot == "any":
+        need = min(BATCH_PER_RUN, max(0, DAILY_COUNT - already))
+        if need <= 0:
+            print(f"SKIP day={day} already={already} cap={DAILY_COUNT}")
+            return []
+
     modes = _pick_modes(need)
     created: List[Dict[str, Any]] = []
     for i, mode in enumerate(modes):
         row = await create_one(mode=mode)
         created.append(row)
         print(
-            f"OK mode={row['mode']} user={row['username']} cc={row['country']} "
-            f"ar={row['auto_rank']} id={row['id']}"
+            f"OK slot={row.get('slot')} mode={row['mode']} user={row['username']} "
+            f"cc={row['country']} ar={row['auto_rank']} id={row['id']}"
         )
         if i + 1 < len(modes):
             lo = int(os.environ.get("AMBIENT_ROSTER_GAP_MIN") or GAP_SEC_RANGE[0])
@@ -559,7 +747,13 @@ async def run_daily(*, force: bool = False) -> List[Dict[str, Any]]:
 
 def main() -> None:
     force = "--force" in sys.argv
-    # Optional: delay so cron at fixed hour still looks scattered
+    if "--morning" in sys.argv:
+        os.environ["AMBIENT_ROSTER_SLOT"] = "morning"
+    if "--afternoon" in sys.argv:
+        os.environ["AMBIENT_ROSTER_SLOT"] = "afternoon"
+    # Re-read slot after CLI overrides
+    global SLOT
+    SLOT = (os.environ.get("AMBIENT_ROSTER_SLOT") or "any").strip().lower()
     if "--jitter" in sys.argv:
         jitter = random.randint(0, int(os.environ.get("AMBIENT_ROSTER_JITTER_SEC") or str(4 * 3600)))
         print(f"JITTER sleep={jitter}s")
