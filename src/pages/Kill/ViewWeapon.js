@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Crosshair, Flame, Shield } from 'lucide-react';
+import { ArrowLeft, Crosshair, Flame, Shield, ZoomIn, X, Crown, Sparkles } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
-import BarM1918A2Viewer from '../../components/BarM1918A2Viewer';
 
 const BAR_ID = 'weapon_loot_bar';
 
@@ -15,7 +14,7 @@ export default function ViewWeapon() {
   const [weapon, setWeapon] = useState(null);
   const [onProfile, setOnProfile] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [rounds, setRounds] = useState(0);
+  const [photoOpen, setPhotoOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +70,7 @@ export default function ViewWeapon() {
   };
 
   const name = weapon?.name || 'Browning Automatic Rifle M1918A2';
+  const heroSrc = '/images/weapons/weapon_loot_bar/mafia-exclusive.png';
 
   return (
     <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} style={{ padding: '12px 14px', maxWidth: '52rem', margin: '0 auto' }}>
@@ -86,16 +86,39 @@ export default function ViewWeapon() {
 
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-amber-500/30`}>
         <div className="h-px bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
-        <div className="relative aspect-[16/11] md:aspect-[16/9] bg-black min-h-[18rem]">
-          {id === BAR_ID ? (
-            <BarM1918A2Viewer onShot={() => setRounds((n) => n + 1)} />
-          ) : (
-            <p className="p-6 text-[11px] text-mutedForeground font-heading">No 3D model for this weapon.</p>
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={() => setPhotoOpen(true)}
+          className="group relative block w-full aspect-[16/9] overflow-hidden bg-black text-left"
+          aria-label={`Enlarge ${name}`}
+        >
+          <img
+            src={heroSrc}
+            alt={name}
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.025]"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/25 pointer-events-none" />
+          <div className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded border border-amber-300/45 bg-black/65 px-2.5 py-1 text-[9px] font-heading font-bold uppercase tracking-[0.14em] text-amber-300 shadow-lg backdrop-blur-sm">
+            <Crown size={11} />
+            Loot Exclusive
+          </div>
+          <div className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-black/60 text-white/80 backdrop-blur-sm transition-colors group-hover:border-amber-300/60 group-hover:text-amber-300">
+            <ZoomIn size={14} />
+          </div>
+          <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-3 md:p-4">
+            <div>
+              <div className="mb-1 flex items-center gap-1 text-[8px] font-heading font-bold uppercase tracking-[0.18em] text-amber-300/90">
+                <Sparkles size={10} />
+                The Commissioner’s Private Reserve
+              </div>
+              <div className="text-sm md:text-lg font-heading font-bold text-white drop-shadow-lg">{name}</div>
+            </div>
+            <span className="shrink-0 text-[8px] font-heading uppercase tracking-wider text-white/60">Click to inspect</span>
+          </div>
+        </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
         <div className={`p-2.5 ${styles.panel} border border-primary/20 rounded-md`}>
           <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground flex items-center gap-1"><Flame size={11} className="text-primary" /> Damage</div>
           <div className="text-lg font-heading font-bold text-foreground tabular-nums">{weapon?.damage ?? 175}</div>
@@ -108,10 +131,14 @@ export default function ViewWeapon() {
           <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground">Attack cost</div>
           <div className="text-lg font-heading font-bold text-emerald-400">−30%</div>
         </div>
-        <div className={`p-2.5 ${styles.panel} border border-primary/20 rounded-md`}>
-          <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground">Rounds fired</div>
-          <div className="text-lg font-heading font-bold text-amber-300 tabular-nums">{rounds}</div>
-        </div>
+      </div>
+
+      <div className={`relative overflow-hidden p-3 ${styles.panel} border border-amber-500/20 rounded-md`}>
+        <div className="absolute inset-y-0 left-0 w-0.5 bg-gradient-to-b from-transparent via-amber-400/70 to-transparent" />
+        <p className="text-[10px] md:text-[11px] leading-relaxed text-mutedForeground font-heading">
+          A full-power military BAR finished in blued steel and walnut. Kept off every public rack and issued only through
+          the Commissioner’s private loot reserve.
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -131,6 +158,32 @@ export default function ViewWeapon() {
           Armoury
         </Link>
       </div>
+
+      {photoOpen ? (
+        <div
+          className="fixed inset-0 z-[400] flex items-center justify-center bg-black/95 p-2 md:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label={name}
+          onClick={() => setPhotoOpen(false)}
+        >
+          <button
+            type="button"
+            onClick={() => setPhotoOpen(false)}
+            className="absolute right-3 top-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-black/70 text-white hover:border-amber-300/70 hover:text-amber-300"
+            aria-label="Close image"
+          >
+            <X size={20} />
+          </button>
+          <div className="relative max-h-full max-w-7xl overflow-hidden rounded-md border border-amber-400/35 shadow-[0_0_80px_rgba(217,164,65,0.14)]" onClick={(e) => e.stopPropagation()}>
+            <img src={heroSrc} alt={name} className="block max-h-[92vh] max-w-full object-contain" />
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-4 pb-4 pt-12">
+              <div className="text-[9px] font-heading font-bold uppercase tracking-[0.18em] text-amber-300">Loot Exclusive</div>
+              <div className="text-base md:text-xl font-heading font-bold text-white">{name}</div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
