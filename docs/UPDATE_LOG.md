@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-11[/color][/b] — [b]iPhone menu navigation[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] On [b]iPhone Safari[/b], tapping menu pages (including [b]Users Online[/b]) could open in a [b]new tab[/b] instead of staying in the game. Mobile menus now stay in the same tab.[/color]
+[*][color=#888888][b]Note:[/b] Hard refresh once if you still see the old behaviour.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-11[/color][/b] — [b]Faster page loading[/b][/size]
 [quote]
 [list]
