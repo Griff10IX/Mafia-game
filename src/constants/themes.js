@@ -324,6 +324,9 @@ export const THEME_COLOURS = [
   { id: 'plasma', name: 'Plasma', primary: '#ff00ff', primaryBright: '#ff55ff', primaryDark: '#cc00cc', foregroundOnPrimary: '#ffffff' },
   { id: 'hologram', name: 'Hologram', primary: '#30d5c8', primaryBright: '#60e8dd', primaryDark: '#20b0a5', foregroundOnPrimary: '#000000' },
   { id: 'laser', name: 'Laser', primary: '#fe0000', primaryBright: '#ff4444', primaryDark: '#cc0000', foregroundOnPrimary: '#ffffff' },
+  /* PixGB Iron Man / Jarvis HUD — exact accent tokens from pixgb.com themes.css */
+  { id: 'jarvis', name: 'Jarvis', primary: '#4fd2ff', primaryBright: '#9ae8ff', primaryDark: '#2a9fc8', foregroundOnPrimary: '#031018' },
+  { id: 'jarvis-reactor', name: 'Jarvis Reactor', primary: '#c41e3a', primaryBright: '#e83555', primaryDark: '#8f1529', foregroundOnPrimary: '#ffffff' },
 
   /* ── Vintage / Retro ─────────────────────────────────────── */
   { id: 'retro-mustard', name: 'Retro Mustard', primary: '#c9a44a', primaryBright: '#dab862', primaryDark: '#a88838', foregroundOnPrimary: '#000000' },
@@ -383,7 +386,7 @@ export const THEME_COLOUR_SECTIONS = [
   { label: 'Metallics', ids: ['rose-gold-metal', 'brushed-silver', 'dark-chrome', 'polished-brass', 'antique-gold', 'bronze-dark', 'platinum', 'iron', 'tin', 'mercury'] },
   { label: 'Tropical', ids: ['mango', 'papaya', 'guava', 'hibiscus', 'palm', 'ocean-breeze', 'lagoon-deep', 'coconut', 'plumeria', 'tiki'] },
   { label: 'Ice & winter', ids: ['glacier', 'arctic', 'frostbite', 'permafrost', 'ice-deep', 'winter-sky', 'snowfall', 'polar', 'icicle', 'aurora-ice'] },
-  { label: 'Cyberpunk', ids: ['neon-violet', 'neon-cyan', 'neon-lime', 'synthwave', 'vaporwave', 'matrix', 'cyber-red', 'plasma', 'hologram', 'laser'] },
+  { label: 'Cyberpunk', ids: ['jarvis', 'jarvis-reactor', 'neon-violet', 'neon-cyan', 'neon-lime', 'synthwave', 'vaporwave', 'matrix', 'cyber-red', 'plasma', 'hologram', 'laser'] },
   { label: 'Vintage', ids: ['retro-mustard', 'avocado-70s', 'burnt-sienna', 'faded-denim', 'harvest', 'parchment', 'rust-orange', 'old-rose', 'olive-drab', 'dusty-pink'] },
   { label: 'Luxury', ids: ['champagne', 'caviar', 'truffle', 'cognac', 'cashmere', 'ebony', 'ivory-lux', 'mink-fur'] },
   { label: 'More', ids: ['sunset', 'sunrise', 'pale-gold', 'antique-brass', 'lagoon', 'mulberry', 'steel-blue', 'deep-maroon', 'obsidian-blue', 'void', 'abyss', 'deep-olive', 'deep-teal', 'deep-amber', 'deep-rose', 'deep-violet', 'deep-copper', 'deep-slate-green', 'deep-burgundy', 'deep-bronze', 'deep-charcoal', 'deep-sapphire'] },
@@ -496,6 +499,8 @@ export const THEME_WRITING_COLOURS = [
   { id: 'cream-text', name: 'Cream', foreground: '#fffbeb', muted: '#d6d3d1' },
   { id: 'warm-white', name: 'Warm White', foreground: '#fef3c7', muted: '#fde68a' },
   { id: 'cool-white', name: 'Cool White', foreground: '#f0f9ff', muted: '#bae6fd' },
+  /* PixGB Jarvis HUD ink / muted */
+  { id: 'jarvis-ink', name: 'Jarvis Ink', foreground: '#e8f4ff', muted: '#7a93a8' },
   { id: 'bone', name: 'Bone', foreground: '#faf6f0', muted: '#e8e2d8' },
   { id: 'eggshell', name: 'Eggshell', foreground: '#f0ebe3', muted: '#c9c2b5' },
   { id: 'linen', name: 'Linen', foreground: '#faf0e6', muted: '#e8dcc8' },
@@ -728,7 +733,7 @@ export const THEME_WRITING_COLOURS = [
 
 /** Display order: sections for writing (text) colours. */
 export const THEME_WRITING_SECTIONS = [
-  { label: 'Default & light', ids: ['default', 'snow', 'pearl', 'ivory-text', 'cream-text', 'warm-white', 'cool-white', 'bone', 'eggshell', 'linen', 'vanilla', 'honeydew', 'azure', 'alabaster', 'chalk', 'milk', 'silk-text', 'snow-deep', 'linen-text', 'pearl-deep', 'ivory-deep', 'cream-deep', 'frost-text', 'blush-light', 'mint-light'] },
+  { label: 'Default & light', ids: ['default', 'snow', 'pearl', 'ivory-text', 'cream-text', 'warm-white', 'cool-white', 'jarvis-ink', 'bone', 'eggshell', 'linen', 'vanilla', 'honeydew', 'azure', 'alabaster', 'chalk', 'milk', 'silk-text', 'snow-deep', 'linen-text', 'pearl-deep', 'ivory-deep', 'cream-deep', 'frost-text', 'blush-light', 'mint-light'] },
   { label: 'Grays', ids: ['gray-50', 'gray-100', 'gray-200', 'gray-300', 'gray-400', 'gray-500', 'zinc-100', 'zinc-200', 'zinc-300', 'zinc-400', 'zinc-500', 'slate-200', 'slate-300', 'slate-400', 'slate-500', 'stone-200', 'stone-300', 'stone-400', 'neutral-300', 'neutral-400', 'storm-text', 'fog-text', 'dove-text', 'flint-text', 'battleship-text', 'mink-text', 'taupe-text', 'dust-text'] },
   { label: 'Dark', ids: ['charcoal-text', 'graphite-text', 'smoke-text', 'carbon-text', 'obsidian-text', 'ink', 'midnight-text', 'iron', 'lead', 'ash-dark', 'graphite-dark', 'slate-dark', 'navy-text', 'forest-text', 'burgundy-text', 'plum-dark', 'dark-1', 'dark-2', 'dark-3', 'dark-charcoal', 'dark-brown-grey', 'dark-indigo', 'dark-blue', 'dark-purple', 'dark-maroon', 'dark-forest', 'dark-teal', 'dark-slate', 'shadow', 'onyx', 'ink-deep', 'pitch-text', 'obsidian-deep', 'midnight-ink', 'forest-ink', 'wine-ink', 'plum-ink', 'slate-ink', 'teal-ink', 'carbon-deep'] },
   { label: 'Tinted – warm', ids: ['warm-gray', 'sepia-text', 'parchment', 'amber-text', 'saffron-text', 'butter', 'wheat', 'sand', 'caramel', 'toast', 'terracotta-text', 'clay'] },
@@ -824,6 +829,7 @@ export const STARTING_LOOK_PRESET_IDS = [
   'old-school-mafia-theme',
   'modern-full',
   'dark-mafia-wars',
+  'pixgb-jarvis',
   'noir-contrast-full',
   'crimson-mafia-full',
   'clean-steel-full',
@@ -869,6 +875,7 @@ export const THEME_PRESETS = [
   { id: 'old-school-mafia-theme', name: 'Old School Mafia Theme', description: 'Classic early-browser look: navy canvas, silver chrome panels, metal tab headers, blue category labels', colourId: 'steel-blue', textureId: 'none', buttonColourId: 'dark-chrome', accentLineColourId: 'brushed-silver', writingColourId: 'cool-white', mutedWritingColourId: 'chrome-text', buttonStyleId: 'flat', fontId: 'compact', textStyleId: 'normal', toastTextColourId: 'cool-white', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'old_school', buttonShapeId: 'sharp', isFullPreset: true, presetCategory: 'mafia' },
   { id: 'modern-full', name: 'Modern Full', description: 'Modern layout with the Telegram sky-blue accent, cleaner typography and spacing', colourId: 'sky', textureId: 'modern-soft', buttonColourId: null, accentLineColourId: null, writingColourId: 'steel-text', mutedWritingColourId: 'slate-300', buttonStyleId: 'flat', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'steel-text', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'modern', buttonShapeId: 'rounded', isFullPreset: true },
   { id: 'dark-mafia-wars', name: 'Dark Mafia Wars', description: 'Command-center chrome: near-black panels, sky accent rail, dense layout', colourId: 'sky', textureId: 'none', buttonColourId: 'sky', accentLineColourId: 'sky', writingColourId: 'cool-white', mutedWritingColourId: 'slate-300', buttonStyleId: 'flat', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'cool-white', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'dark_mafia', buttonShapeId: 'sharp', isFullPreset: true },
+  { id: 'pixgb-jarvis', name: 'Jarvis', description: 'PixGB Iron Man HUD — arc-reactor cyan on void black, tech chrome (from PixGB.com)', colourId: 'jarvis', textureId: 'mesh', buttonColourId: 'jarvis', accentLineColourId: 'jarvis-reactor', writingColourId: 'jarvis-ink', mutedWritingColourId: 'jarvis-ink', buttonStyleId: 'flat', fontId: 'tech', textStyleId: 'medium', toastTextColourId: 'jarvis-ink', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'dark_mafia', buttonShapeId: 'sharp', isFullPreset: true, presetCategory: 'cyberpunk' },
   { id: 'noir-contrast-full', name: 'High Contrast Noir', description: 'Charcoal + gold buttons, carbon texture, sharp industrial type', colourId: 'charcoal', textureId: 'carbon', buttonColourId: 'dark-gold', accentLineColourId: 'gold', writingColourId: 'snow', mutedWritingColourId: 'zinc-400', buttonStyleId: 'outline', fontId: 'industrial', textStyleId: 'medium', toastTextColourId: 'snow', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'classic', buttonShapeId: 'sharp', isFullPreset: true, presetCategory: 'dark-pro' },
   { id: 'crimson-mafia-full', name: 'Crimson Mafia', description: 'Deep blood accent, warm parchment text, grain texture', colourId: 'blood', textureId: 'grain', buttonColourId: null, accentLineColourId: null, writingColourId: 'parchment', mutedWritingColourId: 'warm-gray', buttonStyleId: 'shaded', fontId: 'elegant', textStyleId: 'semibold', toastTextColourId: 'parchment', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized', themeVariant: 'classic', buttonShapeId: 'rounded', isFullPreset: true, presetCategory: 'dark-pro' },
   { id: 'clean-steel-full', name: 'Clean Steel', description: 'Cool steel accent, modern layout, mesh texture', colourId: 'steel', textureId: 'mesh', buttonColourId: null, accentLineColourId: null, writingColourId: 'cool-white', mutedWritingColourId: 'slate-300', buttonStyleId: 'flat', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'cool-white', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'modern', buttonShapeId: 'rounded', isFullPreset: true, presetCategory: 'metallic' },
