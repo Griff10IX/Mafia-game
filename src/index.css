@@ -568,14 +568,23 @@ input[type="button"],
 
 /* Mobile chrome: reduce iOS long-press "Open in New Tab" on nav tiles */
 [data-layout="bottom-nav"] a,
+[data-layout="bottom-nav"] button,
 [data-layout="bottom-nav-submenu"] a,
+[data-layout="bottom-nav-submenu"] button,
 [data-layout="pocket-dock"] a,
+[data-layout="pocket-dock"] button,
 [data-layout="pocket-actions-sheet"] a,
+[data-layout="pocket-actions-sheet"] button,
 [data-layout="pocket-combat-sheet"] a,
+[data-layout="pocket-combat-sheet"] button,
 [data-layout="pocket-money-sheet"] a,
+[data-layout="pocket-money-sheet"] button,
 [data-layout="pocket-menu-sheet"] a,
+[data-layout="pocket-menu-sheet"] button,
 [data-layout="sidebar"] a,
-[data-layout="right-sidebar"] a {
+[data-layout="sidebar"] button,
+[data-layout="right-sidebar"] a,
+[data-layout="right-sidebar"] button {
   -webkit-touch-callout: none;
 }
 

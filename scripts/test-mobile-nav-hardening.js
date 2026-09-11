@@ -9,10 +9,12 @@ const forum = fs.readFileSync(path.join(__dirname, '../src/utils/forumContent.js
 const fails = [];
 
 if (!/function normalizeLinkTo\(/.test(layout)) fails.push('missing normalizeLinkTo');
+if (!/readPreferButtonNav/.test(layout)) fails.push('missing readPreferButtonNav (mobile button nav)');
+if (!/preferButtonNav/.test(layout)) fails.push('missing preferButtonNav branch');
+if (!/\(button == null \|\| button === 0\)/.test(layout)) fails.push('missing iOS button-null primary check');
+if (!/e\.stopPropagation\(\)/.test(layout)) fails.push('missing stopPropagation on SPA tap');
 if (!/navigate\(dest\)/.test(layout)) fails.push('SameRouteAwareLink must call navigate(dest)');
 if (!/e\.preventDefault\(\)/.test(layout)) fails.push('missing preventDefault');
-if (!/isPlainPrimary/.test(layout)) fails.push('missing isPlainPrimary gate');
-if (!/opensNewContext/.test(layout)) fails.push('missing opensNewContext gate');
 if (!/-webkit-touch-callout:\s*none/.test(css)) fails.push('missing touch-callout none on nav');
 if (!/function forumAnchorAttrs\(/.test(forum)) fails.push('missing forumAnchorAttrs');
 if (/target="_blank" rel="noopener noreferrer" class="forum-content-link"/.test(forum)) {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Users, Target, Radio, Clock, CalendarDays, CalendarRange } from 'lucide-react';
 import api from '../../utils/api';
 import { warmProfilePrefetchFromUsername } from '../../utils/profileNavPrefetch';
@@ -323,6 +323,7 @@ const RoleKeyStrip = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor,
 };
 
 const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, modDefaultOnlineColor, profileHoverEnabled, myUsername }) => {
+  const navigate = useNavigate();
   const preview = profileCache[user.username];
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
   const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
@@ -364,21 +365,32 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
   const nameTitle = inFamily || isStaff ? user.username : `${user.username} (no family)`;
   const prefetchFullProfile = () => warmProfilePrefetchFromUsername(user.username);
 
-  const profileLink = (extra = {}) => (
-    <Link
-      to={profileTo}
-      className={linkClass}
-      style={displayColor ? { color: displayColor } : undefined}
-      data-testid={`user-profile-link-${user.username}`}
-      onPointerDown={prefetchFullProfile}
-      onPointerEnter={prefetchFullProfile}
-      onFocus={prefetchFullProfile}
-      title={nameTitle}
-      {...extra}
-    >
-      {user.username}
-    </Link>
-  );
+  const profileLink = (extra = {}) => {
+    const { onClick: extraOnClick, ...extraRest } = extra;
+    return (
+      <Link
+        to={profileTo}
+        className={linkClass}
+        style={displayColor ? { color: displayColor } : undefined}
+        data-testid={`user-profile-link-${user.username}`}
+        onPointerDown={prefetchFullProfile}
+        onPointerEnter={prefetchFullProfile}
+        onFocus={prefetchFullProfile}
+        title={nameTitle}
+        {...extraRest}
+        onClick={(e) => {
+          // iOS: own the tap so profile never opens as a new Safari tab.
+          if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && (e.button == null || e.button === 0)) {
+            e.preventDefault();
+            navigate(profileTo);
+          }
+          if (typeof extraOnClick === 'function') extraOnClick(e);
+        }}
+      >
+        {user.username}
+      </Link>
+    );
+  };
 
   const previewCosmeticHex =
     (preview && !preview.error && preview.profile_cosmetic_active && preview.profile_name_glow_color) ||

@@ -483,9 +483,21 @@ function normalizeLinkTo(to) {
   return { pathname: to.slice(0, q), search: to.slice(q, hash), hash: to.slice(hash) };
 }
 
+function readPreferButtonNav() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  try {
+    // iPhone Safari / coarse touch: real <a href> can still break out into a new tab
+    // (standalone PWA or delayed click). Buttons cannot.
+    return window.matchMedia('(max-width: 767px), (pointer: coarse)').matches;
+  } catch {
+    return false;
+  }
+}
+
 function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown, onTouchStart, ...rest }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const preferButtonNav = readPreferButtonNav();
   const normalizedTo = normalizeLinkTo(to);
   const requestedPath = typeof normalizedTo === 'string' ? normalizedTo : (normalizedTo.pathname || '/');
   const jailRedirect = !!(isClientJailed() && isJailBlockedFrontendPath(requestedPath));
@@ -508,66 +520,96 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown,
       api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {});
     }
   };
-  const mergeClick = (e) => {
+  const goSpa = () => {
     preloadRoute(path);
     if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
     if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
     if (warmJail) prefetchJailPageData({ force: false }).catch(() => {});
-
-    // Own the navigation for plain primary taps so iOS Safari / standalone
-    // never follows the raw <a href> (that breakout looks like a "new tab").
+    if (location.pathname === path && (location.search || '') === destSearch) {
+      window.dispatchEvent(new CustomEvent(SAME_ROUTE_NAV_CLICK, { detail: { pathname: path, search: destSearch } }));
+    } else {
+      navigate(dest);
+    }
+  };
+  const mergeClick = (e) => {
+    // iOS sometimes omits button on synthetic clicks — treat null/undefined as primary.
+    const button = e.button;
     const isPlainPrimary =
       !e.defaultPrevented
-      && e.button === 0
+      && (button == null || button === 0)
       && !e.metaKey && !e.altKey && !e.ctrlKey && !e.shiftKey;
     const targetAttr = (e.currentTarget && e.currentTarget.getAttribute)
       ? e.currentTarget.getAttribute('target')
       : null;
     const opensNewContext = targetAttr && targetAttr !== '_self';
 
+    // Claim the gesture BEFORE any preload work so Safari cannot follow href.
     if (isPlainPrimary && !opensNewContext) {
       e.preventDefault();
-      if (location.pathname === path && (location.search || '') === destSearch) {
-        window.dispatchEvent(new CustomEvent(SAME_ROUTE_NAV_CLICK, { detail: { pathname: path, search: destSearch } }));
-      } else {
-        navigate(dest);
-      }
+      e.stopPropagation();
+      goSpa();
     } else if (location.pathname === path && (location.search || '') === destSearch) {
       e.preventDefault();
       window.dispatchEvent(new CustomEvent(SAME_ROUTE_NAV_CLICK, { detail: { pathname: path, search: destSearch } }));
+    } else {
+      preloadRoute(path);
     }
     if (onClick) onClick(e);
   };
+  const warmHandlers = {
+    onPointerDown: (e) => {
+      warmPointer();
+      if (onPointerDown) onPointerDown(e);
+    },
+    onTouchStart: (e) => {
+      if (!(typeof window !== 'undefined' && window.PointerEvent)) warmPointer();
+      if (onTouchStart) onTouchStart(e);
+    },
+    onMouseEnter: (e) => {
+      preload.onMouseEnter();
+      if (warmTravel) prefetchTravelPageData({ force: false }).catch(() => {});
+      if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
+      if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
+      if (warmJail) prefetchJailPageData({ force: false }).catch(() => {});
+      if (onMouseEnter) onMouseEnter(e);
+    },
+    onFocus: (e) => {
+      preload.onFocus();
+      if (warmTravel) prefetchTravelPageData({ force: false }).catch(() => {});
+      if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
+      if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
+      if (warmJail) prefetchJailPageData({ force: false }).catch(() => {});
+      if (onFocus) onFocus(e);
+    },
+  };
+
+  // Mobile / coarse pointer: no <a href> at all — Safari cannot open a new tab from a button.
+  if (preferButtonNav) {
+    const {
+      replace: _replace,
+      state: _state,
+      relative: _relative,
+      reloadDocument: _reloadDocument,
+      preventScrollReset: _preventScrollReset,
+      viewTransition: _viewTransition,
+      ...buttonRest
+    } = rest;
+    return (
+      <button
+        type="button"
+        {...buttonRest}
+        onClick={mergeClick}
+        {...warmHandlers}
+      />
+    );
+  }
+
   return (
     <Link
       to={dest}
       {...rest}
       onClick={mergeClick}
-      onPointerDown={(e) => {
-        warmPointer();
-        if (onPointerDown) onPointerDown(e);
-      }}
-      onTouchStart={(e) => {
-        // Modern iOS already fires pointerdown; skip double prefetch.
-        if (!(typeof window !== 'undefined' && window.PointerEvent)) warmPointer();
-        if (onTouchStart) onTouchStart(e);
-      }}
-      onMouseEnter={(e) => {
-        preload.onMouseEnter();
-        if (warmTravel) prefetchTravelPageData({ force: false }).catch(() => {});
-        if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
-        if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
-        if (warmJail) prefetchJailPageData({ force: false }).catch(() => {});
-        if (onMouseEnter) onMouseEnter(e);
-      }}
-      onFocus={(e) => {
-        preload.onFocus();
-        if (warmTravel) prefetchTravelPageData({ force: false }).catch(() => {});
-        if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
-        if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
-        if (warmJail) prefetchJailPageData({ force: false }).catch(() => {});
-        if (onFocus) onFocus(e);
-      }}
+      {...warmHandlers}
     />
   );
 }
