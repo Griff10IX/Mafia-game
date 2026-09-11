@@ -2,6 +2,7 @@
 from datetime import datetime, timezone, timedelta
 import asyncio
 import logging
+import math
 import time
 import secrets
 import unicodedata
@@ -10,7 +11,7 @@ import os
 import re
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 # Ensure backend/.env is loaded before reading THE_ODDS_API_KEY (matches server.py paths)
 try:
@@ -82,10 +83,17 @@ def _sports_payout_to_swiss() -> bool:
 
 
 # ----- Models -----
-class SportsBetPlaceRequest(BaseModel):
+class SportsBetLegRequest(BaseModel):
     event_id: str
     option_id: str
+
+
+class SportsBetPlaceRequest(BaseModel):
+    """Single: event_id+option_id. Accumulator: legs (2+). stake always required."""
+    event_id: Optional[str] = None
+    option_id: Optional[str] = None
     stake: int
+    legs: Optional[List[SportsBetLegRequest]] = None
 
 
 class SportsBetCancelRequest(BaseModel):
@@ -173,6 +181,12 @@ SPORTS_BETTING_TRANSFER_TARGET_CONFLICT_DETAIL = (
 # Override persisted in game_settings key sports_bet_max_total_open_stake (see get_sports_bet_max_total_open_stake).
 SPORTS_BET_MAX_TOTAL_OPEN_STAKE = 1_000_000_000
 _SPORTS_BET_STAKE_CAP_CEILING = 10**15
+# Accumulator (acca) max cash payout per bet — combined odds × stake is capped at this.
+SPORTS_ACCA_MAX_PAYOUT = 200_000_000_000  # $200B
+SPORTS_ACCA_MAX_LEGS = 12
+SPORTS_ACCA_MIN_LEGS = 2
+# Board + auto-board include fixtures from today through this many UTC days ahead (inclusive of today = 1).
+SPORTS_BOARD_LOOKAHEAD_DAYS = 10
 # Placing bets and cancelling open bets both end this many minutes before scheduled start.
 SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES = 10
 # Public board/sidebar: keep the visible board focused on the next 45 open events.
@@ -181,16 +195,38 @@ SPORTS_BETTING_PUBLIC_EVENTS_LIMIT = 45
 # so visible upcoming lines are not starved when many stale opens sit at the head of the sort.
 SPORTS_BETTING_PUBLIC_OPEN_SCAN_MAX = 3000
 # Auto-board should not flood the board if cron/admin runs multiple times in the same UTC day.
-SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT = 55
+SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT = 90
 # Player-submitted requests to add a template to the board (UTC calendar day).
 SPORTS_EVENT_REQUESTS_PER_DAY = 3
-SPORTS_EVENT_REQUEST_MAX_HOURS_AHEAD = 24
+SPORTS_EVENT_REQUEST_MAX_HOURS_AHEAD = 72
 SPORTS_LIVE_CACHE_TTL = 30 * 60  # 30 min (was 6h) so "Check for events" gets fresher templates
 ODDS_API_BASE = "https://api.the-odds-api.com/v4"
 THESPORTSDB_LEAGUE_PREMIER = 4328
 THESPORTSDB_LEAGUE_LALIGA = 4335
+THESPORTSDB_LEAGUE_SERIE_A = 4332
+THESPORTSDB_LEAGUE_BUNDESLIGA = 4331
+THESPORTSDB_LEAGUE_LIGUE1 = 4334
+THESPORTSDB_LEAGUE_EREDIVISIE = 4337
+THESPORTSDB_LEAGUE_CHAMPIONSHIP = 4396
+THESPORTSDB_LEAGUE_PRIMEIRA = 4346
+THESPORTSDB_LEAGUE_SPL = 4330
+THESPORTSDB_LEAGUE_BELGIUM = 4338
 THESPORTSDB_LEAGUE_UFC = 4443
 THESPORTSDB_LEAGUE_BOXING = 4445
+
+# Fallback board feed when Odds API / FDO are unavailable (id, odds-api key, rounds to scan).
+THESPORTSDB_FOOTBALL_LEAGUES = (
+    (THESPORTSDB_LEAGUE_PREMIER, "soccer_epl", 12),
+    (THESPORTSDB_LEAGUE_CHAMPIONSHIP, "soccer_efl_champ", 12),
+    (THESPORTSDB_LEAGUE_LALIGA, "soccer_spain_la_liga", 12),
+    (THESPORTSDB_LEAGUE_SERIE_A, "soccer_italy_serie_a", 12),
+    (THESPORTSDB_LEAGUE_BUNDESLIGA, "soccer_germany_bundesliga", 12),
+    (THESPORTSDB_LEAGUE_LIGUE1, "soccer_france_ligue_one", 12),
+    (THESPORTSDB_LEAGUE_EREDIVISIE, "soccer_netherlands_eredivisie", 12),
+    (THESPORTSDB_LEAGUE_PRIMEIRA, "soccer_portugal_primeira_liga", 12),
+    (THESPORTSDB_LEAGUE_SPL, "soccer_spl", 12),
+    (THESPORTSDB_LEAGUE_BELGIUM, "soccer_belgium_first_div", 12),
+)
 
 _sports_live_cache = {
     "football": [],
@@ -1907,6 +1943,19 @@ async def _fetch_football_events_football_data_org() -> list:
                         "id": "football_fdo_%s_%s" % (code, count - 1),
                         "name": name,
                         "category": "Football",
+                        "start_time": _parse_commence_time(utc_str) or utc_str,
+                        "commence_time": utc_str,
+                        "external_sport_key": {
+                            "PL": "soccer_epl",
+                            "PD": "soccer_spain_la_liga",
+                            "BL1": "soccer_germany_bundesliga",
+                            "SA": "soccer_italy_serie_a",
+                            "FL1": "soccer_france_ligue_one",
+                            "CL": "soccer_uefa_champs_league",
+                            "EL": "soccer_uefa_europa_league",
+                            "DED": "soccer_netherlands_eredivisie",
+                            "PPL": "soccer_portugal_primeira_liga",
+                        }.get(code),
                         "options": [
                             {"id": "home_" + opt_h, "name": ht, "odds": round(home_odds, 2)},
                             {"id": "draw", "name": "Draw", "odds": round(draw_odds, 2)},
@@ -1918,72 +1967,173 @@ async def _fetch_football_events_football_data_org() -> list:
     return out
 
 
+# Rough club strengths for 1X2 when Odds API / FDO odds are unavailable.
+_FOOTBALL_TEAM_STRENGTH = {
+    "manchester city": 96, "man city": 96, "arsenal": 93, "liverpool": 92, "chelsea": 88,
+    "manchester united": 84, "man utd": 84, "man united": 84, "newcastle united": 83,
+    "newcastle": 83, "tottenham hotspur": 80, "tottenham": 80, "spurs": 80,
+    "aston villa": 82, "villa": 82, "brighton and hove albion": 78, "brighton": 78,
+    "west ham united": 76, "west ham": 76, "wolverhampton wanderers": 74, "wolves": 74,
+    "brentford": 76, "bournemouth": 74, "crystal palace": 73, "fulham": 72,
+    "everton": 72, "nottingham forest": 74, "forest": 74, "leeds united": 73, "leeds": 73,
+    "leicester city": 68, "leicester": 68, "southampton": 66, "ipswich town": 67,
+    "ipswich": 67, "hull city": 71, "hull": 71, "sunderland": 69, "coventry city": 64,
+    "coventry": 64, "burnley": 65, "sheffield united": 63, "luton town": 62, "luton": 62,
+    "west brom": 74, "birmingham": 73, "derby": 72, "cardiff": 70, "qpr": 69,
+    "bolton": 71, "swansea": 72, "watford": 71, "preston": 70, "barnsley": 68,
+    "sheffield wednesday": 71,
+    "real madrid": 96, "barcelona": 94, "atletico madrid": 88, "sevilla": 76,
+    "real sociedad": 80, "athletic club": 82, "athletic bilbao": 82, "villarreal": 81,
+    "real betis": 78, "girona": 77, "valencia": 74, "osasuna": 72, "getafe": 70,
+    "celta vigo": 73, "mallorca": 71, "las palmas": 68, "rayo vallecano": 72,
+    "alaves": 70, "espanyol": 71, "leganes": 67, "valladolid": 65, "elche": 67,
+    "levante": 68, "racing santander": 66, "malaga": 64, "deportivo": 65,
+    "inter": 92, "milan": 88, "ac milan": 88, "juventus": 90, "napoli": 89,
+    "roma": 84, "lazio": 83, "atalanta": 86, "fiorentina": 80, "bologna": 78,
+    "torino": 75, "udinese": 72, "genoa": 73, "cagliari": 70, "lecce": 69,
+    "monza": 70, "sassuolo": 71, "como": 72, "parma": 71, "venezia": 68, "frosinone": 67,
+    "bayern munich": 95, "borussia dortmund": 88, "bayer leverkusen": 87,
+    "rb leipzig": 84, "eintracht frankfurt": 80, "stuttgart": 81, "vfb stuttgart": 81,
+    "freiburg": 77, "mainz": 74, "mainz 05": 74, "augsburg": 72, "hoffenheim": 74,
+    "werder bremen": 73, "union berlin": 75, "schalke": 70, "koln": 72, "cologne": 72,
+    "monchengladbach": 74, "hamburg": 73, "paderborn": 68, "elversberg": 66,
+    "paris saint-germain": 95, "psg": 95, "marseille": 84, "monaco": 85, "lyon": 82,
+    "lille": 83, "nice": 80, "rennes": 79, "strasbourg": 77, "lens": 81, "brest": 76,
+    "toulouse": 74, "lorient": 71, "auxerre": 70, "angers": 69, "troyes": 67,
+    "paris fc": 73, "le mans": 66,
+    "ajax": 86, "psv": 88, "psv eindhoven": 88, "feyenoord": 85, "az alkmaar": 82,
+    "twente": 78, "utrecht": 76, "heerenveen": 72, "groningen": 71, "nec nijmegen": 73,
+    "sparta rotterdam": 70, "fortuna sittard": 71, "go ahead eagles": 74,
+    "pec zwolle": 69, "excelsior": 68, "cambuur": 66, "ado den haag": 65,
+    "willem ii": 67, "telstar": 64,
+}
+
+
+def _football_team_strength(name: str) -> float:
+    n = (name or "").strip().lower()
+    if not n:
+        return 72.0
+    if n in _FOOTBALL_TEAM_STRENGTH:
+        return float(_FOOTBALL_TEAM_STRENGTH[n])
+    for key, val in _FOOTBALL_TEAM_STRENGTH.items():
+        if key in n or n in key:
+            return float(val)
+    return 72.0
+
+
+def _football_1x2_from_strength(home: str, away: str) -> Tuple[float, float, float]:
+    """Decimal 1X2 with ~5% overround from relative club strength + home edge."""
+    hs = _football_team_strength(home) + 3.5  # home advantage
+    aws = _football_team_strength(away)
+    diff = max(-18.0, min(18.0, hs - aws))  # soft-cap so underdogs stay bettable
+    home_raw = math.exp(diff / 14.0)
+    away_raw = math.exp(-diff / 14.0)
+    draw_raw = math.exp(-abs(diff) / 16.0) * 1.2
+    total = home_raw + draw_raw + away_raw
+    ph, pd, pa = home_raw / total, draw_raw / total, away_raw / total
+    margin = 1.05  # book margin
+    ph, pd, pa = ph * margin, pd * margin, pa * margin
+    inv = ph + pd + pa
+    ph, pd, pa = ph / inv, pd / inv, pa / inv
+
+    def to_odds(p: float) -> float:
+        p = max(0.06, min(0.78, p))
+        return round(max(1.18, min(12.0, 1.0 / p)), 2)
+
+    return to_odds(ph), to_odds(pd), to_odds(pa)
+
+
 async def _fetch_football_events_thesportsdb() -> list:
+    """Upcoming football fixtures from TheSportsDB across major leagues (kickoffs + strength odds)."""
     out = []
-    year = datetime.now(timezone.utc).year
-    league_ids = [(THESPORTSDB_LEAGUE_PREMIER, "Premier League"), (THESPORTSDB_LEAGUE_LALIGA, "La Liga")]
+    seen = set()
+    now = datetime.now(timezone.utc)
+    board_end = now + timedelta(days=max(7, int(SPORTS_BOARD_LOOKAHEAD_DAYS) + 2))
+    y = now.year
+    season = f"{y}-{y + 1}" if now.month >= 7 else f"{y - 1}-{y}"
+
+    def _append_event(e: dict, sport_key: str, league_id: int, rnd: Optional[int] = None) -> None:
+        home = (e.get("strHomeTeam") or "").strip()
+        away = (e.get("strAwayTeam") or "").strip()
+        if not home or not away:
+            return
+        status = (e.get("strStatus") or "").strip().lower()
+        if status in ("ft", "full time", "fulltime", "match finished", "aet", "pen"):
+            return
+        kick = (e.get("strTimestamp") or "").strip()
+        if kick and "T" in kick and "+" not in kick and "Z" not in kick:
+            kick = kick + "+00:00"
+        start_time = _parse_commence_time(kick) if kick else None
+        if not start_time:
+            return
+        start_dt = _parse_start_time_utc(start_time)
+        if start_dt is None or start_dt <= now or start_dt > board_end:
+            return
+        eid = str(e.get("idEvent") or f"{league_id}-{rnd or 0}-{home}-{away}")
+        if eid in seen:
+            return
+        seen.add(eid)
+        name = (e.get("strEvent") or "").strip() or f"{home} vs {away}"
+        opt_h = home.lower().replace(" ", "_").replace(".", "")[:20]
+        opt_a = away.lower().replace(" ", "_").replace(".", "")[:20]
+        home_odds, draw_odds, away_odds = _football_1x2_from_strength(home, away)
+        out.append({
+            "id": f"football_tsdb_{eid}",
+            "name": name,
+            "category": "Football",
+            "start_time": start_time,
+            "commence_time": kick,
+            "external_event_id": eid,
+            "external_sport_key": sport_key,
+            "options": [
+                {"id": "home_" + opt_h, "name": home, "odds": home_odds},
+                {"id": "draw", "name": "Draw", "odds": draw_odds},
+                {"id": "away_" + opt_a, "name": away, "odds": away_odds},
+            ],
+        })
+
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            for league_id, _ in league_ids:
-                for endpoint, params in [
-                    ("eventsseason.php", {"id": league_id, "s": year}),
-                    ("eventsseason.php", {"id": league_id, "s": year - 1}),
-                    ("eventsnextleague.php", {"id": league_id}),
-                ]:
+        async with httpx.AsyncClient(timeout=25.0) as client:
+            for league_id, sport_key, max_rounds in THESPORTSDB_FOOTBALL_LEAGUES:
+                # Prefer next-league feed (works even when round tables are sparse).
+                try:
+                    r = await client.get(
+                        "https://www.thesportsdb.com/api/v1/json/123/eventsnextleague.php",
+                        params={"id": league_id},
+                    )
+                    if r.status_code == 200:
+                        for e in (r.json() or {}).get("events") or []:
+                            _append_event(e, sport_key, league_id)
+                except Exception:
+                    pass
+                # Also scan early season rounds for denser coverage.
+                for rnd in range(1, int(max_rounds) + 1):
                     try:
                         r = await client.get(
-                            "https://www.thesportsdb.com/api/v1/json/123/" + endpoint,
-                            params=params,
+                            "https://www.thesportsdb.com/api/v1/json/123/eventsround.php",
+                            params={"id": league_id, "r": rnd, "s": season},
                         )
                         if r.status_code != 200:
                             continue
-                        data = r.json()
-                        events = (data.get("events") or [])[:25]
-                        for i, e in enumerate(events):
-                            sport = (e.get("strSport") or "").lower()
-                            if sport not in ("soccer", "football", "") and "league" not in (e.get("strLeague") or "").lower():
-                                continue
-                            name = (e.get("strEvent") or "").strip()
-                            home = (e.get("strHomeTeam") or "").strip()
-                            away = (e.get("strAwayTeam") or "").strip()
-                            if not home or not away:
-                                continue
-                            if not name:
-                                name = "%s vs %s" % (home, away)
-                            status = (e.get("strStatus") or "").lower()
-                            if "finished" in status or "result" in status or status == "match finished":
-                                continue
-                            opt_h = home.lower().replace(" ", "_").replace(".", "")[:20]
-                            opt_a = away.lower().replace(" ", "_").replace(".", "")[:20]
-                            out.append({
-                                "id": "football_tsdb_%s_%s" % (league_id, len(out)),
-                                "name": name,
-                                "category": "Football",
-                                "options": [
-                                    {"id": "home_" + opt_h, "name": home, "odds": round(2.0 + _rng.uniform(0.2, 1.2), 2)},
-                                    {"id": "draw", "name": "Draw", "odds": round(3.0 + _rng.uniform(0.1, 0.6), 2)},
-                                    {"id": "away_" + opt_a, "name": away, "odds": round(2.0 + _rng.uniform(0.2, 1.2), 2)},
-                                ],
-                            })
-                        if out:
-                            break
+                        for e in (r.json() or {}).get("events") or []:
+                            _append_event(e, sport_key, league_id, rnd)
                     except Exception:
                         continue
-                    if out:
-                        break
-                if len(out) >= 20:
-                    break
     except Exception:
         pass
-    return out[:30]
+    out.sort(key=lambda t: t.get("start_time") or "")
+    return out[:160]
 
 
 async def _fetch_football_events() -> list:
-    """Use Odds API exclusively when key is set. Fallback only when no key or API fails."""
+    """Odds API when key works; otherwise football-data.org then TheSportsDB (with kickoffs)."""
     if _odds_api_key():
-        events = await _fetch_odds_api_soccer()
-        if events:
-            return events
+        try:
+            events = await _fetch_odds_api_soccer()
+            if events:
+                return events
+        except Exception as ex:
+            logger.warning("Odds API soccer failed, using fallbacks: %s", ex)
     events = await _fetch_football_events_football_data_org()
     if not events:
         events = await _fetch_football_events_thesportsdb()
@@ -2261,6 +2411,11 @@ def _template_to_stored_doc(t: dict) -> dict:
         v = t.get(k)
         if v is not None and v != "":
             doc[k] = v
+    # Always normalize a kickoff so auto-board / public board can schedule the fixture.
+    if not doc.get("start_time"):
+        z = _parse_commence_time(doc.get("commence_time") or t.get("commence_time") or t.get("start_time"))
+        if z:
+            doc["start_time"] = z
     return doc
 
 
@@ -2422,10 +2577,33 @@ def _sports_event_betting_block_reason(ev: dict) -> Optional[str]:
 
 
 def _utc_day_start(now: Optional[datetime] = None) -> datetime:
-    n = now or datetime.now(timezone.utc)
-    if n.tzinfo is None:
-        n = n.replace(tzinfo=timezone.utc)
-    return n.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    now = now or datetime.now(timezone.utc)
+    return now.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _sports_board_window(now: Optional[datetime] = None) -> Tuple[datetime, datetime]:
+    """UTC [day0, day_end) window for public board + auto-board eligibility."""
+    day0 = _utc_day_start(now)
+    days = max(1, int(SPORTS_BOARD_LOOKAHEAD_DAYS))
+    return day0, day0 + timedelta(days=days)
+
+
+def _acca_combined_odds(legs: List[dict]) -> float:
+    combined = 1.0
+    for leg in legs or []:
+        try:
+            o = float(leg.get("odds") or 1)
+        except (TypeError, ValueError):
+            o = 1.0
+        if o < 1.01:
+            o = 1.01
+        combined *= o
+    return round(combined, 4)
+
+
+def _acca_potential_payout(stake: int, combined_odds: float) -> int:
+    raw = int(float(stake) * float(combined_odds))
+    return max(0, min(raw, int(SPORTS_ACCA_MAX_PAYOUT)))
 
 
 async def _count_sports_event_requests_today(user_id: str) -> int:
@@ -2530,9 +2708,12 @@ async def _create_sports_board_event_from_template(template: dict, *, auto_board
     start_time = template.get("start_time") or _parse_commence_time(template.get("commence_time"))
     if not start_time:
         start_time = (now + timedelta(hours=2)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    today0 = _utc_day_start(now)
-    if not _start_time_utc_in_range(start_time, today0, today0 + timedelta(days=1)):
-        raise HTTPException(status_code=400, detail="Only today's events can be added to the sports betting board")
+    board0, board1 = _sports_board_window(now)
+    if not _start_time_utc_in_range(start_time, board0, board1):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only events kicking off within the next {SPORTS_BOARD_LOOKAHEAD_DAYS} day(s) can be added to the board",
+        )
     ev = {
         "id": str(uuid.uuid4()),
         "name": nm,
@@ -2561,9 +2742,9 @@ async def auto_populate_sports_board(
 ) -> dict:
     """Promote eligible templates to open sports_events.
 
-    Only fixtures whose kickoff falls on the **current UTC calendar day** are considered
-    (same window as the daily auto-board counter). All such eligible games are added, in
-    kickoff order, until the per-run cap / daily remaining cap (default 45/day) is reached.
+    Fixtures whose kickoff falls in the board lookahead window (today UTC through
+    SPORTS_BOARD_LOOKAHEAD_DAYS) are considered. All such eligible games are added, in
+    kickoff order, until the per-run cap / daily remaining cap (default 55/day) is reached.
     """
     raw_src = (template_source or _sports_auto_board_template_source() or "database").strip().lower()
     src = "merged" if raw_src in ("merged", "odds", "memory", "api", "all") else "database"
@@ -2583,15 +2764,15 @@ async def auto_populate_sports_board(
     now = datetime.now(timezone.utc)
     count_day_start = _utc_day_start(now)
     count_day_end_excl = count_day_start + timedelta(days=1)
+    board0, board1 = _sports_board_window(now)
     scheduled_today_before = await _count_auto_board_events_scheduled_for_day(count_day_start, count_day_end_excl)
     remaining_today = max(0, SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT - scheduled_today_before)
     cap = min(cap, remaining_today)
     candidates = [t for t in merged if _is_auto_board_eligible_template(t, soccer_keys=soccer_keys, now=now)]
     candidates.sort(key=_template_auto_board_sort_key)
-    same_utc_day = [
-        t for t in candidates if _template_kickoff_utc_in_range(t, count_day_start, count_day_end_excl)
+    board_queue = [
+        t for t in candidates if _template_kickoff_utc_in_range(t, board0, board1)
     ]
-    board_queue = same_utc_day
     added = 0
     skipped_on_board = 0
     errors: list = []
@@ -2670,8 +2851,7 @@ async def _notify_staff_sports_event_request(
 async def sports_betting_events(current_user: dict = Depends(get_current_user_verified)):
     await _sports_ensure_seed_events()
     now = datetime.now(timezone.utc)
-    today0 = _utc_day_start(now)
-    today1 = today0 + timedelta(days=1)
+    board0, board1 = _sports_board_window(now)
     projection = {
         "_id": 0,
         "id": 1,
@@ -2692,7 +2872,7 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
         if scanned > SPORTS_BETTING_PUBLIC_OPEN_SCAN_MAX:
             break
         st = ev_doc.get("start_time")
-        if st and not _start_time_utc_in_range(st, today0, today1):
+        if st and not _start_time_utc_in_range(st, board0, board1):
             continue
         start_dt = _parse_start_time_utc(st) if st else now
         if start_dt is None:
@@ -2746,14 +2926,28 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
                 },
             ]
         ).to_list(len(event_ids) * 32)
-        for sr in stake_rows:
+        # Also count accumulator legs toward pool display
+        acca_rows = await db.sports_bets.aggregate(
+            [
+                {"$match": {"status": "open", "bet_type": "accumulator", "legs.event_id": {"$in": event_ids}}},
+                {"$unwind": "$legs"},
+                {"$match": {"legs.event_id": {"$in": event_ids}}},
+                {
+                    "$group": {
+                        "_id": {"e": "$legs.event_id", "o": "$legs.option_id"},
+                        "total": {"$sum": "$stake"},
+                    }
+                },
+            ]
+        ).to_list(len(event_ids) * 32)
+        for sr in list(stake_rows) + list(acca_rows):
             kid = sr.get("_id") or {}
             eid = kid.get("e")
             oid = kid.get("o")
             if not eid or not oid:
                 continue
             amt = int(sr.get("total") or 0)
-            stake_by_event_option[(eid, oid)] = amt
+            stake_by_event_option[(eid, oid)] = stake_by_event_option.get((eid, oid), 0) + amt
             event_pool[eid] = event_pool.get(eid, 0) + amt
 
     for row in result:
@@ -2771,27 +2965,67 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
         row["options"] = enriched_opts
         row["open_pool_total"] = pool
 
-    return {"events": result}
+    return {
+        "events": result,
+        "acca_max_payout": SPORTS_ACCA_MAX_PAYOUT,
+        "acca_max_legs": SPORTS_ACCA_MAX_LEGS,
+        "board_lookahead_days": SPORTS_BOARD_LOOKAHEAD_DAYS,
+    }
 
 
 async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dict = Depends(get_current_user_verified)):
     raise_if_gambling_self_banned(current_user)
-    event_id = (request.event_id or "").strip()
-    option_id = (request.option_id or "").strip()
     stake = int(request.stake or 0)
-    if not event_id or not option_id:
-        raise HTTPException(status_code=400, detail="event_id and option_id required")
     if stake <= 0:
         raise HTTPException(status_code=400, detail="Stake must be greater than 0")
-    ev = await db.sports_events.find_one({"id": event_id, "status": "open"}, {"_id": 0})
-    if not ev:
-        raise HTTPException(status_code=404, detail="Event not found or closed")
-    reason = _sports_event_betting_block_reason(ev)
-    if reason:
-        raise HTTPException(status_code=400, detail=reason)
-    opt = next((o for o in (ev.get("options") or []) if o.get("id") == option_id), None)
-    if not opt:
-        raise HTTPException(status_code=400, detail="Invalid option")
+
+    raw_legs = list(request.legs or [])
+    if not raw_legs and request.event_id and request.option_id:
+        raw_legs = [SportsBetLegRequest(event_id=request.event_id, option_id=request.option_id)]
+    if not raw_legs:
+        raise HTTPException(status_code=400, detail="Add at least one selection")
+    if len(raw_legs) > SPORTS_ACCA_MAX_LEGS:
+        raise HTTPException(status_code=400, detail=f"Accumulators are limited to {SPORTS_ACCA_MAX_LEGS} selections")
+
+    # Dedupe by event — one pick per fixture
+    seen_events = set()
+    resolved_legs: List[dict] = []
+    for leg in raw_legs:
+        eid = (leg.event_id or "").strip()
+        oid = (leg.option_id or "").strip()
+        if not eid or not oid:
+            raise HTTPException(status_code=400, detail="Each selection needs event_id and option_id")
+        if eid in seen_events:
+            raise HTTPException(status_code=400, detail="Only one selection per event is allowed on an accumulator")
+        seen_events.add(eid)
+        ev = await db.sports_events.find_one({"id": eid, "status": "open"}, {"_id": 0})
+        if not ev:
+            raise HTTPException(status_code=404, detail="Event not found or closed")
+        reason = _sports_event_betting_block_reason(ev)
+        if reason:
+            raise HTTPException(status_code=400, detail=f"{ev.get('name') or 'Event'}: {reason}")
+        opt = next((o for o in (ev.get("options") or []) if o.get("id") == oid), None)
+        if not opt:
+            raise HTTPException(status_code=400, detail=f"Invalid option on {ev.get('name') or 'event'}")
+        try:
+            odds = float(opt.get("odds") or 1)
+        except (TypeError, ValueError):
+            odds = 1.0
+        if odds < 1.01:
+            raise HTTPException(status_code=400, detail="Odds too low on a selection")
+        resolved_legs.append({
+            "event_id": eid,
+            "event_name": ev.get("name", "?"),
+            "option_id": oid,
+            "option_name": opt.get("name", "?"),
+            "odds": odds,
+            "result": None,
+        })
+
+    is_acca = len(resolved_legs) >= SPORTS_ACCA_MIN_LEGS
+    combined = _acca_combined_odds(resolved_legs) if is_acca else float(resolved_legs[0]["odds"])
+    potential = _acca_potential_payout(stake, combined) if is_acca else int(stake * combined)
+
     uid = current_user.get("id") or ""
     open_total = await _sports_open_stake_total(uid)
     max_open = await get_sports_bet_max_total_open_stake()
@@ -2807,28 +3041,75 @@ async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dic
     now = datetime.now(timezone.utc).isoformat()
     bet_id = str(uuid.uuid4())
     result = await db.users.update_one(
-        {"id": current_user.get("id") or "", "money": {"$gte": stake}},
-        {"$inc": {"money": -stake}}
+        {"id": uid, "money": {"$gte": stake}},
+        {"$inc": {"money": -stake}},
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient cash")
-    await db.sports_bets.insert_one({
-        "id": bet_id,
-        "user_id": current_user.get("id") or "",
-        "event_id": event_id,
-        "event_name": ev.get("name", "?"),
-        "option_id": option_id,
-        "option_name": opt.get("name", "?"),
-        "odds": float(opt.get("odds", 1)),
-        "stake": stake,
-        "status": "open",
-        "created_at": now,
-    })
-    await log_gambling(current_user.get("id") or "", current_user.get("username") or "?", "sports_bet", {"bet_id": bet_id, "event_name": ev.get("name"), "option_name": opt.get("name"), "odds": float(opt.get("odds", 1)), "stake": stake, "status": "open"})
+
+    if is_acca:
+        bet_doc = {
+            "id": bet_id,
+            "user_id": uid,
+            "bet_type": "accumulator",
+            "legs": resolved_legs,
+            "event_id": None,
+            "event_name": f"Accumulator ({len(resolved_legs)} folds)",
+            "option_id": None,
+            "option_name": " + ".join(f"{l['option_name']}" for l in resolved_legs),
+            "odds": combined,
+            "stake": stake,
+            "max_payout": SPORTS_ACCA_MAX_PAYOUT,
+            "potential_payout": potential,
+            "status": "open",
+            "created_at": now,
+        }
+        msg = (
+            f"Accumulator placed: ${stake:,} on {len(resolved_legs)} folds @ {combined:g}× "
+            f"(max return ${potential:,})"
+        )
+    else:
+        leg0 = resolved_legs[0]
+        bet_doc = {
+            "id": bet_id,
+            "user_id": uid,
+            "bet_type": "single",
+            "event_id": leg0["event_id"],
+            "event_name": leg0["event_name"],
+            "option_id": leg0["option_id"],
+            "option_name": leg0["option_name"],
+            "odds": leg0["odds"],
+            "stake": stake,
+            "status": "open",
+            "created_at": now,
+        }
+        msg = f"Bet placed: ${stake:,} on {leg0['option_name']}"
+
+    await db.sports_bets.insert_one(bet_doc)
+    await log_gambling(
+        uid,
+        current_user.get("username") or "?",
+        "sports_bet",
+        {
+            "bet_id": bet_id,
+            "bet_type": bet_doc.get("bet_type"),
+            "event_name": bet_doc.get("event_name"),
+            "option_name": bet_doc.get("option_name"),
+            "odds": float(bet_doc.get("odds") or 1),
+            "stake": stake,
+            "status": "open",
+            "legs": len(resolved_legs),
+            "potential_payout": potential if is_acca else None,
+        },
+    )
     updated = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1})
     return {
-        "message": f"Bet placed: ${stake:,} on {opt.get('name')}",
+        "message": msg,
         "bet_id": bet_id,
+        "bet_type": bet_doc.get("bet_type"),
+        "odds": bet_doc.get("odds"),
+        "potential_payout": potential if is_acca else int(stake * float(bet_doc.get("odds") or 1)),
+        "acca_max_payout": SPORTS_ACCA_MAX_PAYOUT,
         "new_balance": int((updated or {}).get("money") or 0),
     }
 
@@ -2846,12 +3127,41 @@ async def sports_betting_my_bets(current_user: dict = Depends(get_current_user_v
     open_stake_total = await _sports_open_stake_total(uid)
     max_open = await get_sports_bet_max_total_open_stake()
     remaining = max(0, max_open - open_stake_total)
+
+    def _serialize_bet(b: dict) -> dict:
+        out = {
+            "id": b["id"],
+            "bet_type": b.get("bet_type") or "single",
+            "event_name": b.get("event_name"),
+            "option_name": b.get("option_name"),
+            "odds": b.get("odds"),
+            "stake": b.get("stake"),
+            "status": b.get("status"),
+            "created_at": b.get("created_at"),
+            "settled_at": b.get("settled_at"),
+            "potential_payout": b.get("potential_payout"),
+            "max_payout": b.get("max_payout"),
+        }
+        if b.get("legs"):
+            out["legs"] = [
+                {
+                    "event_name": lg.get("event_name"),
+                    "option_name": lg.get("option_name"),
+                    "odds": lg.get("odds"),
+                    "result": lg.get("result"),
+                }
+                for lg in b["legs"]
+            ]
+        return out
+
     return {
-        "open": [{"id": b["id"], "event_name": b.get("event_name"), "option_name": b.get("option_name"), "odds": b.get("odds"), "stake": b.get("stake"), "created_at": b.get("created_at")} for b in open_bets],
-        "closed": [{"id": b["id"], "event_name": b.get("event_name"), "option_name": b.get("option_name"), "odds": b.get("odds"), "stake": b.get("stake"), "status": b.get("status"), "created_at": b.get("created_at"), "settled_at": b.get("settled_at")} for b in closed_bets],
+        "open": [_serialize_bet(b) for b in open_bets],
+        "closed": [_serialize_bet(b) for b in closed_bets],
         "max_total_open_stake": max_open,
         "open_stake_total": open_stake_total,
         "open_stake_remaining": remaining,
+        "acca_max_payout": SPORTS_ACCA_MAX_PAYOUT,
+        "acca_max_legs": SPORTS_ACCA_MAX_LEGS,
     }
 
 
@@ -2863,14 +3173,20 @@ async def sports_betting_cancel_bet(request: SportsBetCancelRequest, current_use
     bet = await db.sports_bets.find_one({"id": bet_id, "user_id": uid, "status": "open"}, {"_id": 0})
     if not bet:
         raise HTTPException(status_code=400, detail="Bet not found or already cancelled")
-    ev = await db.sports_events.find_one(
-        {"id": bet.get("event_id") or ""},
-        {"_id": 0, "start_time": 1, "betting_opens_at": 1, "betting_closes_at": 1},
-    )
-    if ev is not None:
-        r = _sports_event_betting_block_reason(ev)
-        if r:
-            raise HTTPException(status_code=400, detail=r)
+    event_ids = []
+    if (bet.get("bet_type") or "single") == "accumulator":
+        event_ids = [lg.get("event_id") for lg in (bet.get("legs") or []) if lg.get("event_id")]
+    elif bet.get("event_id"):
+        event_ids = [bet.get("event_id")]
+    for eid in event_ids:
+        ev = await db.sports_events.find_one(
+            {"id": eid},
+            {"_id": 0, "start_time": 1, "betting_opens_at": 1, "betting_closes_at": 1, "name": 1},
+        )
+        if ev is not None:
+            r = _sports_event_betting_block_reason(ev)
+            if r:
+                raise HTTPException(status_code=400, detail=f"{ev.get('name') or 'Event'}: {r}")
     now = datetime.now(timezone.utc).isoformat()
     bet = await db.sports_bets.find_one_and_update(
         {"id": bet_id, "user_id": uid, "status": "open"},
@@ -2886,15 +3202,25 @@ async def sports_betting_cancel_bet(request: SportsBetCancelRequest, current_use
 
 async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_current_user_verified)):
     uid = current_user.get("id") or ""
-    cursor = db.sports_bets.find({"user_id": uid, "status": "open"}, {"_id": 0, "id": 1, "stake": 1, "event_id": 1})
+    cursor = db.sports_bets.find(
+        {"user_id": uid, "status": "open"},
+        {"_id": 0, "id": 1, "stake": 1, "event_id": 1, "bet_type": 1, "legs": 1},
+    )
     bets = await cursor.to_list(100)
     if not bets:
         return {"message": "No open bets to cancel.", "refunded": 0, "cancelled_count": 0, "skipped_count": 0}
-    eids = list({(b.get("event_id") or "") for b in bets if b.get("event_id")})
+    eids = set()
+    for b in bets:
+        if (b.get("bet_type") or "single") == "accumulator":
+            for lg in b.get("legs") or []:
+                if lg.get("event_id"):
+                    eids.add(lg["event_id"])
+        elif b.get("event_id"):
+            eids.add(b["event_id"])
     events_by_id: dict = {}
     if eids:
         ev_cursor = db.sports_events.find(
-            {"id": {"$in": eids}},
+            {"id": {"$in": list(eids)}},
             {"_id": 0, "id": 1, "start_time": 1, "betting_opens_at": 1, "betting_closes_at": 1},
         )
         for doc in await ev_cursor.to_list(len(eids)):
@@ -2904,8 +3230,18 @@ async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_curren
     skipped_count = 0
     now = datetime.now(timezone.utc).isoformat()
     for b in bets:
-        ev = events_by_id.get(b.get("event_id") or "")
-        if ev is not None and _sports_event_betting_block_reason(ev):
+        blocked = False
+        check_ids = []
+        if (b.get("bet_type") or "single") == "accumulator":
+            check_ids = [lg.get("event_id") for lg in (b.get("legs") or []) if lg.get("event_id")]
+        elif b.get("event_id"):
+            check_ids = [b.get("event_id")]
+        for eid in check_ids:
+            ev = events_by_id.get(eid or "")
+            if ev is not None and _sports_event_betting_block_reason(ev):
+                blocked = True
+                break
+        if blocked:
             skipped_count += 1
             continue
         claimed = await db.sports_bets.find_one_and_update(
@@ -3412,6 +3748,135 @@ async def admin_sports_patch_event_betting_window(
     return {"message": "Betting window updated", "event_id": event_id}
 
 
+async def _pay_sports_bet_win(bet_claim: dict, *, payout: int, now: str) -> None:
+    u = await db.users.find_one(
+        {"id": bet_claim["user_id"]},
+        {"_id": 0, "username": 1, "sports_current_win_streak": 1, "sports_best_win_streak": 1},
+    )
+    stake = int(bet_claim.get("stake") or 0)
+    odds = float(bet_claim.get("odds") or 1)
+    to_swiss = _sports_payout_to_swiss()
+    log_payload = {
+        "bet_id": bet_claim["id"],
+        "bet_type": bet_claim.get("bet_type") or "single",
+        "event_name": bet_claim.get("event_name"),
+        "option_name": bet_claim.get("option_name"),
+        "stake": stake,
+        "odds": odds,
+        "status": "won",
+        "settled_at": now,
+        "payout": payout,
+        "payout_destination": "swiss" if to_swiss else "money",
+    }
+    await log_gambling(bet_claim["user_id"], u.get("username") if u else "?", "sports_bet", log_payload)
+    current_streak = int((u or {}).get("sports_current_win_streak", 0)) + 1
+    best_streak = max(current_streak, int((u or {}).get("sports_best_win_streak", 0)))
+    update_fields = {"sports_current_win_streak": current_streak, "sports_best_win_streak": best_streak}
+    if payout > 0:
+        inc_field = "swiss_balance" if to_swiss else "money"
+        await db.users.update_one({"id": bet_claim["user_id"]}, {"$inc": {inc_field: payout}, "$set": update_fields})
+    else:
+        await db.users.update_one({"id": bet_claim["user_id"]}, {"$set": update_fields})
+    ev_nm = (bet_claim.get("event_name") or "Sports event").strip() or "Sports event"
+    pick_nm = (bet_claim.get("option_name") or "your pick").strip() or "your pick"
+    dest = "your Swiss bank" if to_swiss else "cash on hand"
+    win_msg = (
+        f"Your pick ({pick_nm}) won on \"{ev_nm}\". "
+        f"Payout ${payout:,} added to {dest} (stake ${stake:,} at {odds:g}×)."
+    )
+    await send_notification(bet_claim["user_id"], "Sports bet won", win_msg, "reward")
+    try:
+        house_delta = sports_betting_house_delta(won=True, stake=stake, payout=payout)
+        await record_sports_betting_house_settlement(db, house_delta)
+    except Exception:
+        logger.exception("Sports betting owner weekly profit update failed for bet %s", bet_claim.get("id"))
+
+
+async def _pay_sports_bet_loss(bet_claim: dict, *, now: str) -> None:
+    u = await db.users.find_one({"id": bet_claim["user_id"]}, {"_id": 0, "username": 1})
+    stake = int(bet_claim.get("stake") or 0)
+    odds = float(bet_claim.get("odds") or 1)
+    log_payload = {
+        "bet_id": bet_claim["id"],
+        "bet_type": bet_claim.get("bet_type") or "single",
+        "event_name": bet_claim.get("event_name"),
+        "option_name": bet_claim.get("option_name"),
+        "stake": stake,
+        "odds": odds,
+        "status": "lost",
+        "settled_at": now,
+    }
+    await log_gambling(bet_claim["user_id"], u.get("username") if u else "?", "sports_bet", log_payload)
+    await db.users.update_one({"id": bet_claim["user_id"]}, {"$set": {"sports_current_win_streak": 0}})
+    ev_nm = (bet_claim.get("event_name") or "Sports event").strip() or "Sports event"
+    pick_nm = (bet_claim.get("option_name") or "your pick").strip() or "your pick"
+    lose_msg = f"Your pick ({pick_nm}) lost on \"{ev_nm}\". Stake ${stake:,} was not returned."
+    await send_notification(bet_claim["user_id"], "Sports bet lost", lose_msg, "system")
+    try:
+        house_delta = sports_betting_house_delta(won=False, stake=stake, payout=0)
+        await record_sports_betting_house_settlement(db, house_delta)
+    except Exception:
+        logger.exception("Sports betting owner weekly profit update failed for bet %s", bet_claim.get("id"))
+
+
+async def _settle_accumulator_legs_for_event(event_id: str, winning_option_id: str, now: str) -> None:
+    """Update open accumulators that include this event; settle when all legs are decided."""
+    cursor = db.sports_bets.find(
+        {"status": "open", "bet_type": "accumulator", "legs.event_id": event_id},
+        {"_id": 0},
+    )
+    for bet in await cursor.to_list(2000):
+        legs = list(bet.get("legs") or [])
+        changed = False
+        lost = False
+        for i, leg in enumerate(legs):
+            if (leg.get("event_id") or "") != event_id:
+                continue
+            if leg.get("result") in ("won", "lost"):
+                continue
+            won_leg = (leg.get("option_id") or "") == winning_option_id
+            legs[i] = {**leg, "result": "won" if won_leg else "lost"}
+            changed = True
+            if not won_leg:
+                lost = True
+        if not changed:
+            continue
+        if lost:
+            claim = await db.sports_bets.find_one_and_update(
+                {"id": bet["id"], "status": "open"},
+                {"$set": {"status": "lost", "settled_at": now, "legs": legs}},
+            )
+            if claim:
+                claim["legs"] = legs
+                await _pay_sports_bet_loss(claim, now=now)
+            continue
+        all_won = all((lg.get("result") == "won") for lg in legs)
+        if all_won:
+            stake = int(bet.get("stake") or 0)
+            combined = float(bet.get("odds") or _acca_combined_odds(legs))
+            payout = _acca_potential_payout(stake, combined)
+            claim = await db.sports_bets.find_one_and_update(
+                {"id": bet["id"], "status": "open"},
+                {
+                    "$set": {
+                        "status": "won",
+                        "settled_at": now,
+                        "legs": legs,
+                        "payout": payout,
+                    }
+                },
+            )
+            if claim:
+                claim["legs"] = legs
+                claim["odds"] = combined
+                await _pay_sports_bet_win(claim, payout=payout, now=now)
+        else:
+            await db.sports_bets.update_one(
+                {"id": bet["id"], "status": "open"},
+                {"$set": {"legs": legs}},
+            )
+
+
 async def _settle_event_internal(event_id: str, winning_option_id: str) -> bool:
     """Settle an event: update status, settle all open bets, pay winners. Returns True if settled."""
     now = datetime.now(timezone.utc).isoformat()
@@ -3422,8 +3887,12 @@ async def _settle_event_internal(event_id: str, winning_option_id: str) -> bool:
     if not ev:
         return False
     cursor = db.sports_bets.find(
-        {"event_id": event_id, "status": "open"},
-        {"_id": 0, "id": 1, "user_id": 1, "option_id": 1, "stake": 1, "odds": 1, "event_name": 1, "option_name": 1},
+        {
+            "event_id": event_id,
+            "status": "open",
+            "$or": [{"bet_type": {"$exists": False}}, {"bet_type": "single"}, {"bet_type": None}],
+        },
+        {"_id": 0, "id": 1, "user_id": 1, "option_id": 1, "stake": 1, "odds": 1, "event_name": 1, "option_name": 1, "bet_type": 1},
     )
     for b in await cursor.to_list(1000):
         won = b.get("option_id") == winning_option_id
@@ -3434,56 +3903,15 @@ async def _settle_event_internal(event_id: str, winning_option_id: str) -> bool:
         )
         if not bet_claim:
             continue
-        u = await db.users.find_one({"id": bet_claim["user_id"]}, {"_id": 0, "username": 1, "sports_current_win_streak": 1, "sports_best_win_streak": 1})
         stake = int(bet_claim.get("stake") or 0)
         odds = float(bet_claim.get("odds") or 1)
         payout = int(stake * odds) if won else 0
-        to_swiss = _sports_payout_to_swiss()
-        log_payload = {
-            "bet_id": bet_claim["id"],
-            "event_name": bet_claim.get("event_name"),
-            "option_name": bet_claim.get("option_name"),
-            "stake": stake,
-            "odds": odds,
-            "status": new_status,
-            "settled_at": now,
-        }
         if won:
-            log_payload["payout"] = payout
-            log_payload["payout_destination"] = "swiss" if to_swiss else "money"
-        await log_gambling(bet_claim["user_id"], u.get("username") if u else "?", "sports_bet", log_payload)
-        if won:
-            current_streak = int((u or {}).get("sports_current_win_streak", 0)) + 1
-            best_streak = max(current_streak, int((u or {}).get("sports_best_win_streak", 0)))
-            update_fields = {"sports_current_win_streak": current_streak, "sports_best_win_streak": best_streak}
-            if payout > 0:
-                inc_field = "swiss_balance" if to_swiss else "money"
-                await db.users.update_one({"id": bet_claim["user_id"]}, {"$inc": {inc_field: payout}, "$set": update_fields})
-            else:
-                await db.users.update_one({"id": bet_claim["user_id"]}, {"$set": update_fields})
+            await _pay_sports_bet_win(bet_claim, payout=payout, now=now)
         else:
-            await db.users.update_one({"id": bet_claim["user_id"]}, {"$set": {"sports_current_win_streak": 0}})
+            await _pay_sports_bet_loss(bet_claim, now=now)
 
-        ev_nm = (bet_claim.get("event_name") or "Sports event").strip() or "Sports event"
-        pick_nm = (bet_claim.get("option_name") or "your pick").strip() or "your pick"
-        uid = bet_claim["user_id"]
-        if won:
-            dest = "your Swiss bank" if to_swiss else "cash on hand"
-            win_msg = (
-                f"Your pick ({pick_nm}) won on \"{ev_nm}\". "
-                f"Payout ${payout:,} added to {dest} (stake ${stake:,} at {odds:g}×)."
-            )
-            await send_notification(uid, "Sports bet won", win_msg, "reward")
-        else:
-            lose_msg = f"Your pick ({pick_nm}) lost on \"{ev_nm}\". Stake ${stake:,} was not returned."
-            await send_notification(uid, "Sports bet lost", lose_msg, "system")
-
-        try:
-            house_delta = sports_betting_house_delta(won=won, stake=stake, payout=payout)
-            await record_sports_betting_house_settlement(db, house_delta)
-        except Exception:
-            logger.exception("Sports betting owner weekly profit update failed for bet %s", bet_claim.get("id"))
-
+    await _settle_accumulator_legs_for_event(event_id, winning_option_id, now)
     return True
 
 
@@ -3528,7 +3956,13 @@ async def _cancel_open_bets_for_event(
         if not ev:
             return (0, 0)
     cursor = db.sports_bets.find(
-        {"event_id": event_id, "status": "open"},
+        {
+            "status": "open",
+            "$or": [
+                {"event_id": event_id},
+                {"bet_type": "accumulator", "legs.event_id": event_id},
+            ],
+        },
         {"_id": 0, "id": 1, "user_id": 1, "stake": 1, "event_name": 1},
     )
     refunded_count = 0
@@ -4520,8 +4954,8 @@ def register(router):
         return await _auto_settle_from_scores()
 
     async def cron_sports_auto_board(_: None = Depends(verify_sports_cron_secret)):
-        """Cron: add eligible open events from saved templates (MongoDB default; no Odds refresh). Schedule ~every 2h. Header: X-Cron-Secret."""
-        return await auto_populate_sports_board()
+        """Cron: refresh Odds templates and promote fixtures in the board lookahead window."""
+        return await auto_populate_sports_board(refresh_odds=True, template_source="merged")
 
     router.add_api_route("/sports-betting/cron/auto-settle", cron_sports_auto_settle, methods=["POST"])
     router.add_api_route("/sports-betting/cron/auto-board", cron_sports_auto_board, methods=["POST"])

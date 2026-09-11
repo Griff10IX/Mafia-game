@@ -1075,6 +1075,25 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                                   {w.loot_box_exclusive ? (
                                     <div className="text-[10px] text-amber-400/90 font-heading mt-0.5">Loot box only</div>
                                   ) : null}
+                                  {w.profile_showable && owned ? (
+                                    <button
+                                      type="button"
+                                      className="mt-1 text-[10px] font-heading text-primary hover:underline"
+                                      onClick={async () => {
+                                        try {
+                                          const res = await api.patch('/profile/weapon-preferences', {
+                                            show_weapon_on_profile: true,
+                                            profile_weapon_id: w.id,
+                                          });
+                                          toast.success(res.data?.message || 'Shown on profile');
+                                        } catch (e) {
+                                          toast.error(e.response?.data?.detail || 'Failed to update profile weapon');
+                                        }
+                                      }}
+                                    >
+                                      Show on profile
+                                    </button>
+                                  ) : null}
                                 </div>
                                 <span className="text-[11px] text-mutedForeground tabular-nums font-heading shrink-0">{pct}%</span>
                               </div>

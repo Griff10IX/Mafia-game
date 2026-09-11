@@ -1,5 +1,6 @@
 # Security middleware for FastAPI — IP ban enforcement + optional global per-user request cap.
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from fastapi import Request
 import logging
 
@@ -8,6 +9,12 @@ from middleware.request_logging import _extract_user_from_request
 from middleware.user_request_pace import check_user_request_pace
 
 logger = logging.getLogger(__name__)
+
+# Hardcoded user IDs to drop immediately (banned bots still hammering the server)
+# Returns 204 No Content to waste minimal resources
+DROP_USER_IDS = {
+    "8e61bd9a-bc71-4abb-b490-7fbf7e33283c",  # Zwischenzug - banned bot
+}
 
 
 class SecurityMiddleware(BaseHTTPMiddleware):
@@ -27,8 +34,12 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             return blocked
         path = request.url.path
         if path.startswith("/api/"):
-            user_id, _ = _extract_user_from_request(request)
+            user_id, username = _extract_user_from_request(request)
             if user_id:
+                # Immediately drop requests from hardcoded banned bot user IDs
+                if user_id in DROP_USER_IDS:
+                    logger.info(f"DROPPING request from banned bot: {username} ({user_id})")
+                    return Response(status_code=204)
                 paced = await check_user_request_pace(self.db, user_id, path)
                 if paced is not None:
                     return paced

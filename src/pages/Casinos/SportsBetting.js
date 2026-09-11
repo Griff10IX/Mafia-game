@@ -129,6 +129,8 @@ function apiErrorDetail(e, fallback) {
 
 /** Max total $ locked across all open sports bets (matches backend SPORTS_BET_MAX_TOTAL_OPEN_STAKE). */
 const SPORTS_MAX_TOTAL_OPEN_STAKE = 1_000_000_000;
+const SPORTS_ACCA_MAX_PAYOUT = 200_000_000_000;
+const SPORTS_ACCA_MAX_LEGS = 12;
 
 const STAKE_CHIPS = [
   { label: '10K', value: 10_000, color: '#e4e4e7', ring: '#a1a1aa' },
@@ -326,8 +328,10 @@ export default function SportsBetting() {
   const [recentResults, setRecentResults] = useState([]);
   const [placing, setPlacing] = useState(null);
   const [stake, setStake] = useState('');
-  const [selectedEvent, setSelectedEvent] = useState(null);
-  const [selectedOption, setSelectedOption] = useState(null);
+  const [betSlip, setBetSlip] = useState([]); // [{ event, option }]
+  const [slipOpen, setSlipOpen] = useState(false);
+  const [accaMaxPayout, setAccaMaxPayout] = useState(SPORTS_ACCA_MAX_PAYOUT);
+  const [accaMaxLegs, setAccaMaxLegs] = useState(SPORTS_ACCA_MAX_LEGS);
   const [isAdmin, setIsAdmin] = useState(false);
   const [templates, setTemplates] = useState({
     categories: [],
@@ -468,6 +472,8 @@ export default function SportsBetting() {
         api.get('/sports-betting/ownership').catch(() => ({ data: null })),
       ]);
       nextEvents = eventsRes.data?.events ?? [];
+      if (eventsRes.data?.acca_max_payout) setAccaMaxPayout(Number(eventsRes.data.acca_max_payout));
+      if (eventsRes.data?.acca_max_legs) setAccaMaxLegs(Number(eventsRes.data.acca_max_legs));
       nextMyBets = {
         open: betsRes.data?.open ?? [],
         closed: betsRes.data?.closed ?? [],
@@ -475,6 +481,8 @@ export default function SportsBetting() {
         open_stake_total: betsRes.data?.open_stake_total ?? 0,
         open_stake_remaining: betsRes.data?.open_stake_remaining ?? SPORTS_MAX_TOTAL_OPEN_STAKE,
       };
+      if (betsRes.data?.acca_max_payout) setAccaMaxPayout(Number(betsRes.data.acca_max_payout));
+      if (betsRes.data?.acca_max_legs) setAccaMaxLegs(Number(betsRes.data.acca_max_legs));
       nextStats = statsRes.data ?? null;
       nextRecentResults = resultsRes.data?.results ?? [];
       setOwnership(ownershipRes?.data || null);
@@ -587,7 +595,7 @@ export default function SportsBetting() {
   }, [isAdmin]);
 
   const placeBet = async () => {
-    if (!selectedEvent || !selectedOption) return;
+    if (!betSlip.length) return;
     const amount = parseInt(String(stake || '').replace(/\D/g, ''), 10);
     if (!amount || amount <= 0) { toast.error('Enter a valid stake'); return; }
     const cap = Number(myBets.max_total_open_stake ?? SPORTS_MAX_TOTAL_OPEN_STAKE);
@@ -604,15 +612,46 @@ export default function SportsBetting() {
     }
     setPlacing(true);
     try {
-      await api.post('/sports-betting/bet', { event_id: selectedEvent.id, option_id: selectedOption.id, stake: amount });
-      toast.success(`Bet placed: ${formatMoney(amount)} on ${selectedOption.name}`);
-      setStake(''); setSelectedEvent(null); setSelectedOption(null);
+      const legs = betSlip.map((row) => ({
+        event_id: row.event.id,
+        option_id: row.option.id,
+      }));
+      const body = legs.length === 1
+        ? { event_id: legs[0].event_id, option_id: legs[0].option_id, stake: amount }
+        : { legs, stake: amount };
+      const res = await api.post('/sports-betting/bet', body);
+      toast.success(res.data?.message || `Bet placed: ${formatMoney(amount)}`);
+      setStake('');
+      setBetSlip([]);
+      setSlipOpen(false);
       refreshUser(); await fetchAll();
     } catch (e) { toast.error(apiErrorDetail(e, 'Bet failed')); }
     finally { setPlacing(false); }
   };
 
-  const openBetModal = (event, option) => { setSelectedEvent(event); setSelectedOption(option); setStake(''); };
+  const addToSlip = (event, option) => {
+    if (!event?.id || !option?.id) return;
+    setBetSlip((prev) => {
+      const withoutSameEvent = prev.filter((row) => row.event?.id !== event.id);
+      if (withoutSameEvent.length >= accaMaxLegs) {
+        toast.error(`Max ${accaMaxLegs} selections on an accumulator`);
+        return prev;
+      }
+      return [...withoutSameEvent, { event, option }];
+    });
+    setSlipOpen(true);
+  };
+
+  const removeFromSlip = (eventId) => {
+    setBetSlip((prev) => prev.filter((row) => row.event?.id !== eventId));
+  };
+
+  const slipCombinedOdds = useMemo(() => {
+    if (!betSlip.length) return 1;
+    return betSlip.reduce((acc, row) => acc * Math.max(1.01, Number(row.option?.odds) || 1), 1);
+  }, [betSlip]);
+
+  const openBetModal = (event, option) => { addToSlip(event, option); };
 
   const checkForEvents = async () => {
     if (!assertAdmin()) return;
@@ -1938,12 +1977,23 @@ export default function SportsBetting() {
               {myBets.open.length === 0 ? (
                 <p className="text-[11px] text-zinc-600 font-heading py-6 text-center">No open bets — pick an event to place one.</p>
               ) : myBets.open.map((b) => {
-                const ret = Math.floor(Number(b.stake || 0) * Number(b.odds || 1));
+                const isAcca = (b.bet_type || 'single') === 'accumulator';
+                const rawRet = Math.floor(Number(b.stake || 0) * Number(b.odds || 1));
+                const ret = isAcca
+                  ? Math.min(rawRet, Number(b.potential_payout ?? b.max_payout ?? accaMaxPayout))
+                  : rawRet;
                 return (
                   <div key={b.id} className="flex items-center gap-2 px-2 py-2 rounded bg-zinc-800/20 mb-1 last:mb-0">
                     <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-heading font-bold text-foreground truncate">{b.event_name}</p>
-                      <p className="text-[9px] font-heading text-zinc-500">{b.option_name} @ {Number(b.odds)} · Stake: {formatMoney(b.stake)} · Returns: {formatMoney(ret)}</p>
+                      <p className="text-[11px] font-heading font-bold text-foreground truncate">
+                        {isAcca ? `Acca · ${(b.legs || []).length || '?'} folds` : b.event_name}
+                      </p>
+                      <p className="text-[9px] font-heading text-zinc-500 truncate">
+                        {isAcca
+                          ? `${(b.legs || []).map((l) => l.option_name).join(' + ') || b.option_name} @ ${Number(b.odds)}`
+                          : `${b.option_name} @ ${Number(b.odds)}`}
+                        {' · '}Stake: {formatMoney(b.stake)} · Returns: {formatMoney(ret)}
+                      </p>
                     </div>
                     <button onClick={() => cancelBet(b.id)} disabled={cancellingBetId === b.id || cancellingAll} className="text-red-400 hover:bg-red-500/10 p-1 rounded border border-transparent hover:border-red-500/30 disabled:opacity-50 transition-all shrink-0">
                       <X size={12} />
@@ -2177,30 +2227,54 @@ export default function SportsBetting() {
         </div>
       )}
 
-      {/* ═══ Place bet modal ═══ */}
-      {selectedEvent && selectedOption && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setSelectedEvent(null)}>
+      {/* ═══ Betting slip (singles + accumulators) ═══ */}
+      {slipOpen && betSlip.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setSlipOpen(false)}>
           <div
-            className="w-full max-w-sm rounded-xl overflow-hidden shadow-2xl animate-sb-slide-up border-2 border-primary/20 bg-zinc-900"
+            className="w-full max-w-sm rounded-xl overflow-hidden shadow-2xl animate-sb-slide-up border-2 border-primary/20 bg-zinc-900 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Slip header */}
-            <div className="px-4 py-3 text-center border-b border-primary/20 bg-primary/8">
-              <p className="text-[9px] font-heading text-primary/80 uppercase tracking-[0.2em]">Betting Slip</p>
+            <div className="px-4 py-3 text-center border-b border-primary/20 bg-primary/8 sticky top-0 bg-zinc-900 z-10">
+              <p className="text-[9px] font-heading text-primary/80 uppercase tracking-[0.2em]">
+                {betSlip.length >= 2 ? `Accumulator · ${betSlip.length} folds` : 'Betting Slip'}
+              </p>
             </div>
 
-            <div className="p-4 space-y-4">
-              {/* Event info */}
-              <div className="text-center">
-                <p className="text-xs font-heading text-zinc-500">{selectedEvent.category}</p>
-                <p className="text-sm font-heading font-bold text-foreground mt-0.5">{selectedEvent.name}</p>
-                <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded bg-primary/10 border border-primary/20">
-                  <span className="text-[10px] font-heading text-zinc-400">{selectedOption.name}</span>
-                  <span className="text-lg font-heading font-black text-primary">{Number(selectedOption.odds).toFixed(2)}</span>
+            <div className="p-4 space-y-3">
+              {betSlip.map((row) => (
+                <div key={row.event.id} className="rounded-lg border border-zinc-700/50 bg-black/20 px-3 py-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-heading text-zinc-500 truncate">{row.event.category}</p>
+                      <p className="text-xs font-heading font-bold text-foreground truncate">{row.event.name}</p>
+                      <p className="text-[10px] font-heading text-primary mt-0.5">
+                        {row.option.name} <span className="font-black">@ {Number(row.option.odds).toFixed(2)}</span>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeFromSlip(row.event.id)}
+                      className="shrink-0 text-zinc-500 hover:text-red-400 p-1"
+                      aria-label="Remove"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
                 </div>
+              ))}
+
+              <div className="text-center py-1">
+                <p className="text-[9px] font-heading text-zinc-500 uppercase tracking-wider">
+                  {betSlip.length >= 2 ? 'Combined odds' : 'Odds'}
+                </p>
+                <p className="text-xl font-heading font-black text-primary">{slipCombinedOdds.toFixed(2)}</p>
+                {betSlip.length >= 2 && (
+                  <p className="text-[9px] font-heading text-zinc-500 mt-0.5">
+                    Acca max payout {formatMoney(accaMaxPayout)}
+                  </p>
+                )}
               </div>
 
-              {/* Stake input */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-primary font-bold text-lg">$</span>
@@ -2214,8 +2288,6 @@ export default function SportsBetting() {
                     className="flex-1 bg-black/30 border border-primary/20 rounded-lg h-11 px-4 text-white text-base font-heading font-bold text-center focus:border-primary/50 focus:outline-none"
                   />
                 </div>
-
-                {/* Chips */}
                 <div className="flex gap-1.5 justify-center">
                   {STAKE_CHIPS.map((c) => (
                     <Chip
@@ -2234,40 +2306,61 @@ export default function SportsBetting() {
                 </p>
               </div>
 
-              {/* Returns */}
               {(() => {
                 const s = parseInt(stake, 10);
                 if (Number.isNaN(s) || s <= 0) return null;
-                const totalReturn = Math.floor(s * Number(selectedOption.odds));
+                const raw = Math.floor(s * slipCombinedOdds);
+                const totalReturn = betSlip.length >= 2 ? Math.min(raw, accaMaxPayout) : raw;
+                const capped = betSlip.length >= 2 && raw > accaMaxPayout;
                 const profit = totalReturn - s;
                 return (
                   <div className="text-center py-2 rounded bg-emerald-500/5 border border-emerald-500/20">
                     <p className="text-[9px] font-heading text-zinc-500 uppercase tracking-wider">Potential Return</p>
                     <p className="text-lg font-heading font-black text-emerald-400">{formatMoney(totalReturn)}</p>
-                    <p className="text-[10px] font-heading text-emerald-400/60">Profit: {formatMoney(profit)}</p>
+                    <p className="text-[10px] font-heading text-emerald-400/60">
+                      Profit: {formatMoney(profit)}
+                      {capped ? ' · capped' : ''}
+                    </p>
                   </div>
                 );
               })()}
 
-              {/* Actions */}
               <div className="flex gap-2">
                 <button
                   onClick={placeBet}
                   disabled={placing || stakeExceedsOpenCap}
                   className="flex-1 rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-40 active:scale-[0.98] transition-all"
                 >
-                  {placing ? '...' : 'Place Bet'}
+                  {placing ? '...' : betSlip.length >= 2 ? 'Place Accumulator' : 'Place Bet'}
                 </button>
                 <button
-                  onClick={() => setSelectedEvent(null)}
+                  onClick={() => setSlipOpen(false)}
                   className="px-5 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-foreground font-heading text-sm font-bold uppercase hover:bg-zinc-700 transition-all"
                 >
                   Back
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={() => { setBetSlip([]); setStake(''); setSlipOpen(false); }}
+                className="w-full text-[10px] font-heading text-zinc-500 hover:text-zinc-300 py-1"
+              >
+                Clear slip
+              </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Floating slip opener when closed with selections */}
+      {!slipOpen && betSlip.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setSlipOpen(true)}
+          className="fixed bottom-20 right-4 z-40 rounded-full px-4 py-3 bg-primary text-primary-foreground font-heading font-bold text-sm shadow-lg border border-primary/40"
+        >
+          Slip · {betSlip.length} · {slipCombinedOdds.toFixed(2)}×
+        </button>
       )}
     </div>
   );

@@ -163,6 +163,8 @@ async def capture_death_revive_snapshot(
         "exclusive_weed_curing": exclusive_weed_curing,
         "user_ibm_fields": _extract_ibm_user_fields(victim_user),
         "mission_completions": deepcopy(victim_user.get("mission_completions")),
+        # Commissioner's Pardon is ownership-doc based and never revive-restored (kill resolves transfer/pool).
+        "exclude_commissioners_pardon": True,
         "car_transfer_outcomes": [],
     }
     return snapshot
@@ -512,6 +514,11 @@ async def restore_death_revive_snapshot(db, *, victim_id: str) -> dict:
         await _revert_killer_biz_takeover_if_needed(db, victim_id, killer_id, snap, summary)
         await _restore_illegal_business(db, victim_id, snap, summary)
         await _restore_properties(db, victim_id, killer_id, snap, summary)
+        # Never restore Commissioner's Pardon from death snapshots (kill already resolved ownership).
+        await db.users.update_one(
+            {"id": victim_id},
+            {"$unset": {"has_commissioners_pardon": "", "pardon_auto_skip_mission_ids": "", "pardon_near_finish_mission_id": ""}},
+        )
         await _restore_exclusive_property(db, victim_id, killer_id, snap, summary)
         await _clawback_cars_from_killer(db, victim_id, killer_id, snap, summary)
         await _restore_exclusive_weed(db, victim_id, killer_id, snap, summary)

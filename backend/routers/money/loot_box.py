@@ -90,6 +90,122 @@ LOOT_EXCLUSIVE_540K_CAR_ID = "car24"  # Mercedes-Benz 540K — Ultra Rare only; 
 LOOT_EXCLUSIVE_540K_RATES: Dict[str, float] = {
     "ultra_rare": 0.08,
 }
+
+
+async def _try_roll_new_exclusives_v2(
+    *,
+    user_id: str,
+    open_total_after: int,
+    now: datetime,
+    username: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Secret pool: BAR / Brewster L8 / Commissioner's Pardon. Requires live flag + open_total > 10."""
+    from utils.commissioners_pardon import (
+        ARMOUR_LEVEL_8_NAME,
+        NEW_EXCLUSIVE_CAP_ARMOUR8,
+        NEW_EXCLUSIVE_CAP_BAR,
+        NEW_EXCLUSIVE_CAP_PARDON,
+        NEW_EXCLUSIVE_CHANCE,
+        NEW_EXCLUSIVE_MIN_OPENS,
+        PARDON_NAME,
+        WEAPON_LOOT_BAR_ID,
+        WEAPON_LOOT_BAR_NAME,
+        count_live_armour_v2,
+        count_live_bar,
+        count_live_pardon,
+        grant_armour_v2,
+        grant_bar,
+        grant_pardon,
+        new_exclusives_live,
+        user_has_armour_v2,
+        user_has_bar,
+        user_has_pardon,
+    )
+
+    if not await new_exclusives_live(db):
+        return None
+    if int(open_total_after) <= int(NEW_EXCLUSIVE_MIN_OPENS):
+        return None
+    if _rng.random() >= float(NEW_EXCLUSIVE_CHANCE):
+        return None
+    available: List[str] = []
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "armour_level": 1, "armour_owned_level_max": 1},
+    ) or {}
+    if await count_live_bar(db) < NEW_EXCLUSIVE_CAP_BAR and not await user_has_bar(db, user_id):
+        available.append("weapon_bar")
+    if await count_live_armour_v2(db) < NEW_EXCLUSIVE_CAP_ARMOUR8 and not await user_has_armour_v2(user):
+        available.append("armour_v2")
+    if await count_live_pardon(db) < NEW_EXCLUSIVE_CAP_PARDON and not await user_has_pardon(db, user_id):
+        available.append("mission_perk")
+    if not available:
+        return None
+    typ = _rng.choice(available)
+    if typ == "weapon_bar":
+        res = await grant_bar(db, user_id, now=now)
+        if not res.get("ok"):
+            return None
+        try:
+            await send_notification(
+                user_id,
+                "Loot box",
+                f"You claimed a {WEAPON_LOOT_BAR_NAME}!",
+                "system",
+            )
+        except Exception:
+            pass
+        return {
+            "type": "weapon",
+            "name": WEAPON_LOOT_BAR_NAME,
+            "id": WEAPON_LOOT_BAR_ID,
+            "rarity": "loot_exclusive",
+            "reward_tier": "loot_exclusive",
+        }
+    if typ == "armour_v2":
+        res = await grant_armour_v2(db, user_id)
+        if not res.get("ok"):
+            return None
+        try:
+            await send_notification(
+                user_id,
+                "Loot box",
+                f"You claimed {ARMOUR_LEVEL_8_NAME}!",
+                "system",
+            )
+        except Exception:
+            pass
+        return {
+            "type": "armour",
+            "name": ARMOUR_LEVEL_8_NAME,
+            "level": 8,
+            "rarity": "loot_exclusive",
+            "reward_tier": "loot_exclusive",
+        }
+    if typ == "mission_perk":
+        res = await grant_pardon(db, user_id, now=now, run_on_grant=True)
+        if not res.get("ok"):
+            return None
+        try:
+            await send_notification(
+                user_id,
+                "Loot box",
+                f"You claimed the {PARDON_NAME} — 75-mission path, monthly skips, weekly points.",
+                "system",
+            )
+        except Exception:
+            pass
+        return {
+            "type": "mission_perk",
+            "name": PARDON_NAME,
+            "id": "commissioners_pardon",
+            "rarity": "loot_exclusive",
+            "reward_tier": "loot_exclusive",
+            "mission_meta": res.get("mission_meta"),
+        }
+    return None
+
+
 USER_LOOT_BOX_OPEN_TOTAL_FIELD = "loot_box_open_total"
 LOOT_BOX_FREE_OPEN_FIELDS: Dict[str, str] = {
     "rare": "loot_box_free_rare_opens",
@@ -1245,6 +1361,17 @@ async def open_loot_box(
                 rewards.append(sj_reward)
                 cars_given_ids.add(LOOT_EXCLUSIVE_SJ_CAR_ID)
                 cars_prize_granted = True
+
+        # New exclusives (BAR / Brewster / Pardon) — secret 5% after 10 opens; live flag off by default
+        open_total_after = int(current_user.get(USER_LOOT_BOX_OPEN_TOTAL_FIELD) or 0) + 1
+        new_ex = await _try_roll_new_exclusives_v2(
+            user_id=user_id,
+            open_total_after=open_total_after,
+            now=now,
+            username=current_user.get("username") if current_user else None,
+        )
+        if new_ex:
+            rewards.append(new_ex)
 
         for prize_idx in range(num_prizes):
             claimed = await _get_claimed_counts()

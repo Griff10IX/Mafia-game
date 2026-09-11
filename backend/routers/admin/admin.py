@@ -9136,6 +9136,9 @@ def register(router):
         cursor = db.user_weapons.find({"weapon_id": "weapon_loot", "quantity": {"$gte": 1}}, {"_id": 0, "user_id": 1})
         async for uw in cursor:
             await _add_user(uw["user_id"], "weapon", "Colt Monitor")
+        cursor = db.user_weapons.find({"weapon_id": "weapon_loot_bar", "quantity": {"$gte": 1}}, {"_id": 0, "user_id": 1})
+        async for uw in cursor:
+            await _add_user(uw["user_id"], "weapon", "Browning Automatic Rifle M1918A2")
         # Armour level 7 (Steel Plate Vest 1922)
         cursor = db.users.find({"$or": [{"armour_level": 7}, {"armour_owned_level_max": {"$gte": 7}}]}, {"_id": 0, "id": 1, "username": 1})
         async for u in cursor:
@@ -9143,12 +9146,114 @@ def register(router):
             if uid not in users_by_id:
                 users_by_id[uid] = {"username": u.get("username", "?"), "items": []}
             users_by_id[uid]["items"].append({"category": "armour", "item": "Steel Plate Vest 1922"})
+        cursor = db.users.find({"$or": [{"armour_level": 8}, {"armour_owned_level_max": {"$gte": 8}}]}, {"_id": 0, "id": 1, "username": 1})
+        async for u in cursor:
+            uid = u["id"]
+            if uid not in users_by_id:
+                users_by_id[uid] = {"username": u.get("username", "?"), "items": []}
+            users_by_id[uid]["items"].append({"category": "armour", "item": "Brewster Body Shield (1917)"})
+        # Commissioner's Pardon
+        try:
+            from utils.commissioners_pardon import get_pardon_doc, PARDON_NAME
+            pdoc = await get_pardon_doc(db)
+            if pdoc and pdoc.get("owner_id"):
+                await _add_user(
+                    pdoc["owner_id"],
+                    "perk",
+                    f"{PARDON_NAME} (transfers {int(pdoc.get('transfer_count') or 0)}/2)",
+                )
+        except Exception:
+            pass
         # Exclusive property (Speakeasy)
         cursor = db.exclusive_properties.find({"type": "speakeasy"}, {"_id": 0, "owner_id": 1})
         async for ep in cursor:
             await _add_user(ep["owner_id"], "property", "Speakeasy")
         out = sorted(users_by_id.values(), key=lambda x: (-len(x["items"]), x["username"].lower()))
         return {"owners": out}
+
+    class NewExclusivesGrantBody(BaseModel):
+        username: str
+        item: str  # weapon_bar | armour_v2 | mission_perk
+
+    @router.post("/admin/loot-new-exclusives/grant")
+    async def admin_grant_new_exclusives(
+        body: NewExclusivesGrantBody,
+        current_user: dict = Depends(require_admin),
+    ):
+        """Grant BAR / Brewster L8 / Commissioner's Pardon for testing (loot live flag independent)."""
+        from utils.commissioners_pardon import (
+            ARMOUR_LEVEL_8_NAME,
+            PARDON_NAME,
+            WEAPON_LOOT_BAR_NAME,
+            grant_armour_v2,
+            grant_bar,
+            grant_pardon,
+        )
+        from routers.kill.armoury import _invalidate_weapons_cache
+
+        uname = (body.username or "").strip()
+        item = (body.item or "").strip().lower()
+        target = await db.users.find_one(
+            {"username": {"$regex": f"^{re.escape(uname)}$", "$options": "i"}},
+            {"_id": 0, "id": 1, "username": 1},
+        )
+        if not target:
+            raise HTTPException(status_code=400, detail="User not found")
+        uid = target["id"]
+        if item in ("weapon_bar", "bar", "weapon_loot_bar"):
+            res = await grant_bar(db, uid)
+            if res.get("ok"):
+                _invalidate_weapons_cache(uid)
+            return {"item": WEAPON_LOOT_BAR_NAME, **res, "username": target["username"]}
+        if item in ("armour_v2", "armour8", "brewster"):
+            res = await grant_armour_v2(db, uid)
+            return {"item": ARMOUR_LEVEL_8_NAME, **res, "username": target["username"]}
+        if item in ("mission_perk", "pardon", "commissioners_pardon"):
+            res = await grant_pardon(db, uid, run_on_grant=True)
+            return {"item": PARDON_NAME, **res, "username": target["username"]}
+        raise HTTPException(status_code=400, detail="item must be weapon_bar, armour_v2, or mission_perk")
+
+    @router.post("/admin/loot-new-exclusives/reclaim-pardon")
+    async def admin_reclaim_pardon(current_user: dict = Depends(require_admin)):
+        from utils.commissioners_pardon import reclaim_pardon_to_pool
+        prev = await reclaim_pardon_to_pool(db, reason="admin_reclaim")
+        return {"reclaimed": bool(prev), "previous_owner_id": prev}
+
+    class NewExclusivesLiveBody(BaseModel):
+        live: bool = False
+
+    @router.get("/admin/loot-new-exclusives/status")
+    async def admin_new_exclusives_status(current_user: dict = Depends(require_admin)):
+        from utils.commissioners_pardon import (
+            count_live_armour_v2,
+            count_live_bar,
+            count_live_pardon,
+            get_pardon_doc,
+            new_exclusives_live,
+            NEW_EXCLUSIVE_CAP_ARMOUR8,
+            NEW_EXCLUSIVE_CAP_BAR,
+            NEW_EXCLUSIVE_CAP_PARDON,
+        )
+        pdoc = await get_pardon_doc(db)
+        return {
+            "live": await new_exclusives_live(db),
+            "bar_live": await count_live_bar(db),
+            "bar_cap": NEW_EXCLUSIVE_CAP_BAR,
+            "armour_v2_live": await count_live_armour_v2(db),
+            "armour_v2_cap": NEW_EXCLUSIVE_CAP_ARMOUR8,
+            "pardon_live": await count_live_pardon(db),
+            "pardon_cap": NEW_EXCLUSIVE_CAP_PARDON,
+            "pardon": pdoc,
+        }
+
+    @router.post("/admin/loot-new-exclusives/set-live")
+    async def admin_set_new_exclusives_live(
+        body: NewExclusivesLiveBody,
+        current_user: dict = Depends(require_admin),
+    ):
+        from utils.commissioners_pardon import set_new_exclusives_live
+        live = await set_new_exclusives_live(db, bool(body.live))
+        return {"live": live, "message": "Loot drops for new exclusives are ON" if live else "Loot drops for new exclusives are OFF (admin grant still works)"}
 
     def _staff_shell_access(user: dict) -> bool:
         """Same gate as Admin SPA shell: listed admin email, moderator, or full admin powers."""

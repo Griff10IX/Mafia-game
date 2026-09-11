@@ -24,6 +24,7 @@ from server import (
     STATES,
     RANKS,
     CAPO_RANK_ID,
+    GODFATHER_RANK_ID,
 )
 from routers.kill.armoury import (
     TOKEN_CONFIG,
@@ -595,8 +596,8 @@ IBM_MISSIONS_CORE = [
      "rewards": {"vault_cash": 500_000, "income_per_hour_add": 3_000, "xp_crimes_tokens": 2, "racket_tokens": 1, "xp_gta_tokens": 1}},
     {"id": "ibm_29", "order": 29, "title": "Capo di tutti capi",
      "story": "Almost nobody gets here. Prove you earned the chair.",
-     "how_to_complete": "Reach Capo di tutti capi rank, 110 collections, win 90 raids.",
-     "requirements": {"rank_id": 11, "collections": 110, "raids_won": 90},
+     "how_to_complete": "Reach Don rank, 70 collections, win 55 raids.",
+     "requirements": {"rank_id": 10, "collections": 70, "raids_won": 55},
      "rewards": {"vault_cash": 600_000, "guard_slots": 2, "jailbust_tokens": 1, "income_per_hour_add": 5_000, "travel_tokens": 1, "oc_reduced_tokens": 1}},
     {"id": "ibm_30", "order": 30, "title": "Godfather's racket",
      "story": "The final grind — every lever of the business, pulled until they break or bend.",
@@ -1573,6 +1574,10 @@ def _ibm_requirement_current(
     if key == "crimes":
         return int(user.get("total_crimes") or 0)
     if key == "rank_id":
+        # Prestige resets live rank_points to Rat; players already proved Godfather.
+        # Treat any prestiged account as meeting IBM rank gates so progress isn't wiped.
+        if int(user.get("prestige_level") or 0) >= 1:
+            return int(GODFATHER_RANK_ID)
         return _user_rank_id(user)
     if key == "security_level":
         if not business:

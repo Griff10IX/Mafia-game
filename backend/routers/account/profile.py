@@ -1096,6 +1096,17 @@ def register(router):
             "sports_betting": sports_betting,
             "top_cars": top_cars or [],
             "show_cars_on_profile": user.get("profile_show_cars", False),
+            "profile_weapon": (
+                {
+                    "id": "weapon_loot_bar",
+                    "name": "Browning Automatic Rifle M1918A2",
+                    "image_base": "/images/weapons/weapon_loot_bar",
+                    "frames": 12,
+                }
+                if user.get("profile_show_weapon") and user.get("profile_weapon_id") == "weapon_loot_bar"
+                else None
+            ),
+            "has_commissioners_pardon": bool(user.get("has_commissioners_pardon")),
             "youtube_url": (user.get("profile_youtube_url") or "").strip() or None,
             "spotify_url": (user.get("profile_spotify_url") or "").strip() or None,
             "spotify_embed_url": (user.get("profile_spotify_embed_url") or "").strip() or None,
@@ -2364,6 +2375,55 @@ def register(router):
         new_show = updates.get("profile_show_cars", current_user.get("profile_show_cars", False))
         new_ids = updates.get("profile_car_ids", current_user.get("profile_car_ids") or [])
         return {"message": "Profile cars preferences updated", "show_cars_on_profile": new_show, "profile_car_ids": new_ids}
+
+    @router.get("/profile/weapon-preferences")
+    async def get_profile_weapon_preferences(current_user: dict = Depends(get_current_user)):
+        from utils.commissioners_pardon import WEAPON_LOOT_BAR_ID, user_has_bar
+        has_bar = await user_has_bar(db, current_user["id"])
+        return {
+            "has_bar": has_bar,
+            "profile_weapon_id": current_user.get("profile_weapon_id") if has_bar else None,
+            "show_weapon_on_profile": bool(current_user.get("profile_show_weapon")) and has_bar,
+            "frames": 12,
+            "image_base": "/images/weapons/weapon_loot_bar",
+        }
+
+    @router.patch("/profile/weapon-preferences")
+    async def patch_profile_weapon_preferences(
+        current_user: dict = Depends(get_current_user),
+        show_weapon_on_profile: Optional[bool] = Body(None, embed=True),
+        profile_weapon_id: Optional[str] = Body(None, embed=True),
+    ):
+        from utils.commissioners_pardon import WEAPON_LOOT_BAR_ID, user_has_bar
+        if not await user_has_bar(db, current_user["id"]):
+            raise HTTPException(status_code=400, detail="You do not own the Browning BAR M1918A2")
+        updates: dict = {}
+        if show_weapon_on_profile is not None:
+            updates["profile_show_weapon"] = bool(show_weapon_on_profile)
+        if profile_weapon_id is not None:
+            wid = (profile_weapon_id or "").strip()
+            if wid and wid != WEAPON_LOOT_BAR_ID:
+                raise HTTPException(status_code=400, detail="Only the BAR can be shown on profile")
+            if wid:
+                updates["profile_weapon_id"] = WEAPON_LOOT_BAR_ID
+            else:
+                updates["profile_weapon_id"] = None
+                await db.users.update_one({"id": current_user["id"]}, {"$unset": {"profile_weapon_id": ""}, "$set": {"profile_show_weapon": False}})
+                return {"message": "Profile weapon cleared", "show_weapon_on_profile": False, "profile_weapon_id": None}
+        if not updates:
+            return {
+                "message": "No changes",
+                "show_weapon_on_profile": bool(current_user.get("profile_show_weapon")),
+                "profile_weapon_id": current_user.get("profile_weapon_id"),
+            }
+        if updates.get("profile_show_weapon") and not updates.get("profile_weapon_id"):
+            updates["profile_weapon_id"] = WEAPON_LOOT_BAR_ID
+        await db.users.update_one({"id": current_user["id"]}, {"$set": updates})
+        return {
+            "message": "Profile weapon preferences updated",
+            "show_weapon_on_profile": bool(updates.get("profile_show_weapon", current_user.get("profile_show_weapon"))),
+            "profile_weapon_id": updates.get("profile_weapon_id", current_user.get("profile_weapon_id")),
+        }
 
     @router.get("/profile/my-cars")
     async def get_profile_my_cars(current_user: dict = Depends(get_current_user)):

@@ -433,6 +433,16 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
         else:
             current = _get_user_progress_value(user, key)
         met = current >= target
+        # Commissioner's Pardon near-finish: count 75% of remaining toward this mission only
+        if (
+            not met
+            and (user.get("pardon_near_finish_mission_id") or "") == (mission.get("id") or "")
+            and isinstance(target, (int, float))
+            and key not in ("in_state", "complete_missions", "rank_id")
+        ):
+            remaining = max(0, int(target) - int(current))
+            current = int(current) + int(round(remaining * 0.75))
+            met = current >= target
         if met:
             met_count += 1
         # Cap displayed progress at target so we show e.g. 200/200 not 202/200
@@ -494,6 +504,19 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
 
 async def get_missions(current_user: dict = Depends(get_current_user), city: Optional[str] = None):
     """List missions for unlocked cities with completion status and progress."""
+    # Commissioner's Pardon: weekly points / monthly skips + auto-complete skip-marked missions
+    try:
+        from utils.commissioners_pardon import maybe_auto_complete_pardon_skip, maybe_collect_pardon_periodic
+
+        if current_user.get("has_commissioners_pardon"):
+            await maybe_collect_pardon_periodic(db, current_user["id"])
+            auto = await maybe_auto_complete_pardon_skip(db, current_user)
+            if auto:
+                refreshed = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
+                if refreshed:
+                    current_user = refreshed
+    except Exception:
+        pass
     unlocked = _user_unlocked_cities(current_user)
     completed_ids = _user_completed_mission_ids(current_user)
     # Ensure first mission crimes baseline exists (so crimes count only after mission started)
@@ -633,6 +656,18 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
 
 async def get_missions_map(current_user: dict = Depends(get_current_user)):
     """Map state: current city, unlocked cities, areas and missions per city (single mission, no districts)."""
+    try:
+        from utils.commissioners_pardon import maybe_auto_complete_pardon_skip, maybe_collect_pardon_periodic
+
+        if current_user.get("has_commissioners_pardon"):
+            await maybe_collect_pardon_periodic(db, current_user["id"])
+            auto = await maybe_auto_complete_pardon_skip(db, current_user)
+            if auto:
+                refreshed = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
+                if refreshed:
+                    current_user = refreshed
+    except Exception:
+        pass
     unlocked = _user_unlocked_cities(current_user)
     current_city = "Start"
     completed_ids = _user_completed_mission_ids(current_user)
@@ -780,6 +815,8 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         "unlocked_cities": unlocked,
         "cities": list(unlocked),
         "by_city": by_city,
+        "has_commissioners_pardon": bool(current_user.get("has_commissioners_pardon")),
+        "pardon_manual_ladder_target": 75 if current_user.get("has_commissioners_pardon") else None,
         "tribute_bank": tribute_bank,
         "tribute_bullets": tribute_bullets,
         "tribute_loot_box_pieces": tribute_loot_box_pieces,

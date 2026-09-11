@@ -6,6 +6,25 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-05[/color][/b] — [b]Kill while target is traveling[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] If someone starts traveling while you are on them, you can still [b]shoot them until they arrive[/b]. They stay in their current city for the whole travel timer — leaving no longer gives an instant safe window mid-timer.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-09-04[/color][/b] — [b]System AI reports[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]System AI[/b] page ([b]Game → System AI[/b], also from the System AI profile). File up to [b]3 reports per day[/b] — bot checks, dupe / multi checks, suspicious play, or other.[/color]
+[*][color=#888888][b]New:[/b] Reports are investigated by [b]System AI only[/b] (not Help Desk). Replies arrive in your inbox from System AI.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-03[/color][/b] — [b]Hitman counter vs protection[/b][/size]
 [quote]
 [list]

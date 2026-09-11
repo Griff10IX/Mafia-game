@@ -23,6 +23,9 @@ import {
   routesByCategory,
 } from './adminToolMap';
 import { StaffAccessVerifyContext } from './staffAccessVerifyContext';
+import ErrorBoundary from '../../components/ErrorBoundary';
+// Eager: avoids stale webpack chunk id collision leaving this page blank after atomic deploys.
+import AdminSystemAiReports from './AdminSystemAiReports';
 
 const Admin = lazy(() => import('./Admin'));
 const AdminOverview = lazy(() => import('./AdminOverview'));
@@ -78,6 +81,7 @@ const STANDALONE_PAGE = {
   'property-transfer': AdminPropertyTransfer,
   'witness-statements': AdminWitnessStatements,
   'last-man-standing': AdminLastManStanding,
+  'system-ai-reports': AdminSystemAiReports,
   locked: AdminLocked,
 };
 
@@ -1114,7 +1118,18 @@ export default function AdminShell() {
         {hubSection === 'overview' && <AdminOverview isFullAdmin={!!isFullAdminShell} />}
         {STANDALONE_ADMIN_SECTIONS.has(hubSection) && (() => {
           const Page = STANDALONE_PAGE[hubSection];
-          return Page ? <Page /> : null;
+          if (!Page) {
+            return (
+              <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-4 text-amber-100 text-sm">
+                Admin page missing for <code className="text-amber-200">{hubSection}</code>. Hard-refresh or redeploy.
+              </div>
+            );
+          }
+          return (
+            <ErrorBoundary>
+              <Page />
+            </ErrorBoundary>
+          );
         })()}
         {HUB_ADMIN_SECTIONS.has(hubSection) && <Admin />}
       </Suspense>

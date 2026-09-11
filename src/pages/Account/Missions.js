@@ -1336,15 +1336,24 @@ export default function Missions() {
       )}
 
       {orderedCityMissions.length > 0 && (
-        <MissionFocusSection
+        <>
+          {(authUser?.has_commissioners_pardon || data?.has_commissioners_pardon) ? (
+            <div className={`relative p-2.5 ${styles.panel} border border-amber-500/30 rounded-md bg-amber-500/5 mobile-panel`}>
+              <p className="text-[11px] font-heading text-amber-200/95">
+                Commissioner&apos;s Pardon active — 75-mission path · auto-rewards on skipped steps · +5 mission skips each month · +3,500 points weekly.
+              </p>
+            </div>
+          ) : null}
+          <MissionFocusSection
           cityLabel={cityDisplayName(activeCity)}
           currentMission={currentMission}
           nextMission={nextMission}
           missionStoryStep={missionStoryStep}
-          orderedTotal={totalMissions}
+          orderedTotal={(authUser?.has_commissioners_pardon || data?.has_commissioners_pardon) ? 75 : totalMissions}
           completedCount={completedCount}
           onOpen={setSelected}
         />
+        </>
       )}
 
       {cityMissions.length === 0 && (

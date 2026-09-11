@@ -275,9 +275,20 @@ HEALTH_REGEN_FULL_SECONDS = 7200  # 2 hours
 MIN_BULLETS_TO_KILL = 7200
 MAX_BULLETS_TO_KILL = 207000
 # Base bullets before rank/weapon/gap factors; hard floor applied in attack._apply_bullet_caps.
-MAX_ARMOUR_LEVEL = 7
+MAX_ARMOUR_LEVEL = 8
 LOOT_EXCLUSIVE_ARMOUR_LEVEL = 7
-ARMOUR_BASE_BULLETS = {0: 7200, 1: 19800, 2: 35100, 3: 50400, 4: 65700, 5: 76500, 6: 83700, 7: 91800}
+LOOT_EXCLUSIVE_ARMOUR_LEVEL_V2 = 8  # Brewster Body Shield (1917)
+ARMOUR_BASE_BULLETS = {
+    0: 7200,
+    1: 19800,
+    2: 35100,
+    3: 50400,
+    4: 65700,
+    5: 76500,
+    6: 83700,
+    7: 91800,
+    8: 114750,  # Brewster Body Shield — 25% tougher than L7
+}
 # Level 6: Points Store only (not armoury factory stock). Requires owning level 5 first.
 ARMOUR_POINT_STORE_TIER = {
     "level": 6,
@@ -988,6 +999,7 @@ class UserResponse(BaseModel):
     auto_collect_24h_tokens: int = 0
     jail_bailout_tokens: int = 0
     mission_skip_tokens: int = 0
+    has_commissioners_pardon: bool = False
     robot_bodyguard_hire_tokens: int = 0
     cooldown_skip_crime_tokens: int = 0
     cooldown_skip_gta_tokens: int = 0
@@ -3823,6 +3835,8 @@ profile.register(api_router)
 admin.register(api_router)
 from routers.game import help_desk
 help_desk.register(api_router)
+from routers.game import system_ai_reports
+system_ai_reports.register(api_router)
 from routers.game import game_help_chat
 game_help_chat.register(api_router)
 payments.register(api_router)
@@ -4456,6 +4470,34 @@ async def init_game_data():
             loot_weapon = {"id": "weapon_loot", "name": "Colt Monitor", "description": "Loot-exclusive LMG. Not sold anywhere.", "damage": 140, "bullets_needed": 40, "rank_required": 11, "price_money": None, "price_points": None, "loot_exclusive": True}
             await db.weapons.insert_one(loot_weapon)
             logging.info("Inserted loot-exclusive weapon (weapon_loot) into existing weapons collection")
+        if await db.weapons.find_one({"id": "weapon_loot_bar"}) is None:
+            bar_weapon = {
+                "id": "weapon_loot_bar",
+                "name": "Browning Automatic Rifle M1918A2",
+                "description": "Loot-exclusive military BAR — the full-auto rifle the civilian Colt Monitor was cut down from. Not sold anywhere.",
+                "damage": 175,
+                "bullets_needed": 30,
+                "rank_required": 11,
+                "price_money": None,
+                "price_points": None,
+                "loot_exclusive": True,
+            }
+            await db.weapons.insert_one(bar_weapon)
+            logging.info("Inserted loot-exclusive weapon (weapon_loot_bar) into existing weapons collection")
+        else:
+            await db.weapons.update_one(
+                {"id": "weapon_loot_bar"},
+                {
+                    "$set": {
+                        "name": "Browning Automatic Rifle M1918A2",
+                        "description": "Loot-exclusive military BAR — the full-auto rifle the civilian Colt Monitor was cut down from. Not sold anywhere.",
+                        "damage": 175,
+                        "bullets_needed": 30,
+                        "rank_required": 11,
+                        "loot_exclusive": True,
+                    }
+                },
+            )
     properties_count = await db.properties.count_documents({})
     seed_properties = _load_seed_json("properties.json")
     if properties_count == 0:

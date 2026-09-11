@@ -78,7 +78,8 @@ function applyFoundLocationPatches(list, rows, hunterCity) {
     const loc = p.location_state || a.location_state;
     const moving = !!(p.target_traveling ?? a.target_traveling);
     const canTravel = !!(a.status === 'found' && loc && myCity && myCity !== loc);
-    const canAttack = !!(a.status === 'found' && loc && myCity && myCity === loc && !moving);
+    // Mid-travel targets remain at origin until they land — still shootable in that city.
+    const canAttack = !!(a.status === 'found' && loc && myCity && myCity === loc);
     changed = true;
     return {
       ...a,
@@ -86,7 +87,7 @@ function applyFoundLocationPatches(list, rows, hunterCity) {
       traveling_to: null,
       target_traveling: moving,
       can_travel: myCity ? canTravel : a.can_travel,
-      can_attack: myCity ? canAttack : (!moving && a.can_attack),
+      can_attack: myCity ? canAttack : a.can_attack,
       message: canAttack
         ? `Target found in ${loc}! You are in the same location. Ready to attack!`
         : `Target found in ${loc}! Travel there to attack.`,
@@ -1319,8 +1320,14 @@ const CalcModal = ({
                 )}
                 {calcResult.loot_exclusive_weapon_bullet_discount && (
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-mutedForeground font-heading">Colt Monitor equipped:</span>
-                    <span className="text-[11px] font-heading font-bold text-emerald-500">−25% bullets</span>
+                    <span className="text-[10px] text-mutedForeground font-heading">
+                      {(calcResult.loot_exclusive_weapon_id === 'weapon_loot_bar'
+                        ? 'Browning BAR M1918A2'
+                        : 'Colt Monitor')} equipped:
+                    </span>
+                    <span className="text-[11px] font-heading font-bold text-emerald-500">
+                      −{Math.round((1 - Number(calcResult.loot_exclusive_weapon_bullet_mult || (calcResult.loot_exclusive_weapon_id === 'weapon_loot_bar' ? 0.7 : 0.75))) * 100)}% bullets
+                    </span>
                   </div>
                 )}
                 <div className="pt-2 border-t border-border text-[10px] text-mutedForeground font-heading space-y-0.5">

@@ -136,7 +136,7 @@ function getRewardAnimLevel(reward, paidTier) {
   if (!reward) return 0;
   let level = 0;
   const rt = reward.reward_tier || reward.rarity;
-  if (rt === 'loot_exclusive' || rt === 'exclusive' || ['weapon', 'car', 'armour', 'property', 'weed_strain'].includes(reward.type)) {
+    if (rt === 'loot_exclusive' || rt === 'exclusive' || ['weapon', 'car', 'armour', 'property', 'weed_strain', 'mission_perk'].includes(reward.type)) {
     if (reward.type && ['weapon', 'car', 'armour', 'property'].includes(reward.type)) return 4;
     if (rt === 'loot_exclusive') return 4;
   }

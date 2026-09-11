@@ -26,6 +26,7 @@ import {
   Zap,
   Trophy,
   Wine,
+  Bot,
 } from 'lucide-react';
 
 export const ADMIN_CATEGORIES = [
@@ -142,6 +143,7 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'ip-history', label: 'Account access', categoryId: 'admin-analytics-monitoring', kind: 'standalone', icon: History, description: 'Hacked-account check: IPs, devices, shared logins.' },
   { id: 'dead-alive-log', label: 'Dead > Alive log', categoryId: 'admin-analytics-monitoring', kind: 'standalone', icon: Skull, description: 'Retrieve and revive transfers.' },
   { id: 'account-compare', label: 'Account compare', categoryId: 'admin-analytics-monitoring', kind: 'standalone', icon: ArrowLeftRight, description: 'Compare two accounts: shared IPs, devices, and transfers.' },
+  { id: 'system-ai-reports', label: 'System AI reports', categoryId: 'admin-operations', kind: 'standalone', icon: Bot, description: 'Player reports filed to System AI (bot/dupe checks). Admin only.' },
   { id: 'ent-games', label: 'E-Games audit', categoryId: 'admin-analytics-monitoring', kind: 'standalone', icon: Dices, description: 'Entertainer Forum dice/gbox/hangman audit.' },
 ];
 
@@ -189,6 +191,7 @@ export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
   'witness-statements': 'Witness',
   'last-man-standing': 'LMS',
   locked: 'Locked',
+  'system-ai-reports': 'SAI',
 };
 
 /** In-game Layout sidebar: Admin Tools entry + short favorites. */

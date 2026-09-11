@@ -524,6 +524,7 @@ MASTERY_AUTO_SIM_PCT_PER_CHUNK = 5  # +5% per "Train 5 min" chunk
 MASTERY_COOLDOWN_MINUTES = 5  # min time between trains per weapon (auto_sim + 3D live submit)
 BRASS_KNUCKLES_WEAPON_ID = "weapon1"  # exclude from shooting range (no bullets)
 LOOT_EXCLUSIVE_WEAPON_ID = "weapon_loot"  # Colt Monitor — only from loot box; omit from mastery list until owned
+LOOT_EXCLUSIVE_WEAPON_BAR_ID = "weapon_loot_bar"  # Browning BAR M1918A2
 # Playing the 3D range: grant more mastery per hit than auto_sim (quicker mastery when you play)
 MASTERY_PCT_PER_LIVE_HIT = 1  # 1% per hit when playing the 3D game (max 30 hits per submit)
 MASTERY_LIVE_HITS_MAX_PER_REQUEST = 30
@@ -1804,6 +1805,7 @@ async def get_armour_options(request: Request, current_user: dict = Depends(get_
     })
     # Loot-exclusive armour (level 7) — always shown: owned → equip; not owned → grayed "Loot exclusive"
     from routers.money.loot_box import ARMOUR_LEVEL_7_NAME
+    from utils.commissioners_pardon import ARMOUR_LEVEL_8_NAME, LOOT_EXCLUSIVE_ARMOUR_LEVEL_V2
 
     loot_lv = LOOT_EXCLUSIVE_ARMOUR_LEVEL
     rows.append({
@@ -1820,6 +1822,23 @@ async def get_armour_options(request: Request, current_user: dict = Depends(get_
         "armoury_stock": 0,
         "loot_exclusive": True,
         "unowned_restricted": False,
+    })
+    loot_lv8 = LOOT_EXCLUSIVE_ARMOUR_LEVEL_V2
+    rows.append({
+        "level": loot_lv8,
+        "name": ARMOUR_LEVEL_8_NAME,
+        "description": "Loot-exclusive WWI Brewster Body Shield — not sold anywhere.",
+        "cost_money": None,
+        "cost_points": None,
+        "effective_cost_money": None,
+        "effective_cost_points": None,
+        "owned": owned_max >= loot_lv8,
+        "equipped": equipped_level == loot_lv8,
+        "affordable": False,
+        "armoury_stock": 0,
+        "loot_exclusive": True,
+        "unowned_restricted": False,
+        "image_base": "/images/armour/brewster_1917",
     })
     return {
         "current_level": equipped_level,
@@ -2395,11 +2414,14 @@ async def get_shooting_range_mastery(current_user: dict = Depends(get_current_us
     weapons_out: List[Dict] = []
     for w in gun_weapons:
         wid = w.get("id")
-        if wid == LOOT_EXCLUSIVE_WEAPON_ID and wid not in owned_ids:
+        if wid in (LOOT_EXCLUSIVE_WEAPON_ID, LOOT_EXCLUSIVE_WEAPON_BAR_ID) and wid not in owned_ids:
             continue
         row: Dict = {"id": w["id"], "name": w.get("name", w["id"]), "owned": wid in owned_ids}
-        if wid == LOOT_EXCLUSIVE_WEAPON_ID:
+        if wid in (LOOT_EXCLUSIVE_WEAPON_ID, LOOT_EXCLUSIVE_WEAPON_BAR_ID):
             row["loot_box_exclusive"] = True
+        if wid == LOOT_EXCLUSIVE_WEAPON_BAR_ID:
+            row["image_base"] = "/images/weapons/weapon_loot_bar"
+            row["profile_showable"] = True
         weapons_out.append(row)
     return {"mastery": result, "weapons": weapons_out}
 
@@ -3557,7 +3579,33 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
         }
     fresh_user = await db.users.find_one({"id": uid}, {"_id": 0})
     udoc = fresh_user or current_user
+    # Commissioner's Pardon: weekly points / monthly skips while owned
+    try:
+        from utils.commissioners_pardon import maybe_collect_pardon_periodic, get_pardon_doc, PARDON_NAME
+
+        if udoc.get("has_commissioners_pardon"):
+            await maybe_collect_pardon_periodic(db, uid)
+            fresh_user = await db.users.find_one({"id": uid}, {"_id": 0})
+            udoc = fresh_user or udoc
+    except Exception:
+        logger.exception("pardon periodic collect on inventory failed")
     tokens = _tokens_from_user(udoc)
+    pardon_info = None
+    try:
+        from utils.commissioners_pardon import get_pardon_doc, PARDON_NAME, pardon_not_tradable_detail
+
+        if udoc.get("has_commissioners_pardon"):
+            pdoc = await get_pardon_doc(db, owner_id=uid)
+            pardon_info = {
+                "name": PARDON_NAME,
+                "transfer_count": int((pdoc or {}).get("transfer_count") or 0),
+                "max_transfers": 2,
+                "tradable": False,
+                "gift_blocked_reason": pardon_not_tradable_detail(),
+                "note": "75-mission path · monthly skips · weekly points · PvP transfer only (max 2)",
+            }
+    except Exception:
+        pass
     # Next auto-collect check time (global ticker runs every AUTO_COLLECT_TICKER_SECONDS).
     auto_collect_info = None
     if tokens.get("auto_collect_12h", {}).get("active_until") or tokens.get("auto_collect_24h", {}).get("active_until"):
@@ -3585,6 +3633,7 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
             "exclusive_cars": exclusive_cars,
             "has_speakeasy": speakeasy is not None,
             "speakeasy": speakeasy_info,
+            "commissioners_pardon": pardon_info,
         },
         "tokens": tokens,
         "auto_collect": auto_collect_info,

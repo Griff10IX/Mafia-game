@@ -1185,6 +1185,9 @@ export default function Admin() {
   const [sjUrGuarantee, setSjUrGuarantee] = useState(null);
   const [sjUrGuaranteeUser, setSjUrGuaranteeUser] = useState('');
   const [sjUrGuaranteeLoading, setSjUrGuaranteeLoading] = useState(false);
+  const [newExclusivesStatus, setNewExclusivesStatus] = useState(null);
+  const [newExclusivesLoading, setNewExclusivesLoading] = useState(false);
+  const [newExclusivesGrantItem, setNewExclusivesGrantItem] = useState('weapon_bar');
 
   // Security state
   const [securitySummary, setSecuritySummary] = useState(null);
@@ -5261,6 +5264,72 @@ export default function Admin() {
       setExclusiveLootOwners(null);
     } finally {
       setExclusiveLootLoading(false);
+    }
+  };
+
+  const handleNewExclusivesStatus = async () => {
+    setNewExclusivesLoading(true);
+    try {
+      const res = await api.get('/admin/loot-new-exclusives/status');
+      setNewExclusivesStatus(res.data || null);
+      toast.success(res.data?.live ? 'New exclusives loot LIVE' : 'New exclusives loot OFF (admin grant OK)');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load status');
+      setNewExclusivesStatus(null);
+    } finally {
+      setNewExclusivesLoading(false);
+    }
+  };
+
+  const handleNewExclusivesSetLive = async (live) => {
+    setNewExclusivesLoading(true);
+    try {
+      const res = await api.post('/admin/loot-new-exclusives/set-live', { live: !!live });
+      setNewExclusivesStatus((prev) => ({ ...(prev || {}), live: !!res.data?.live }));
+      toast.success(res.data?.message || (live ? 'Live ON' : 'Live OFF'));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to set live flag');
+    } finally {
+      setNewExclusivesLoading(false);
+    }
+  };
+
+  const handleNewExclusivesGrant = async () => {
+    const un = (formData.targetUsername || '').trim();
+    if (!un) {
+      toast.error('Enter target username above');
+      return;
+    }
+    setNewExclusivesLoading(true);
+    try {
+      const res = await api.post('/admin/loot-new-exclusives/grant', {
+        username: un,
+        item: newExclusivesGrantItem,
+      });
+      toast.success(
+        res.data?.ok === false
+          ? (res.data?.detail || 'Grant failed')
+          : `Granted ${res.data?.item || newExclusivesGrantItem} to ${res.data?.username || un}`,
+      );
+      await handleNewExclusivesStatus();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Grant failed');
+    } finally {
+      setNewExclusivesLoading(false);
+    }
+  };
+
+  const handleNewExclusivesReclaimPardon = async () => {
+    if (!window.confirm("Reclaim Commissioner's Pardon to the loot pool?")) return;
+    setNewExclusivesLoading(true);
+    try {
+      const res = await api.post('/admin/loot-new-exclusives/reclaim-pardon');
+      toast.success(res.data?.reclaimed ? 'Pardon reclaimed' : 'No pardon to reclaim');
+      await handleNewExclusivesStatus();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Reclaim failed');
+    } finally {
+      setNewExclusivesLoading(false);
     }
   };
 
@@ -10946,9 +11015,51 @@ export default function Admin() {
         />
         {!collapsed.player && (
           <div className="p-2 space-y-1">
-            <ActionRow icon={Gift} label="Who has exclusive loot" description="Cars (car20/car21/car23), Colt Monitor, Steel Vest 1922, Speakeasy">
+            <ActionRow icon={Gift} label="Who has exclusive loot" description="Cars, Colt Monitor, BAR, Steel Vest, Brewster L8, Speakeasy, Commissioner's Pardon">
               <BtnPrimary onClick={handleFetchExclusiveLoot} disabled={exclusiveLootLoading}>{exclusiveLootLoading ? '...' : 'View'}</BtnPrimary>
             </ActionRow>
+            <ActionRow
+              icon={Gift}
+              label="New loot exclusives (BAR / Brewster / Pardon)"
+              description="Admin grant for testing. Loot drops stay OFF until go-live. Caps: 2 BAR, 2 L8, 1 Pardon."
+            >
+              <BtnSecondary type="button" onClick={handleNewExclusivesStatus} disabled={newExclusivesLoading}>
+                {newExclusivesLoading ? '…' : 'Status'}
+              </BtnSecondary>
+              <BtnPrimary type="button" onClick={() => handleNewExclusivesSetLive(true)} disabled={newExclusivesLoading}>
+                Go live
+              </BtnPrimary>
+              <BtnDanger type="button" onClick={() => handleNewExclusivesSetLive(false)} disabled={newExclusivesLoading}>
+                Keep off
+              </BtnDanger>
+            </ActionRow>
+            <div className="pl-6 flex flex-wrap items-center gap-2 -mt-0.5 mb-1">
+              <select
+                value={newExclusivesGrantItem}
+                onChange={(e) => setNewExclusivesGrantItem(e.target.value)}
+                className="px-2 py-1 rounded border border-amber-500/30 bg-transparent text-[10px] font-heading"
+              >
+                <option value="weapon_bar">BAR M1918A2</option>
+                <option value="armour_v2">Brewster L8</option>
+                <option value="mission_perk">Commissioner's Pardon</option>
+              </select>
+              <BtnPrimary type="button" onClick={handleNewExclusivesGrant} disabled={newExclusivesLoading}>
+                Grant to target
+              </BtnPrimary>
+              <BtnDanger type="button" onClick={handleNewExclusivesReclaimPardon} disabled={newExclusivesLoading}>
+                Reclaim Pardon
+              </BtnDanger>
+              {newExclusivesStatus ? (
+                <span className="text-[9px] font-heading text-mutedForeground">
+                  live={String(!!newExclusivesStatus.live)} · BAR {newExclusivesStatus.bar_live}/{newExclusivesStatus.bar_cap} · L8{' '}
+                  {newExclusivesStatus.armour_v2_live}/{newExclusivesStatus.armour_v2_cap} · Pardon {newExclusivesStatus.pardon_live}/
+                  {newExclusivesStatus.pardon_cap}
+                  {newExclusivesStatus.pardon?.transfer_count != null
+                    ? ` (transfers ${newExclusivesStatus.pardon.transfer_count}/2)`
+                    : ''}
+                </span>
+              ) : null}
+            </div>
             <ActionRow icon={Car} label="Exclusive car manager" description="Remove, transfer, or grant car20 / car21 / car23 (dedicated page)">
               <Link
                 to="/tjjeujr3wa/exclusive-cars"

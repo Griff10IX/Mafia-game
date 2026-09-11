@@ -427,19 +427,46 @@ async def _fetch_odds_epl_events() -> List[dict]:
 
 
 THESPORTSDB_PL_ID = "4328"
+# Skip prior-season rounds whose last kickoff is this far in the past.
+_TSDB_STALE_AFTER = timedelta(days=21)
+_TSDB_FT_STATUSES = frozenset({"ft", "full time", "fulltime", "match finished", "aet", "pen"})
+
+
+def _tsdb_season_keys(now: Optional[datetime] = None) -> List[str]:
+    now = now or datetime.now(timezone.utc)
+    y = now.year
+    if now.month >= 7:
+        return [f"{y}-{y + 1}", f"{y - 1}-{y}"]
+    return [f"{y - 1}-{y}", f"{y}-{y + 1}"]
+
+
+def _tsdb_event_kickoff(e: dict) -> Optional[datetime]:
+    kick = (e.get("strTimestamp") or "").strip()
+    if kick and "T" in kick and "+" not in kick and "Z" not in kick:
+        kick = kick + "+00:00"
+    return parse_dt(kick)
+
+
+def _tsdb_events_stale(events: List[dict], now: Optional[datetime] = None) -> bool:
+    """True when every kickoff is well in the past (wrong / finished prior season)."""
+    now = now or datetime.now(timezone.utc)
+    kicks = [k for k in (_tsdb_event_kickoff(e) for e in events or []) if k]
+    if not kicks:
+        return False
+    return max(kicks) < (now - _TSDB_STALE_AFTER)
 
 
 async def _fetch_thesportsdb_pl_results(gw: Optional[int] = None) -> List[dict]:
     """PL results by gameweek round. eventsseason.php is truncated on the free key (~15 rows)."""
     now = datetime.now(timezone.utc)
-    y = now.year
-    seasons = [f"{y}-{y + 1}", f"{y - 1}-{y}"] if now.month >= 7 else [f"{y - 1}-{y}", f"{y}-{y + 1}"]
+    seasons = _tsdb_season_keys(now)
     rounds = [int(gw)] if gw else [1, 2, 3, 4]
     out: List[dict] = []
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             for season in seasons:
                 got_any = False
+                season_stale = False
                 for rnd in rounds:
                     r = await client.get(
                         "https://www.thesportsdb.com/api/v1/json/123/eventsround.php",
@@ -449,6 +476,9 @@ async def _fetch_thesportsdb_pl_results(gw: Optional[int] = None) -> List[dict]:
                         continue
                     events = (r.json() or {}).get("events") or []
                     if not events:
+                        continue
+                    if _tsdb_events_stale(events, now):
+                        season_stale = True
                         continue
                     got_any = True
                     for e in events:
@@ -460,6 +490,9 @@ async def _fetch_thesportsdb_pl_results(gw: Optional[int] = None) -> List[dict]:
                         status = (e.get("strStatus") or "").strip().lower()
                         if postponed in ("yes", "true") or "postponed" in status:
                             out.append({"home": ht, "away": at, "result": "postponed"})
+                            continue
+                        # Never treat live/half-time / not-started scores as final.
+                        if status not in _TSDB_FT_STATUSES:
                             continue
                         try:
                             hs = int(e.get("intHomeScore"))
@@ -475,6 +508,9 @@ async def _fetch_thesportsdb_pl_results(gw: Optional[int] = None) -> List[dict]:
                         })
                 if got_any:
                     break
+                if season_stale:
+                    # Prior season finished — try the next (current) season key.
+                    continue
     except Exception as ex:
         logger.warning("TheSportsDB PL results failed: %s", ex)
     return out
@@ -482,11 +518,12 @@ async def _fetch_thesportsdb_pl_results(gw: Optional[int] = None) -> List[dict]:
 
 async def _thesportsdb_round_fixtures(gw: int) -> List[dict]:
     now = datetime.now(timezone.utc)
-    y = now.year
-    seasons = [f"{y}-{y + 1}", f"{y - 1}-{y}"] if now.month >= 7 else [f"{y - 1}-{y}", f"{y}-{y + 1}"]
+    seasons = _tsdb_season_keys(now)
     out: List[dict] = []
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
+            # Prefer a non-stale round (current season). Fall back only if nothing fresher exists.
+            candidates: List[Tuple[str, List[dict], bool]] = []
             for season in seasons:
                 r = await client.get(
                     "https://www.thesportsdb.com/api/v1/json/123/eventsround.php",
@@ -497,41 +534,60 @@ async def _thesportsdb_round_fixtures(gw: int) -> List[dict]:
                 events = (r.json() or {}).get("events") or []
                 if not events:
                     continue
-                for e in events:
-                    ht = (e.get("strHomeTeam") or "").strip()
-                    at = (e.get("strAwayTeam") or "").strip()
-                    kick = (e.get("strTimestamp") or "").strip()
-                    if kick and "T" in kick and "+" not in kick and "Z" not in kick:
-                        kick = kick + "+00:00"
-                    if not ht or not at or not kick:
-                        continue
-                    home_name = "AFC Bournemouth" if team_canon(ht) == "bournemouth" else ht
-                    away_name = "AFC Bournemouth" if team_canon(at) == "bournemouth" else at
-                    fx = {
-                        "external_event_id": f"tsdb-{e.get('idEvent') or slug_team(home_name)+slug_team(away_name)}",
-                        "home_team_id": slug_team(home_name),
-                        "away_team_id": slug_team(away_name),
-                        "home": home_name,
-                        "away": away_name,
-                        "kickoff": kick,
-                        "result": None,
-                    }
-                    postponed = (e.get("strPostponed") or "").strip().lower()
-                    status = (e.get("strStatus") or "").strip().upper()
-                    if postponed in ("yes", "true") or "POSTPONED" in status:
-                        fx["result"] = "postponed"
-                    else:
-                        try:
-                            hs = int(e.get("intHomeScore"))
-                            aws = int(e.get("intAwayScore"))
-                            fx["home_score"] = hs
-                            fx["away_score"] = aws
-                            fx["result"] = _fixture_result_from_scores(hs, aws)
-                        except (TypeError, ValueError):
-                            pass
-                    out.append(fx)
-                if out:
+                candidates.append((season, events, _tsdb_events_stale(events, now)))
+            chosen = None
+            for season, events, stale in candidates:
+                if not stale:
+                    chosen = (season, events)
                     break
+            if chosen is None and candidates:
+                # Only stale data available — still skip embedding FT from a prior year when
+                # a fresher empty current season is expected; do not use stale for new GWs.
+                logger.warning(
+                    "TheSportsDB PL round %s only has stale season data (%s); skipping",
+                    gw,
+                    ",".join(s for s, _, st in candidates if st),
+                )
+                return []
+            if not chosen:
+                return []
+            _season, events = chosen
+            for e in events:
+                ht = (e.get("strHomeTeam") or "").strip()
+                at = (e.get("strAwayTeam") or "").strip()
+                kick_dt = _tsdb_event_kickoff(e)
+                kick = kick_dt.isoformat() if kick_dt else (e.get("strTimestamp") or "").strip()
+                if kick and "T" in kick and "+" not in kick and "Z" not in kick:
+                    kick = kick + "+00:00"
+                if not ht or not at or not kick:
+                    continue
+                home_name = "AFC Bournemouth" if team_canon(ht) == "bournemouth" else ht
+                away_name = "AFC Bournemouth" if team_canon(at) == "bournemouth" else at
+                fx = {
+                    "external_event_id": f"tsdb-{e.get('idEvent') or slug_team(home_name)+slug_team(away_name)}",
+                    "home_team_id": slug_team(home_name),
+                    "away_team_id": slug_team(away_name),
+                    "home": home_name,
+                    "away": away_name,
+                    "kickoff": kick,
+                    "result": None,
+                }
+                postponed = (e.get("strPostponed") or "").strip().lower()
+                status = (e.get("strStatus") or "").strip()
+                status_l = status.lower()
+                status_u = status.upper()
+                if postponed in ("yes", "true") or "POSTPONED" in status_u:
+                    fx["result"] = "postponed"
+                elif status_l in _TSDB_FT_STATUSES:
+                    try:
+                        hs = int(e.get("intHomeScore"))
+                        aws = int(e.get("intAwayScore"))
+                        fx["home_score"] = hs
+                        fx["away_score"] = aws
+                        fx["result"] = _fixture_result_from_scores(hs, aws)
+                    except (TypeError, ValueError):
+                        pass
+                out.append(fx)
     except Exception as ex:
         logger.warning("TheSportsDB PL round %s fixtures failed: %s", gw, ex)
     return _sort_fixtures(out)
@@ -1544,22 +1600,27 @@ async def refresh_results_into_gameweek(db, season_id: str, gw: int) -> dict:
         merged = []
         for f in fixtures:
             nxt = dict(f)
-            if nxt.get("result") in ("home", "away", "draw", "postponed"):
-                merged.append(nxt)
-                continue
             hit = None
             for ev in tsdb:
                 if teams_same(nxt.get("home") or "", ev.get("home") or "") and teams_same(nxt.get("away") or "", ev.get("away") or ""):
                     hit = ev
                     break
+            # Always allow FT/postponed TSDB rows to correct stale/wrong scores (e.g. premature 0-0).
             if hit:
                 if hit.get("result") == "postponed":
+                    if nxt.get("result") != "postponed":
+                        updated += 1
                     nxt["result"] = "postponed"
                 else:
+                    if (
+                        nxt.get("result") != hit.get("result")
+                        or nxt.get("home_score") != hit.get("home_score")
+                        or nxt.get("away_score") != hit.get("away_score")
+                    ):
+                        updated += 1
                     nxt["home_score"] = hit.get("home_score")
                     nxt["away_score"] = hit.get("away_score")
                     nxt["result"] = hit.get("result")
-                updated += 1
             merged.append(nxt)
         fixtures = merged
         new_fx = merged

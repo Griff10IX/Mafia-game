@@ -600,6 +600,7 @@ export default function MyInventory() {
   const exclusiveCars = loot.exclusive_cars || [];
   const hasSpeakeasy = loot.has_speakeasy === true;
   const speakeasyInfo = loot.speakeasy || null;
+  const commissionersPardon = loot.commissioners_pardon || null;
   const isAdmin = data?.is_admin === true;
   const tokens = data?.tokens || {};
 
@@ -691,7 +692,7 @@ export default function MyInventory() {
     const until = tokens[key]?.active_until;
     return until && new Date(until) > nowDate;
   });
-  const hasExclusives = exclusiveCars.length > 0 || hasSpeakeasy;
+  const hasExclusives = exclusiveCars.length > 0 || hasSpeakeasy || !!commissionersPardon;
 
   const tabs = [
     { id: 'weapons', label: 'Weapons', icon: Swords, count: weapons.length },
@@ -699,7 +700,7 @@ export default function MyInventory() {
     { id: 'tokens', label: 'Tokens', icon: Zap, count: heldTokenKeys.length },
     { id: 'active', label: 'In use', icon: Clock, count: activeTokenKeys.length },
     ...(hasExclusives
-      ? [{ id: 'exclusives', label: 'Exclusives', icon: Gift, count: exclusiveCars.length + (hasSpeakeasy ? 1 : 0) }]
+      ? [{ id: 'exclusives', label: 'Exclusives', icon: Gift, count: exclusiveCars.length + (hasSpeakeasy ? 1 : 0) + (commissionersPardon ? 1 : 0) }]
       : []),
   ];
   const currentTab = tabs.some((t) => t.id === activeTab) ? activeTab : 'weapons';
@@ -1340,6 +1341,25 @@ export default function MyInventory() {
                   <Link to="/cars/garage" className="ml-auto text-[9px] text-primary hover:underline">View in Garage →</Link>
                 </div>
               ))}
+              {commissionersPardon ? (
+                <div className="inv-item relative overflow-hidden rounded-lg border-2 border-violet-500/35 bg-violet-950/15 p-3">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Shield size={14} className="text-violet-300 shrink-0" />
+                    <span className="text-[12px] font-heading font-bold text-violet-300 tracking-wide">
+                      {commissionersPardon.name || "Commissioner's Pardon"}
+                    </span>
+                    <span className="text-[8px] font-heading uppercase tracking-wider text-violet-200/90 border border-violet-500/40 px-2 py-0.5 rounded-full">
+                      Not tradable
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-mutedForeground font-heading leading-snug">
+                    {commissionersPardon.note || '75-mission path · monthly skips · weekly points'}
+                  </p>
+                  <p className="text-[9px] text-violet-200/80 font-heading mt-1">
+                    Kill transfers {Number(commissionersPardon.transfer_count) || 0}/{Number(commissionersPardon.max_transfers) || 2} — cannot sell or gift.
+                  </p>
+                </div>
+              ) : null}
               {hasSpeakeasy && speakeasyInfo && (
                 <div className="inv-item relative overflow-hidden rounded-lg border-2 border-amber-500/40 bg-amber-950/20 ring-1 ring-amber-500/20 shadow-[0_0_24px_rgba(245,158,11,0.12)] p-3">
                   <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-amber-400/70 to-transparent pointer-events-none" aria-hidden />

@@ -1597,7 +1597,8 @@ async def _build_active_attacks_list(
                 # second round-trip via _ensure_execute_token. This op is awaited (urgent_bulk_ops) so the row
                 # is durable before the response surfaces the token to the client.
                 flip_token: Optional[str] = None
-                if new_location and ac_state and new_location == ac_state and not attack.get("execute_token") and not _in_transit_destination(tu):
+                # Mid-travel: target is still at origin until arrive time — mint token if hunter is there.
+                if new_location and ac_state and new_location == ac_state and not attack.get("execute_token"):
                     flip_token = secrets.token_urlsafe(24)
                     set_fields["execute_token"] = flip_token
                     set_fields["execute_token_bucket"] = _execute_code_bucket()
@@ -1627,11 +1628,11 @@ async def _build_active_attacks_list(
                 attack["location_state"] = eff_loc
         chase_city = attack.get("location_state")
         can_travel = attack["status"] == "found" and chase_city and ac_state != chase_city
+        # Mid-travel targets stay shootable at their current (origin) city until they land.
         can_attack = (
             attack["status"] == "found"
             and attack.get("location_state")
             and ac_state == attack["location_state"]
-            and not in_transit
         )
         if attack["status"] == "searching":
             msg = "Searching..."
@@ -1794,10 +1795,20 @@ def _bullets_to_kill_breakdown(
     }
 
 
-# Attacker has Colt Monitor (weapon_loot) equipped: fewer bullets needed to kill.
-LOOT_EXCLUSIVE_WEAPON_ATTACK_BULLET_MULT = 0.75
+# Attacker loot-exclusive weapons: fewer bullets needed to kill.
+LOOT_EXCLUSIVE_WEAPON_ATTACK_BULLET_MULT = 0.75  # Colt Monitor
+LOOT_EXCLUSIVE_BAR_ATTACK_BULLET_MULT = 0.70  # Browning BAR M1918A2
 MAX_BULLETS_TO_KILL = 207_000
 ROBOT_BODYGUARD_MAX_BULLETS_TO_KILL = 112_500
+
+
+def _loot_weapon_attack_bullet_mult(weapon_id: Optional[str]) -> float:
+    wid = (weapon_id or "").strip()
+    if wid == "weapon_loot_bar":
+        return LOOT_EXCLUSIVE_BAR_ATTACK_BULLET_MULT
+    if wid == LOOT_EXCLUSIVE_WEAPON_ID or wid == "weapon_loot":
+        return LOOT_EXCLUSIVE_WEAPON_ATTACK_BULLET_MULT
+    return 1.0
 
 _BULLET_CALC_TARGET_PROJECTION = {
     "_id": 0,
@@ -2208,11 +2219,11 @@ async def get_attack_status(
         in_transit = False
     chase_city = attack.get("location_state")
     can_travel = attack["status"] == "found" and chase_city and current_user["current_state"] != chase_city
+    # Mid-travel targets stay shootable at their current (origin) city until they land.
     can_attack = (
         attack["status"] == "found"
         and attack.get("location_state")
         and current_user["current_state"] == attack["location_state"]
-        and not in_transit
     )
     message = ""
     if attack["status"] == "searching":
@@ -2245,6 +2256,10 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
     from utils.robot_bg_auto_search import maybe_sync_robot_bg_searches_for_owner, robot_bg_auto_search_running
 
     attacker_id = current_user["id"]
+    
+    # Clear bot trap on page load/refresh - but only if few failures (bot would have 100s)
+    # Human hits it once, refreshes, gets cleared. Bot hammers 100+ times, stays trapped.
+    await db.bot_traps.delete_one({"user_id": attacker_id, "failures": {"$lt": 10}})
     ac_state = (current_user.get("current_state") or "")
     find_clock_active = _attacker_has_find_clock(current_user)
 
@@ -2445,9 +2460,10 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     exclusive_car_bullet_mult = await _exclusive_car_bullet_defense_multiplier(target)
     if exclusive_car_bullet_mult > 1.0:
         bullets_required = int(math.ceil(bullets_required * exclusive_car_bullet_mult))
-    loot_exclusive_weapon_bullet_discount = equipped_id == LOOT_EXCLUSIVE_WEAPON_ID
+    loot_mult = _loot_weapon_attack_bullet_mult(equipped_id)
+    loot_exclusive_weapon_bullet_discount = loot_mult < 0.999
     if loot_exclusive_weapon_bullet_discount:
-        bullets_required = max(1, int(round(bullets_required * LOOT_EXCLUSIVE_WEAPON_ATTACK_BULLET_MULT)))
+        bullets_required = max(1, int(round(bullets_required * loot_mult)))
     try:
         from utils.loot_reclaimable_passives import BUFF_KILL_BULLETS, get_reclaimable_passive_mults_from_user
 
@@ -2483,6 +2499,8 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
         "target_armour_bonus": target_armour_bonus,
         "exclusive_car_bullet_mult": exclusive_car_bullet_mult,
         "loot_exclusive_weapon_bullet_discount": loot_exclusive_weapon_bullet_discount,
+        "loot_exclusive_weapon_bullet_mult": loot_mult if loot_exclusive_weapon_bullet_discount else None,
+        "loot_exclusive_weapon_id": equipped_id if loot_exclusive_weapon_bullet_discount else None,
     }
 
 async def get_attack_inflation(current_user: dict = Depends(get_current_user)):
@@ -2585,6 +2603,25 @@ async def reset_kill_inflation(current_user: dict = Depends(get_current_user_ver
 async def execute_attack(request: AttackExecuteRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
   try:
     meta = _request_meta(req)
+    # --- Bot trap check (dynamic challenge field for suspected bots) ---
+    bot_trap = await db.bot_traps.find_one({"user_id": current_user["id"], "active": True})
+    if bot_trap:
+        try:
+            body_bytes = await req.body()
+            import json as _json
+            body_data = _json.loads(body_bytes) if body_bytes else {}
+        except Exception:
+            body_data = {}
+        challenge_field = bot_trap.get("challenge_field", "")
+        challenge_value = bot_trap.get("challenge_value", "")
+        submitted = body_data.get(challenge_field, "")
+        if submitted != challenge_value:
+            await db.bot_traps.update_one({"_id": bot_trap["_id"]}, {"$inc": {"failures": 1}})
+            logger.warning("bot_trap_fail user=%s field=%s expected=%s got=%s", current_user.get("username"), challenge_field, challenge_value, submitted)
+            raise HTTPException(status_code=400, detail="Attack verification failed. Please refresh and try again.")
+        else:
+            await db.bot_traps.update_one({"_id": bot_trap["_id"]}, {"$inc": {"successes": 1}})
+    # --- End bot trap check ---
     submitted_execute_token = await _submitted_execute_token(request, req)
     attack = await _resolve_attack_row_for_execute(
         current_user["id"],
@@ -2631,13 +2668,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if not target_location:
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Target location unknown; cannot attack.", req), label="log_target_location_unknown")
         raise HTTPException(status_code=400, detail="Target location unknown; cannot attack.")
-    in_transit_dest = _in_transit_destination(target)
-    if in_transit_dest:
-        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Target is traveling", req), label="log_target_traveling")
-        raise HTTPException(
-            status_code=400,
-            detail="Target is traveling. Wait until they arrive.",
-        )
+    # Mid-travel: still at origin city until travel_arrives_at — allow shoot there (no block).
     attack["location_state"] = target_location
     attacker_location = (attacker_row or {}).get("current_state") or ""
     if attacker_location != target_location:
@@ -2912,8 +2943,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         bullets_required = bullets_required * 2
     if exclusive_car_bullet_mult > 1.0:
         bullets_required = int(math.ceil(bullets_required * exclusive_car_bullet_mult))
-    if equipped_weapon_id == LOOT_EXCLUSIVE_WEAPON_ID:
-        bullets_required = max(1, int(round(bullets_required * LOOT_EXCLUSIVE_WEAPON_ATTACK_BULLET_MULT)))
+    loot_mult = _loot_weapon_attack_bullet_mult(equipped_weapon_id)
+    if loot_mult < 0.999:
+        bullets_required = max(1, int(round(bullets_required * loot_mult)))
     try:
         from utils.loot_reclaimable_passives import BUFF_KILL_BULLETS, get_reclaimable_passive_mults_from_user
 
@@ -3777,13 +3809,52 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},
                     upsert=True,
                 )
+        # Transfer BAR (weapon_loot_bar) same pattern
+        victim_bar = await db.user_weapons.find_one(
+            {"user_id": victim_id, "weapon_id": "weapon_loot_bar", "quantity": {"$gte": 1}},
+            {"_id": 0, "quantity": 1},
+        )
+        if victim_bar:
+            await db.user_weapons.update_one(
+                {"user_id": victim_id, "weapon_id": "weapon_loot_bar"},
+                {"$inc": {"quantity": -1}},
+            )
+            await db.users.update_one(
+                {"id": victim_id, "profile_weapon_id": "weapon_loot_bar"},
+                {"$unset": {"profile_weapon_id": ""}},
+            )
+            killer_has_bar = await db.user_weapons.find_one(
+                {"user_id": killer_id, "weapon_id": "weapon_loot_bar", "quantity": {"$gte": 1}},
+                {"_id": 1},
+            )
+            if not killer_has_bar:
+                await db.user_weapons.update_one(
+                    {"user_id": killer_id, "weapon_id": "weapon_loot_bar"},
+                    {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True,
+                )
         # Transfer loot-exclusive armour (level 7): victim drops one tier; killer gets 7 only if they don't have it
-        from server import LOOT_EXCLUSIVE_ARMOUR_LEVEL
+        from server import LOOT_EXCLUSIVE_ARMOUR_LEVEL, LOOT_EXCLUSIVE_ARMOUR_LEVEL_V2
 
         victim_armour = int(target.get("armour_level") or 0)
         victim_owned_max = int(target.get("armour_owned_level_max") or 0)
         loot_lv = LOOT_EXCLUSIVE_ARMOUR_LEVEL
-        if victim_armour >= loot_lv or victim_owned_max >= loot_lv:
+        loot_lv8 = LOOT_EXCLUSIVE_ARMOUR_LEVEL_V2
+        if victim_armour >= loot_lv8 or victim_owned_max >= loot_lv8:
+            drop_to = loot_lv8 - 1  # keep Steel Plate L7 if they had progressed through it
+            await db.users.update_one(
+                {"id": victim_id},
+                {"$set": {"armour_level": drop_to, "armour_owned_level_max": drop_to}},
+            )
+            killer_doc = await db.users.find_one({"id": killer_id}, {"_id": 0, "armour_level": 1, "armour_owned_level_max": 1})
+            k_level = int((killer_doc or {}).get("armour_level") or 0)
+            k_owned = int((killer_doc or {}).get("armour_owned_level_max") or 0)
+            if k_level < loot_lv8 and k_owned < loot_lv8:
+                await db.users.update_one(
+                    {"id": killer_id},
+                    {"$set": {"armour_level": loot_lv8, "armour_owned_level_max": loot_lv8}},
+                )
+        elif victim_armour >= loot_lv or victim_owned_max >= loot_lv:
             drop_to = loot_lv - 1
             await db.users.update_one(
                 {"id": victim_id},
@@ -3842,6 +3913,22 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         except Exception:
             logger.exception(
                 "reclaimable vault relic kill reclaim failed victim=%s killer=%s",
+                victim_id,
+                killer_id,
+            )
+        # Commissioner's Pardon: up to 2 transfers then back to loot pool
+        try:
+            from utils.commissioners_pardon import handle_pardon_on_kill
+
+            await handle_pardon_on_kill(
+                db,
+                victim_id=victim_id,
+                killer_id=killer_id,
+                send_notification=send_notification,
+            )
+        except Exception:
+            logger.exception(
+                "commissioners_pardon kill transfer failed victim=%s killer=%s",
                 victim_id,
                 killer_id,
             )

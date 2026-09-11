@@ -82,6 +82,7 @@ const ROUTE_PRELOADERS = {
       prefetchUsersOnlineData({ force: false }).catch(() => null),
     ]),
   '/game/help-desk': () => import('../pages/Game/HelpDesk'),
+  '/game/system-ai': () => import('../pages/Game/SystemAiPage'),
   '/game/guide': () => import('../pages/Game/GameGuideChat'),
   '/game/dead-alive': () => import('../pages/Game/DeadAlive'),
   '/game/daily-rewards': () => import('../pages/Game/DailyRewards'),

@@ -77,6 +77,7 @@ const DeadAlive = lazy(() => import("./pages/Game/DeadAlive"));
 const FamilyPage = lazy(() => import("./pages/Game/FamilyPage"));
 const FamilyProfilePage = lazy(() => import("./pages/Game/FamilyProfilePage"));
 const HelpDesk = lazy(() => import("./pages/Game/HelpDesk"));
+const SystemAiPage = lazy(() => import("./pages/Game/SystemAiPage"));
 const GameGuideChat = lazy(() => import("./pages/Game/GameGuideChat"));
 const Leaderboard = lazy(() => import("./pages/Game/Leaderboard"));
 const Ranking = lazy(() => import("./pages/Game/Ranking"));
@@ -1169,6 +1170,12 @@ function App() {
               path="/game/help-desk"
               element={
               <HelpDesk />
+              }
+            />
+            <Route
+              path="/game/system-ai"
+              element={
+              <SystemAiPage />
               }
             />
             <Route

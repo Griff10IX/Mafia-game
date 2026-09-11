@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown, Star, Eraser, Eye, Bot } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown, Star, Eraser, Eye, Bot, Crosshair } from 'lucide-react';
 import api, { apiGetWithResumeRetries, getApiErrorMessage, isTransientResumeLoadError, shouldSuppressResumeNetworkToast } from '../../utils/api';
 import {
   apiPostWithCivilianProtectionConfirm,
@@ -1360,6 +1360,67 @@ const TopCarsCard = ({ topCars, showCars }) => {
         })}
       </div>
       <div className="prof-art-line text-primary mx-3" />
+    </div>
+  );
+};
+
+/** Drag / swipe 360° turntable for exclusive BAR showcase (~12 yaw frames). */
+const ProfileWeaponShowcase = ({ weapon }) => {
+  const frames = Math.max(1, Number(weapon?.frames) || 12);
+  const base = (weapon?.image_base || '/images/weapons/weapon_loot_bar').replace(/\/$/, '');
+  const [idx, setIdx] = useState(0);
+  const dragRef = useRef({ active: false, startX: 0, startIdx: 0 });
+
+  const frameSrc = `${base}/${String(((idx % frames) + frames) % frames).padStart(2, '0')}.png`;
+
+  const onPointerDown = (e) => {
+    dragRef.current = { active: true, startX: e.clientX ?? e.touches?.[0]?.clientX ?? 0, startIdx: idx };
+    try {
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    } catch (_) {
+      /* ignore */
+    }
+  };
+  const onPointerMove = (e) => {
+    if (!dragRef.current.active) return;
+    const x = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+    const dx = x - dragRef.current.startX;
+    const step = Math.round(dx / 28);
+    setIdx((((dragRef.current.startIdx - step) % frames) + frames) % frames);
+  };
+  const onPointerUp = () => {
+    dragRef.current.active = false;
+  };
+
+  if (!weapon) return null;
+  return (
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-amber-500/30 prof-card prof-fade-in mobile-panel mb-3`} style={{ animationDelay: '0.04s' }}>
+      <div className="h-px bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-amber-500/10 border-b border-amber-500/25 flex items-center justify-center gap-1">
+        <Crosshair size={12} className="text-amber-400" />
+        <h3 className="text-[10px] md:text-[11px] font-heading font-bold text-amber-300 uppercase tracking-[0.12em]">
+          {weapon.name || 'Browning Automatic Rifle M1918A2'}
+        </h3>
+      </div>
+      <div
+        className="relative aspect-[16/10] bg-gradient-to-b from-zinc-900 to-black cursor-ew-resize select-none touch-pan-y"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        role="img"
+        aria-label="Drag to rotate weapon"
+      >
+        <img
+          src={frameSrc}
+          alt={weapon.name || 'Exclusive rifle'}
+          className="absolute inset-0 w-full h-full object-contain p-3 pointer-events-none"
+          draggable={false}
+        />
+        <div className="absolute bottom-2 left-0 right-0 text-center text-[9px] font-heading text-mutedForeground">
+          Drag to rotate · {idx + 1}/{frames}
+        </div>
+      </div>
     </div>
   );
 };
@@ -3573,6 +3634,13 @@ export default function Profile() {
                   <p className="text-[11px] text-zinc-200 font-heading mt-0.5">
                     House intelligence
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/game/system-ai')}
+                    className="mt-2 inline-flex items-center px-3 py-1.5 rounded-md bg-amber-500/90 hover:bg-amber-400 text-black text-[10px] font-heading font-bold uppercase tracking-wide"
+                  >
+                    File a report
+                  </button>
                 </div>
               </div>
             ) : null}
@@ -3581,6 +3649,9 @@ export default function Profile() {
               spotifyEmbedUrl={profile.spotify_embed_url}
               spotifyUrl={profile.spotify_url}
             />
+            ) : null}
+            {profile.profile_weapon ? (
+              <ProfileWeaponShowcase weapon={profile.profile_weapon} />
             ) : null}
             <ProfileInfoCard 
               profile={profile} 

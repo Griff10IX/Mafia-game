@@ -120,5 +120,16 @@
     "price_money": null,
     "price_points": null,
     "loot_exclusive": true
+  },
+  {
+    "id": "weapon_loot_bar",
+    "name": "Browning Automatic Rifle M1918A2",
+    "description": "Loot-exclusive military BAR — the full-auto rifle the civilian Colt Monitor was cut down from. Not sold anywhere.",
+    "damage": 175,
+    "bullets_needed": 30,
+    "rank_required": 11,
+    "price_money": null,
+    "price_points": null,
+    "loot_exclusive": true
   }
 ]
