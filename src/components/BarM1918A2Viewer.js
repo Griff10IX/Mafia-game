@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 
-const GUN_BASE = new THREE.Vector3(-0.34, 0.02, 0);
-const TARGET_CENTRE = new THREE.Vector3(2.7, 0.32, 0);
+const GUN_BASE = new THREE.Vector3(-0.18, 0.08, 0);
+const TARGET_CENTRE = new THREE.Vector3(4.2, 0.28, 0);
 const TARGET_NORMAL = GUN_BASE.clone().sub(TARGET_CENTRE).normalize();
 const TARGET_ROTATION = new THREE.Quaternion().setFromUnitVectors(
   new THREE.Vector3(0, 0, 1),
@@ -34,19 +34,25 @@ function woodMat() {
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(2.2, 1);
-  return new THREE.MeshStandardMaterial({
+  return new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
     map: texture,
-    roughness: 0.64,
+    bumpMap: texture,
+    bumpScale: 0.012,
+    roughness: 0.58,
     metalness: 0.04,
+    clearcoat: 0.18,
+    clearcoatRoughness: 0.72,
   });
 }
 
 function steelMat(hex = 0x1c1f24, extra = {}) {
-  return new THREE.MeshStandardMaterial({
+  return new THREE.MeshPhysicalMaterial({
     color: hex,
-    roughness: 0.32,
-    metalness: 0.88,
+    roughness: 0.29,
+    metalness: 0.9,
+    clearcoat: 0.12,
+    clearcoatRoughness: 0.5,
     ...extra,
   });
 }
@@ -56,10 +62,18 @@ export function buildBarM1918A2() {
   const gun = new THREE.Group();
   gun.name = "bar_m1918a2";
   const wood = woodMat();
-  const blued = steelMat(0x303740, { roughness: 0.24 });
-  const steel = steelMat(0x484f57, { roughness: 0.28 });
-  const magSteel = steelMat(0x262c32, { roughness: 0.38 });
-  const brass = steelMat(0xb08a4a, { metalness: 0.75, roughness: 0.38 });
+  const blued = steelMat(0x252b31, { roughness: 0.2 });
+  const bluedEdge = steelMat(0x3d454d, { roughness: 0.25 });
+  const steel = steelMat(0x555d65, { roughness: 0.26 });
+  const black = steelMat(0x111519, { roughness: 0.38 });
+  const magSteel = steelMat(0x30363c, { roughness: 0.34 });
+  const brass = steelMat(0xa9813f, { metalness: 0.76, roughness: 0.36 });
+  const leather = new THREE.MeshPhysicalMaterial({
+    color: 0x4b2618,
+    roughness: 0.94,
+    metalness: 0,
+    clearcoat: 0.05,
+  });
 
   const add = (geom, mat, pos, rot = null, parent = gun) => {
     const m = new THREE.Mesh(geom, mat);
@@ -72,128 +86,169 @@ export function buildBarM1918A2() {
   };
   const rounded = (size, radius = 0.012, segments = 4) =>
     new RoundedBoxGeometry(size[0], size[1], size[2], segments, radius);
+  const extrudeSide = (shape, depth, material, bevel = 0.008, name = "") => {
+    const mesh = add(
+      new THREE.ExtrudeGeometry(shape, {
+        depth,
+        bevelEnabled: true,
+        bevelSegments: 4,
+        bevelSize: bevel,
+        bevelThickness: bevel,
+        curveSegments: 18,
+      }),
+      material,
+      [0, 0, -depth / 2],
+    );
+    mesh.name = name;
+    return mesh;
+  };
 
-  // Sculpted walnut buttstock
+  // Sculpted walnut buttstock copied from the real M1918A2 side profile.
   const stockShape = new THREE.Shape();
-  stockShape.moveTo(-0.72, -0.045);
-  stockShape.bezierCurveTo(-0.69, 0.015, -0.68, 0.072, -0.62, 0.075);
-  stockShape.lineTo(-0.43, 0.07);
-  stockShape.bezierCurveTo(-0.37, 0.06, -0.34, 0.025, -0.35, -0.01);
-  stockShape.lineTo(-0.42, -0.055);
-  stockShape.bezierCurveTo(-0.52, -0.075, -0.63, -0.08, -0.72, -0.045);
-  const stock = add(
-    new THREE.ExtrudeGeometry(stockShape, {
-      depth: 0.052,
-      bevelEnabled: true,
-      bevelSegments: 3,
-      bevelSize: 0.008,
-      bevelThickness: 0.006,
-      curveSegments: 12,
-    }),
-    wood,
-    [0, 0, -0.026],
-  );
-  stock.name = "walnut_stock";
-  add(rounded([0.055, 0.125, 0.058], 0.008), steel, [-0.71, -0.002, 0]); // butt plate
-  add(rounded([0.17, 0.07, 0.052], 0.012), wood, [-0.30, 0.005, 0], [0, 0, -0.08]); // wrist
-  add(rounded([0.12, 0.028, 0.038], 0.006), blued, [-0.285, 0.052, 0]); // receiver tang
+  stockShape.moveTo(-1.08, -0.12);
+  stockShape.bezierCurveTo(-1.07, -0.01, -1.04, 0.14, -0.97, 0.18);
+  stockShape.bezierCurveTo(-0.86, 0.205, -0.70, 0.20, -0.58, 0.18);
+  stockShape.lineTo(-0.46, 0.13);
+  stockShape.lineTo(-0.40, 0.07);
+  stockShape.lineTo(-0.43, -0.01);
+  stockShape.bezierCurveTo(-0.55, -0.07, -0.71, -0.12, -0.90, -0.15);
+  stockShape.bezierCurveTo(-0.99, -0.17, -1.05, -0.16, -1.08, -0.12);
+  extrudeSide(stockShape, 0.13, wood, 0.014, "walnut_stock");
+  const buttShape = new THREE.Shape();
+  buttShape.moveTo(-1.095, -0.13);
+  buttShape.bezierCurveTo(-1.12, -0.03, -1.11, 0.11, -1.075, 0.18);
+  buttShape.lineTo(-1.04, 0.17);
+  buttShape.lineTo(-1.045, -0.14);
+  extrudeSide(buttShape, 0.142, black, 0.004, "butt_plate");
+  add(rounded([0.20, 0.075, 0.105], 0.016, 6), wood, [-0.41, 0.065, 0], [0, 0, -0.12]);
+  add(rounded([0.17, 0.025, 0.075], 0.005), blued, [-0.36, 0.145, 0]);
 
-  // Receiver
-  add(rounded([0.31, 0.09, 0.066], 0.009), blued, [-0.07, 0.025, 0]);
-  add(rounded([0.20, 0.047, 0.056], 0.008), blued, [-0.03, 0.088, 0]);
-  add(rounded([0.05, 0.04, 0.05], 0.006), steel, [-0.19, 0.075, 0.0]); // rear sight base
-  add(new THREE.BoxGeometry(0.006, 0.028, 0.018), steel, [-0.18, 0.08, 0]);
+  // Forged receiver with the BAR's characteristic raised top and rear shoulder.
+  const receiverShape = new THREE.Shape();
+  receiverShape.moveTo(-0.44, -0.015);
+  receiverShape.lineTo(-0.43, 0.15);
+  receiverShape.lineTo(-0.31, 0.18);
+  receiverShape.lineTo(-0.26, 0.235);
+  receiverShape.lineTo(-0.08, 0.24);
+  receiverShape.lineTo(-0.035, 0.205);
+  receiverShape.lineTo(0.14, 0.195);
+  receiverShape.lineTo(0.17, 0.13);
+  receiverShape.lineTo(0.14, -0.025);
+  receiverShape.lineTo(-0.13, -0.04);
+  receiverShape.lineTo(-0.20, -0.005);
+  receiverShape.closePath();
+  extrudeSide(receiverShape, 0.15, blued, 0.01, "forged_receiver");
+  add(rounded([0.33, 0.018, 0.158], 0.004), bluedEdge, [-0.04, 0.203, 0]);
 
-  // Charging handle
-  add(new THREE.CylinderGeometry(0.006, 0.006, 0.05, 8), steel, [-0.04, 0.055, 0.032], [Math.PI / 2, 0, 0]);
-  add(new THREE.SphereGeometry(0.01, 8, 8), steel, [-0.04, 0.055, 0.058]);
+  // Ejection port, bolt face and stamped side plate.
+  add(rounded([0.12, 0.052, 0.004], 0.005), black, [-0.095, 0.145, 0.078]);
+  add(rounded([0.06, 0.032, 0.005], 0.004), steel, [-0.07, 0.145, 0.081]);
+  add(rounded([0.18, 0.085, 0.004], 0.006), bluedEdge, [0.045, 0.07, 0.078]);
 
-  // Pistol-less BAR grip / trigger group
-  add(rounded([0.075, 0.10, 0.04], 0.009), wood, [-0.215, -0.058, 0], [0, 0, 0.28]);
-  add(new THREE.BoxGeometry(0.012, 0.028, 0.008), steel, [-0.16, -0.02, 0]); // trigger
-  add(new THREE.TorusGeometry(0.022, 0.0035, 8, 16, Math.PI), steel, [-0.155, -0.038, 0], [Math.PI / 2, 0, Math.PI]);
+  // Rear sight block and aperture.
+  add(rounded([0.072, 0.045, 0.09], 0.006), steel, [-0.26, 0.235, 0]);
+  add(new THREE.BoxGeometry(0.014, 0.07, 0.025), steel, [-0.26, 0.285, 0]);
+  add(new THREE.TorusGeometry(0.017, 0.004, 10, 28), steel, [-0.26, 0.323, 0], [0, Math.PI / 2, 0]);
 
-  // Magazine
-  add(rounded([0.052, 0.17, 0.038], 0.006), magSteel, [0.02, -0.075, 0], [0.10, 0, 0]);
-  add(rounded([0.05, 0.018, 0.039], 0.004), magSteel, [0.012, -0.163, 0]);
-  for (let i = 0; i < 5; i += 1) {
-    add(new THREE.BoxGeometry(0.047, 0.003, 0.031), steel, [0.02, -0.105 - i * 0.022, 0]);
-  }
+  // Charging handle and fire selector.
+  add(new THREE.CylinderGeometry(0.009, 0.009, 0.085, 16), steel, [-0.18, 0.13, 0.095], [Math.PI / 2, 0, 0]);
+  add(new THREE.CylinderGeometry(0.017, 0.017, 0.035, 18), black, [-0.18, 0.13, 0.145], [Math.PI / 2, 0, 0]);
+  add(new THREE.CylinderGeometry(0.012, 0.012, 0.018, 16), steel, [-0.32, 0.075, 0.086], [Math.PI / 2, 0, 0]);
+  add(new THREE.BoxGeometry(0.045, 0.009, 0.014), steel, [-0.30, 0.085, 0.096], [0, 0, 0.45]);
 
-  // Forend
-  add(rounded([0.25, 0.064, 0.058], 0.016, 6), wood, [0.19, -0.008, 0]);
-  add(rounded([0.075, 0.05, 0.052], 0.012), wood, [0.34, 0.002, 0]);
+  // Trigger, guard and grip wrist.
+  const guardCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(-0.29, -0.015, 0),
+    new THREE.Vector3(-0.25, -0.115, 0),
+    new THREE.Vector3(-0.12, -0.12, 0),
+    new THREE.Vector3(-0.08, -0.025, 0),
+  ]);
+  add(new THREE.TubeGeometry(guardCurve, 30, 0.008, 10, false), bluedEdge, [0, 0, 0.055]);
+  add(new THREE.TubeGeometry(guardCurve, 30, 0.008, 10, false), bluedEdge, [0, 0, -0.055]);
+  add(new THREE.CylinderGeometry(0.006, 0.006, 0.09, 10), steel, [-0.19, -0.045, 0], [0, 0, 0.30]);
+
+  // Tapered twenty-round box magazine with pressed ribs.
+  const magShape = new THREE.Shape();
+  magShape.moveTo(-0.12, -0.025);
+  magShape.lineTo(0.015, -0.025);
+  magShape.lineTo(0.005, -0.36);
+  magShape.lineTo(-0.105, -0.37);
+  magShape.closePath();
+  extrudeSide(magShape, 0.105, magSteel, 0.007, "box_magazine");
   for (let i = 0; i < 6; i += 1) {
-    add(new THREE.BoxGeometry(0.003, 0.026, 0.061), magSteel, [0.095 + i * 0.034, -0.032, 0]);
+    add(rounded([0.105, 0.008, 0.004], 0.002), bluedEdge, [-0.05, -0.09 - i * 0.045, 0.056]);
+    add(rounded([0.105, 0.008, 0.004], 0.002), bluedEdge, [-0.05, -0.09 - i * 0.045, -0.056]);
   }
 
-  // Barrel (long)
-  const barrel = add(new THREE.CylinderGeometry(0.012, 0.015, 0.62, 24), blued, [0.65, 0.028, 0], [0, 0, Math.PI / 2]);
+  // Full walnut fore-end, tapered toward the gas block.
+  const foreShape = new THREE.Shape();
+  foreShape.moveTo(0.13, 0.025);
+  foreShape.lineTo(0.18, 0.155);
+  foreShape.bezierCurveTo(0.34, 0.17, 0.55, 0.16, 0.70, 0.125);
+  foreShape.lineTo(0.68, 0.025);
+  foreShape.closePath();
+  extrudeSide(foreShape, 0.145, wood, 0.014, "walnut_fore_end");
+  for (let i = 0; i < 5; i += 1) {
+    add(new THREE.BoxGeometry(0.008, 0.052, 0.151), black, [0.23 + i * 0.09, 0.044, 0]);
+  }
+
+  // Heavy barrel and lower gas system.
+  const barrel = add(new THREE.CylinderGeometry(0.021, 0.026, 0.78, 36), blued, [1.04, 0.175, 0], [0, 0, Math.PI / 2]);
   barrel.name = "barrel";
-  add(new THREE.CylinderGeometry(0.016, 0.016, 0.04, 12), steel, [0.32, 0.028, 0], [0, 0, Math.PI / 2]); // barrel band
-  add(new THREE.CylinderGeometry(0.018, 0.014, 0.075, 20), steel, [0.985, 0.028, 0], [0, 0, Math.PI / 2]); // flash hider / muzzle
+  add(new THREE.CylinderGeometry(0.029, 0.029, 0.07, 32), steel, [0.69, 0.175, 0], [0, 0, Math.PI / 2]);
+  add(new THREE.CylinderGeometry(0.031, 0.026, 0.13, 32), steel, [1.49, 0.175, 0], [0, 0, Math.PI / 2]);
+  add(new THREE.CylinderGeometry(0.017, 0.019, 0.76, 28), bluedEdge, [1.03, 0.075, 0], [0, 0, Math.PI / 2]);
+  add(new THREE.CylinderGeometry(0.034, 0.034, 0.17, 32), blued, [0.75, 0.075, 0], [0, 0, Math.PI / 2]);
+  add(rounded([0.08, 0.12, 0.12], 0.012), bluedEdge, [1.35, 0.12, 0]);
   const muzzle = new THREE.Object3D();
   muzzle.name = "muzzle";
-  muzzle.position.set(1.025, 0.028, 0);
+  muzzle.position.set(1.57, 0.175, 0);
   gun.add(muzzle);
 
-  // Gas tube above barrel
-  add(new THREE.CylinderGeometry(0.007, 0.007, 0.47, 16), steel, [0.59, 0.055, 0], [0, 0, Math.PI / 2]);
-  add(new THREE.CylinderGeometry(0.018, 0.018, 0.18, 18), blued, [0.52, 0.054, 0], [0, 0, Math.PI / 2]);
-  add(rounded([0.05, 0.026, 0.03], 0.005), steel, [0.79, 0.05, 0]);
-  for (let x = 0.43; x < 0.95; x += 0.035) {
-    add(new THREE.TorusGeometry(0.015, 0.002, 6, 18), steel, [x, 0.028, 0], [0, Math.PI / 2, 0]);
+  // Barrel cooling collars and front sight ears.
+  for (let x = 0.76; x < 1.42; x += 0.055) {
+    add(new THREE.TorusGeometry(0.025, 0.0022, 8, 28), bluedEdge, [x, 0.175, 0], [0, Math.PI / 2, 0]);
   }
+  add(rounded([0.04, 0.10, 0.035], 0.006), steel, [1.37, 0.225, 0]);
+  add(new THREE.BoxGeometry(0.008, 0.07, 0.012), steel, [1.37, 0.29, 0]);
+  add(new THREE.TorusGeometry(0.025, 0.005, 10, 30), steel, [1.37, 0.32, 0], [0, Math.PI / 2, 0]);
 
-  // Front sight
-  add(rounded([0.022, 0.038, 0.016], 0.004), steel, [0.91, 0.055, 0]);
-  add(new THREE.BoxGeometry(0.004, 0.024, 0.004), steel, [0.91, 0.085, 0]);
-  add(new THREE.TorusGeometry(0.014, 0.003, 8, 20), steel, [0.91, 0.092, 0], [0, Math.PI / 2, 0]);
-
-  // Receiver pins, selector and ejection port
-  [-0.16, -0.08, 0.01].forEach((x) => {
-    add(new THREE.CylinderGeometry(0.007, 0.007, 0.056, 12), steel, [x, 0.03, 0], [Math.PI / 2, 0, 0]);
+  // Receiver pins.
+  [-0.34, -0.22, -0.04, 0.08].forEach((x) => {
+    add(new THREE.CylinderGeometry(0.011, 0.011, 0.158, 20), steel, [x, 0.08, 0], [Math.PI / 2, 0, 0]);
   });
-  add(new THREE.BoxGeometry(0.082, 0.026, 0.003), steelMat(0x050607), [-0.03, 0.045, 0.027]);
-  add(new THREE.BoxGeometry(0.055, 0.012, 0.004), steelMat(0xa0a6ac), [-0.035, 0.046, 0.030]);
-  add(new THREE.CylinderGeometry(0.004, 0.004, 0.04, 8), steel, [-0.19, 0.025, 0.03], [Math.PI / 2, 0, 0]);
 
-  // Carry handle
-  add(new THREE.TorusGeometry(0.035, 0.004, 8, 16, Math.PI), steel, [0.12, 0.09, 0], [Math.PI / 2, 0, 0]);
+  // M1918A2 carry handle: steel arm and turned walnut grip.
+  add(rounded([0.035, 0.23, 0.035], 0.007), bluedEdge, [0.72, 0.26, 0], [0, 0, -0.15]);
+  add(new THREE.CylinderGeometry(0.045, 0.045, 0.16, 32), wood, [0.70, 0.43, 0], [Math.PI / 2, 0, 0]);
+  add(new THREE.CylinderGeometry(0.015, 0.015, 0.19, 20), steel, [0.70, 0.43, 0], [Math.PI / 2, 0, 0]);
 
-  // Bipod (deployed)
-  const bipod = new THREE.Group();
-  const legGeo = new THREE.CylinderGeometry(0.005, 0.006, 0.22, 8);
-  const legL = new THREE.Mesh(legGeo, steel);
-  legL.position.set(0.34, -0.12, 0.06);
-  legL.rotation.z = 0.35;
-  legL.rotation.x = 0.45;
-  bipod.add(legL);
-  const legR = new THREE.Mesh(legGeo, steel);
-  legR.position.set(0.34, -0.12, -0.06);
-  legR.rotation.z = 0.35;
-  legR.rotation.x = -0.45;
-  bipod.add(legR);
-  const footL = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 8), steel);
-  footL.position.set(0.38, -0.22, 0.11);
-  bipod.add(footL);
-  const footR = footL.clone();
-  footR.position.set(0.38, -0.22, -0.11);
-  bipod.add(footR);
-  gun.add(bipod);
+  // M1918A2 bipod with hinge, telescoping legs and broad stamped feet.
+  add(new THREE.CylinderGeometry(0.055, 0.055, 0.18, 32), bluedEdge, [1.35, 0.11, 0], [Math.PI / 2, 0, 0]);
+  const legMaterial = steelMat(0x3b4249, { roughness: 0.34 });
+  const legGeo = new THREE.CylinderGeometry(0.016, 0.021, 0.68, 18);
+  const makeLeg = (zSign) => {
+    const leg = add(legGeo, legMaterial, [1.20, -0.20, zSign * 0.25], [zSign * 0.43, 0, -0.34]);
+    add(new THREE.CylinderGeometry(0.021, 0.021, 0.20, 18), black, [1.31, 0.055, zSign * 0.065], [zSign * 0.43, 0, -0.34]);
+    const foot = add(rounded([0.18, 0.025, 0.075], 0.012, 6), legMaterial, [1.08, -0.52, zSign * 0.47], [0, zSign * 0.15, 0]);
+    leg.name = `bipod_leg_${zSign > 0 ? "right" : "left"}`;
+    foot.name = `bipod_foot_${zSign > 0 ? "right" : "left"}`;
+  };
+  makeLeg(1);
+  makeLeg(-1);
 
-  // Sling swivels
-  add(new THREE.TorusGeometry(0.01, 0.0025, 6, 10), brass, [-0.48, -0.055, 0], [0, Math.PI / 2, 0]);
-  add(new THREE.TorusGeometry(0.01, 0.0025, 6, 10), brass, [0.28, -0.04, 0], [0, Math.PI / 2, 0]);
+  // Leather sling, swivels and brass fittings.
+  add(new THREE.TorusGeometry(0.018, 0.004, 8, 18), brass, [-0.84, -0.12, 0], [0, Math.PI / 2, 0]);
+  add(new THREE.TorusGeometry(0.018, 0.004, 8, 18), brass, [0.57, 0.015, 0], [0, Math.PI / 2, 0]);
   const slingCurve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(-0.53, -0.055, -0.02),
-    new THREE.Vector3(-0.25, -0.24, -0.045),
-    new THREE.Vector3(0.12, -0.25, -0.05),
-    new THREE.Vector3(0.30, -0.045, -0.02),
+    new THREE.Vector3(-0.84, -0.12, -0.04),
+    new THREE.Vector3(-0.52, -0.42, -0.08),
+    new THREE.Vector3(0.16, -0.44, -0.09),
+    new THREE.Vector3(0.57, 0.015, -0.04),
   ]);
   add(
-    new THREE.TubeGeometry(slingCurve, 36, 0.005, 7, false),
-    new THREE.MeshStandardMaterial({ color: 0x352216, roughness: 1 }),
+    new THREE.TubeGeometry(slingCurve, 72, 0.011, 10, false),
+    leather,
     [0, 0, 0],
   );
 
@@ -204,13 +259,13 @@ export function buildBarM1918A2() {
 function buildStudio() {
   const root = new THREE.Group();
   const tableWood = new THREE.MeshStandardMaterial({ color: 0x3a2416, roughness: 0.55, metalness: 0.08 });
-  const table = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.58, 0.06, 48), tableWood);
-  table.position.y = -0.26;
+  const table = new THREE.Mesh(new THREE.CylinderGeometry(1.38, 1.42, 0.10, 72), tableWood);
+  table.position.y = -0.57;
   table.receiveShadow = true;
   table.castShadow = true;
   root.add(table);
-  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.42, 24), tableWood);
-  pedestal.position.y = -0.5;
+  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.42, 0.58, 36), tableWood);
+  pedestal.position.y = -0.9;
   pedestal.receiveShadow = true;
   root.add(pedestal);
 
@@ -219,12 +274,12 @@ function buildStudio() {
     new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 0.95, metalness: 0.05 }),
   );
   floor.rotation.x = -Math.PI / 2;
-  floor.position.y = -0.72;
+  floor.position.y = -1.2;
   floor.receiveShadow = true;
   root.add(floor);
 
   const targetBoard = new THREE.Mesh(
-    new THREE.CircleGeometry(0.38, 48),
+    new THREE.CircleGeometry(0.62, 64),
     new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.9 }),
   );
   targetBoard.quaternion.copy(TARGET_ROTATION);
@@ -232,7 +287,7 @@ function buildStudio() {
   targetBoard.name = "target";
   root.add(targetBoard);
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.11, 0.22, 48),
+    new THREE.RingGeometry(0.16, 0.34, 64),
     new THREE.MeshBasicMaterial({ color: 0xb42318, side: THREE.DoubleSide }),
   );
   ring.quaternion.copy(TARGET_ROTATION);
@@ -240,7 +295,7 @@ function buildStudio() {
   ring.position.addScaledVector(TARGET_NORMAL, 0.004);
   root.add(ring);
   const bull = new THREE.Mesh(
-    new THREE.CircleGeometry(0.055, 32),
+    new THREE.CircleGeometry(0.085, 40),
     new THREE.MeshBasicMaterial({ color: 0x1a1208 }),
   );
   bull.quaternion.copy(TARGET_ROTATION);
@@ -249,12 +304,12 @@ function buildStudio() {
   root.add(bull);
 
   const targetPostMaterial = new THREE.MeshStandardMaterial({ color: 0x49301e, roughness: 0.88 });
-  const post = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.78, 0.05), targetPostMaterial);
-  post.position.set(TARGET_CENTRE.x, -0.16, TARGET_CENTRE.z);
+  const post = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.1, 0.07), targetPostMaterial);
+  post.position.set(TARGET_CENTRE.x, -0.30, TARGET_CENTRE.z);
   post.castShadow = true;
   root.add(post);
-  const base = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.035, 0.45), targetPostMaterial);
-  base.position.set(TARGET_CENTRE.x, -0.56, TARGET_CENTRE.z);
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.045, 0.58), targetPostMaterial);
+  base.position.set(TARGET_CENTRE.x, -0.86, TARGET_CENTRE.z);
   base.castShadow = true;
   root.add(base);
 
@@ -286,11 +341,11 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
     scene.fog = new THREE.Fog(0x17191d, 6, 12);
 
     const camera = new THREE.PerspectiveCamera(40, 16 / 10, 0.05, 40);
-    const orbit = { yaw: 0.06, pitch: 0.18, dist: 3.65 };
-    const focus = new THREE.Vector3(0.45, 0.03, -0.24);
+    const orbit = { yaw: 0.06, pitch: 0.16, dist: 4.25 };
+    const focus = new THREE.Vector3(0.12, 0.02, 0);
     const applyCam = () => {
       if (modeRef.current === "aim") {
-        camera.position.set(-1.52, 0.42, 1.18);
+        camera.position.set(-1.72, 0.38, 0.42);
         camera.lookAt(TARGET_CENTRE);
         return;
       }
@@ -331,11 +386,11 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
     const gun = buildBarM1918A2();
     const gunBase = GUN_BASE.clone();
     gun.position.copy(gunBase);
-    gun.scale.setScalar(1.22);
+    gun.scale.setScalar(1);
     scene.add(gun);
 
     const muzzleFlash = new THREE.Mesh(
-      new THREE.ConeGeometry(0.04, 0.14, 10, 1, true),
+      new THREE.ConeGeometry(0.075, 0.24, 14, 1, true),
       new THREE.MeshBasicMaterial({ color: 0xffcc66, transparent: true, opacity: 0.9, side: THREE.DoubleSide }),
     );
     muzzleFlash.rotation.z = -Math.PI / 2;
@@ -350,7 +405,7 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
     scene.add(tracer);
 
     const casings = [];
-    const casingGeo = new THREE.CylinderGeometry(0.004, 0.004, 0.018, 6);
+    const casingGeo = new THREE.CylinderGeometry(0.009, 0.009, 0.038, 10);
     const casingMat = steelMat(0xc4a35a, { metalness: 0.7, roughness: 0.4 });
 
     const drag = { on: false, moved: false, x: 0, y: 0, yaw: orbit.yaw, pitch: orbit.pitch };
@@ -435,7 +490,7 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
     const onContextMenu = (e) => e.preventDefault();
     const onWheel = (e) => {
       e.preventDefault();
-      orbit.dist = Math.max(1.15, Math.min(3.6, orbit.dist + e.deltaY * 0.0022));
+      orbit.dist = Math.max(2.0, Math.min(6.2, orbit.dist + e.deltaY * 0.003));
       applyCam();
     };
 
@@ -499,8 +554,8 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
       if (!shotRay.intersectPlane(targetPlane, hit)) hit.copy(origin).add(dir.multiplyScalar(4));
       tracerGeo.setFromPoints([origin, hit]);
       tracerMat.opacity = 0.85;
-      const targetDistance = Math.hypot(hit.y - targetCentre.y, hit.z - targetCentre.z);
-      if (targetDistance <= 0.38) {
+      const targetDistance = hit.distanceTo(targetCentre);
+      if (targetDistance <= 0.62) {
         const hole = new THREE.Mesh(
           new THREE.CircleGeometry(0.009 + Math.random() * 0.004, 10),
           new THREE.MeshBasicMaterial({ color: 0x090909, side: THREE.DoubleSide }),
@@ -615,14 +670,7 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
     <div className={className} style={{ position: "relative", width: "100%", height: "100%" }}>
       <div
         ref={wrapRef}
-        className={`absolute inset-0 touch-none ${mode === "aim" ? "cursor-crosshair" : "pointer-events-none"}`}
-      />
-      <iframe
-        title="Realistic Browning Automatic Rifle M1918A2 3D model"
-        src="https://sketchfab.com/models/1213683e58b14dd89fd4520489c7b732/embed?autostart=1&ui_theme=dark&ui_infos=0&ui_help=0&ui_settings=0&ui_annotations=0&ui_watermark_link=0"
-        className={`absolute inset-0 w-full h-full border-0 bg-[#17191d] ${mode === "inspect" ? "block" : "hidden"}`}
-        allow="autoplay; fullscreen; xr-spatial-tracking"
-        allowFullScreen
+        className={`absolute inset-0 touch-none ${mode === "aim" ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}`}
       />
       <div
         ref={crosshairRef}
@@ -668,21 +716,11 @@ export default function BarM1918A2Viewer({ className = "", onShot = null }) {
           </button>
         ) : null}
       </div>
-      <div className="absolute top-2 left-2 right-2 pointer-events-none text-center text-[9px] font-heading text-mutedForeground">
+      <div className="absolute z-10 top-2 left-2 right-2 pointer-events-none text-center text-[9px] font-heading text-mutedForeground">
         {mode === "inspect"
-          ? "Real M1918A2 model · drag freely for full 360° inspection · scroll to zoom"
+          ? "Original high-detail M1918A2 model · drag freely for full 360° inspection · scroll to zoom"
           : "Target is directly down-range · move to aim · click / Fire / Space to shoot"}
       </div>
-      {mode === "inspect" ? (
-        <a
-          href="https://sketchfab.com/3d-models/bar-m1918-a2-game-ready-rigged-1213683e58b14dd89fd4520489c7b732"
-          target="_blank"
-          rel="noreferrer"
-          className="absolute z-20 right-2 bottom-2 text-[8px] text-white/50 hover:text-white/80 font-heading"
-        >
-          M1918A2 model by Peanut_Butcher · CC BY 4.0
-        </a>
-      ) : null}
     </div>
   );
 }
