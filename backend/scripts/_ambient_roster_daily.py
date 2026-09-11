@@ -85,75 +85,107 @@ LAST = [
     "Lee", "Kim", "Park", "Nguyen", "Patel", "Singh", "Khan", "Ali", "Chen", "Wang",
 ]
 
-# Single-token forum / chat handles (no surname needed)
+# Single-token forum / chat handles
 HANDLES = [
     "pulse", "atom", "fruitcake", "shadow", "ghost", "raven", "wolf", "fox", "hawk", "crow",
     "blaze", "frost", "storm", "thunder", "spark", "ember", "ash", "smoke", "vapor", "neon",
-    "pixel", "byte", "nova", "orbit", "comet", "lunar", "solar", "cosmic", "void", "null",
-    "echo", "static", "signal", "radio", "wave", "drift", "glide", "surge", "rush", "dash",
-    "ace", "king", "rook", "pawn", "knight", "bishop", "check", "mate", "bluff", "fold",
-    "cash", "chips", "vault", "safe", "lock", "key", "cipher", "code", "hack", "glitch",
-    "bug", "patch", "mod", "skin", "loot", "crate", "drop", "spawn", "respawn", "lag",
-    "ping", "packet", "proxy", "relay", "node", "hub", "grid", "matrix", "core", "shell",
-    "root", "guest", "anon", "incog", "masked", "veiled", "cloak",
-    "dagger", "blade", "razor", "spike", "thorn", "needle", "bullet", "shells", "clip", "mag",
-    "diesel", "nitro", "turbo", "drift", "skid", "burnout", "wheelie", "clutch", "gear", "axle",
-    "mocha", "latte", "brew", "toast", "crumble", "biscuit", "waffle", "pretzel", "pickle", "olive",
-    "mango", "kiwi", "peach", "berry", "grape", "melon", "cocoa", "sugar", "spice", "honey",
-    "buddy", "pal", "matey", "chap", "lad", "bloke", "dude", "homie", "chief",
-    "skip", "bossman", "bigdog", "lilguy", "tiny", "jumbo", "mega", "ultra", "hyper",
-    "quiet", "loud", "silent", "whisper", "murmur", "hum", "buzz", "click", "snap",
-    "zipper", "button", "pocket", "wallet", "ticket", "stamp", "label", "tag", "badge", "pin",
-    "rocket", "cannon", "rifle", "pistol", "revolver", "sniper",
-    "bandit", "outlaw", "fugitive", "warden", "agent",
-    "spy", "mole", "witness", "jury", "judge",
-    "dealer", "runner", "courier", "smuggler", "bootleg", "moonshine", "whiskey", "bourbon",
-    "gin", "rum", "vodka", "tequila", "scotch", "ale", "stout", "lager", "cider", "mead",
-    "redfox", "bluejay", "greydog", "blackcat", "whitecrow", "goldfish", "silverfox",
-    "steeltoe", "hardluck", "easystreet", "lowkey", "highroll", "sideline", "backseat", "frontrow",
-    "midlane", "jungle", "carry", "casual", "grinder", "farmer", "miner", "crafter",
-    "builder", "breaker", "fixer", "mender", "stitch", "sew", "knit", "weave", "braid", "twist",
-    "donut", "bagel", "crumpet", "scone", "flapjack", "pancake", "crepe", "taco", "burrito",
-    "nacho", "salsa", "guac", "fries", "nugget", "brisket",
-    "smokehouse", "pitmaster", "chefboy", "souschef", "linecook",
-    "janitor", "mailman", "postie", "cabbie", "cyclist", "jogger",
-    "hiker", "climber", "diver", "surfer", "skater", "bmxer", "scooter",
-    "zeppelin", "biplane", "jetski", "speedboat", "yachtie", "sailor", "firstmate",
-    "deckhand", "corsair", "buccaneer", "cutlass",
-    "treasure", "doubloon", "galleon", "kraken", "mermaid", "siren", "trident",
-    "lighthouse", "harbor", "dockyard", "shipyard", "boathouse", "marina", "pier",
-    "alley", "avenue", "boulevard", "highway", "freeway", "subway",
-    "uptown", "downtown", "midtown", "oldtown", "newtown",
-    "broadway", "wallstreet", "mainstreet", "highstreet", "backstreet",
-    "corner", "crossroad", "junction", "roundabout", "overpass", "underpass",
-    "tunnel", "canal", "creek", "brook", "stream", "pond", "lake", "bay", "cove",
-    "cliff", "ridge", "peak", "summit", "valley", "canyon", "gully", "ravine", "mesa", "dune",
-    "oasis", "tundra", "glacier", "iceberg", "frostbite", "heatwave", "monsoon",
-    "typhoon", "cyclone", "twister", "blizzard", "whiteout", "blackout",
-    "fadein", "closeup", "longshot", "widescreen", "panorama",
-    "snapshot", "polaroid", "negative", "exposure", "aperture", "shutter", "tripod",
-    "softbox", "ringlight", "flashlight", "headlamp", "lantern", "candle", "matchstick",
-    "flint", "steel", "tinder", "kindling", "bonfire", "campfire", "fireplace", "hearth",
-    "chimney", "rooftop", "attic", "basement", "cellar", "pantry", "closet", "wardrobe",
-    "drawer", "shelf", "cabinet", "cupboard", "bookcase", "nightstand",
-    "pillow", "blanket", "duvet", "quilt", "comforter", "cushion", "ottoman",
-    "recliner", "loveseat", "sofa", "couch", "futon", "hammock", "beanbag",
-    "stool", "bench", "bleacher", "grandstand", "endzone", "goalpost",
-    "halftime", "overtime", "kickoff", "touchdown", "homerun", "hattrick",
+    "pixel", "byte", "nova", "orbit", "comet", "lunar", "solar", "cosmic", "void", "echo",
+    "static", "signal", "radio", "wave", "drift", "glide", "surge", "rush", "dash", "ace",
+    "cash", "chips", "vault", "glitch", "loot", "crate", "lag", "ping", "cloak", "blade",
+    "diesel", "nitro", "turbo", "mocha", "latte", "biscuit", "waffle", "pretzel", "mango",
+    "buddy", "bloke", "homie", "chief", "skip", "quiet", "silent", "whisper", "bandit",
+    "outlaw", "dealer", "runner", "courier", "smuggler", "whiskey", "bourbon", "redfox",
+    "lowkey", "highroll", "grinder", "donut", "bagel", "crumpet", "scone", "taco", "nacho",
+    "hiker", "skater", "surfer", "kraken", "siren", "harbor", "uptown", "downtown", "broadway",
 ]
 
-# Extra short words for mashups (pulseAtom, fruitCake style)
+# Pokémon-style (common name vibes — not a full pokedex dump)
+POKEMON = [
+    "Pikachu", "Charizard", "Bulbasaur", "Squirtle", "Eevee", "Snorlax", "Gengar", "Mewtwo",
+    "Lucario", "Gyarados", "Dragonite", "Umbreon", "Espeon", "Absol", "Rayquaza", "Gardevoir",
+    "Blaziken", "Greninja", "Infernape", "Toxicroak", "Tentacool", "Dracovish", "Toxtricity",
+    "Corviknight", "Dragapult", "Cinderace", "Rillaboom", "Inteleon", "Zoroark", "Hydreigon",
+    "Metagross", "Salamence", "Tyranitar", "Scizor", "Weavile", "Chandelure", "Aegislash",
+    "Mimikyu", "Toxapex", "Araquanid", "Lycanroc", "Decidueye", "Incineroar", "Primarina",
+    "Rowlet", "Litten", "Popplio", "Mudkip", "Torchic", "Treecko", "Cyndaquil", "Totodile",
+    "Chikorita", "Piplup", "Chimchar", "Turtwig", "Froakie", "Fennekin", "Chespin", "Sobble",
+    "Scorbunny", "Grookey", "Fuecoco", "Sprigatito", "Quaxly", "Arcanine", "Ninetales", "Rapidash",
+    "Alakazam", "Machamp", "Golem", "Lapras", "Vaporeon", "Jolteon", "Flareon", "Sylveon",
+    "Leafeon", "Glaceon", "Ditto", "Porygon", "Kabutops", "Aerodactyl", "Articuno", "Zapdos",
+    "Moltres", "Lugia", "Hooh", "Celebi", "Jirachi", "Deoxys", "Darkrai", "Shaymin", "Victini",
+]
+
+# Anime / manga vibes (handles people actually use)
+ANIME = [
+    "Naruto", "Sasuke", "Sakura", "Kakashi", "Itachi", "Madara", "Obito", "Minato",
+    "Goku", "Vegeta", "Gohan", "Piccolo", "Trunks", "Broly", "Luffy", "Zoro", "Sanji",
+    "Nami", "Ace", "Law", "Shanks", "Kaido", "Momonosuke", "Ichigo", "Rukia", "Byakuya",
+    "Aizen", "Ulquiorra", "Eren", "Mikasa", "Levi", "Armin", "Tanjiro", "Nezuko", "Zenitsu",
+    "Inosuke", "Gojo", "Itadori", "Megumi", "Nobara", "Sukuna", "Deku", "Bakugo", "Todoroki",
+    "AllMight", "Light", "LLawliet", "Near", "Misa", "Kaneki", "Touka", "Killua", "Gon",
+    "Hisoka", "Kurapika", "Leorio", "Edward", "Alphonse", "RoyMustang", "Spike", "Faye",
+    "Jet", "Ein", "Vash", "Rem", "Emilia", "Subaru", "Aqua", "Kazuma", "Megumin", "Darkness",
+    "Saitama", "Genos", "Tatsumaki", "Mob", "Reigen", "Rimuru", "Ainz", "Albedo", "Shalltear",
+    "Asuna", "Kirito", "Sinon", "Leviackerman", "ErenYeager", "PinkiePie", "RainbowDash",
+    "Twilight", "Fluttershy", "Rengoku", "Akaza", "Muzan", "Dio", "Jotaro", "Joseph",
+    "Josuke", "Giorno", "Yuji", "Yuta", "Maki", "Panda", "Todo", "Mahito",
+]
+
+# RuneScape / old-school MMO nick energy
+RS_STYLE = [
+    "Pure", "Zerker", "Main", "Iron", "HCIM", "UIM", "Skiller", "Pker", "Dh'er", "Whip",
+    "Barrows", "Dharok", "Guthans", "Verac", "Torag", "Ahrim", "Karil", "Bandos", "Armadyl",
+    "Saradomin", "Zamorak", "Guthix", "Corp", "Nex", "Zulrah", "Vorkath", "Cerberus", "Kraken",
+    "Abyssal", "DragonScim", "Rune", "Addy", "Mith", "Black", "Steel", "Ironman", "Noobscape",
+    "QuestCape", "FireCape", "Infernal", "Maxed", "NearMax", "F2P", "P2P", "Wildy", "Edgeville",
+    "Varrock", "Lumby", "Falador", "Camelot", "Ardougne", "Canifis", "MortMyre", "Shilo",
+    "Karamja", "Entrana", "Draynor", "Seers", "Catherby", "Rellekka", "Neitiznot", "Jatizso",
+    "PestControl", "BarrowsBro", "RaidPure", "NhPure", "DharokPker", "Veng", "IceBarrage",
+    "Ancients", "Lunar", "Arceuus", "Thrall", "Scythe", "Tbow", "Shadow", "Sang", "Trident",
+    "Blowpipe", "DWH", "BGS", "SGS", "AGS", "Claws", "DDS", "Gmaul", "ObbyMaul", "RuneCbow",
+]
+
+# Two-word gamer / joke phrases (AngryToaster, Cabbagehead energy)
+PHRASE_A = [
+    "Angry", "Happy", "Sad", "Crazy", "Lazy", "Sneaky", "Sleepy", "Spicy", "Salty", "Sour",
+    "Sweet", "Bitter", "Broken", "Rusty", "Shiny", "Dusty", "Muddy", "Foggy", "Stormy", "Icy",
+    "Fiery", "Toxic", "Silent", "Loud", "Tiny", "Giant", "Wicked", "Blessed", "Cursed", "Lucky",
+    "Unlucky", "Drunk", "Sober", "Hungry", "Thirsty", "Bored", "Hype", "Chill", "Deadly", "Holy",
+    "Welsh", "Irish", "Scottish", "London", "Scouse", "Geordie", "Yorkshire", "Essex", "Kent",
+    "Mafia", "Crime", "Street", "Night", "Dark", "Light", "Blood", "Shadow", "Ghost", "Demon",
+]
+PHRASE_B = [
+    "Toaster", "Cabbage", "Potato", "Noodle", "Waffle", "Biscuit", "Penguin", "Badger", "Pigeon",
+    "Squirrel", "Hamster", "Llama", "Goose", "Duck", "Chicken", "Turkey", "Pickle", "Onion",
+    "Garlic", "Pepper", "Mustard", "Ketchup", "Mayo", "Gravy", "Custard", "Jelly", "Trifle",
+    "Shelter", "House", "Castle", "Tower", "Bridge", "Tunnel", "Alley", "Corner", "Bench",
+    "Snake", "Viper", "Cobra", "Python", "Dragon", "Phoenix", "Griffin", "Hydra", "Kraken",
+    "Killer", "Hunter", "Slayer", "Reaper", "Warden", "Bandit", "Outlaw", "Pirate", "Ninja",
+    "Wizard", "Knight", "Ranger", "Rogue", "Paladin", "Warlock", "Monk", "Bard", "Druid",
+    "Gains", "Losses", "Clutch", "Tilt", "Panic", "Calm", "Rage", "Fury", "Chaos", "Order",
+    "Charlie", "Noel", "Geeza", "Bloke", "Lad", "Mate", "Chief", "Boss", "King", "Duke",
+]
+
+LOC_PREFIX = [
+    "Welsh", "Irish", "Scottish", "London", "Scouse", "Geordie", "Yorkshire", "Essex",
+    "EastEnd", "WestEnd", "North", "South", "Brum", "Manc", "Glaswegian", "Dublin",
+    "Toronto", "Boston", "Chicago", "Texas", "Cali", "NY", "Ozzie", "Kiwi",
+]
+
+# Extra short words for mashups
 WORD_A = [
     "cold", "hot", "dark", "bright", "fast", "slow", "loud", "soft", "raw", "real",
     "fake", "true", "wild", "mild", "keen", "dull", "sharp", "blunt", "sly", "bold",
     "calm", "mad", "glad", "sad", "bad", "good", "evil", "holy", "pure", "vile",
     "iron", "gold", "ruby", "jade", "onyx", "opal", "pearl", "coral", "amber", "ivory",
+    "red", "blue", "grey", "black", "white", "green", "pink", "purple", "toxic", "shadow",
 ]
 WORD_B = [
     "fox", "dog", "cat", "owl", "bat", "rat", "pig", "cow", "elk", "ram",
     "bee", "ant", "fly", "bug", "worm", "fish", "crab", "seal", "bear", "boar",
     "man", "boy", "kid", "guy", "lad", "gal", "sis", "bro", "pal", "foe",
     "day", "night", "dusk", "dawn", "noon", "moon", "sun", "star", "sky", "sea",
+    "fury", "ends", "blade", "fire", "ice", "wind", "stone", "bone", "soul", "heart",
 ]
 
 
@@ -170,56 +202,102 @@ def _sanitize_username(raw: str) -> str:
     return s[:20]
 
 
+def _maybe_digits(base: str, chance: float = 0.45) -> str:
+    if random.random() >= chance:
+        return base
+    roll = random.random()
+    if roll < 0.4:
+        return base + str(random.randint(10, 99))
+    if roll < 0.65:
+        return base + str(random.randint(1, 9))
+    if roll < 0.85:
+        return base + str(random.randint(100, 9999))
+    return base + str(random.randint(10, 99)) + random.choice(["", "x", "z", "zz"])
+
+
 def _rand_username() -> str:
-    """Mostly normal: Danny56, JakeWilson19 — some forum handles. Avoids botty patterns."""
+    """Mix of real signup + other-game styles: pokemon, anime, RS, joke phrases, etc."""
     style = random.random()
 
-    if style < 0.38:
-        # First + digits: Danny56, Jake420, Liam7
+    if style < 0.18:
+        # Danny56 / deano14 / tony8669
+        base = random.choice(FIRST)
+        if random.random() < 0.12:
+            base = base.lower()
+        base = _maybe_digits(base, 0.85)
+    elif style < 0.30:
+        # FirstLast / AnthonyTucker
+        base = random.choice(FIRST) + random.choice(LAST)
+        base = _maybe_digits(base, 0.4)
+    elif style < 0.42:
+        # Pokémon (+ digits / x)
+        base = random.choice(POKEMON)
+        if random.random() < 0.25:
+            base = base.lower()
+        base = _maybe_digits(base, 0.55)
+    elif style < 0.54:
+        # Anime
+        base = random.choice(ANIME)
+        if random.random() < 0.2:
+            base = base.lower()
+        # sasukke210 energy — occasional double letter typo vibe
+        if random.random() < 0.08 and len(base) > 4:
+            i = random.randint(1, len(base) - 2)
+            base = base[:i] + base[i] + base[i:]
+        base = _maybe_digits(base, 0.5)
+    elif style < 0.64:
+        # RuneScape energy: Pure123, DharokPker, FireCape99
+        base = random.choice(RS_STYLE)
+        if random.random() < 0.35:
+            base = base + random.choice(RS_STYLE)
+        if random.random() < 0.15:
+            base = base.lower()
+        base = _maybe_digits(base, 0.55)
+    elif style < 0.76:
+        # AngryToaster / Cabbagehead / GhostKiller
+        a, b = random.choice(PHRASE_A), random.choice(PHRASE_B)
+        base = a + b
+        if random.random() < 0.15:
+            base = base.lower()
+        if random.random() < 0.1:
+            base = base + random.choice(["zz", "x", "xx", "v2", "v3", "123"])
+        else:
+            base = _maybe_digits(base, 0.4)
+    elif style < 0.84:
+        # WelshCharlie / IrishNoel / eastendgeeza
+        pref = random.choice(LOC_PREFIX)
+        if random.random() < 0.55:
+            base = pref + random.choice(FIRST)
+        else:
+            base = pref + random.choice(PHRASE_B)
+        if random.random() < 0.2:
+            base = base.lower()
+        base = _maybe_digits(base, 0.35)
+    elif style < 0.92:
+        # Forum handle / mash: fruitcake, redfury, coldFox
+        if random.random() < 0.55:
+            base = random.choice(HANDLES)
+            if random.random() < 0.5:
+                base = base.lower()
+            else:
+                base = base[:1].upper() + base[1:]
+        else:
+            a, b = random.choice(WORD_A), random.choice(WORD_B)
+            base = a + (b.capitalize() if random.random() < 0.65 else b)
+        base = _maybe_digits(base, 0.5)
+    else:
+        # joshboiiii / FoREvcR23 — playful stretch
         base = random.choice(FIRST)
         if random.random() < 0.5:
-            base += str(random.randint(10, 99))
-        elif random.random() < 0.7:
-            base += str(random.randint(1, 9))
+            base = base.lower()
+            if random.random() < 0.35:
+                base = base + random.choice(["boi", "boiiii", "yy", "xxx", "pls", "xd"])
         else:
-            base += str(random.randint(100, 9999))
-    elif style < 0.62:
-        # FirstLast / FirstLast99 (common signup)
-        base = random.choice(FIRST) + random.choice(LAST)
-        if random.random() < 0.45:
-            base += str(random.randint(10, 99))
-    elif style < 0.78:
-        # Forum handle: fruitcake, pulse, atom19
-        base = random.choice(HANDLES)
-        if random.random() < 0.5:
-            base += str(random.randint(10, 99) if random.random() < 0.7 else random.randint(1, 9999))
-    elif style < 0.88:
-        # Mash: coldFox, darkMoon
-        a, b = random.choice(WORD_A), random.choice(WORD_B)
-        base = a + (b.capitalize() if random.random() < 0.6 else b)
-        if random.random() < 0.35:
-            base += str(random.randint(1, 99))
-    else:
-        # Last + digits or LastFirst
-        if random.random() < 0.55:
-            base = random.choice(LAST) + str(random.randint(10, 999))
-        else:
-            base = random.choice(LAST) + random.choice(FIRST)
-            if random.random() < 0.4:
-                base += str(random.randint(1, 99))
-
-    # Rare First_Last style only (not mid-syllable cuts)
-    if (
-        random.random() < 0.03
-        and "_" not in base
-        and any(base.startswith(f) and len(base) > len(f) + 2 for f in FIRST)
-    ):
-        for f in sorted(FIRST, key=len, reverse=True):
-            if base.startswith(f) and len(base) > len(f) + 2:
-                rest = base[len(f) :]
-                if rest[:1].isalpha():
-                    base = f + "_" + rest
-                break
+            # mixed caps vibe
+            base = "".join(c.upper() if random.random() < 0.35 else c.lower() for c in base)
+            if len(base) < 8:
+                base = base + random.choice(WORD_B)
+        base = _maybe_digits(base, 0.7)
 
     return _sanitize_username(base)
 
