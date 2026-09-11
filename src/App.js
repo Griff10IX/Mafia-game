@@ -64,6 +64,7 @@ const CarProfile = lazy(() => import("./pages/Cars/CarProfile"));
 const Garage = lazy(() => import("./pages/Cars/Garage"));
 const SellCars = lazy(() => import("./pages/Cars/SellCars"));
 const ViewCar = lazy(() => import("./pages/Cars/ViewCar"));
+const ViewWeapon = lazy(() => import("./pages/Kill/ViewWeapon"));
 
 // Crime pages
 const Crimes = lazy(() => import("./pages/Crime/Crimes"));
@@ -721,6 +722,12 @@ function App() {
               path="/cars/view"
               element={
               <ViewCar />
+              }
+            />
+            <Route
+              path="/weapons/view"
+              element={
+              <ViewWeapon />
               }
             />
             <Route

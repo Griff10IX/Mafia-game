@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown, Star, Eraser, Eye, Bot, Crosshair } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown, Star, Eraser, Eye, Bot } from 'lucide-react';
 import api, { apiGetWithResumeRetries, getApiErrorMessage, isTransientResumeLoadError, shouldSuppressResumeNetworkToast } from '../../utils/api';
 import {
   apiPostWithCivilianProtectionConfirm,
@@ -392,6 +392,7 @@ const ProfileInfoCard = ({
   showCompactHonoursAndProperties = false,
   topCars = [],
   showCarsOnProfile = true,
+  profileWeapon = null,
   isAdmin = false,
   isModerator = false,
   hasAdminEmail = false,
@@ -1035,6 +1036,26 @@ const ProfileInfoCard = ({
               </div>
             </div>
           )}
+          {profileWeapon ? (
+            <div className="border-t border-primary/15 px-2.5 py-2 md:px-3 md:py-2">
+              <div className="flex items-center gap-1 mb-1.5">
+                <Target size={12} className="text-primary shrink-0" />
+                <span className="text-[10px] md:text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Weapons</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <Link
+                  to={`/weapons/view?id=${encodeURIComponent(profileWeapon.id || 'weapon_loot_bar')}`}
+                  title={profileWeapon.name || 'Browning Automatic Rifle M1918A2'}
+                  className={`flex items-start gap-1 px-2 py-1.5 min-h-8 w-full min-w-0 rounded-md border bg-background/80 hover:bg-primary/10 transition-colors prof-row text-[10px] md:text-[11px] font-heading leading-snug ${RARITY_BADGE_CLASSES.loot_exclusive}`}
+                >
+                  <span className="shrink-0 uppercase font-bold tracking-wide">Loot:</span>
+                  <span className="min-w-0 text-foreground font-semibold break-words">
+                    {censorProfanity ? filterProfanity(profileWeapon.name || 'BAR M1918A2') : (profileWeapon.name || 'BAR M1918A2')}
+                  </span>
+                </Link>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -1360,67 +1381,6 @@ const TopCarsCard = ({ topCars, showCars }) => {
         })}
       </div>
       <div className="prof-art-line text-primary mx-3" />
-    </div>
-  );
-};
-
-/** Drag / swipe 360° turntable for exclusive BAR showcase (~12 yaw frames). */
-const ProfileWeaponShowcase = ({ weapon }) => {
-  const frames = Math.max(1, Number(weapon?.frames) || 12);
-  const base = (weapon?.image_base || '/images/weapons/weapon_loot_bar').replace(/\/$/, '');
-  const [idx, setIdx] = useState(0);
-  const dragRef = useRef({ active: false, startX: 0, startIdx: 0 });
-
-  const frameSrc = `${base}/${String(((idx % frames) + frames) % frames).padStart(2, '0')}.png`;
-
-  const onPointerDown = (e) => {
-    dragRef.current = { active: true, startX: e.clientX ?? e.touches?.[0]?.clientX ?? 0, startIdx: idx };
-    try {
-      e.currentTarget.setPointerCapture?.(e.pointerId);
-    } catch (_) {
-      /* ignore */
-    }
-  };
-  const onPointerMove = (e) => {
-    if (!dragRef.current.active) return;
-    const x = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
-    const dx = x - dragRef.current.startX;
-    const step = Math.round(dx / 28);
-    setIdx((((dragRef.current.startIdx - step) % frames) + frames) % frames);
-  };
-  const onPointerUp = () => {
-    dragRef.current.active = false;
-  };
-
-  if (!weapon) return null;
-  return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-amber-500/30 prof-card prof-fade-in mobile-panel mb-3`} style={{ animationDelay: '0.04s' }}>
-      <div className="h-px bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-amber-500/10 border-b border-amber-500/25 flex items-center justify-center gap-1">
-        <Crosshair size={12} className="text-amber-400" />
-        <h3 className="text-[10px] md:text-[11px] font-heading font-bold text-amber-300 uppercase tracking-[0.12em]">
-          {weapon.name || 'Browning Automatic Rifle M1918A2'}
-        </h3>
-      </div>
-      <div
-        className="relative aspect-[16/10] bg-gradient-to-b from-zinc-900 to-black cursor-ew-resize select-none touch-pan-y"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        role="img"
-        aria-label="Drag to rotate weapon"
-      >
-        <img
-          src={frameSrc}
-          alt={weapon.name || 'Exclusive rifle'}
-          className="absolute inset-0 w-full h-full object-contain p-3 pointer-events-none"
-          draggable={false}
-        />
-        <div className="absolute bottom-2 left-0 right-0 text-center text-[9px] font-heading text-mutedForeground">
-          Drag to rotate · {idx + 1}/{frames}
-        </div>
-      </div>
     </div>
   );
 };
@@ -3650,9 +3610,6 @@ export default function Profile() {
               spotifyUrl={profile.spotify_url}
             />
             ) : null}
-            {profile.profile_weapon ? (
-              <ProfileWeaponShowcase weapon={profile.profile_weapon} />
-            ) : null}
             <ProfileInfoCard 
               profile={profile} 
               isMe={isMe}
@@ -3678,6 +3635,7 @@ export default function Profile() {
               showCompactHonoursAndProperties
               topCars={profile.top_cars}
               showCarsOnProfile={profile.show_cars_on_profile}
+              profileWeapon={profile.profile_weapon}
               isAdmin={isAdmin}
               isModerator={isModerator}
               hasAdminEmail={hasAdminEmail}

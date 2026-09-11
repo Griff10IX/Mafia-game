@@ -74,6 +74,7 @@ const ROUTE_PRELOADERS = {
   '/cars/buy': () => import('../pages/Cars/BuyCars'),
   '/cars/sell': () => import('../pages/Cars/SellCars'),
   '/cars/view': () => import('../pages/Cars/ViewCar'),
+  '/weapons/view': () => import('../pages/Kill/ViewWeapon'),
   '/view-car': () => import('../pages/Cars/ViewCar'),
   '/game/stats': () => import('../pages/Game/Stats'),
   '/game/users-online': () =>
