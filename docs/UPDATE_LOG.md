@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-12[/color][/b] — [b]Blackjack dealer rules[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] The Blackjack dealer was sometimes standing early when already ahead (under 17), and sometimes still hitting as normal. Dealer now always hits on 16 or less and stands on 17+.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-11[/color][/b] — [b]Image host → PixGB[/b][/size]
 [quote]
 [list]
