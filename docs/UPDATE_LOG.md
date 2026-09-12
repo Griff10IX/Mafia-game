@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-12[/color][/b] — [b]Blackjack: proper dealer rules[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] Casino Blackjack dealer now plays standard rules — [b]hits on 16 or less[/b], [b]stands on 17+[/b] (including soft 17). The dealer no longer stands early just because they already beat your total.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-11[/color][/b] — [b]Image host → PixGB[/b][/size]
 [quote]
 [list]

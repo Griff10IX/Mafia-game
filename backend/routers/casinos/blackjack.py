@@ -150,15 +150,14 @@ def _blackjack_is_blackjack(hand):
     return len(hand) == 2 and _blackjack_hand_total(hand) == 21
 
 
-def _blackjack_dealer_play(dealer_hand: list, deck: list, player_total: int) -> int:
-    """Hit while under 17, except stand immediately if already beating a standing player.
+def _blackjack_dealer_play(dealer_hand: list, deck: list, player_total: int = 0) -> int:
+    """Standard dealer: hit on 16 or less, stand on all 17+ (including soft 17).
 
     Mutates dealer_hand and deck. Returns final total.
+    player_total is unused (kept for call-site compatibility).
     """
     dealer_total = _blackjack_hand_total(dealer_hand)
     while dealer_total < 17 and deck:
-        if player_total <= 21 and dealer_total > player_total:
-            break
         dealer_hand.append(deck.pop())
         dealer_total = _blackjack_hand_total(dealer_hand)
     return dealer_total
