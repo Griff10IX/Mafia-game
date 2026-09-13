@@ -28,6 +28,13 @@ import httpx
 
 from bson import ObjectId
 
+from utils.odds_api_quota import (
+    can_spend_odds_credits,
+    note_non_settle_spend,
+    quota_status_payload,
+    record_odds_api_response_headers,
+)
+
 from server import (
     db,
     get_current_user,
@@ -110,7 +117,7 @@ class AdminAddSportsEventRequest(BaseModel):
 
 
 class AdminSportsAutoBoardRunRequest(BaseModel):
-    refresh_odds: bool = True
+    refresh_odds: bool = False
     # None = use SPORTS_AUTO_BOARD_TEMPLATE_SOURCE env (default database). "merged" = in-memory Odds + DB merge (mem wins).
     template_source: Optional[str] = None
 
@@ -290,17 +297,35 @@ async def ensure_sports_bet_max_total_open_stake_setting() -> None:
 
 
 def _sports_odds_cache_ttl_sec() -> int:
+    # Free-tier default: 6h (was 30m) so admin refresh does not re-burn credits quickly.
     try:
-        return max(120, int(os.environ.get("SPORTS_ODDS_CACHE_TTL_SEC", "1800")))
+        return max(120, int(os.environ.get("SPORTS_ODDS_CACHE_TTL_SEC", "21600")))
     except ValueError:
-        return 1800
+        return 21600
 
 
 def _sports_odds_scores_cache_ttl_sec() -> int:
+    # Free-tier default: 45m (was 15m).
     try:
-        return max(60, int(os.environ.get("SPORTS_ODDS_SCORES_CACHE_TTL_SEC", "900")))
+        return max(60, int(os.environ.get("SPORTS_ODDS_SCORES_CACHE_TTL_SEC", "2700")))
     except ValueError:
-        return 900
+        return 2700
+
+
+def _odds_regions_primary() -> str:
+    """Single region string for free-tier odds pulls (1 region = 1× market credits)."""
+    raw = (os.environ.get("SPORTS_ODDS_REGIONS") or "uk").strip()
+    return raw or "uk"
+
+
+def _odds_multi_region_enabled() -> bool:
+    """Paid-tier / legacy: merge multiple region attempts (expensive). Default off."""
+    return _env_flag("SPORTS_ODDS_MULTI_REGION")
+
+
+def _odds_catalog_extras_enabled() -> bool:
+    """Tennis / golf / snooker Odds catalog discovery — off on free tier (burns many keys)."""
+    return _env_flag("SPORTS_ODDS_ENABLE_TENNIS_GOLF_SNOOKER")
 
 
 def _sports_odds_fetch_concurrency() -> int:
@@ -670,6 +695,7 @@ def _parse_odds_event(event: dict, category: str, three_way: bool, sport_key: st
 
 
 # Keys from https://the-odds-api.com/sports-odds-data/sports-apis.html (invalid keys → empty odds for that league).
+# Full list kept for settle matching / fallbacks; Odds *fetches* use curated subset unless overridden.
 SOCCER_LEAGUES = (
     "soccer_epl",
     "soccer_fa_cup",
@@ -713,7 +739,13 @@ SOCCER_LEAGUES = (
     "soccer_australia_aleague",
 )
 
-# Bookmaker regions (Odds API): try narrow sets first, then add fr/se/au so one bad region does not block the rest.
+# Free-tier Odds pull: ~1 credit per key (1 region × 1 market). Override with SPORTS_ODDS_SOCCER_KEYS.
+ODDS_CURATED_SOCCER_KEYS = (
+    "soccer_epl",
+    "soccer_uefa_champs_league",
+)
+
+# Bookmaker regions (Odds API): multi-region only when SPORTS_ODDS_MULTI_REGION=1 (paid).
 SOCCER_ODDS_REGION_ATTEMPTS = (
     "uk,us,eu",
     "uk,us,eu,fr,se",
@@ -732,6 +764,16 @@ def _auto_board_soccer_sport_keys() -> frozenset[str]:
     if raw:
         return frozenset(x.strip() for x in raw.split(",") if x.strip())
     return frozenset(_AUTO_BOARD_SOCCER_DEFAULT_KEYS)
+
+
+def _odds_soccer_keys_for_fetch() -> tuple[str, ...]:
+    """Sport keys used for Odds API soccer odds pulls (curated by default for free tier)."""
+    raw = (os.environ.get("SPORTS_ODDS_SOCCER_KEYS") or "").strip()
+    if raw:
+        return tuple(x.strip() for x in raw.split(",") if x.strip())
+    if _env_flag("SPORTS_ODDS_FULL_CATALOG"):
+        return tuple(SOCCER_LEAGUES)
+    return tuple(ODDS_CURATED_SOCCER_KEYS)
 
 
 def _sports_auto_board_max() -> int:
@@ -850,12 +892,20 @@ async def _fetch_odds_api_soccer_league_raw(client: httpx.AsyncClient, sport_key
     cached = await _odds_cache_read_list_if_fresh(cache_key, ttl)
     if cached is not None:
         return cached
+    regions_list = list(SOCCER_ODDS_REGION_ATTEMPTS) if _odds_multi_region_enabled() else [_odds_regions_primary()]
+    # Free tier: one market only (h2h_3_way). Paid/multi may fall back to h2h on failure.
+    markets_list = ("h2h,h2h_3_way", "h2h") if _odds_multi_region_enabled() else ("h2h_3_way", "h2h")
+    est = max(1, len(regions_list[0].split(",")) * len(markets_list[0].split(",")))
+    ok, reason = await can_spend_odds_credits(purpose="odds", estimated_cost=est)
+    if not ok:
+        logger.warning("Odds API soccer skip %s: %s", sport_key, reason)
+        return []
     async with sem:
         r = None
         # Bulk /sports/{key}/odds only accepts featured markets. draw_no_bet and other
         # "additional" markets cause INVALID_MARKET and fail the whole request — avoid them here.
-        for regions in SOCCER_ODDS_REGION_ATTEMPTS:
-            for markets in ("h2h,h2h_3_way", "h2h"):
+        for regions in regions_list:
+            for markets in markets_list:
                 try:
                     r = await client.get(
                         "%s/sports/%s/odds" % (ODDS_API_BASE, sport_key),
@@ -866,6 +916,7 @@ async def _fetch_odds_api_soccer_league_raw(client: httpx.AsyncClient, sport_key
                             "oddsFormat": "decimal",
                         },
                     )
+                    await record_odds_api_response_headers(r.headers, purpose="odds")
                 except Exception as ex:
                     logger.warning("Odds API odds fetch failed %s: %s", sport_key, ex)
                     return []
@@ -878,13 +929,18 @@ async def _fetch_odds_api_soccer_league_raw(client: httpx.AsyncClient, sport_key
                 "Odds API odds %s failed (last HTTP %s); tried regions: %s",
                 sport_key,
                 getattr(r, "status_code", 0) if r is not None else 0,
-                ", ".join(SOCCER_ODDS_REGION_ATTEMPTS),
+                ", ".join(regions_list),
             )
             return []
     events = r.json()
     if not isinstance(events, list):
         events = []
     await _odds_cache_write_list(cache_key, 200, events)
+    try:
+        last = int(float(str(r.headers.get("x-requests-last") or est)))
+    except (TypeError, ValueError):
+        last = est
+    await note_non_settle_spend(last)
     return events
 
 
@@ -892,13 +948,16 @@ async def _fetch_odds_api_soccer() -> list:
     key = _odds_api_key()
     if not key:
         return []
+    soccer_keys = _odds_soccer_keys_for_fetch()
+    if not soccer_keys:
+        return []
     out = []
     seen_event = set()
     sem = asyncio.Semaphore(_sports_odds_fetch_concurrency())
     try:
         async with httpx.AsyncClient(timeout=22.0) as client:
-            raw_lists = await asyncio.gather(*[_fetch_odds_api_soccer_league_raw(client, sk, sem, key) for sk in SOCCER_LEAGUES])
-        for sport_key, events in zip(SOCCER_LEAGUES, raw_lists):
+            raw_lists = await asyncio.gather(*[_fetch_odds_api_soccer_league_raw(client, sk, sem, key) for sk in soccer_keys])
+        for sport_key, events in zip(soccer_keys, raw_lists):
             if not isinstance(events, list):
                 continue
             # Cap per league to control payload; parse fix above allows most fixtures through
@@ -921,35 +980,56 @@ async def _fetch_odds_api_soccer() -> list:
 
 
 async def _fetch_odds_api_h2h_events_merged(sport_key: str) -> list:
-    """GET /sports/{sport_key}/odds (h2h only), merged across region attempts; returns raw Odds API event dicts."""
+    """GET /sports/{sport_key}/odds (h2h). Single region by default; multi-region merge only if SPORTS_ODDS_MULTI_REGION=1."""
     api_key = _odds_api_key()
     sk = (sport_key or "").strip()
     if not api_key or not sk:
         return []
-    cache_key = "v2:odds:%s:merged" % re.sub(r"[^a-zA-Z0-9_-]+", "_", sk)[:56]
+    regions_primary = _odds_regions_primary()
+    cache_key = "v3:odds:%s:%s" % (
+        re.sub(r"[^a-zA-Z0-9_-]+", "_", sk)[:56],
+        "multi" if _odds_multi_region_enabled() else regions_primary.replace(",", "_")[:24],
+    )
     ttl = _sports_odds_cache_ttl_sec()
     try:
         cached = await _odds_cache_read_list_if_fresh(cache_key, ttl)
         if cached is not None:
             return cached if isinstance(cached, list) else []
+        region_attempts = list(FIGHT_SPORTS_ODDS_REGION_ATTEMPTS) if _odds_multi_region_enabled() else [regions_primary]
+        est = max(1, len(region_attempts[0].split(",")))
+        ok, reason = await can_spend_odds_credits(purpose="odds", estimated_cost=est)
+        if not ok:
+            logger.warning("Odds API h2h skip %s: %s", sk, reason)
+            return []
         raw_lists: list = []
+        last_headers = None
         async with httpx.AsyncClient(timeout=18.0) as client:
-            for regions in FIGHT_SPORTS_ODDS_REGION_ATTEMPTS:
+            for regions in region_attempts:
                 try:
                     r = await client.get(
                         "%s/sports/%s/odds" % (ODDS_API_BASE, sk),
                         params={"apiKey": api_key, "regions": regions, "markets": "h2h", "oddsFormat": "decimal"},
                     )
+                    last_headers = r.headers
+                    await record_odds_api_response_headers(r.headers, purpose="odds")
                     if r.status_code != 200:
                         logger.warning("Odds API odds %s HTTP %s regions=%s", sk, r.status_code, regions)
                         continue
                     chunk = r.json()
                     if isinstance(chunk, list):
                         raw_lists.append(chunk)
+                    if not _odds_multi_region_enabled():
+                        break
                 except Exception as ex:
                     logger.warning("Odds API fetch %s regions=%s: %s", sk, regions, ex)
-        merged = _merge_odds_api_events_by_id(raw_lists)
+        merged = _merge_odds_api_events_by_id(raw_lists) if len(raw_lists) > 1 else (raw_lists[0] if raw_lists else [])
         await _odds_cache_write_list(cache_key, 200, merged)
+        if last_headers is not None and raw_lists:
+            try:
+                last = int(float(str(last_headers.get("x-requests-last") or est)))
+            except (TypeError, ValueError):
+                last = est
+            await note_non_settle_spend(last)
         return merged
     except Exception as ex:
         logger.warning("Odds API h2h merge %s: %s", sk, ex)
@@ -1067,8 +1147,8 @@ def _golf_sport_keys_from_odds_catalog(rows: list) -> list[str]:
 
 
 async def _fetch_snooker_events() -> list:
-    """Snooker match odds from The Odds API when a snooker sport key exists (discovered via /v4/sports or SNOOKER_ODDS_SPORT_KEYS)."""
-    if not _odds_api_key():
+    """Snooker match odds from The Odds API when enabled (SPORTS_ODDS_ENABLE_TENNIS_GOLF_SNOOKER=1)."""
+    if not _odds_api_key() or not _odds_catalog_extras_enabled():
         return []
     out: list = []
     seen_pair: set[tuple[str, str]] = set()
@@ -1122,7 +1202,7 @@ async def _fetch_odds_api_basketball() -> list:
 
 
 async def _fetch_tennis_events() -> list:
-    if not _odds_api_key():
+    if not _odds_api_key() or not _odds_catalog_extras_enabled():
         return []
     out: list = []
     seen_pair: set[tuple[str, str]] = set()
@@ -1155,7 +1235,7 @@ async def _fetch_tennis_events() -> list:
 
 
 async def _fetch_golf_events() -> list:
-    if not _odds_api_key():
+    if not _odds_api_key() or not _odds_catalog_extras_enabled():
         return []
     out: list = []
     seen_pair: set[tuple[str, str]] = set()
@@ -1226,17 +1306,24 @@ async def _fetch_odds_api_f1() -> list:
     key = _odds_api_key()
     if not key:
         return []
-    cache_key = "v1:odds:motor_racing_f1"
+    regions = _odds_regions_primary()
+    cache_key = "v2:odds:motor_racing_f1:%s" % regions.replace(",", "_")[:24]
     ttl = _sports_odds_cache_ttl_sec()
     out = []
     try:
         events = await _odds_cache_read_list_if_fresh(cache_key, ttl)
         if events is None:
+            est = max(1, len(regions.split(",")))
+            ok, reason = await can_spend_odds_credits(purpose="odds", estimated_cost=est)
+            if not ok:
+                logger.warning("Odds API F1 skip: %s", reason)
+                return []
             async with httpx.AsyncClient(timeout=14.0) as client:
                 r = await client.get(
                     "%s/sports/motor_racing_f1/odds" % ODDS_API_BASE,
-                    params={"apiKey": key, "regions": "uk,us", "markets": "h2h", "oddsFormat": "decimal"},
+                    params={"apiKey": key, "regions": regions, "markets": "h2h", "oddsFormat": "decimal"},
                 )
+            await record_odds_api_response_headers(r.headers, purpose="odds")
             if r.status_code != 200:
                 logger.warning("Odds API odds motor_racing_f1 HTTP %s", r.status_code)
                 return []
@@ -1244,6 +1331,11 @@ async def _fetch_odds_api_f1() -> list:
             if not isinstance(events, list):
                 events = []
             await _odds_cache_write_list(cache_key, 200, events)
+            try:
+                last = int(float(str(r.headers.get("x-requests-last") or est)))
+            except (TypeError, ValueError):
+                last = est
+            await note_non_settle_spend(last)
         for ev in events[:25]:
             if not _is_future_event(ev, require_time=True):
                 continue
@@ -1289,11 +1381,18 @@ async def _fetch_odds_api_scores(sport_key: str, days_from: int = 1) -> list:
         cached = await _odds_cache_read_list_if_fresh(cache_key, ttl)
         if cached is not None:
             return cached
+        # daysFrom present → 2 credits; prefer daysFrom=1 when possible.
+        est = 2 if d >= 1 else 1
+        ok, reason = await can_spend_odds_credits(purpose="settle", estimated_cost=est)
+        if not ok:
+            logger.warning("Odds API scores skip %s: %s", sport_key, reason)
+            return []
         async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.get(
                 "%s/sports/%s/scores" % (ODDS_API_BASE, sport_key),
                 params={"apiKey": key, "daysFrom": d},
             )
+        await record_odds_api_response_headers(r.headers, purpose="settle")
         if r.status_code != 200:
             logger.warning("Odds API scores %s HTTP %s", sport_key, r.status_code)
             return []
@@ -1745,7 +1844,7 @@ async def _auto_settle_fallback_thesportsdb_open_bets() -> int:
 
 
 async def _auto_settle_from_scores() -> dict:
-    """Poll Odds API scores, match to open events with external_event_id, settle and pay. Returns stats."""
+    """Settle due open bets: free fallbacks first, then Odds API scores (budget-gated)."""
     settled_count = 0
     skipped_no_match = 0
     skipped_no_winner = 0
@@ -1759,21 +1858,23 @@ async def _auto_settle_from_scores() -> dict:
             "fallback_settled": 0,
             "message": "No due open-bet events to settle",
         }
+
+    # Prefer free sources so Odds credits stay available all month.
+    try:
+        fallback_settled += await _auto_settle_fallback_football_data()
+    except Exception as ex:
+        logger.warning("Fallback auto-settle football-data failed: %s", ex)
+    try:
+        fallback_settled += await _auto_settle_fallback_f1_ergast()
+    except Exception as ex:
+        logger.warning("Fallback auto-settle F1 Ergast failed: %s", ex)
+    try:
+        fallback_settled += await _auto_settle_fallback_thesportsdb_open_bets()
+    except Exception as ex:
+        logger.warning("Fallback auto-settle TheSportsDB failed: %s", ex)
+
     key = _odds_api_key()
     if not key:
-        # Keep admin/cron/manual path useful even when Odds API key is absent.
-        try:
-            fallback_settled += await _auto_settle_fallback_football_data()
-        except Exception as ex:
-            logger.warning("Fallback auto-settle football-data failed (no Odds key): %s", ex)
-        try:
-            fallback_settled += await _auto_settle_fallback_f1_ergast()
-        except Exception as ex:
-            logger.warning("Fallback auto-settle F1 Ergast failed (no Odds key): %s", ex)
-        try:
-            fallback_settled += await _auto_settle_fallback_thesportsdb_open_bets()
-        except Exception as ex:
-            logger.warning("Fallback auto-settle TheSportsDB failed (no Odds key): %s", ex)
         try:
             await db.sports_events.update_many(
                 {"id": {"$in": list(due_open_event_ids)}, "status": "open"},
@@ -1781,9 +1882,15 @@ async def _auto_settle_from_scores() -> dict:
             )
         except Exception as ex:
             logger.warning("Auto-settle attempted marker update failed (no Odds key): %s", ex)
-        return {"settled": fallback_settled, "skipped_no_match": 0, "skipped_no_winner": 0, "source": "fallback_only"}
+        return {
+            "settled": fallback_settled,
+            "skipped_no_match": 0,
+            "skipped_no_winner": 0,
+            "fallback_settled": fallback_settled,
+            "source": "fallback_only",
+        }
+
     due_event_ids = await _linkable_due_once_event_ids_with_open_bets()
-    # Collect only the sport keys that actually have due events with open bets.
     needed_sport_keys: set[str] = set()
     if due_event_ids:
         _nsk_cursor = db.sports_events.find(
@@ -1794,19 +1901,49 @@ async def _auto_settle_from_scores() -> dict:
             _sk = (_nsk_doc.get("external_sport_key") or "").strip()
             if _sk:
                 needed_sport_keys.add(_sk)
+
     all_sport_keys: set[str] = set()
     for _ks in ODDS_API_SPORT_KEYS.values():
         all_sport_keys.update(_ks)
-    sport_keys_used = set()
-    for category, keys in ODDS_API_SPORT_KEYS.items():
-        three_way = category == "Football"
-        for sport_key in keys:
-            if sport_key in sport_keys_used:
-                continue
-            if sport_key not in needed_sport_keys:
-                continue
-            sport_keys_used.add(sport_key)
-            events = await _fetch_odds_api_scores(sport_key, days_from=3)
+
+    async def _settle_from_scores_for_keys(sport_keys: set[str], *, days_from: int) -> None:
+        nonlocal settled_count, skipped_no_match, skipped_no_winner
+        sport_keys_used_local: set[str] = set()
+        for category, keys in ODDS_API_SPORT_KEYS.items():
+            three_way = category == "Football"
+            for sport_key in keys:
+                if sport_key in sport_keys_used_local:
+                    continue
+                if sport_key not in sport_keys:
+                    continue
+                sport_keys_used_local.add(sport_key)
+                events = await _fetch_odds_api_scores(sport_key, days_from=days_from)
+                for api_ev in events:
+                    if not api_ev.get("completed"):
+                        continue
+                    ext_id = (api_ev.get("id") or "").strip()
+                    if not ext_id:
+                        continue
+                    ev = await db.sports_events.find_one(
+                        {
+                            "external_event_id": ext_id,
+                            "external_sport_key": sport_key,
+                            "status": "open",
+                            "id": {"$in": list(due_event_ids)},
+                        },
+                        {"_id": 0, "id": 1, "options": 1},
+                    )
+                    if not ev:
+                        skipped_no_match += 1
+                        continue
+                    winning_id = _derive_winning_option_from_scores(api_ev, ev.get("options") or [], three_way)
+                    if not winning_id:
+                        skipped_no_winner += 1
+                        continue
+                    if await _settle_event_internal(ev["id"], winning_id):
+                        settled_count += 1
+        for sport_key in sorted(sport_keys - sport_keys_used_local):
+            events = await _fetch_odds_api_scores(sport_key, days_from=days_from)
             for api_ev in events:
                 if not api_ev.get("completed"):
                     continue
@@ -1825,53 +1962,32 @@ async def _auto_settle_from_scores() -> dict:
                 if not ev:
                     skipped_no_match += 1
                     continue
-                winning_id = _derive_winning_option_from_scores(api_ev, ev.get("options") or [], three_way)
+                winning_id = _derive_winning_option_from_scores(api_ev, ev.get("options") or [], False)
                 if not winning_id:
                     skipped_no_winner += 1
                     continue
                 if await _settle_event_internal(ev["id"], winning_id):
                     settled_count += 1
-    # Odds-backed events whose sport_key is not listed in ODDS_API_SPORT_KEYS (e.g. Snooker when added under a new key).
-    for sport_key in sorted(needed_sport_keys - sport_keys_used):
-        sport_keys_used.add(sport_key)
-        events = await _fetch_odds_api_scores(sport_key, days_from=3)
-        for api_ev in events:
-            if not api_ev.get("completed"):
-                continue
-            ext_id = (api_ev.get("id") or "").strip()
-            if not ext_id:
-                continue
-            ev = await db.sports_events.find_one(
-                {
-                    "external_event_id": ext_id,
-                    "external_sport_key": sport_key,
-                    "status": "open",
-                    "id": {"$in": list(due_event_ids)},
-                },
-                {"_id": 0, "id": 1, "options": 1},
-            )
-            if not ev:
-                skipped_no_match += 1
-                continue
-            winning_id = _derive_winning_option_from_scores(api_ev, ev.get("options") or [], False)
-            if not winning_id:
-                skipped_no_winner += 1
-                continue
-            if await _settle_event_internal(ev["id"], winning_id):
-                settled_count += 1
-    try:
-        fallback_settled += await _auto_settle_fallback_football_data()
-    except Exception as ex:
-        logger.warning("Fallback auto-settle football-data failed: %s", ex)
-    try:
-        fallback_settled += await _auto_settle_fallback_f1_ergast()
-    except Exception as ex:
-        logger.warning("Fallback auto-settle F1 Ergast failed: %s", ex)
-    try:
-        fallback_settled += await _auto_settle_fallback_thesportsdb_open_bets()
-    except Exception as ex:
-        logger.warning("Fallback auto-settle TheSportsDB failed: %s", ex)
-    # Mark all due events as attempted so each event is auto-processed only once.
+
+    sport_keys_used: set[str] = set()
+    if due_event_ids and needed_sport_keys:
+        # Prefer daysFrom=1 (cheaper); widen to 3 only for still-open due events.
+        await _settle_from_scores_for_keys(needed_sport_keys, days_from=1)
+        still_due = await _linkable_due_once_event_ids_with_open_bets()
+        still_keys: set[str] = set()
+        if still_due:
+            _c = db.sports_events.find(
+                {**_LINKABLE_OPEN_EVENT_FILTER, "id": {"$in": list(still_due)}},
+                {"_id": 0, "external_sport_key": 1},
+            ).limit(3000)
+            async for _d in _c:
+                _sk = (_d.get("external_sport_key") or "").strip()
+                if _sk:
+                    still_keys.add(_sk)
+            if still_keys:
+                await _settle_from_scores_for_keys(still_keys, days_from=3)
+        sport_keys_used = set(needed_sport_keys)
+
     try:
         if due_open_event_ids:
             await db.sports_events.update_many(
@@ -1887,6 +2003,7 @@ async def _auto_settle_from_scores() -> dict:
         "fallback_settled": fallback_settled,
         "sport_keys_queried": len(sport_keys_used),
         "sport_keys_skipped": max(0, len(all_sport_keys) - len(sport_keys_used & all_sport_keys)),
+        "odds_quota": await quota_status_payload(),
     }
 
 
@@ -3576,9 +3693,14 @@ async def admin_sports_templates(current_user: dict = Depends(require_admin_veri
 
 
 async def admin_sports_refresh(current_user: dict = Depends(require_admin_verified)):
+    # Budget gate: still run refresh (individual fetches no-op when reserved), surface quota to admin.
+    ok, reason = await can_spend_odds_credits(purpose="odds", estimated_cost=6)
     await _refresh_sports_live_cache(force=True)
     n = len(_get_all_sports_templates())
     payload = await _admin_sports_templates_payload(templates_persisted=n)
+    payload["odds_quota"] = await quota_status_payload()
+    if not ok:
+        payload["odds_budget_warning"] = reason
     try:
         payload["wc_board_kickoffs_updated"] = await _propagate_wc_kickoffs_to_open_board_events()
     except Exception as ex:
@@ -4409,10 +4531,11 @@ def _sports_auto_settle_ticker_idle_sec() -> int:
 
 
 def _sports_auto_settle_ticker_poll_interval_sec() -> int:
+    # Free-tier default 15m (was 3m) so score polls are rare when ticker is left on.
     try:
-        return max(30, int(os.environ.get("SPORTS_AUTO_SETTLE_TICKER_POLL_INTERVAL_SEC", "180")))
+        return max(30, int(os.environ.get("SPORTS_AUTO_SETTLE_TICKER_POLL_INTERVAL_SEC", "900")))
     except ValueError:
-        return 180
+        return 900
 
 
 def _sports_auto_settle_ticker_wait_cap_sec() -> int:
@@ -4954,8 +5077,8 @@ def register(router):
         return await _auto_settle_from_scores()
 
     async def cron_sports_auto_board(_: None = Depends(verify_sports_cron_secret)):
-        """Cron: refresh Odds templates and promote fixtures in the board lookahead window."""
-        return await auto_populate_sports_board(refresh_odds=True, template_source="merged")
+        """Cron: promote DB templates onto the board (no Odds refresh — free-tier safe)."""
+        return await auto_populate_sports_board(refresh_odds=False, template_source="database")
 
     router.add_api_route("/sports-betting/cron/auto-settle", cron_sports_auto_settle, methods=["POST"])
     router.add_api_route("/sports-betting/cron/auto-board", cron_sports_auto_board, methods=["POST"])

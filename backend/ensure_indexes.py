@@ -638,6 +638,7 @@ async def ensure_all_indexes(db):
         # --- The Odds API response cache (sports betting templates / scores) ---
         await db.sports_odds_api_cache.create_index("cache_key", unique=True)
         await db.sports_odds_api_cache.create_index([("fetched_at", -1)])
+        await db.sports_odds_api_quota.create_index("id", unique=True)
 
         # --- Sports betting: admin template library (persisted after "Check for events") ---
         await db.sports_betting_templates.create_index("id", unique=True)

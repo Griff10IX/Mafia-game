@@ -392,24 +392,50 @@ def _fixtures_from_fd_matches(matches: List[dict], gw: int) -> List[dict]:
 
 
 async def _fetch_odds_epl_events() -> List[dict]:
+    from utils.odds_api_quota import (
+        can_spend_odds_credits,
+        note_non_settle_spend,
+        record_odds_api_response_headers,
+    )
+
     key = (os.environ.get("THE_ODDS_API_KEY") or "").strip()
     if not key:
         return []
+    regions = (os.environ.get("SPORTS_ODDS_REGIONS") or "uk").strip() or "uk"
     events: List[dict] = []
     try:
+        # Odds pull (~1 credit) — share sports settle reserve / daily soft cap.
+        ok, reason = await can_spend_odds_credits(purpose="odds", estimated_cost=1)
+        if not ok:
+            logger.warning("LMS Odds EPL odds skip: %s", reason)
+        else:
+            async with httpx.AsyncClient(timeout=18.0) as client:
+                r = await client.get(
+                    "https://api.the-odds-api.com/v4/sports/soccer_epl/odds",
+                    params={"apiKey": key, "regions": regions, "markets": "h2h", "oddsFormat": "decimal"},
+                )
+                await record_odds_api_response_headers(r.headers, purpose="odds")
+                if r.status_code == 200:
+                    raw = r.json()
+                    if isinstance(raw, list):
+                        events.extend(raw)
+                    try:
+                        last = int(float(str(r.headers.get("x-requests-last") or 1)))
+                    except (TypeError, ValueError):
+                        last = 1
+                    await note_non_settle_spend(last)
+
+        # Scores for settle — allowed against settle reserve.
+        ok_s, reason_s = await can_spend_odds_credits(purpose="settle", estimated_cost=2)
+        if not ok_s:
+            logger.warning("LMS Odds EPL scores skip: %s", reason_s)
+            return events
         async with httpx.AsyncClient(timeout=18.0) as client:
-            r = await client.get(
-                "https://api.the-odds-api.com/v4/sports/soccer_epl/odds",
-                params={"apiKey": key, "regions": "uk,eu,us", "markets": "h2h", "oddsFormat": "decimal"},
-            )
-            if r.status_code == 200:
-                raw = r.json()
-                if isinstance(raw, list):
-                    events.extend(raw)
             s = await client.get(
                 "https://api.the-odds-api.com/v4/sports/soccer_epl/scores",
-                params={"apiKey": key, "daysFrom": 3},
+                params={"apiKey": key, "daysFrom": 1},
             )
+            await record_odds_api_response_headers(s.headers, purpose="settle")
             if s.status_code == 200:
                 raw = s.json()
                 if isinstance(raw, list):
