@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-13[/color][/b] — [b]Distillery stills overhaul[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] Slow stills no longer lose booze when auto-collect ticks — fractional production carries over until a full unit is ready.[/color]
+[*][color=#888888][b]Easier:[/b] Safer defaults (crew sell, no 50-unit reserve), starter production + sales workers, vault auto-repairs maintenance when it gets critically low, and ROI only counts booze cash when sales can actually sell.[/color]
+[*][color=#888888][b]Pay:[/b] Fully upgraded stills target roughly [b]$200–400M/week[/b] depending on setup and booze prices (crew vs street sell).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-13[/color][/b] — [b]Points price adjusted[/b][/size]
 [quote]
 [list]

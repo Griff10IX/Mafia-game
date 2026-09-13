@@ -239,7 +239,7 @@ export default function Distillery() {
   const [specialCursor, setSpecialCursor] = useState(0);
   const [workerDraft, setWorkerDraft] = useState({ production: 0, quality: 0, security: 0, sales: 0 });
   const [maintenancePoints, setMaintenancePoints] = useState(10);
-  const [autoSell, setAutoSell] = useState({ enabled: true, mode: 'booze_run', min_inventory: 50, batch_size: 30 });
+  const [autoSell, setAutoSell] = useState({ enabled: true, mode: 'crew', min_inventory: 0, batch_size: 25 });
   const [autoAging, setAutoAging] = useState({
     enabled: true,
     tier: 'standard',
@@ -247,7 +247,7 @@ export default function Distillery() {
     auto_collect_booze: true,
   });
   const [agingTier, setAgingTier] = useState('standard');
-  const [agingQty, setAgingQty] = useState(50);
+  const [agingQty, setAgingQty] = useState(10);
   const [activeSegment, setActiveSegment] = useState('ops');
   const [passiveBoozePaused, setPassiveBoozePaused] = useState(false);
 
@@ -393,8 +393,11 @@ export default function Distillery() {
   const workerPlanCost = hiresNeeded * workerHireCost;
   const maintenanceCost = Math.max(1, Number(maintenancePoints || 1)) * maintenanceCostPerPoint;
   const projected24hCash = Number(roi.risk_adjusted_cash_per_hour_estimate || roi.cash_per_hour_estimate || 0) * 24;
+  const projectedWeeklyCash = Number(roi.weekly_cash_estimate || projected24hCash * 7);
   const projected12dCash = Number(roi.projected_12d_income || 0);
   const hardCapProgress = Number(roi.hard_cap_progress || 0);
+  const autoSellActive = roi.auto_sell_active === true;
+  const salesWorkersCount = Number(workers.sales || 0);
   const projectedLossEvents24h = Number(lossForecast24h.expected_downgrade_events || 0);
   const projectedRebuyCost24h = Number(lossForecast24h.expected_rebuy_cost || 0);
   const maintenancePct = Number(dist?.maintenance || 0);
@@ -880,6 +883,10 @@ export default function Distillery() {
               <div className="dist-hero-status-v">{heatInfo.label} heat · {progression.progress_pct || 0}% complete</div>
             </div>
             <div className="dist-hero-status-cell">
+              <div className="dist-hero-status-l">Weekly Run</div>
+              <div className="dist-hero-status-v">{money(projectedWeeklyCash)}</div>
+            </div>
+            <div className="dist-hero-status-cell">
               <div className="dist-hero-status-l">12-Day Run</div>
               <div className="dist-hero-status-v">{money(projected12dCash)} / {money(roi.target_12d_top_end)}</div>
             </div>
@@ -948,6 +955,12 @@ export default function Distillery() {
           {passiveBoozePaused && (
             <div className="dist-paused-banner">
               Booze intake is paused (Auto Rank). Distillery will not add booze to inventory until you unblock intake on Account → Auto Rank.
+            </div>
+          )}
+
+          {!!autoSell.enabled && salesWorkersCount < 1 && (
+            <div className="dist-paused-banner" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.35)' }}>
+              Auto-sell is on but you have <strong>0 sales workers</strong> — booze will stack instead of paying. Assign at least one sales worker under Workers.
             </div>
           )}
 
@@ -1059,9 +1072,15 @@ export default function Distillery() {
 
             <div className="dist-panel">
               <SectionHead icon={BarChart3} title="ROI Forecast" />
-              <div className="dist-roi-row"><span className="dist-roi-key">Raw cash/h</span><span className="dist-roi-val">{money(roi.cash_per_hour_estimate)}</span></div>
+              <div className="dist-roi-row"><span className="dist-roi-key">Live cash/h</span><span className="dist-roi-val">{money(roi.cash_per_hour_estimate)}</span></div>
+              <div className="dist-roi-row"><span className="dist-roi-key">Till /h</span><span className="dist-roi-val">{money(roi.till_cash_per_hour_estimate)}</span></div>
+              <div className="dist-roi-row"><span className="dist-roi-key">Booze sell /h</span><span className="dist-roi-val">{money(roi.booze_cash_per_hour_estimate)}</span></div>
+              {!autoSellActive && Number(roi.booze_cash_per_hour_potential || 0) > 0 && (
+                <div className="dist-roi-row"><span className="dist-roi-key">Booze potential /h</span><span className="dist-roi-val" style={{ color: 'var(--amber)' }}>{money(roi.booze_cash_per_hour_potential)}</span></div>
+              )}
               <div className="dist-roi-row"><span className="dist-roi-key">Risk-adjusted</span><span className="dist-roi-val">{money(roi.risk_adjusted_cash_per_hour_estimate)}</span></div>
               <div className="dist-roi-row"><span className="dist-roi-key">Projected 24h</span><span className="dist-roi-val">{money(projected24hCash)}</span></div>
+              <div className="dist-roi-row"><span className="dist-roi-key">Projected week</span><span className="dist-roi-val">{money(projectedWeeklyCash)}</span></div>
               <div className="dist-roi-row"><span className="dist-roi-key">Downside</span><span className="dist-roi-val">{pct(roi.downside_exposure)}</span></div>
               <div className="dist-roi-row"><span className="dist-roi-key">Loss events 24h</span><span className="dist-roi-val">{projectedLossEvents24h.toFixed(2)}</span></div>
               <div className="dist-roi-row"><span className="dist-roi-key">Rebuy exposure</span><span className="dist-roi-val">{money(projectedRebuyCost24h)}</span></div>

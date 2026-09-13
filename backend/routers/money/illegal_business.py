@@ -2,6 +2,7 @@
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any, Tuple
 import copy
+import math
 import os
 import re
 import uuid
@@ -92,13 +93,17 @@ DISTILLERY_WORKER_ROLES = ("production", "quality", "security", "sales")
 DISTILLERY_WORKER_HIRE_COST = 22_000
 DISTILLERY_WORKER_MAX_PER_ACTION = 3
 DISTILLERY_MAINTENANCE_RECOVER_COST_PER_POINT = 300
-DISTILLERY_MAINTENANCE_DECAY_PER_HOUR = 0.5
+DISTILLERY_MAINTENANCE_DECAY_PER_HOUR = 0.28
 DISTILLERY_MAINTENANCE_DEGRADE_THRESHOLD = 35.0
 DISTILLERY_MAINTENANCE_MELTDOWN_THRESHOLD = 18.0
 DISTILLERY_MAINTENANCE_DEGRADE_CHECK_HOURS = 6.0
 DISTILLERY_MAINTENANCE_DEGRADE_MAX_PER_TICK = 4
-DISTILLERY_MAINTENANCE_DEGRADE_BASE_CHANCE = 0.22
-DISTILLERY_MAINTENANCE_DEGRADE_MELTDOWN_BONUS = 0.24
+DISTILLERY_MAINTENANCE_DEGRADE_BASE_CHANCE = 0.16
+DISTILLERY_MAINTENANCE_DEGRADE_MELTDOWN_BONUS = 0.18
+# Vault auto-topup while automation runs (keeps stills from rotting at 0%).
+DISTILLERY_AUTO_MAINTAIN_THRESHOLD = 28.0
+DISTILLERY_AUTO_MAINTAIN_TARGET = 55.0
+DISTILLERY_AUTO_MAINTAIN_MAX_POINTS = 80
 DISTILLERY_HEAT_DECAY_PER_HOUR = 1.35
 DISTILLERY_HEAT_THRESHOLDS = {"warm": 25, "hot": 50, "critical": 75}
 # Per-unit gain is intentionally low; high-end stills produce thousands of units per full cap.
@@ -113,7 +118,8 @@ DISTILLERY_ENFORCEMENT_VAULT_LOSS_MIN = 0.05
 DISTILLERY_ENFORCEMENT_VAULT_LOSS_MAX = 0.22
 DISTILLERY_AUTO_SELL_MARGIN_BASE = 0.85
 DISTILLERY_AUTO_SELL_MARGIN_CAP = 1.70
-DISTILLERY_BASE_BOOZE_UNIT_VALUE = 900
+# Crew auto-sell unit value. Maxed stills aim ~$200–400M/week with city booze-run variance on top.
+DISTILLERY_BASE_BOOZE_UNIT_VALUE = 1050
 RACKET_TOKEN_INCOME_MULT = 1.2
 BOOZE_TOKEN_DISTILLERY_MULT = 1.1
 DISTILLERY_COLLECT_ROI_SAFETY_FLOOR = 1.0
@@ -137,7 +143,7 @@ try:
     )
 except (TypeError, ValueError):
     DISTILLERY_AUTOMATION_MAX_BUSINESSES_PER_TICK = 40
-DISTILLERY_TARGET_12D_TOP_END = 50_000_000
+DISTILLERY_TARGET_12D_TOP_END = 350_000_000
 DISTILLERY_TARGET_DAILY_TOP_END = DISTILLERY_TARGET_12D_TOP_END / 12.0
 DISTILLERY_TOP_END_HOURS = 12 * 24
 DISTILLERY_RISK_ACTION_COOLDOWN_HOURS = 4
@@ -885,20 +891,21 @@ def _distillery_projected_24h_loss_forecast(distillery: dict) -> Dict[str, Any]:
 def _distillery_default(now: datetime) -> Dict[str, Any]:
     return {
         "equipment": {lane: 0 for lane in DISTILLERY_EQUIPMENT_ORDER},
-        "workers": {role: 0 for role in DISTILLERY_WORKER_ROLES},
+        "workers": {"production": 1, "quality": 0, "security": 0, "sales": 1},
         "worker_capacity": DISTILLERY_BASE_WORKER_CAP,
-        "worker_hires": 0,
+        "worker_hires": 2,
         "maintenance": 100.0,
         "last_maintenance_at": now.isoformat(),
         "heat": 0.0,
         "last_heat_at": now.isoformat(),
         "shutdown_until": None,
+        "booze_production_remainder": 0.0,
         "auto_sell": {
             "enabled": True,
-            "mode": "booze_run",
+            "mode": "crew",
             "booze_id": _default_booze_type_id(),
-            "min_inventory": 50,
-            "batch_size": 30,
+            "min_inventory": 0,
+            "batch_size": 25,
         },
         "auto_aging": {
             "enabled": True,
@@ -928,6 +935,7 @@ def _distillery_default(now: datetime) -> Dict[str, Any]:
         "last_tick_at": now.isoformat(),
         "last_auto_collect_at": None,
         "automation_baseline_v1": True,
+        "easy_ops_v1": True,
     }
 
 
@@ -1007,17 +1015,39 @@ def _distillery_ensure_state(business: dict, now: Optional[datetime] = None) -> 
         auto_sell["booze_id"] = _default_booze_type_id()
         changed = True
     if "min_inventory" not in auto_sell:
-        auto_sell["min_inventory"] = 50
+        auto_sell["min_inventory"] = 0
         changed = True
     if "batch_size" not in auto_sell:
-        auto_sell["batch_size"] = 30
+        auto_sell["batch_size"] = 25
         changed = True
     if "mode" not in auto_sell:
-        auto_sell["mode"] = "booze_run"
+        auto_sell["mode"] = "crew"
         changed = True
-    _asm = str(auto_sell.get("mode") or "booze_run").lower()
+    _asm = str(auto_sell.get("mode") or "crew").lower()
     if _asm not in DISTILLERY_AUTO_SELL_MODES:
-        auto_sell["mode"] = "booze_run"
+        auto_sell["mode"] = "crew"
+        changed = True
+    if "booze_production_remainder" not in dist:
+        dist["booze_production_remainder"] = 0.0
+        changed = True
+    # One-shot ease pass: stock hostile defaults + empty crew → starter sales/prod + crew sell.
+    if not dist.get("easy_ops_v1"):
+        if int(auto_sell.get("min_inventory") or 0) == 50:
+            auto_sell["min_inventory"] = 0
+            changed = True
+        wmap = dist.get("workers") or {}
+        sales_n = int(wmap.get("sales") or 0)
+        total_w = sum(int(wmap.get(r) or 0) for r in DISTILLERY_WORKER_ROLES)
+        if str(auto_sell.get("mode") or "").lower() == "booze_run" and sales_n == 0:
+            auto_sell["mode"] = "crew"
+            changed = True
+        if total_w == 0 and int(dist.get("worker_hires") or 0) == 0:
+            wmap["production"] = 1
+            wmap["sales"] = 1
+            dist["workers"] = wmap
+            dist["worker_hires"] = 2
+            changed = True
+        dist["easy_ops_v1"] = True
         changed = True
     auto_aging = dist.get("auto_aging")
     if not isinstance(auto_aging, dict):
@@ -1214,7 +1244,8 @@ def _distillery_output_modifiers(distillery: dict) -> dict:
     booze_loss_reduction = _clamp(float(specials.get("booze_loss_reduction", 0.0)), 0.0, 0.8)
 
     return {
-        "production_mult": max(DISTILLERY_COLLECT_ROI_SAFETY_FLOOR, production_mult) * automation_mult * _clamp(maintenance_penalty, 0.25, 1.0) * _clamp(heat_penalty, 0.4, 1.0),
+        # Floor 0.55 so neglected stills still feel alive; repair remains the clear upgrade path.
+        "production_mult": max(DISTILLERY_COLLECT_ROI_SAFETY_FLOOR, production_mult) * automation_mult * _clamp(maintenance_penalty, 0.55, 1.0) * _clamp(heat_penalty, 0.4, 1.0),
         "quality_mult": _clamp(max(1.0, quality_mult), 1.0, 3.2),
         "auto_sell_margin": margin,
         "cash_mult": _clamp(cash_mult, 1.0, 4.5),
@@ -1291,13 +1322,19 @@ def _distillery_roi_snapshot(
     base_cash_per_hour = float(business.get("income_per_hour") or INCOME_PER_HOUR_BASE)
     mods = _distillery_output_modifiers(distillery)
     effective_booze_per_hour = bph * mods["production_mult"] * booze_mult
-    implied_cash_per_hour = (base_cash_per_hour * mods["cash_mult"] * racket_mult) + (
+    till_cash_per_hour = base_cash_per_hour * mods["cash_mult"] * racket_mult
+    potential_booze_cash_per_hour = (
         effective_booze_per_hour
         * DISTILLERY_BASE_BOOZE_UNIT_VALUE
         * mods["auto_sell_margin"]
         * mods["quality_mult"]
         * distillery_cash_mult
     )
+    auto_sell = distillery.get("auto_sell") or {}
+    sales_workers = int(workers.get("sales") or 0)
+    auto_sell_live = bool(auto_sell.get("enabled")) and sales_workers > 0
+    realized_booze_cash_per_hour = potential_booze_cash_per_hour if auto_sell_live else 0.0
+    implied_cash_per_hour = till_cash_per_hour + realized_booze_cash_per_hour
     heat = float(distillery.get("heat") or 0.0)
     downside_exposure = 0.0
     if heat >= DISTILLERY_HEAT_BOOZE_LOSS_THRESHOLDS["hot"]:
@@ -1323,7 +1360,6 @@ def _distillery_roi_snapshot(
             best_lane = lane
             best_hours = payback_h
 
-    sales_workers = int(workers.get("sales") or 0)
     worker_payback = None
     if sales_workers < worker_cap:
         worker_gain = max(350.0, effective_booze_per_hour * DISTILLERY_BASE_BOOZE_UNIT_VALUE * 0.04)
@@ -1336,9 +1372,15 @@ def _distillery_roi_snapshot(
 
     projected_12d = risk_adjusted_cash_per_hour * DISTILLERY_TOP_END_HOURS
     hard_cap_progress = _clamp(projected_12d / DISTILLERY_TARGET_12D_TOP_END, 0.0, 1.8)
+    weekly_estimate = risk_adjusted_cash_per_hour * 24.0 * 7.0
 
     return {
         "cash_per_hour_estimate": round(implied_cash_per_hour, 2),
+        "till_cash_per_hour_estimate": round(till_cash_per_hour, 2),
+        "booze_cash_per_hour_estimate": round(realized_booze_cash_per_hour, 2),
+        "booze_cash_per_hour_potential": round(potential_booze_cash_per_hour, 2),
+        "auto_sell_active": auto_sell_live,
+        "weekly_cash_estimate": round(weekly_estimate, 2),
         "booze_per_hour_estimate": round(effective_booze_per_hour, 2),
         "risk_adjusted_cash_per_hour_estimate": round(risk_adjusted_cash_per_hour, 2),
         "downside_exposure": round(downside_exposure, 4),
@@ -1349,11 +1391,16 @@ def _distillery_roi_snapshot(
         "projected_12d_income": round(projected_12d, 2),
         "hard_cap_progress": round(hard_cap_progress, 4),
         "target_12d_top_end": DISTILLERY_TARGET_12D_TOP_END,
-        "efficiency_score": round((_clamp(float(distillery.get("maintenance") or 0.0), 0.0, 100.0) * 0.42) + ((100.0 - _clamp(float(distillery.get("heat") or 0.0), 0.0, 100.0)) * 0.58), 2),
+        "efficiency_score": round(
+            (_clamp(float(distillery.get("maintenance") or 0.0), 0.0, 100.0) * 0.42)
+            + ((100.0 - _clamp(float(distillery.get("heat") or 0.0), 0.0, 100.0)) * 0.58),
+            2,
+        ),
         "racket_token_active": racket_mult > 1.0,
         "booze_token_active": booze_mult > 1.0,
         "racket_token_income_mult": racket_mult,
         "booze_token_distillery_mult": booze_mult,
+        "booze_production_remainder": round(float(distillery.get("booze_production_remainder") or 0.0), 4),
     }
 
 
@@ -1365,6 +1412,26 @@ def _distillery_heat_label(heat: float) -> str:
     if heat >= DISTILLERY_HEAT_THRESHOLDS["warm"]:
         return "warm"
     return "low"
+
+
+def _distillery_vault_auto_maintain(business: dict, distillery: dict, now: datetime) -> int:
+    """Spend vault cash to pull maintenance off the floor. Returns vault cash spent."""
+    maint = float(distillery.get("maintenance") or 0.0)
+    if maint >= DISTILLERY_AUTO_MAINTAIN_THRESHOLD:
+        return 0
+    vault = int(business.get("vault") or 0)
+    cost_pp = int(DISTILLERY_MAINTENANCE_RECOVER_COST_PER_POINT)
+    if vault < cost_pp:
+        return 0
+    need = max(1, int(math.ceil(DISTILLERY_AUTO_MAINTAIN_TARGET - maint)))
+    afford = vault // cost_pp
+    pts = min(need, afford, int(DISTILLERY_AUTO_MAINTAIN_MAX_POINTS))
+    if pts <= 0:
+        return 0
+    spent = pts * cost_pp
+    distillery["maintenance"] = _clamp(maint + float(pts), 0.0, 100.0)
+    distillery["last_maintenance_at"] = now.isoformat()
+    return int(spent)
 
 
 # ---------------------------------------------------------------------------
@@ -2364,6 +2431,7 @@ async def distillery_process_automation(user_id: str) -> None:
     )
     distillery, _ = _distillery_ensure_state(business, now)
     _distillery_decay_and_status(distillery, now)
+    auto_maint_spent = _distillery_vault_auto_maintain(business, distillery, now)
     claimed, vault_add = _distillery_claim_ready_mutate(distillery, now)
     set_doc: Dict[str, Any] = {"distillery": distillery}
     inc_doc: Dict[str, int] = {}
@@ -2371,9 +2439,14 @@ async def distillery_process_automation(user_id: str) -> None:
         vault_add = int(vault_add * _distillery_cash_token_mult(user, now))
         inc_doc["vault"] = vault_add
         inc_doc["vault_lifetime_earned"] = max(0, vault_add)
+    if auto_maint_spent > 0:
+        inc_doc["vault"] = int(inc_doc.get("vault") or 0) - int(auto_maint_spent)
+        # Keep business vault in sync for later collect checks in this pass.
+        business["vault"] = int(business.get("vault") or 0) - int(auto_maint_spent)
     if inc_doc:
         await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": set_doc, "$inc": inc_doc})
-        await _bump_distillery_token_bonus_stats(user, int(inc_doc.get("vault") or 0), now)
+        if vault_add > 0:
+            await _bump_distillery_token_bonus_stats(user, int(vault_add), now)
     else:
         await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": set_doc})
     if booze_intake_blocked(user):
@@ -2396,6 +2469,22 @@ async def distillery_process_automation(user_id: str) -> None:
         return
     if not user or user.get("in_jail"):
         return
+    # Skip empty ticks: wait until till is collectable OR at least 1 booze unit is ready (incl. remainder).
+    try:
+        pending_take, _ = _illegal_business_pending_take_and_hours_sync(business, user or {}, now)
+        last_booze = business.get("last_collected_booze_at") or business.get("last_collected_at")
+        last_b = _parse_iso_utc(last_booze, now) if last_booze else now
+        hours_booze = max(0.0, (now - last_b).total_seconds() / 3600.0)
+        mods = _distillery_output_modifiers(distillery)
+        bph = float(business.get("booze_per_hour") or BOOZE_PER_HOUR_BASE)
+        bcap = float(business.get("booze_cap_hours") or BOOZE_CAP_HOURS_BASE)
+        booze_raw = min(hours_booze * bph * float(mods.get("production_mult") or 1.0), bph * bcap * float(mods.get("production_mult") or 1.0))
+        rem = float(distillery.get("booze_production_remainder") or 0.0)
+        units_ready = int(max(0.0, booze_raw + rem))
+        if float(pending_take) < float(MIN_IBM_CASH_ACTION) and units_ready < 1:
+            return
+    except Exception:
+        pass
     try:
         await _collect_illegal_business_impl(user)
     except HTTPException:
@@ -2525,11 +2614,24 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
 
         distillery, _ = _distillery_ensure_state(business, now)
         status = _distillery_decay_and_status(distillery, now) if distillery else None
+        auto_maint_spent = 0
+        if distillery:
+            auto_maint_spent = int(_distillery_vault_auto_maintain(business, distillery, now) or 0)
+            if auto_maint_spent > 0:
+                business["_distillery_auto_maint_spent"] = auto_maint_spent
         mods = _distillery_output_modifiers(distillery or {})
         production_mult = float(mods.get("production_mult") or 1.0) * booze_mult
 
         booze_raw = min(hours_booze * bph * production_mult, (bph * bcap) * production_mult)
-        booze_earned = int(max(0, booze_raw)) if not (status and status.get("is_shutdown")) else 0
+        # Keep sub-unit production across collects (auto-collect used to wipe ~0.2 units forever).
+        remainder = float(distillery.get("booze_production_remainder") or 0.0) if distillery else 0.0
+        if status and status.get("is_shutdown"):
+            booze_earned = 0
+        else:
+            booze_total = max(0.0, float(booze_raw) + max(0.0, remainder))
+            booze_earned = int(booze_total)
+            if distillery is not None:
+                distillery["booze_production_remainder"] = round(booze_total - float(booze_earned), 6)
 
         default_booze_id = _default_booze_type_id()
         if distillery:
@@ -2709,7 +2811,8 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
     if respect_earned > 0:
         await log_respect_earned(current_user["id"], respect_earned, "illegal_business")
     vault_income = int(income) + auto_sell_cash
-    vault_delta = vault_income - vault_penalty
+    auto_maint_spent = int(business.get("_distillery_auto_maint_spent") or 0)
+    vault_delta = vault_income - vault_penalty - auto_maint_spent
     await db.illegal_businesses.update_one(
         {"id": business["id"]},
         {"$set": updates, "$inc": {"vault": vault_delta, "vault_lifetime_earned": max(0, vault_income)}},
