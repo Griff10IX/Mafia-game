@@ -143,7 +143,10 @@ try:
     )
 except (TypeError, ValueError):
     DISTILLERY_AUTOMATION_MAX_BUSINESSES_PER_TICK = 40
-DISTILLERY_TARGET_12D_TOP_END = 350_000_000
+DISTILLERY_TARGET_WEEKLY_LOW = 200_000_000
+DISTILLERY_TARGET_WEEKLY_HIGH = 400_000_000
+# 12-day meter aligned to the top of the weekly band (~$400M/week).
+DISTILLERY_TARGET_12D_TOP_END = int(DISTILLERY_TARGET_WEEKLY_HIGH * (12.0 / 7.0))
 DISTILLERY_TARGET_DAILY_TOP_END = DISTILLERY_TARGET_12D_TOP_END / 12.0
 DISTILLERY_TOP_END_HOURS = 12 * 24
 DISTILLERY_RISK_ACTION_COOLDOWN_HOURS = 4
@@ -1371,8 +1374,9 @@ def _distillery_roi_snapshot(
         tier_roi[tier_id] = round((base * float(tier["cash_mult"])) / max(1.0, base), 3)
 
     projected_12d = risk_adjusted_cash_per_hour * DISTILLERY_TOP_END_HOURS
-    hard_cap_progress = _clamp(projected_12d / DISTILLERY_TARGET_12D_TOP_END, 0.0, 1.8)
     weekly_estimate = risk_adjusted_cash_per_hour * 24.0 * 7.0
+    # True ratio vs top-of-band (not clamped to 180% — that made maxed stills look broken).
+    hard_cap_progress = max(0.0, weekly_estimate / float(DISTILLERY_TARGET_WEEKLY_HIGH))
 
     return {
         "cash_per_hour_estimate": round(implied_cash_per_hour, 2),
@@ -1381,6 +1385,8 @@ def _distillery_roi_snapshot(
         "booze_cash_per_hour_potential": round(potential_booze_cash_per_hour, 2),
         "auto_sell_active": auto_sell_live,
         "weekly_cash_estimate": round(weekly_estimate, 2),
+        "target_weekly_low": DISTILLERY_TARGET_WEEKLY_LOW,
+        "target_weekly_high": DISTILLERY_TARGET_WEEKLY_HIGH,
         "booze_per_hour_estimate": round(effective_booze_per_hour, 2),
         "risk_adjusted_cash_per_hour_estimate": round(risk_adjusted_cash_per_hour, 2),
         "downside_exposure": round(downside_exposure, 4),

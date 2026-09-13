@@ -887,8 +887,8 @@ export default function Distillery() {
               <div className="dist-hero-status-v">{money(projectedWeeklyCash)}</div>
             </div>
             <div className="dist-hero-status-cell">
-              <div className="dist-hero-status-l">12-Day Run</div>
-              <div className="dist-hero-status-v">{money(projected12dCash)} / {money(roi.target_12d_top_end)}</div>
+              <div className="dist-hero-status-l">Week Band</div>
+              <div className="dist-hero-status-v">{money(roi.target_weekly_low || 200000000)}–{money(roi.target_weekly_high || 400000000)}</div>
             </div>
             <div className="dist-hero-status-cell">
               <div className="dist-hero-status-l">Risk Tone</div>
@@ -943,8 +943,20 @@ export default function Distillery() {
         <div className="dist-stat-strip hidden sm:grid">
           <StatCard label="Vault" value={money(vaultBalance)} accent />
           <StatCard label="Progress" value={`${progression.total_steps || 0}/${progression.max_steps || 0}`} sub={`${progression.progress_pct || 0}% unlocked`} />
-          <StatCard label="Projected 12d" value={money(projected12dCash)} sub={`Target ${money(roi.target_12d_top_end)}`} />
-          <StatCard label="Target Progress" value={pct(hardCapProgress)} sub="toward 12-day goal" />
+          <StatCard
+            label="Projected week"
+            value={money(projectedWeeklyCash)}
+            sub={`Band ${money(roi.target_weekly_low || 200000000)}–${money(roi.target_weekly_high || 400000000)}`}
+          />
+          <StatCard
+            label="Band progress"
+            value={`${(Number(hardCapProgress || 0) * 100).toFixed(0)}%`}
+            sub={
+              Number(hardCapProgress || 0) >= 1
+                ? 'at/above $400M/week top'
+                : 'toward $400M/week top'
+            }
+          />
         </div>
 
         <div className="dist-body">
