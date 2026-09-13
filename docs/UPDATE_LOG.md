@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-13[/color][/b] — [b]Points price adjusted[/b][/size]
+[quote]
+[list]
+[*][color=#888888]Points price adjusted.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-12[/color][/b] — [b]Blackjack dealer rules[/b][/size]
 [quote]
 [list]

@@ -40,8 +40,8 @@ STORE_POINTS_LOOT_PIECES_PER_BLOCK = 110
 # GBP store: 2 bonus Wheel of Fortune free spins per whole £10 charged (per purchase; leftover under £10 does not carry).
 STORE_POINTS_WHEEL_GBP_MINOR_PER_SPIN = 1000
 STORE_POINTS_WHEEL_SPINS_PER_BLOCK = 2
-# Permanent card-points multiplier (+100% = double points vs listed/base amount).
-STORE_POINTS_EVENT_BONUS_RATE = 1.0
+# Permanent card-points multiplier (+40% on top of listed/base amount).
+STORE_POINTS_EVENT_BONUS_RATE = 0.4
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
 AUTO_RANK_PERMANENT_PACKAGE_ID = "auto_rank_permanent_2000"
@@ -386,7 +386,7 @@ def _store_points_event_payload(
     enabled: bool = True,
     force_until: Optional[str] = None,
 ) -> dict:
-    """Permanent store points bonus (+100% when enabled). Schedule helpers kept for payload shape only."""
+    """Permanent store points bonus (+40% when enabled). Schedule helpers kept for payload shape only."""
     n = now or datetime.now(timezone.utc)
     if n.tzinfo is None:
         n = n.replace(tzinfo=timezone.utc)
