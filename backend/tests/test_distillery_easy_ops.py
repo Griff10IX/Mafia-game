@@ -33,11 +33,11 @@ def test_roi_requires_sales():
 
 
 def test_weekly_band():
-    # $1.2M–$2.4M/hr ≈ $200–400M/week
-    lo = 1_200_000 * 24 * 7
-    hi = 2_400_000 * 24 * 7
-    assert 200_000_000 <= lo <= 210_000_000
-    assert 400_000_000 <= hi <= 410_000_000
+    # Fully upgraded top ≈ $1B/week
+    hi = 1_000_000_000
+    assert hi == 1_000_000_000
+    lo = 400_000_000
+    assert lo < hi
 
 
 if __name__ == "__main__":

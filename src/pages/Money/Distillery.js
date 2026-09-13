@@ -888,7 +888,7 @@ export default function Distillery() {
             </div>
             <div className="dist-hero-status-cell">
               <div className="dist-hero-status-l">Week Band</div>
-              <div className="dist-hero-status-v">{money(roi.target_weekly_low || 200000000)}–{money(roi.target_weekly_high || 400000000)}</div>
+              <div className="dist-hero-status-v">{money(roi.target_weekly_low || 400000000)}–{money(roi.target_weekly_high || 1000000000)}</div>
             </div>
             <div className="dist-hero-status-cell">
               <div className="dist-hero-status-l">Risk Tone</div>
@@ -946,15 +946,15 @@ export default function Distillery() {
           <StatCard
             label="Projected week"
             value={money(projectedWeeklyCash)}
-            sub={`Band ${money(roi.target_weekly_low || 200000000)}–${money(roi.target_weekly_high || 400000000)}`}
+            sub={`Band ${money(roi.target_weekly_low || 400000000)}–${money(roi.target_weekly_high || 1000000000)}`}
           />
           <StatCard
             label="Band progress"
             value={`${(Number(hardCapProgress || 0) * 100).toFixed(0)}%`}
             sub={
               Number(hardCapProgress || 0) >= 1
-                ? 'at/above $400M/week top'
-                : 'toward $400M/week top'
+                ? 'at/above $1B/week top'
+                : 'toward $1B/week top'
             }
           />
         </div>

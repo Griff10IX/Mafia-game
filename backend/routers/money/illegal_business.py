@@ -143,9 +143,11 @@ try:
     )
 except (TypeError, ValueError):
     DISTILLERY_AUTOMATION_MAX_BUSINESSES_PER_TICK = 40
-DISTILLERY_TARGET_WEEKLY_LOW = 200_000_000
-DISTILLERY_TARGET_WEEKLY_HIGH = 400_000_000
-# 12-day meter aligned to the top of the weekly band (~$400M/week).
+DISTILLERY_TARGET_WEEKLY_LOW = 400_000_000
+DISTILLERY_TARGET_WEEKLY_HIGH = 1_000_000_000
+# Scales vault income (till + booze sells + aging) so a fully maxed still ≈ $1B/week.
+DISTILLERY_PAY_SCALE = 1.75
+# 12-day meter aligned to the top of the weekly band ($1B/week).
 DISTILLERY_TARGET_12D_TOP_END = int(DISTILLERY_TARGET_WEEKLY_HIGH * (12.0 / 7.0))
 DISTILLERY_TARGET_DAILY_TOP_END = DISTILLERY_TARGET_12D_TOP_END / 12.0
 DISTILLERY_TOP_END_HOURS = 12 * 24
@@ -1337,7 +1339,10 @@ def _distillery_roi_snapshot(
     sales_workers = int(workers.get("sales") or 0)
     auto_sell_live = bool(auto_sell.get("enabled")) and sales_workers > 0
     realized_booze_cash_per_hour = potential_booze_cash_per_hour if auto_sell_live else 0.0
-    implied_cash_per_hour = till_cash_per_hour + realized_booze_cash_per_hour
+    implied_cash_per_hour = (till_cash_per_hour + realized_booze_cash_per_hour) * float(DISTILLERY_PAY_SCALE)
+    till_cash_per_hour *= float(DISTILLERY_PAY_SCALE)
+    potential_booze_cash_per_hour *= float(DISTILLERY_PAY_SCALE)
+    realized_booze_cash_per_hour *= float(DISTILLERY_PAY_SCALE)
     heat = float(distillery.get("heat") or 0.0)
     downside_exposure = 0.0
     if heat >= DISTILLERY_HEAT_BOOZE_LOSS_THRESHOLDS["hot"]:
@@ -2338,7 +2343,7 @@ def _distillery_claim_ready_mutate(distillery: dict, now: datetime) -> tuple[int
         qty = int(batch.get("quantity") or 0)
         cash_mult = float(batch.get("cash_mult") or 1.0)
         quality_mult = float(batch.get("quality_mult") or 1.0)
-        cash = int(qty * DISTILLERY_BASE_BOOZE_UNIT_VALUE * cash_mult * quality_mult)
+        cash = int(qty * DISTILLERY_BASE_BOOZE_UNIT_VALUE * cash_mult * quality_mult * float(DISTILLERY_PAY_SCALE))
         if heat >= DISTILLERY_HEAT_THRESHOLDS["hot"]:
             cash = int(cash * 0.9)
         vault_add += cash
@@ -2627,6 +2632,12 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
                 business["_distillery_auto_maint_spent"] = auto_maint_spent
         mods = _distillery_output_modifiers(distillery or {})
         production_mult = float(mods.get("production_mult") or 1.0) * booze_mult
+        # Distillery upgrades boost till into the vault (matches ROI) + global pay scale → ~$1B/week maxed.
+        if distillery:
+            income = round(
+                float(income) * float(mods.get("cash_mult") or 1.0) * float(DISTILLERY_PAY_SCALE),
+                2,
+            )
 
         booze_raw = min(hours_booze * bph * production_mult, (bph * bcap) * production_mult)
         # Keep sub-unit production across collects (auto-collect used to wipe ~0.2 units forever).
@@ -2667,6 +2678,7 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
                             * float(mods.get("auto_sell_margin") or DISTILLERY_AUTO_SELL_MARGIN_BASE)
                             * float(mods.get("quality_mult") or 1.0)
                             * float(mods.get("cash_mult") or 1.0)
+                            * float(DISTILLERY_PAY_SCALE)
                         )
                         stats = distillery.get("stats") or {}
                         stats["total_booze_auto_sold"] = int(stats.get("total_booze_auto_sold") or 0) + auto_sold_units
@@ -2802,7 +2814,7 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
                         distillery_breakdown["booze_run_jailed"] = True
                         distillery_breakdown["booze_run_vault"] = 0
                 elif sell_out:
-                    booze_run_vault = int(sell_out.get("revenue") or 0)
+                    booze_run_vault = int(int(sell_out.get("revenue") or 0) * float(DISTILLERY_PAY_SCALE))
                     stats = distillery.get("stats") or {}
                     stats["total_booze_auto_sold"] = int(stats.get("total_booze_auto_sold") or 0) + auto_sold_units
                     stats["total_booze_run_auto_vault"] = int(stats.get("total_booze_run_auto_vault") or 0) + booze_run_vault
@@ -3264,7 +3276,7 @@ async def distillery_claim_aged_batch(req: DistilleryClaimBatchRequest, current_
     qty = int(batch.get("quantity") or 0)
     cash_mult = float(batch.get("cash_mult") or 1.0)
     quality_mult = float(batch.get("quality_mult") or 1.0)
-    cash = int(qty * DISTILLERY_BASE_BOOZE_UNIT_VALUE * cash_mult * quality_mult)
+    cash = int(qty * DISTILLERY_BASE_BOOZE_UNIT_VALUE * cash_mult * quality_mult * float(DISTILLERY_PAY_SCALE))
     heat = float(distillery.get("heat") or 0.0)
     if heat >= DISTILLERY_HEAT_THRESHOLDS["hot"]:
         cash = int(cash * 0.9)

@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-13[/color][/b] — [b]Distillery pay ceiling ~$1B/week[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Pay:[/b] Fully upgraded Distillery stills now top out around [b]$1B/week[/b] (band [b]$400M–$1B[/b] depending on setup, till strength, and booze prices).[/color]
+[*][color=#888888]Still upgrades now also boost till cash into the vault, not just booze sells.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-13[/color][/b] — [b]Distillery stills overhaul[/b][/size]
 [quote]
 [list]
