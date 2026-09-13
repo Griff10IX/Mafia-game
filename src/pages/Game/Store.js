@@ -906,7 +906,7 @@ export default function Store() {
       try {
         if (customPurchaseMode === 'points') {
           const p = parseInt(String(customPointsInput).replace(/\D/g, ''), 10);
-          if (!Number.isFinite(p) || p < 1000) {
+          if (!Number.isFinite(p) || p < 2740) {
             setCustomQuote(null);
             return;
           }
@@ -1618,7 +1618,7 @@ export default function Store() {
                 {pointsPaymentMode === 'card'
                   ? (
                     <>
-                      Enter whole points from 1,000–1,000,000, or a GBP budget — the server prices along the standard store curve (Stripe checkout).
+                      Enter whole points from 2,740–1,000,000, or a GBP budget — the server prices along the standard store curve (Stripe checkout).
                       {' '}
                       <span className="text-violet-400/90">GBP card checkouts earn 1,100 loot box pieces per whole £10 charged</span> (110 per whole £1; credited when your points are). Any GBP store checkout also earns{' '}
                       <span className="text-amber-400/90">2 Wheel of Fortune free spins per whole £10</span> (banked; leftover under £10 on that checkout does not carry).

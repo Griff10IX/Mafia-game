@@ -764,17 +764,17 @@ GARAGE_BATCH_LIMIT_MAX = 100
 # Bullet storage cap: melt (and other sources) cannot push bullets above this
 BULLET_STORAGE_CAP = 250_000
 
-# Points store: list ~£2.50/1k; larger packs add volume discount (£x.99); 100k < 2×50k
+# Points store: ~1,100 points per £1 (e.g. £10 ≈ 11,000 pts). GBP prices unchanged; points raised.
 POINT_PACKAGES = {
-    "mini": {"points": 1000, "price_gbp": 2.49},
-    "starter": {"points": 2500, "price_gbp": 5.99},
-    "bronze": {"points": 5000, "price_gbp": 11.99},
-    "silver": {"points": 10000, "price_gbp": 21.99},
-    "gold": {"points": 25000, "price_gbp": 52.99},
-    "platinum": {"points": 50000, "price_gbp": 99.99},
-    "diamond": {"points": 100000, "price_gbp": 189.99},
-    "elite": {"points": 150000, "price_gbp": 274.99},
-    "legend": {"points": 200000, "price_gbp": 349.99},
+    "mini": {"points": 2740, "price_gbp": 2.49},
+    "starter": {"points": 6590, "price_gbp": 5.99},
+    "bronze": {"points": 13190, "price_gbp": 11.99},
+    "silver": {"points": 24190, "price_gbp": 21.99},
+    "gold": {"points": 58290, "price_gbp": 52.99},
+    "platinum": {"points": 110000, "price_gbp": 99.99},
+    "diamond": {"points": 209000, "price_gbp": 189.99},
+    "elite": {"points": 302500, "price_gbp": 274.99},
+    "legend": {"points": 385000, "price_gbp": 349.99},
     # Rank-XP pass entitlement (no points credited; token is activated in Armoury).
     "rank_xp_pass_499": {"points": 0, "price_gbp": 15.00},
     # Permanent Auto Rank (email-tied entitlement; no points credited).

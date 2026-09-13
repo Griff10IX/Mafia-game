@@ -10,7 +10,7 @@ from typing import List, Optional, Tuple
 CUSTOM_POINTS_PACKAGE_ID = "custom"
 
 # Match smallest / largest fixed point packs (mini / legend).
-CUSTOM_POINTS_MIN = 1_000
+CUSTOM_POINTS_MIN = 2_740
 CUSTOM_POINTS_MAX = 1_000_000
 
 _RANK_PASS_ID = "rank_xp_pass_499"
