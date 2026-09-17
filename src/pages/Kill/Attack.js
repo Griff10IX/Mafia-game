@@ -148,8 +148,10 @@ const ATTACK_LIST_POLL_IDLE_MS = 10000;
 const ATTACK_LIST_POLL_SEARCHING_MS = 3000;
 /** Coalesce bursts (focus + events + poll) so we don't stack GETs. */
 const ATTACK_LIST_MIN_GAP_MS = 1500;
-/** JWT-only pulse: target travel shows on My Searches immediately. */
-const FOUND_LOCATION_PULSE_MS = 200;
+/** JWT-only pulse: target travel shows on My Searches within ~this delay while tab visible. */
+const FOUND_LOCATION_PULSE_MS = 100;
+/** Hidden tab: no need for sub-second hops — ease API load until they come back. */
+const FOUND_LOCATION_PULSE_HIDDEN_MS = 2000;
 const ATTACK_LIST_REFRESH_AFTER_FOCUS_MS = 1500;
 function readCachedAttacks() {
   try {
@@ -2017,9 +2019,29 @@ export default function Attack() {
     if (!hasFoundAttacks) return undefined;
     let cancelled = false;
     let inFlight = false;
+    let timerId = null;
+
+    const nextDelay = () => (
+      typeof document !== 'undefined' && document.visibilityState === 'hidden'
+        ? FOUND_LOCATION_PULSE_HIDDEN_MS
+        : FOUND_LOCATION_PULSE_MS
+    );
+
+    const schedule = (ms) => {
+      if (cancelled) return;
+      if (timerId) clearTimeout(timerId);
+      timerId = setTimeout(() => {
+        timerId = null;
+        tick();
+      }, ms);
+    };
+
     const tick = async () => {
       if (cancelled || inFlight) return;
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        schedule(FOUND_LOCATION_PULSE_HIDDEN_MS);
+        return;
+      }
       inFlight = true;
       try {
         const since = foundLocPulseRevRef.current || 0;
@@ -2027,25 +2049,34 @@ export default function Attack() {
         if (cancelled) return;
         const rev = Number(res.data?.rev) || 0;
         if (rev) foundLocPulseRevRef.current = rev;
-        if (!res.data?.changed || !Array.isArray(res.data?.rows) || res.data.rows.length === 0) return;
-        const patched = applyFoundLocationPatches(attacksRef.current, res.data.rows, hunterCityRef.current);
-        if (patched !== attacksRef.current) {
-          setAttacks(patched);
-          attacksRef.current = patched;
-          writeCachedAttacks(patched);
+        if (res.data?.changed && Array.isArray(res.data?.rows) && res.data.rows.length > 0) {
+          const patched = applyFoundLocationPatches(attacksRef.current, res.data.rows, hunterCityRef.current);
+          if (patched !== attacksRef.current) {
+            setAttacks(patched);
+            attacksRef.current = patched;
+            writeCachedAttacks(patched);
+          }
+          refreshAttacks({ force: true });
         }
-        refreshAttacks({ force: true });
       } catch (_) {
         /* pulse is best-effort; full list poll still runs */
       } finally {
         inFlight = false;
       }
+      if (cancelled) return;
+      schedule(nextDelay());
     };
+
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible' || cancelled) return;
+      schedule(0);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
     tick();
-    const interval = setInterval(tick, FOUND_LOCATION_PULSE_MS);
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      if (timerId) clearTimeout(timerId);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [hasFoundAttacks, refreshAttacks]);
 

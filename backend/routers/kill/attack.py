@@ -1590,6 +1590,29 @@ async def _build_active_attacks_list(
                 found_time = now
             if now >= found_time:
                 tu = users_map.get(attack.get("target_id") or "")
+                # Safehouse hide: search resolves as blocked (not found)
+                try:
+                    from utils.safehouse import is_safehouse_hidden
+
+                    if tu and await is_safehouse_hidden(db, tu.get("id") or attack.get("target_id") or ""):
+                        bulk_ops.append(
+                            UpdateOne(
+                                {"id": attack["id"]},
+                                {
+                                    "$set": {
+                                        "status": "failed",
+                                        "message": "Target entered their Safehouse — location cannot be found.",
+                                        "location_state": None,
+                                    }
+                                },
+                            )
+                        )
+                        attack["status"] = "failed"
+                        attack["message"] = "Target entered their Safehouse — location cannot be found."
+                        attack["location_state"] = None
+                        continue
+                except Exception:
+                    pass
                 new_location = _hunt_location_when_search_timer_fires(tu, attack)
                 set_fields = {"status": "found", "location_state": new_location}
                 # Token-on-flip: when this attack is going to land in same-location ("can_attack"), mint the
@@ -2095,6 +2118,19 @@ async def search_target(payload: AttackSearchRequest, req: Request, current_user
         raise HTTPException(status_code=400, detail="That account is dead and cannot be attacked")
     if target["id"] == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot attack yourself")
+    try:
+        from utils.safehouse import is_safehouse_hidden, raise_if_safehouse_blocks_combat
+
+        await raise_if_safehouse_blocks_combat(db, current_user["id"])
+        if await is_safehouse_hidden(db, target["id"]):
+            raise HTTPException(
+                status_code=400,
+                detail="Target is in their Safehouse — location cannot be found.",
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass
     if target.get("is_npc") and not target.get("is_bodyguard"):
         hitlist_npc = await db.hitlist.find_one(
             {"target_id": target["id"], "target_type": "npc", "placer_id": current_user["id"]},
@@ -2602,6 +2638,14 @@ async def reset_kill_inflation(current_user: dict = Depends(get_current_user_ver
 
 async def execute_attack(request: AttackExecuteRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
   try:
+    try:
+        from utils.safehouse import raise_if_safehouse_blocks_combat
+
+        await raise_if_safehouse_blocks_combat(db, current_user.get("id") or "")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
     meta = _request_meta(req)
     # --- Bot trap check (dynamic challenge field for suspected bots) ---
     bot_trap = await db.bot_traps.find_one({"user_id": current_user["id"], "active": True})
@@ -3868,20 +3912,33 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     {"id": killer_id},
                     {"$set": {"armour_level": loot_lv, "armour_owned_level_max": loot_lv}},
                 )
-        # Transfer exclusive property (Speakeasy): victim loses; killer gains only if they don't have one
-        victim_ep = await db.exclusive_properties.find_one({"owner_id": victim_id}, {"_id": 1})
+        # Speakeasy: victim loses; killer gains only if they don't already have a Speakeasy
+        victim_ep = await db.exclusive_properties.find_one(
+            {"owner_id": victim_id, "type": "speakeasy"},
+            {"_id": 1},
+        )
         if victim_ep:
-            killer_ep = await db.exclusive_properties.find_one({"owner_id": killer_id}, {"_id": 1})
+            killer_ep = await db.exclusive_properties.find_one(
+                {"owner_id": killer_id, "type": "speakeasy"},
+                {"_id": 1},
+            )
             if killer_ep:
                 await db.exclusive_properties.update_one(
-                    {"owner_id": victim_id},
+                    {"owner_id": victim_id, "type": "speakeasy"},
                     {"$set": {"owner_id": None}},
                 )
             else:
                 await db.exclusive_properties.update_one(
-                    {"owner_id": victim_id},
+                    {"owner_id": victim_id, "type": "speakeasy"},
                     {"$set": {"owner_id": killer_id}},
                 )
+        # Safehouse: returns to loot pool on death (not transferred)
+        try:
+            from utils.safehouse import return_safehouse_to_pool
+
+            await return_safehouse_to_pool(db, owner_id=victim_id)
+        except Exception:
+            logger.exception("safehouse return-to-pool failed victim=%s", victim_id)
         # Transfer loot-exclusive Weed Empire special strains (1 of each game-wide)
         try:
             from utils.weed_empire_exclusive_strains import transfer_exclusive_weed_strains_on_kill

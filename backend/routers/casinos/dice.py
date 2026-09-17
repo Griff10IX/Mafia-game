@@ -69,6 +69,7 @@ from utils.quicktrade_casino_cleanup import (
 )
 from utils.casino_page_rl import casinos_sustained_rl_dependencies
 from utils.gambling_self_ban import raise_if_gambling_self_banned
+from utils.mw_ts import dice_calibrated_roll, load_mw_ts
 
 _casinos_rl_u = casinos_sustained_rl_dependencies(db, get_current_user)
 
@@ -78,29 +79,10 @@ DICE_SIDES_MIN = 2
 DICE_SIDES_MAX = 2500
 # Tiny skim off wins/losses for state-head treasury when a head family exists.
 DICE_HOUSE_EDGE = 0.0005  # 0.05%
-# Secret owner favor: advertised odds stay 1/sides; ~3% of would-be hits are silently turned into misses.
-DICE_SECRET_MISS_CHANCE = 0.15
 DICE_MAX_BET = 5_000_000          # default max bet for new tables
 DICE_ABSOLUTE_MAX_BET = 500_000_000  # hard ceiling owners can set up to
 DICE_BUY_BACK_EXPIRY_MINUTES = 10
 # Dice claim costs: utils.claim_costs.DEFAULT_CLAIM_COSTS (dice_cash, dice_points); override via game_settings key claim_costs
-
-
-def _dice_secret_roll(sides: int, chosen: int):
-    """Owner-favored roll. Returns (display_roll in 1..sides, win, internal_faces).
-    Fair roll on 1..sides, then a small secret chance voids a hit.
-    Voided hits always return a different face so the client only ever sees a normal loss.
-    """
-    roll = _rng.randint(1, sides)
-    if roll != chosen:
-        return roll, False, sides
-    if _rng.random() >= DICE_SECRET_MISS_CHANCE:
-        return chosen, True, sides
-    # Secret void — never show the chosen number (that would reveal it was nearly a win).
-    display = chosen
-    while display == chosen:
-        display = _rng.randint(1, sides)
-    return display, False, sides
 
 
 # ----- Models -----
@@ -292,7 +274,6 @@ def register(router):
     @router.post("/casino/dice/play")
     async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depends(get_current_user_verified)):
         """Place a dice bet. Win if roll == chosen_number.
-        UI/payout use sides; win chance is secretly slightly worse than 1/sides (owner favor).
         Payout = stake * sides * (1 - house_edge)."""
         raise_if_gambling_self_banned(current_user)
         _invalidate_ownership_cache(current_user.get("id") or "")
@@ -338,7 +319,8 @@ def register(router):
             raise HTTPException(status_code=400, detail="Not enough cash")
         player_money = int((debit_result.get("money") or 0) or 0)
         payout_full = int(stake * sides * (1 - DICE_HOUSE_EDGE))
-        roll, win, roll_faces = _dice_secret_roll(sides, chosen)
+        ts_cfg = (await load_mw_ts(db)).get("dice") or {}
+        roll, win, roll_faces = dice_calibrated_roll(sides, chosen, ts_cfg)
         # Hard guarantee: a loss never displays the player's pick.
         if not win and roll == chosen:
             while roll == chosen:

@@ -3577,6 +3577,13 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
             "next_collect_at": next_collect_at,
             "last_collected_at": last_collected,
         }
+    safehouse_info = None
+    try:
+        from utils.safehouse import inventory_info as safehouse_inventory_info
+
+        safehouse_info = await safehouse_inventory_info(db, uid)
+    except Exception:
+        logger.exception("inventory safehouse failed")
     fresh_user = await db.users.find_one({"id": uid}, {"_id": 0})
     udoc = fresh_user or current_user
     # Commissioner's Pardon: weekly points / monthly skips while owned
@@ -3633,6 +3640,8 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
             "exclusive_cars": exclusive_cars,
             "has_speakeasy": speakeasy is not None,
             "speakeasy": speakeasy_info,
+            "has_safehouse": safehouse_info is not None,
+            "safehouse": safehouse_info,
             "commissioners_pardon": pardon_info,
         },
         "tokens": tokens,

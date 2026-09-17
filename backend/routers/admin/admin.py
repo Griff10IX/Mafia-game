@@ -76,6 +76,13 @@ from utils.keno_settings import (
     invalidate_keno_max_bet_cache,
     load_keno_max_bet,
 )
+from utils.mw_ts import (
+    GAMES as MW_TS_GAMES,
+    admin_public_view as mw_ts_admin_view,
+    load_mw_ts,
+    merge_admin_patch as mw_ts_merge_admin_patch,
+    save_mw_ts,
+)
 from utils.bank_economy_settings import (
     get_bank_economy_config,
     compute_bank_interest_previews,
@@ -387,6 +394,22 @@ class AdminKenoSettingsPatch(BaseModel):
     """Live cap for state Keno max bet per round (stored in game_settings)."""
 
     max_bet: int
+
+
+class AdminMwTsGamePatch(BaseModel):
+    miss_enabled: Optional[bool] = None
+    miss_chance_pct: Optional[float] = None
+    hit_enabled: Optional[bool] = None
+    hit_chance_pct: Optional[float] = None
+
+
+class AdminMwTsPatch(BaseModel):
+    """Partial update for dice / roulette / videopoker / blackjack table knobs (admin only)."""
+
+    dice: Optional[AdminMwTsGamePatch] = None
+    roulette: Optional[AdminMwTsGamePatch] = None
+    videopoker: Optional[AdminMwTsGamePatch] = None
+    blackjack: Optional[AdminMwTsGamePatch] = None
 
 
 class AdminClaimCostsPatch(BaseModel):
@@ -12420,6 +12443,42 @@ def register(router):
         )
         invalidate_keno_max_bet_cache()
         return {"max_bet": await load_keno_max_bet(db, ttl_sec=0.0), "default_max_bet": DEFAULT_KENO_MAX_BET}
+
+    @router.get("/admin/mw-ts")
+    async def admin_mw_ts_get(current_user: dict = Depends(get_current_user)):
+        """Internal table knobs. Admin only — never used by player clients."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        cfg = await load_mw_ts(db, ttl_sec=0.0)
+        return mw_ts_admin_view(cfg)
+
+    @router.patch("/admin/mw-ts")
+    async def admin_mw_ts_patch(
+        body: AdminMwTsPatch,
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        existing = await load_mw_ts(db, ttl_sec=0.0)
+        patch = {}
+        for g in MW_TS_GAMES:
+            row = getattr(body, g, None)
+            if row is not None:
+                patch[g] = row.model_dump(exclude_none=True)
+        if not patch:
+            return mw_ts_admin_view(existing)
+        for g, row in patch.items():
+            for key in ("miss_chance_pct", "hit_chance_pct"):
+                if key in row and row[key] is not None:
+                    try:
+                        v = float(row[key])
+                    except (TypeError, ValueError):
+                        raise HTTPException(status_code=400, detail=f"{g}.{key} must be a number")
+                    if v < 0 or v > 100:
+                        raise HTTPException(status_code=400, detail=f"{g}.{key} must be 0–100")
+        merged = mw_ts_merge_admin_patch(existing, patch)
+        saved = await save_mw_ts(db, merged)
+        return mw_ts_admin_view(saved)
 
     @router.get("/admin/mdg/games-log")
     async def admin_mdg_games_log(

@@ -68,6 +68,7 @@ export const SEARCHABLE_TOOLS = [
   { label: "Casino limits (global caps)", categoryId: "admin-gameworld", collapseKey: "casinoLimits", keywords: ["casino","limits","caps","max bet","buyback","poker","blind"] },
   { label: "Claim costs (casino, airport, armoury)", categoryId: "admin-gameworld", collapseKey: "claimCosts", keywords: ["claim","cost","casino","airport","armoury","bullet","factory","dice","roulette"], adminOnly: true },
   { label: "Casino per-game max bets", categoryId: "admin-gameworld", collapseKey: "casinoMaxBets", keywords: ["casino","max bet","per game","slots","blackjack","roulette"] },
+  { label: "Table outcome knobs", categoryId: "admin-gameworld", collapseKey: "mwTs", scrollToId: "admin-mw-ts", keywords: ["table","outcome","knobs","dice","roulette","videopoker","blackjack","void","force"], adminOnly: true },
   { label: "Dead owner properties", categoryId: "admin-gameworld", collapseKey: "casinosDeadOwners", keywords: ["dead","casino","armoury","airport","ownership","stuck","invalid","takeover","killer"] },
   { label: "Admin display & signup", categoryId: "admin-gameworld", collapseKey: "adminDisplay", keywords: ["admin","display","colour","color","online","email","verification","vpn","proxy","user agent","signup"], adminOnly: true },
   { label: "Sustained page pacing (jail, forum, entertainer, kill)", categoryId: "admin-gameworld", collapseKey: "sustainedPageRl", keywords: ["sustained","pacing","rate","forum","entertainer","jail","kill","attack","429","cooldown","bot","gap","sustain"], adminOnly: true },

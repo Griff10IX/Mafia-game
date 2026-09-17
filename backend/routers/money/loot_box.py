@@ -393,14 +393,14 @@ async def resync_loot_exclusive_claimed_counts_from_live() -> Dict[str, int]:
     )
     property_n = int(
         await db.exclusive_properties.count_documents(
-            {"owner_id": {"$nin": [None, ""]}}
+            {"type": "speakeasy", "owner_id": {"$nin": [None, ""]}}
         )
     )
     counts = {
         "weapon": min(_exclusive_cap("weapon"), max(0, 1 if weapon_n > 0 else 0)),
         "car": min(_exclusive_cap("car"), max(0, 1 if car_n > 0 else 0)),
         "armour": min(_exclusive_cap("armour"), max(0, 1 if armour_n > 0 else 0)),
-        "property": min(_exclusive_cap("property"), max(0, 1 if property_n > 0 else 0)),
+        "property": min(_exclusive_cap("property"), max(0, property_n)),
     }
     await db.game_settings.update_one(
         {"key": GAME_SETTINGS_LOOT_COUNTS_KEY},
@@ -691,7 +691,11 @@ async def _user_has_armour_6(user_id: str) -> bool:
 
 
 async def _user_has_exclusive_property(user_id: str) -> bool:
-    doc = await db.exclusive_properties.find_one({"owner_id": user_id}, {"_id": 1})
+    """True if user owns a Speakeasy (legacy property exclusive). Safehouse is separate."""
+    doc = await db.exclusive_properties.find_one(
+        {"owner_id": user_id, "type": "speakeasy"},
+        {"_id": 1},
+    )
     return doc is not None
 
 
@@ -778,6 +782,14 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
     claimed["weapon_bar"] = await count_live_bar(db)
     claimed["armour_v2"] = await count_live_armour_v2(db)
     claimed["mission_perk"] = await count_live_pardon(db)
+    try:
+        from utils.safehouse import SAFEHOUSE_CAP, SAFEHOUSE_NAME, count_live_safehouse
+
+        claimed["safehouse"] = await count_live_safehouse(db)
+    except Exception:
+        claimed["safehouse"] = 0
+        SAFEHOUSE_CAP = 1
+        SAFEHOUSE_NAME = "Safehouse"
     pardon_holder = None
     pdoc = await get_pardon_doc(db)
     if pdoc and pdoc.get("owner_id"):
@@ -817,12 +829,14 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
             "weapon_bar": NEW_EXCLUSIVE_CAP_BAR,
             "armour_v2": NEW_EXCLUSIVE_CAP_ARMOUR8,
             "mission_perk": NEW_EXCLUSIVE_CAP_PARDON,
+            "safehouse": SAFEHOUSE_CAP,
         },
         "new_exclusives_live": new_ex_live,
         "new_exclusives_labels": {
             "weapon_bar": WEAPON_LOOT_BAR_NAME,
             "armour_v2": ARMOUR_LEVEL_8_NAME,
             "mission_perk": PARDON_NAME,
+            "safehouse": SAFEHOUSE_NAME,
         },
         "mission_perk_holder": pardon_holder,
         "reclaimable_passives": list(reclaimable.values()),
@@ -1059,6 +1073,7 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         {"id": "armour_v2", "label": ARMOUR_LEVEL_8_NAME, "cap_global": NEW_EXCLUSIVE_CAP_ARMOUR8},
         {"id": "mission_perk", "label": PARDON_NAME, "cap_global": NEW_EXCLUSIVE_CAP_PARDON},
         {"id": "property", "label": "Speakeasy (exclusive property)", "cap_global": _exclusive_cap("property")},
+        {"id": "safehouse", "label": "Safehouse (Ultra Rare exclusive property)", "cap_global": 1},
         {
             "id": "weed_strain",
             "label": "Exclusive Weed Empire strains (1 per player from loot; more via kill)",
@@ -1422,6 +1437,32 @@ async def open_loot_box(
         )
         if new_ex:
             rewards.append(new_ex)
+
+        # Safehouse — Ultra Rare only; secret min-opens + chance (never expose rates)
+        try:
+            from utils.safehouse import try_roll_safehouse
+
+            sh_reward = await try_roll_safehouse(
+                db,
+                user_id=user_id,
+                open_total_after=open_total_after,
+                paid_tier=paid_tier,
+                now=now,
+                rng=_rng,
+            )
+            if sh_reward:
+                rewards.append(sh_reward)
+                try:
+                    await send_notification(
+                        user_id,
+                        "Loot box",
+                        "You claimed the Safehouse — Ultra Rare exclusive!",
+                        "system",
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
         for prize_idx in range(num_prizes):
             claimed = await _get_claimed_counts()
@@ -1947,11 +1988,61 @@ async def _loot_box_sustained_rl_user(current_user: dict = Depends(get_current_u
 _loot_box_rl_u = [Depends(_loot_box_sustained_rl_user)]
 
 
+async def collect_safehouse(current_user: dict = Depends(get_current_user)):
+    """Collect Safehouse weekly / 3-day rewards if due."""
+    from utils.safehouse import collect_rewards
+
+    res = await collect_rewards(db, current_user["id"])
+    if not res.get("ok"):
+        reason = res.get("reason") or "unavailable"
+        if reason == "not_owned":
+            raise HTTPException(status_code=400, detail="You do not own the Safehouse")
+        if reason == "cooldown":
+            raise HTTPException(status_code=400, detail="Safehouse rewards are on cooldown")
+        raise HTTPException(status_code=400, detail="Could not collect Safehouse rewards")
+    parts = []
+    if res.get("money"):
+        parts.append(f"${int(res['money']):,}")
+    if res.get("respect_points"):
+        parts.append(f"{int(res['respect_points']):,} respect")
+    if res.get("robot_bodyguard_hire_tokens"):
+        parts.append(f"{int(res['robot_bodyguard_hire_tokens'])} robot BG token")
+    if res.get("mission_skip_tokens"):
+        parts.append(f"{int(res['mission_skip_tokens'])} mission token")
+    if res.get("loot_box_pieces"):
+        parts.append(f"{int(res['loot_box_pieces'])} loot pieces")
+    msg = "Collected from Safehouse: " + (", ".join(parts) if parts else "nothing due")
+    return {"message": msg, **res}
+
+
+async def activate_safehouse_hide(current_user: dict = Depends(get_current_user)):
+    """Enter Safehouse for 3 hours (once per UTC day). Block kill searches while active."""
+    from utils.safehouse import SAFEHOUSE_HIDE_HOURS, activate_hide
+
+    res = await activate_hide(db, current_user["id"])
+    if not res.get("ok"):
+        reason = res.get("reason") or "unavailable"
+        if reason == "not_owned":
+            raise HTTPException(status_code=400, detail="You do not own the Safehouse")
+        if reason == "already_active":
+            raise HTTPException(status_code=400, detail="You are already in the Safehouse")
+        if reason == "already_used_today":
+            raise HTTPException(status_code=400, detail="Safehouse hide already used today (once per day)")
+        raise HTTPException(status_code=400, detail="Could not enter Safehouse")
+    return {
+        "message": f"You entered the Safehouse for {SAFEHOUSE_HIDE_HOURS} hours. Searchers cannot find your location.",
+        "hide_until": res.get("hide_until"),
+        "hide_hours": SAFEHOUSE_HIDE_HOURS,
+    }
+
+
 def register(router):
     router.add_api_route("/loot-box/status", get_loot_box_status, methods=["GET"], dependencies=_loot_box_rl_u)
     router.add_api_route("/loot-box/open", open_loot_box, methods=["POST"])
     router.add_api_route("/loot-box/speakeasy/collect", collect_speakeasy, methods=["POST"])
     router.add_api_route("/loot-box/speakeasy/gift", gift_speakeasy, methods=["POST"])
+    router.add_api_route("/loot-box/safehouse/collect", collect_safehouse, methods=["POST"])
+    router.add_api_route("/loot-box/safehouse/hide", activate_safehouse_hide, methods=["POST"])
     router.add_api_route("/loot-box/admin/rarity", get_loot_box_rarity_admin, methods=["GET"])
     router.add_api_route("/loot-box/admin/rarity", set_loot_box_rarity_admin, methods=["POST"])
     router.add_api_route("/loot-box/admin/sj-guarantee", get_sj_ur_guarantee_admin, methods=["GET"])

@@ -219,8 +219,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, weedSellAudit: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, pointsCashLogs: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, weedSellAudit: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, pointsCashLogs: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, weedSellAudit: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, pointsCashLogs: true, mwTs: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, weedSellAudit: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, pointsCashLogs: true, mwTs: true }; }
 }
 
 function saveCollapsed(state) {
@@ -1510,6 +1510,10 @@ export default function Admin() {
   const [casinoMaxBetLocation, setCasinoMaxBetLocation] = useState('');
   const [casinoMaxBetValue, setCasinoMaxBetValue] = useState('');
   const [casinoMaxBetSaving, setCasinoMaxBetSaving] = useState(false);
+  const [mwTsData, setMwTsData] = useState(null);
+  const [mwTsLoading, setMwTsLoading] = useState(false);
+  const [mwTsSaving, setMwTsSaving] = useState(false);
+  const [mwTsDraft, setMwTsDraft] = useState(null);
 
   // Cheat detection
   const [cheatSameIp, setCheatSameIp] = useState(null);
@@ -3716,6 +3720,41 @@ export default function Admin() {
     } finally {
       setCasinoMaxBetsLoading(false);
     }
+  };
+
+  const fetchMwTs = async () => {
+    setMwTsLoading(true);
+    try {
+      const res = await api.get('/admin/mw-ts');
+      setMwTsData(res.data);
+      setMwTsDraft(res.data?.games ? JSON.parse(JSON.stringify(res.data.games)) : null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load table knobs');
+    } finally {
+      setMwTsLoading(false);
+    }
+  };
+
+  const handleSaveMwTs = async () => {
+    if (!mwTsDraft) return;
+    setMwTsSaving(true);
+    try {
+      const res = await api.patch('/admin/mw-ts', mwTsDraft);
+      setMwTsData(res.data);
+      setMwTsDraft(res.data?.games ? JSON.parse(JSON.stringify(res.data.games)) : null);
+      toast.success('Saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save');
+    } finally {
+      setMwTsSaving(false);
+    }
+  };
+
+  const setMwTsGameField = (game, field, value) => {
+    setMwTsDraft((prev) => {
+      if (!prev?.[game]) return prev;
+      return { ...prev, [game]: { ...prev[game], [field]: value } };
+    });
   };
 
   const fetchCasinosDeadOwners = async () => {
@@ -15892,6 +15931,96 @@ export default function Admin() {
           </div>
         )}
         </div>
+
+        {isAdmin && (
+        <div id="admin-mw-ts" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Settings}
+          title="Table outcome knobs"
+          badge={<span className="text-[10px] font-heading text-mutedForeground">dice · roulette · VP · BJ</span>}
+          toolAnchor="mwTs"
+          isCollapsed={collapsed.mwTs}
+          onToggle={() => { toggleSection('mwTs'); if (collapsed.mwTs && !mwTsData) fetchMwTs(); }}
+        />
+        {!collapsed.mwTs && (
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground">
+              Admin only. Never shown on player casino pages or public APIs. Void = remap would-be wins to losses; Force = remap would-be losses to wins. Hold-all video poker is immune. Blackjack keeps the dealer upcard; player busts are never forced.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <BtnSecondary onClick={fetchMwTs} disabled={mwTsLoading}>{mwTsLoading ? '…' : 'Refresh'}</BtnSecondary>
+              <BtnPrimary onClick={handleSaveMwTs} disabled={mwTsSaving || !mwTsDraft}>{mwTsSaving ? '…' : 'Save'}</BtnPrimary>
+            </div>
+            {mwTsLoading && !mwTsDraft ? (
+              <p className="text-xs text-mutedForeground">Loading…</p>
+            ) : mwTsDraft && (
+              <div className="space-y-3">
+                {[
+                  { id: 'dice', label: 'Dice' },
+                  { id: 'roulette', label: 'Roulette' },
+                  { id: 'videopoker', label: 'Video Poker' },
+                  { id: 'blackjack', label: 'Blackjack' },
+                ].map(({ id, label }) => {
+                  const row = mwTsDraft[id] || {};
+                  return (
+                    <div key={id} className="rounded-md border border-zinc-700/50 bg-zinc-900/40 p-2.5 space-y-2">
+                      <div className="text-[11px] font-heading font-bold text-foreground uppercase tracking-wider">{label}</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label className="flex items-center gap-2 text-[10px] text-mutedForeground">
+                          <input
+                            type="checkbox"
+                            checked={!!row.miss_enabled}
+                            onChange={(e) => setMwTsGameField(id, 'miss_enabled', e.target.checked)}
+                            className="rounded border-zinc-600"
+                          />
+                          Void wins
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] text-mutedForeground uppercase font-heading shrink-0">%</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={0.1}
+                            value={row.miss_chance_pct ?? 0}
+                            onChange={(e) => setMwTsGameField(id, 'miss_chance_pct', parseFloat(e.target.value) || 0)}
+                            className="w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none font-mono"
+                            disabled={!row.miss_enabled}
+                          />
+                        </div>
+                        <label className="flex items-center gap-2 text-[10px] text-mutedForeground">
+                          <input
+                            type="checkbox"
+                            checked={!!row.hit_enabled}
+                            onChange={(e) => setMwTsGameField(id, 'hit_enabled', e.target.checked)}
+                            className="rounded border-zinc-600"
+                          />
+                          Force wins
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] text-mutedForeground uppercase font-heading shrink-0">%</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={0.1}
+                            value={row.hit_chance_pct ?? 0}
+                            onChange={(e) => setMwTsGameField(id, 'hit_chance_pct', parseFloat(e.target.value) || 0)}
+                            className="w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none font-mono"
+                            disabled={!row.hit_enabled}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+        </div>
+        )}
 
         <div id="admin-page-locks" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

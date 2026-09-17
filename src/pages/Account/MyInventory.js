@@ -170,6 +170,8 @@ export default function MyInventory() {
   const [usingToken, setUsingToken] = useState(null);
   const [autoRankRunning, setAutoRankRunning] = useState(null);
   const [collectingSpeakeasy, setCollectingSpeakeasy] = useState(false);
+  const [collectingSafehouse, setCollectingSafehouse] = useState(false);
+  const [activatingSafehouseHide, setActivatingSafehouseHide] = useState(false);
   const [exchangingAutoRank, setExchangingAutoRank] = useState(false);
   const [autoRankExchangeCount, setAutoRankExchangeCount] = useState('1');
   const [giftUsername, setGiftUsername] = useState('');
@@ -449,6 +451,33 @@ export default function MyInventory() {
     }
   };
 
+  const collectSafehouse = async () => {
+    setCollectingSafehouse(true);
+    try {
+      const res = await api.post('/loot-box/safehouse/collect');
+      toast.success(res?.data?.message || 'Collected from Safehouse!');
+      refreshUser();
+      fetchInventory();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to collect Safehouse');
+    } finally {
+      setCollectingSafehouse(false);
+    }
+  };
+
+  const activateSafehouseHide = async () => {
+    setActivatingSafehouseHide(true);
+    try {
+      const res = await api.post('/loot-box/safehouse/hide');
+      toast.success(res?.data?.message || 'Entered Safehouse.');
+      fetchInventory();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to enter Safehouse');
+    } finally {
+      setActivatingSafehouseHide(false);
+    }
+  };
+
   const sendGift = async () => {
     const un = giftUsername.trim();
     if (!un || !giftTokenType || !data?.tokens) return;
@@ -600,6 +629,8 @@ export default function MyInventory() {
   const exclusiveCars = loot.exclusive_cars || [];
   const hasSpeakeasy = loot.has_speakeasy === true;
   const speakeasyInfo = loot.speakeasy || null;
+  const hasSafehouse = loot.has_safehouse === true;
+  const safehouseInfo = loot.safehouse || null;
   const commissionersPardon = loot.commissioners_pardon || null;
   const isAdmin = data?.is_admin === true;
   const tokens = data?.tokens || {};
@@ -692,7 +723,7 @@ export default function MyInventory() {
     const until = tokens[key]?.active_until;
     return until && new Date(until) > nowDate;
   });
-  const hasExclusives = exclusiveCars.length > 0 || hasSpeakeasy || !!commissionersPardon;
+  const hasExclusives = exclusiveCars.length > 0 || hasSpeakeasy || hasSafehouse || !!commissionersPardon;
 
   const tabs = [
     { id: 'weapons', label: 'Weapons', icon: Swords, count: weapons.length },
@@ -700,7 +731,7 @@ export default function MyInventory() {
     { id: 'tokens', label: 'Tokens', icon: Zap, count: heldTokenKeys.length },
     { id: 'active', label: 'In use', icon: Clock, count: activeTokenKeys.length },
     ...(hasExclusives
-      ? [{ id: 'exclusives', label: 'Exclusives', icon: Gift, count: exclusiveCars.length + (hasSpeakeasy ? 1 : 0) + (commissionersPardon ? 1 : 0) }]
+      ? [{ id: 'exclusives', label: 'Exclusives', icon: Gift, count: exclusiveCars.length + (hasSpeakeasy ? 1 : 0) + (hasSafehouse ? 1 : 0) + (commissionersPardon ? 1 : 0) }]
       : []),
   ];
   const currentTab = tabs.some((t) => t.id === activeTab) ? activeTab : 'weapons';
@@ -1474,6 +1505,93 @@ export default function MyInventory() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+              {hasSafehouse && safehouseInfo && (
+                <div className="inv-item relative overflow-hidden rounded-lg border-2 border-rose-500/40 bg-rose-950/20 ring-1 ring-rose-500/20 shadow-[0_0_24px_rgba(244,63,94,0.12)] p-3">
+                  <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-rose-400/70 to-transparent pointer-events-none" aria-hidden />
+                  <div className="flex flex-wrap items-center gap-2 mb-3 pt-0.5">
+                    {safehouseInfo.image ? (
+                      <Link to="/properties/safehouse" className="shrink-0">
+                        <img src={safehouseInfo.image} alt="Safehouse" className="h-12 w-12 rounded-lg object-cover border border-rose-500/30 hover:border-rose-400/70 transition-colors" />
+                      </Link>
+                    ) : (
+                      <Link to="/properties/safehouse" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-rose-500/30 bg-gradient-to-br from-rose-500/20 to-primary/10">
+                        <Building2 size={16} className="text-rose-400" />
+                      </Link>
+                    )}
+                    <div className="min-w-0 flex-1 flex flex-wrap items-center gap-2">
+                      <Link to="/properties/safehouse" className="text-[12px] font-heading font-bold text-rose-300 tracking-wide hover:underline">
+                        Safehouse
+                      </Link>
+                      <span className="text-[8px] font-heading font-bold uppercase tracking-wider text-rose-200 border border-rose-500/50 bg-rose-500/20 px-2 py-0.5 rounded-full">
+                        Loot exclusive
+                      </span>
+                      {safehouseInfo.hide_active ? (
+                        <span className="text-[8px] font-heading font-bold uppercase tracking-wider text-emerald-200 border border-emerald-500/50 bg-emerald-500/20 px-2 py-0.5 rounded-full">
+                          Hidden
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-mutedForeground font-heading leading-snug mb-3">
+                    Once per day: enter for {safehouseInfo.hide_hours || 3} hours — searchers cannot find your location.
+                    While inside you cannot attack anyone, and you may hire at most {safehouseInfo.robot_hires_max_while_hidden || 1} robot bodyguard.
+                    Weekly cash + respect; every {safehouseInfo.interval_days || 3} days: robot BG token, mission token, and loot pieces.
+                    If you die, it returns to the loot pool.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                    <div className="rounded-md border border-emerald-500/25 bg-emerald-950/20 px-2.5 py-2">
+                      <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground mb-0.5">Weekly cash</div>
+                      <div className="text-lg font-heading font-bold text-emerald-400 leading-tight">
+                        ${Number(safehouseInfo.weekly_cash || 0).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="rounded-md border border-violet-500/25 bg-violet-950/20 px-2.5 py-2">
+                      <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground mb-0.5">Weekly respect</div>
+                      <div className="text-lg font-heading font-bold text-violet-300 leading-tight">
+                        {Number(safehouseInfo.weekly_respect || 0).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="rounded-md border border-sky-500/25 bg-sky-950/15 px-2.5 py-2">
+                      <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground mb-0.5">Every {safehouseInfo.interval_days || 3}d</div>
+                      <div className="text-[11px] font-heading font-bold text-sky-300 leading-snug">
+                        {safehouseInfo.interval_robot_bg_tokens || 1} robot BG · {safehouseInfo.interval_mission_tokens || 1} mission · {safehouseInfo.interval_loot_pieces || 100} pieces
+                      </div>
+                    </div>
+                    <div className="rounded-md border border-rose-500/25 bg-rose-950/20 px-2.5 py-2">
+                      <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground mb-0.5">Hide status</div>
+                      <div className="text-[11px] font-heading font-bold text-rose-200 leading-snug">
+                        {safehouseInfo.hide_active
+                          ? `Active — no attacks · robot hires ${safehouseInfo.robot_hires_while_hidden || 0}/${safehouseInfo.robot_hires_max_while_hidden || 1}`
+                          : safehouseInfo.hide_used_today
+                            ? 'Used today'
+                            : 'Ready (once / day)'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={activateSafehouseHide}
+                      disabled={activatingSafehouseHide || !safehouseInfo.can_activate_hide}
+                      className="px-4 py-2 rounded-md text-[9px] font-heading font-bold uppercase tracking-wider border-2 border-rose-500/50 bg-gradient-to-b from-rose-500/15 to-rose-950/30 text-rose-100 hover:border-rose-400/70 disabled:opacity-50 transition-all"
+                    >
+                      {activatingSafehouseHide ? 'Entering…' : 'Enter Safehouse (3h)'}
+                    </button>
+                    {safehouseInfo.can_collect ? (
+                      <button
+                        type="button"
+                        onClick={collectSafehouse}
+                        disabled={collectingSafehouse}
+                        className="px-4 py-2 rounded-md text-[9px] font-heading font-bold uppercase tracking-wider border-2 border-emerald-500/50 bg-gradient-to-b from-emerald-500/15 to-emerald-950/30 text-emerald-200 hover:border-emerald-400/70 disabled:opacity-50 transition-all"
+                      >
+                        {collectingSafehouse ? 'Collecting…' : 'Collect rewards'}
+                      </button>
+                    ) : (
+                      <span className="text-[9px] text-mutedForeground">Rewards on cooldown</span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

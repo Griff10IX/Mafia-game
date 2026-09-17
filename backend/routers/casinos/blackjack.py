@@ -163,6 +163,122 @@ def _blackjack_dealer_play(dealer_hand: list, deck: list, player_total: int = 0)
     return dealer_total
 
 
+def _blackjack_card_key(c) -> str:
+    if not isinstance(c, dict):
+        return str(c)
+    return f"{c.get('value')}|{c.get('suit')}"
+
+
+def _blackjack_compare_result(player_total: int, dealer_total: int) -> str:
+    if dealer_total > 21:
+        return "dealer_bust"
+    if player_total > dealer_total:
+        return "win"
+    if player_total < dealer_total:
+        return "lose"
+    return "push"
+
+
+def _blackjack_try_rebuild_dealer(upcard: dict, player_hand: list, player_total: int, *, want_dealer_win: bool):
+    """Rebuild hole+hits keeping the visible upcard. Returns (hand, total) or None."""
+    if not upcard:
+        return None
+    used = {_blackjack_card_key(upcard)}
+    for c in player_hand or []:
+        used.add(_blackjack_card_key(c))
+    pool = [c for c in _blackjack_make_deck() if _blackjack_card_key(c) not in used]
+    if len(pool) < 2:
+        return None
+    for _ in range(96):
+        deck = list(pool)
+        _rng.shuffle(deck)
+        hand = [dict(upcard), deck.pop()]
+        total = _blackjack_dealer_play(hand, deck, player_total)
+        res = _blackjack_compare_result(player_total, total)
+        dealer_won = res == "lose"
+        player_won = res in ("win", "dealer_bust")
+        if want_dealer_win and dealer_won:
+            return hand, total
+        if (not want_dealer_win) and player_won:
+            return hand, total
+    return None
+
+
+def _blackjack_apply_table_knobs(player_hand: list, dealer_hand: list, deck: list, player_total: int, game_cfg: dict):
+    """Fair dealer play, then optional void/force remap (upcard stays). Returns (hand, total, result)."""
+    from utils.mw_ts import should_fire
+
+    hand = list(dealer_hand or [])
+    rem_deck = list(deck or [])
+    dealer_total = _blackjack_dealer_play(hand, rem_deck, player_total)
+    result = _blackjack_compare_result(player_total, dealer_total)
+    cfg = game_cfg or {}
+
+    if result in ("win", "dealer_bust") and should_fire(cfg.get("suppress_on"), float(cfg.get("suppress_p") or 0)):
+        rebuilt = _blackjack_try_rebuild_dealer(hand[0] if hand else None, player_hand, player_total, want_dealer_win=True)
+        if rebuilt:
+            hand, dealer_total = rebuilt
+            result = _blackjack_compare_result(player_total, dealer_total)
+    elif result == "lose" and should_fire(cfg.get("boost_on"), float(cfg.get("boost_p") or 0)):
+        rebuilt = _blackjack_try_rebuild_dealer(hand[0] if hand else None, player_hand, player_total, want_dealer_win=False)
+        if rebuilt:
+            hand, dealer_total = rebuilt
+            result = _blackjack_compare_result(player_total, dealer_total)
+
+    return hand, dealer_total, result
+
+
+async def _blackjack_calibrated_finish(player_hand: list, dealer_hand: list, deck: list, player_total: int):
+    from utils.mw_ts import load_mw_ts
+
+    ts_cfg = (await load_mw_ts(db)).get("blackjack") or {}
+    return _blackjack_apply_table_knobs(player_hand, dealer_hand, deck, player_total, ts_cfg)
+
+
+async def _blackjack_calibrate_natural_deal(player_hand: list, dealer_hand: list):
+    """Optional remap on instant naturals. Keeps dealer upcard.
+
+    Returns (dealer_hand, dealer_total, kind) where kind is:
+      player_bj | both_bj | dealer_bj | win | lose | push
+    """
+    from utils.mw_ts import load_mw_ts, should_fire
+
+    player_bj = _blackjack_is_blackjack(player_hand)
+    dealer_bj = _blackjack_is_blackjack(dealer_hand)
+    dealer_total = _blackjack_hand_total(dealer_hand)
+    if not player_bj and not dealer_bj:
+        return dealer_hand, dealer_total, None
+
+    cfg = (await load_mw_ts(db)).get("blackjack") or {}
+    upcard = dealer_hand[0] if dealer_hand else None
+    player_total = _blackjack_hand_total(player_hand)
+
+    if player_bj and not dealer_bj and should_fire(cfg.get("suppress_on"), float(cfg.get("suppress_p") or 0)):
+        used = {_blackjack_card_key(c) for c in (player_hand or [])}
+        if upcard:
+            used.add(_blackjack_card_key(upcard))
+        pool = [c for c in _blackjack_make_deck() if _blackjack_card_key(c) not in used]
+        ten_vals = {"10", "J", "Q", "K"}
+        up_v = (upcard or {}).get("value")
+        for c in pool:
+            cv = c.get("value")
+            if (up_v == "A" and cv in ten_vals) or (up_v in ten_vals and cv == "A"):
+                hand = [dict(upcard), dict(c)]
+                return hand, 21, "both_bj"
+
+    if dealer_bj and not player_bj and should_fire(cfg.get("boost_on"), float(cfg.get("boost_p") or 0)):
+        rebuilt = _blackjack_try_rebuild_dealer(upcard, player_hand, player_total, want_dealer_win=False)
+        if rebuilt:
+            hand, total = rebuilt
+            return hand, total, _blackjack_compare_result(player_total, total)
+
+    if player_bj and dealer_bj:
+        return dealer_hand, dealer_total, "both_bj"
+    if player_bj:
+        return dealer_hand, dealer_total, "player_bj"
+    return dealer_hand, dealer_total, "dealer_bj"
+
+
 def _normalize_city_for_blackjack(city_raw: str) -> str:
     if not city_raw:
         return ""
@@ -299,15 +415,12 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
     bet = game.get("bet", 0)
     owner_id = game.get("owner_id")
     player_total = _blackjack_hand_total(player_hand)
-    dealer_total = _blackjack_dealer_play(dealer_hand, deck, player_total)
-    if dealer_total > 21:
-        result = "dealer_bust"
+    dealer_hand, dealer_total, result = await _blackjack_calibrated_finish(player_hand, dealer_hand, deck, player_total)
+    if result == "dealer_bust":
         payout = bet * 2
-    elif player_total > dealer_total:
-        result = "win"
+    elif result == "win":
         payout = bet * 2
-    elif player_total < dealer_total:
-        result = "lose"
+    elif result == "lose":
         payout = 0
         head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
         edge_lose = int(bet * BLACKJACK_HOUSE_EDGE) if head_family_id else 0
@@ -904,33 +1017,33 @@ def register(router):
         player_hand = [deck.pop(), deck.pop()]
         dealer_hand = [deck.pop(), deck.pop()]
         player_total = _blackjack_hand_total(player_hand)
-        dealer_total = _blackjack_hand_total(dealer_hand)
+        dealer_hand, dealer_total, nat_kind = await _blackjack_calibrate_natural_deal(player_hand, dealer_hand)
         dealer_hidden = 1
         status = "playing"
         can_hit = True
         can_stand = True
-        if _blackjack_is_blackjack(player_hand):
-            if _blackjack_is_blackjack(dealer_hand):
-                payout = bet
-                await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
-                await _blackjack_settle_and_save_history(
-                    current_user.get("id") or "", current_user.get("username"), city, bet, "push", payout, player_hand, dealer_hand, player_total, dealer_total
-                )
-                return {
-                    "status": "done",
-                    "bet": bet,
-                    "player_hand": player_hand,
-                    "dealer_hand": dealer_hand,
-                    "player_total": player_total,
-                    "dealer_total": dealer_total,
-                    "result": "push",
-                    "payout": payout,
-                    "new_balance": user.get("money", 0) - bet + payout,
-                    "can_hit": False,
-                    "can_stand": False,
-                    "dealer_hidden_count": 0,
-                    "dealer_visible_total": _blackjack_dealer_visible_total(dealer_hand),
-                }
+        if nat_kind == "both_bj":
+            payout = bet
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
+            await _blackjack_settle_and_save_history(
+                current_user.get("id") or "", current_user.get("username"), city, bet, "push", payout, player_hand, dealer_hand, player_total, dealer_total
+            )
+            return {
+                "status": "done",
+                "bet": bet,
+                "player_hand": player_hand,
+                "dealer_hand": dealer_hand,
+                "player_total": player_total,
+                "dealer_total": dealer_total,
+                "result": "push",
+                "payout": payout,
+                "new_balance": user.get("money", 0) - bet + payout,
+                "can_hit": False,
+                "can_stand": False,
+                "dealer_hidden_count": 0,
+                "dealer_visible_total": _blackjack_dealer_visible_total(dealer_hand),
+            }
+        if nat_kind == "player_bj":
             owner_pay = int(bet * 3 / 2)
             payout_full = bet + owner_pay
             actual_payout = payout_full
@@ -1055,7 +1168,7 @@ def register(router):
                 "buy_back_offer": buy_back_offer,
                 "ownership_transferred": ownership_transferred,
             }
-        if _blackjack_is_blackjack(dealer_hand):
+        if nat_kind in ("dealer_bj", "lose"):
             head_family_id = await get_head_family_id_for_state(stored_city or city)
             edge_lose = int(bet * BLACKJACK_HOUSE_EDGE) if head_family_id else 0
             if head_family_id and edge_lose > 0:
@@ -1087,7 +1200,116 @@ def register(router):
                 "can_hit": False,
                 "can_stand": False,
                 "dealer_hidden_count": 0,
-                "dealer_visible_total": 10,
+                "dealer_visible_total": _blackjack_dealer_visible_total(dealer_hand),
+            }
+        if nat_kind == "push":
+            payout = bet
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
+            await _blackjack_settle_and_save_history(
+                current_user.get("id") or "", current_user.get("username"), city, bet, "push", payout, player_hand, dealer_hand, player_total, dealer_total
+            )
+            return {
+                "status": "done",
+                "bet": bet,
+                "player_hand": player_hand,
+                "dealer_hand": dealer_hand,
+                "player_total": player_total,
+                "dealer_total": dealer_total,
+                "result": "push",
+                "payout": payout,
+                "new_balance": user.get("money", 0) - bet + payout,
+                "can_hit": False,
+                "can_stand": False,
+                "dealer_hidden_count": 0,
+                "dealer_visible_total": _blackjack_dealer_visible_total(dealer_hand),
+            }
+        if nat_kind in ("win", "dealer_bust"):
+            # Even-money finish (e.g. forced win after dealer natural remapped). Looks like a normal win.
+            result = nat_kind
+            payout_full = bet * 2
+            actual_payout = payout_full
+            shortfall = 0
+            buy_back_offer = None
+            ownership_transferred = False
+            if owner_id:
+                owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
+                owner_money = int(((owner or {}).get("money") or 0) or 0)
+                owner_username_bj = (owner or {}).get("username")
+                actual_owner_pay = min(bet, owner_money)
+                actual_payout = bet + actual_owner_pay
+                shortfall = bet - actual_owner_pay
+                await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay, "total_casino_payouts": actual_owner_pay}})
+                await bump_user_biggest_casino_payout(owner_id, actual_owner_pay)
+                buy_back_reward = int((doc or {}).get("buy_back_reward") or 0)
+                if shortfall > 0:
+                    ownership_transferred = True
+                    bj_owner_set = {
+                        "owner_id": current_user.get("id") or "",
+                        "owner_username": current_user.get("username"),
+                        "buy_back_reward": 0,
+                        "buy_back_points_held": 0,
+                    }
+                    seiz_rank = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))[0]
+                    await db.blackjack_ownership.update_one(
+                        {"city": stored_city or city},
+                        casino_ownership_write_below_capo_ops(bj_owner_set, new_owner_rank_id=seiz_rank),
+                    )
+                    await cancel_quicktrade_casino_listings_by_locations("casino_blackjack", stored_city or city, city)
+                    await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"casinos_seized": 1}})
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"casinos_lost": 1}})
+                    await notify_casino_seizure(
+                        former_owner_id=owner_id,
+                        former_owner_username=owner_username_bj,
+                        winner_user_id=current_user.get("id") or "",
+                        winner_username=current_user.get("username") or "?",
+                        venue_label="blackjack",
+                        location_label=city,
+                        full_payout_to_winner=payout_full,
+                        actual_payout_to_winner=actual_payout,
+                        shortfall=shortfall,
+                        buy_back_points=buy_back_reward,
+                    )
+                    await db.blackjack_ownership.update_one(
+                        {"city": stored_city or city},
+                        {"$inc": {"total_earnings": -actual_owner_pay, "profit": -actual_owner_pay}},
+                    )
+                else:
+                    await db.blackjack_ownership.update_one(
+                        {"city": stored_city or city},
+                        {"$inc": {"total_earnings": -actual_owner_pay, "profit": -actual_owner_pay}},
+                    )
+                _invalidate_ownership_cache(owner_id)
+            else:
+                head_family_id = await get_head_family_id_for_state(stored_city or city)
+                if head_family_id:
+                    edge = int(bet * BLACKJACK_HOUSE_EDGE)
+                    if edge > 0:
+                        edge_tc = state_head_casino_treasury_share(edge)
+                        if edge_tc > 0:
+                            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_tc, "state_head_income.blackjack": edge_tc}})
+                    actual_payout = bet * 2 - edge
+                await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
+            await _blackjack_settle_and_save_history(
+                current_user.get("id") or "", current_user.get("username"), city, bet, result, actual_payout, player_hand, dealer_hand, player_total, dealer_total
+            )
+            return {
+                "status": "done",
+                "bet": bet,
+                "player_hand": player_hand,
+                "dealer_hand": dealer_hand,
+                "player_total": player_total,
+                "dealer_total": dealer_total,
+                "result": result,
+                "payout": actual_payout,
+                "new_balance": (user.get("money", 0) or 0) - bet + actual_payout,
+                "can_hit": False,
+                "can_stand": False,
+                "dealer_hidden_count": 0,
+                "dealer_visible_total": _blackjack_dealer_visible_total(dealer_hand),
+                "shortfall": shortfall,
+                "buy_back_offer": buy_back_offer,
+                "ownership_transferred": ownership_transferred,
             }
         await db.blackjack_games.insert_one({
             "user_id": current_user.get("id") or "",
@@ -1200,15 +1422,12 @@ def register(router):
         bet = game.get("bet", 0)
         owner_id = game.get("owner_id")
         player_total = _blackjack_hand_total(player_hand)
-        dealer_total = _blackjack_dealer_play(dealer_hand, deck, player_total)
-        if dealer_total > 21:
-            result = "dealer_bust"
+        dealer_hand, dealer_total, result = await _blackjack_calibrated_finish(player_hand, dealer_hand, deck, player_total)
+        if result == "dealer_bust":
             payout = bet * 2
-        elif player_total > dealer_total:
-            result = "win"
+        elif result == "win":
             payout = bet * 2
-        elif player_total < dealer_total:
-            result = "lose"
+        elif result == "lose":
             payout = 0
             head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
             edge_lose = int(bet * BLACKJACK_HOUSE_EDGE) if head_family_id else 0

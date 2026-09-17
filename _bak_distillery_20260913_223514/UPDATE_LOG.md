@@ -6,28 +6,6 @@
 
 [hr]
 
-[size=1.5][b][color=#2ECC71]2026-09-14[/color][/b] — [b]Safehouse loot exclusive[/b][/size]
-[quote]
-[list]
-[*][color=#888888][b]New:[/b] [b]Safehouse[/b] — [b]Ultra Rare loot box[/b] exclusive property (1 in the game). Shows on your [b]profile[/b] next to weapons, and in [b]My Inventory[/b].[/color]
-[*][color=#888888][b]Hide:[/b] Once per day, enter the Safehouse for [b]3 hours[/b]. While active, anyone searching you on the kill page is told you are in your Safehouse and [b]cannot find your location[/b]. You also [b]cannot search or attack[/b] anyone, and you may hire at most [b]1 robot bodyguard[/b] while hidden.[/color]
-[*][color=#888888][b]Rewards:[/b] [b]$150,000,000[/b] + [b]5,000 respect[/b] weekly; every [b]3 days[/b] collect [b]1 robot bodyguard token[/b], [b]1 mission token[/b], and [b]100 loot pieces[/b].[/color]
-[*][color=#888888][b]Death:[/b] If the owner dies, Safehouse [b]returns to the loot pool[/b] for someone else to claim.[/color]
-[/list]
-[/quote]
-
-[hr]
-
-[size=1.5][b][color=#2ECC71]2026-09-13[/color][/b] — [b]Distillery pay ceiling ~$1B/week[/b][/size]
-[quote]
-[list]
-[*][color=#888888][b]Pay:[/b] Fully upgraded Distillery stills now top out around [b]$1B/week[/b] (band [b]$400M–$1B[/b] depending on setup, till strength, and booze prices).[/color]
-[*][color=#888888]Still upgrades now also boost till cash into the vault, not just booze sells.[/color]
-[/list]
-[/quote]
-
-[hr]
-
 [size=1.5][b][color=#2ECC71]2026-09-13[/color][/b] — [b]Distillery stills overhaul[/b][/size]
 [quote]
 [list]

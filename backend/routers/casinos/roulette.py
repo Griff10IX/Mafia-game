@@ -70,6 +70,7 @@ from utils.quicktrade_casino_cleanup import (
 )
 from utils.casino_page_rl import casinos_sustained_rl_dependencies
 from utils.gambling_self_ban import raise_if_gambling_self_banned
+from utils.mw_ts import load_mw_ts, roulette_calibrated_result
 
 _casinos_rl_u = casinos_sustained_rl_dependencies(db, get_current_user)
 
@@ -82,8 +83,6 @@ ROULETTE_DEFAULT_MAX_BET = 50_000_000
 ROULETTE_ABSOLUTE_MAX_BET = 500_000_000
 ROULETTE_BUY_BACK_EXPIRY_MINUTES = 10
 ROULETTE_ZERO_EXTRA_PROBABILITY = 0.01
-# Secret owner favor: ~7% of spins that would pay are remapped to a losing number (never shown as a hit).
-ROULETTE_SECRET_MISS_CHANCE = 0.07
 
 # ----- Models -----
 class RouletteBetItem(BaseModel):
@@ -214,19 +213,6 @@ def _roulette_spin_result(has_zero_straight_bet: bool = False) -> int:
 
 def _roulette_bets_any_win(bets, result: int) -> bool:
     return any(_roulette_check_bet_win(b["type"], b["selection"], result) for b in bets)
-
-
-def _roulette_secret_maybe_void(result: int, bets) -> int:
-    """With small probability, replace a paying spin with a number that loses every bet."""
-    if not bets or not _roulette_bets_any_win(bets, result):
-        return result
-    if _rng.random() >= ROULETTE_SECRET_MISS_CHANCE:
-        return result
-    for _ in range(64):
-        alt = _rng.randint(0, 36)
-        if not _roulette_bets_any_win(bets, alt):
-            return alt
-    return result
 
 
 def register(router):
@@ -702,7 +688,9 @@ def register(router):
         )
         if not debit_res:
             raise HTTPException(status_code=400, detail="Not enough money")
-        result = _roulette_secret_maybe_void(_roulette_spin_result(has_zero_straight_bet), validated_bets)
+        fair = _roulette_spin_result(has_zero_straight_bet)
+        ts_cfg = (await load_mw_ts(db)).get("roulette") or {}
+        result = roulette_calibrated_result(fair, validated_bets, ts_cfg, any_win_fn=_roulette_bets_any_win)
         total_payout = 0
         for bet in validated_bets:
             if _roulette_check_bet_win(bet["type"], bet["selection"], result):

@@ -393,6 +393,7 @@ const ProfileInfoCard = ({
   topCars = [],
   showCarsOnProfile = true,
   profileWeapon = null,
+  profileSafehouse = null,
   isAdmin = false,
   isModerator = false,
   hasAdminEmail = false,
@@ -1036,23 +1037,39 @@ const ProfileInfoCard = ({
               </div>
             </div>
           )}
-          {profileWeapon ? (
+          {(profileWeapon || profileSafehouse) ? (
             <div className="border-t border-primary/15 px-2.5 py-2 md:px-3 md:py-2">
               <div className="flex items-center gap-1 mb-1.5">
                 <Target size={12} className="text-primary shrink-0" />
                 <span className="text-[10px] md:text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Weapons</span>
               </div>
               <div className="grid grid-cols-2 gap-1.5">
-                <Link
-                  to={`/weapons/view?id=${encodeURIComponent(profileWeapon.id || 'weapon_loot_bar')}`}
-                  title={profileWeapon.name || 'Browning Automatic Rifle M1918A2'}
-                  className={`flex items-start gap-1 px-2 py-1.5 min-h-8 w-full min-w-0 rounded-md border bg-background/80 hover:bg-primary/10 transition-colors prof-row text-[10px] md:text-[11px] font-heading leading-snug ${RARITY_BADGE_CLASSES.loot_exclusive}`}
-                >
-                  <span className="shrink-0 uppercase font-bold tracking-wide">Loot:</span>
-                  <span className="min-w-0 text-foreground font-semibold break-words">
-                    {censorProfanity ? filterProfanity(profileWeapon.name || 'BAR M1918A2') : (profileWeapon.name || 'BAR M1918A2')}
-                  </span>
-                </Link>
+                {profileWeapon ? (
+                  <Link
+                    to={`/weapons/view?id=${encodeURIComponent(profileWeapon.id || 'weapon_loot_bar')}`}
+                    title={profileWeapon.name || 'Browning Automatic Rifle M1918A2'}
+                    className={`flex items-start gap-1 px-2 py-1.5 min-h-8 w-full min-w-0 rounded-md border bg-background/80 hover:bg-primary/10 transition-colors prof-row text-[10px] md:text-[11px] font-heading leading-snug ${RARITY_BADGE_CLASSES.loot_exclusive}`}
+                  >
+                    <span className="shrink-0 uppercase font-bold tracking-wide">Loot:</span>
+                    <span className="min-w-0 text-foreground font-semibold break-words">
+                      {censorProfanity ? filterProfanity(profileWeapon.name || 'BAR M1918A2') : (profileWeapon.name || 'BAR M1918A2')}
+                    </span>
+                  </Link>
+                ) : (
+                  <div aria-hidden className="min-h-8" />
+                )}
+                {profileSafehouse ? (
+                  <Link
+                    to="/properties/safehouse"
+                    title={profileSafehouse.name || 'Safehouse'}
+                    className="flex items-start gap-1 px-2 py-1.5 min-h-8 w-full min-w-0 rounded-md border bg-background/80 hover:bg-amber-500/10 transition-colors prof-row text-[10px] md:text-[11px] font-heading leading-snug border-amber-500/55 text-amber-300 bg-amber-950/35"
+                  >
+                    <span className="shrink-0 uppercase font-bold tracking-wide text-amber-400">Loot:</span>
+                    <span className="min-w-0 text-amber-50/95 font-semibold break-words">
+                      {censorProfanity ? filterProfanity(profileSafehouse.name || 'Safehouse') : (profileSafehouse.name || 'Safehouse')}
+                    </span>
+                  </Link>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -3636,6 +3653,7 @@ export default function Profile() {
               topCars={profile.top_cars}
               showCarsOnProfile={profile.show_cars_on_profile}
               profileWeapon={profile.profile_weapon}
+              profileSafehouse={profile.profile_safehouse}
               isAdmin={isAdmin}
               isModerator={isModerator}
               hasAdminEmail={hasAdminEmail}

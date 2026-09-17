@@ -85,9 +85,6 @@ VIDEO_POKER_ABSOLUTE_MAX_BET = 500_000_000
 # Video poker claim cost: utils.claim_costs (key video_poker)
 VIDEO_POKER_HISTORY_MAX = 10
 VIDEO_POKER_HOUSE_EDGE = 0.0005  # 0.05% of profit to house (state head when no owner), like dice
-# Secret owner favor (like roulette): advertised deal/draw looks fair; ~7% of would-be paying
-# draws are silently re-drawn to a non-paying hand. Never changes held cards; never exposed in API.
-VIDEO_POKER_SECRET_MISS_CHANCE = 0.07
 
 SUITS = ["H", "D", "C", "S"]
 VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
@@ -97,7 +94,7 @@ VALUE_RANK = {"2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "1
 # Values match real Jacks-or-Better machine pays (total return of the bet):
 #   jacks_or_better=1 → stake returned (net 0), two_pair=2, … royal 250–800.
 # Presets: tight=8/5, normal=9/6 full-pay, increased=9/7, enhanced=10/7.
-# Deal is fair; draw has a small secret miss rate (VIDEO_POKER_SECRET_MISS_CHANCE).
+# Deal is fair; draw may apply optional post-draw calibration (admin mw_ts).
 VIDEO_POKER_DEFAULT_ODDS_PRESET = "tight"
 VIDEO_POKER_ODDS_PRESET_LABELS = {
     "tight": "Tight payouts",
@@ -106,7 +103,7 @@ VIDEO_POKER_ODDS_PRESET_LABELS = {
     "enhanced": "Enhanced payouts",
 }
 VIDEO_POKER_PAY_PRESETS: dict[str, dict[str, float]] = {
-    # 8/5 JoB — real-life house-positive (~97% RTP with optimal play before secret miss)
+    # 8/5 JoB — real-life house-positive (~97% RTP with optimal play)
     "tight": {
         "royal_flush": 250,
         "straight_flush": 50,
@@ -190,31 +187,18 @@ def _vp_draw_once(hand: list, swap_indices: list[int], deck: list) -> tuple[list
     return new_hand, candidate_deck
 
 
-def _vp_draw_biased_hand(hand: list, held_idx: set[int], deck: list, preset: str, pay_table: dict[str, float]) -> list:
-    """Draw replacements, then secretly void ~7% of would-be paying results (owner favor).
+def _vp_draw_biased_hand(hand: list, held_idx: set[int], deck: list, preset: str, pay_table: dict[str, float], game_cfg: dict | None = None) -> list:
+    """Draw replacements; optional suppress/boost via mw_ts. Held cards never change."""
+    from utils.mw_ts import videopoker_calibrated_draw
 
-    Held cards never change. Client only sees a normal non-paying hand — same pattern as
-    dice/roulette secret miss. If every card is held (nothing drawn), no void is possible.
-    """
-    swap_indices = [i for i in range(5) if i not in held_idx]
-    if not swap_indices:
-        return hand
-
-    new_hand, remaining = _vp_draw_once(hand, swap_indices, deck)
-    if not _vp_hand_pays(new_hand, pay_table) or _rng.random() >= VIDEO_POKER_SECRET_MISS_CHANCE:
-        deck[:] = remaining
-        return new_hand
-
-    # Secret void: re-draw replacements until the hand does not pay (looks like a fair bust).
-    for _ in range(48):
-        alt_hand, alt_remaining = _vp_draw_once(hand, swap_indices, deck)
-        if not _vp_hand_pays(alt_hand, pay_table):
-            deck[:] = alt_remaining
-            return alt_hand
-
-    # Could not find a non-paying draw — keep the original fair result (rare).
-    deck[:] = remaining
-    return new_hand
+    return videopoker_calibrated_draw(
+        hand,
+        held_idx,
+        deck,
+        game_cfg or {},
+        draw_once_fn=_vp_draw_once,
+        hand_pays_fn=lambda h: _vp_hand_pays(h, pay_table),
+    )
 
 
 HAND_NAMES = {
@@ -997,7 +981,10 @@ def register(router):
             if 0 <= idx <= 4:
                 holds.add(idx)
 
-        hand = _vp_draw_biased_hand(hand, holds, deck, odds_preset, pay_table)
+        from utils.mw_ts import load_mw_ts
+
+        ts_cfg = (await load_mw_ts(db)).get("videopoker") or {}
+        hand = _vp_draw_biased_hand(hand, holds, deck, odds_preset, pay_table, ts_cfg)
         hand_key, _, multiplier = _evaluate_hand(hand, pay_table)
         hand_name = HAND_NAMES.get(hand_key, hand_key)
         payout = _payout_for_multiplier(bet, multiplier)

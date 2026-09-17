@@ -973,6 +973,17 @@ async def _do_hire_bodyguard_reserved(
             status_code=400,
             detail=f"Your robot bodyguard was just taken out. Wait {secs_left} seconds before hiring another.",
         )
+    if is_robot:
+        try:
+            from utils.safehouse import safehouse_robot_hire_allowed
+
+            ok_hire, hire_msg = await safehouse_robot_hire_allowed(db, current_user["id"])
+            if not ok_hire:
+                raise HTTPException(status_code=400, detail=hire_msg)
+        except HTTPException:
+            raise
+        except Exception:
+            logger.exception("safehouse robot hire gate failed")
     existing_bgs = await db.bodyguards.find(
         {"user_id": current_user["id"]},
         {"_id": 0, "slot_number": 1}
@@ -1135,6 +1146,13 @@ async def _do_hire_bodyguard_reserved(
         }
     )
     tokens_left = max(0, hire_tokens - 1) if use_hire_token else hire_tokens
+    if is_robot:
+        try:
+            from utils.safehouse import record_safehouse_robot_hire
+
+            await record_safehouse_robot_hire(db, current_user["id"])
+        except Exception:
+            logger.exception("safehouse robot hire record failed")
     if use_hire_token:
         hire_msg = f"Robot bodyguard {robot_name} hired with a free token"
     else:

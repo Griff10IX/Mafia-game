@@ -1106,6 +1106,7 @@ def register(router):
                 if user.get("profile_show_weapon") and user.get("profile_weapon_id") == "weapon_loot_bar"
                 else None
             ),
+            "profile_safehouse": None,
             "has_commissioners_pardon": bool(user.get("has_commissioners_pardon")),
             "youtube_url": (user.get("profile_youtube_url") or "").strip() or None,
             "spotify_url": (user.get("profile_spotify_url") or "").strip() or None,
@@ -1120,6 +1121,17 @@ def register(router):
             **civilian_protection_public_fields(user),
             "achievement_badges": achievement_badges,
         }
+        try:
+            from utils.safehouse import SAFEHOUSE_IMAGE, SAFEHOUSE_NAME, user_has_safehouse
+
+            if user.get("profile_show_safehouse", True) and await user_has_safehouse(db, user_id):
+                out["profile_safehouse"] = {
+                    "id": "safehouse",
+                    "name": SAFEHOUSE_NAME,
+                    "image": SAFEHOUSE_IMAGE,
+                }
+        except Exception:
+            pass
         wr_until = user.get("war_rat_badge_until")
         out["war_rat_badge_until"] = wr_until if show_war_rat else None
         out["show_war_rat_badge"] = show_war_rat
@@ -2423,6 +2435,41 @@ def register(router):
             "message": "Profile weapon preferences updated",
             "show_weapon_on_profile": bool(updates.get("profile_show_weapon", current_user.get("profile_show_weapon"))),
             "profile_weapon_id": updates.get("profile_weapon_id", current_user.get("profile_weapon_id")),
+        }
+
+    @router.get("/profile/safehouse-preferences")
+    async def get_profile_safehouse_preferences(current_user: dict = Depends(get_current_user)):
+        from utils.safehouse import SAFEHOUSE_IMAGE, SAFEHOUSE_NAME, user_has_safehouse
+
+        has = await user_has_safehouse(db, current_user["id"])
+        return {
+            "has_safehouse": has,
+            "name": SAFEHOUSE_NAME,
+            "image": SAFEHOUSE_IMAGE,
+            "show_safehouse_on_profile": bool(current_user.get("profile_show_safehouse", True)) and has,
+        }
+
+    @router.patch("/profile/safehouse-preferences")
+    async def patch_profile_safehouse_preferences(
+        current_user: dict = Depends(get_current_user),
+        show_safehouse_on_profile: Optional[bool] = Body(None, embed=True),
+    ):
+        from utils.safehouse import user_has_safehouse
+
+        if not await user_has_safehouse(db, current_user["id"]):
+            raise HTTPException(status_code=400, detail="You do not own the Safehouse")
+        if show_safehouse_on_profile is None:
+            return {
+                "message": "No changes",
+                "show_safehouse_on_profile": bool(current_user.get("profile_show_safehouse", True)),
+            }
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"profile_show_safehouse": bool(show_safehouse_on_profile)}},
+        )
+        return {
+            "message": "Profile Safehouse preferences updated",
+            "show_safehouse_on_profile": bool(show_safehouse_on_profile),
         }
 
     @router.get("/profile/my-cars")

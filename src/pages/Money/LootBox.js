@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Gift, X, Package, Swords, Car, Shield, Building2, Coins, Zap, Save, Puzzle, Leaf, Gem, ScrollText } from 'lucide-react';
+import { Gift, X, Package, Swords, Car, Shield, Building2, Coins, Zap, Save, Puzzle, Leaf, Gem, ScrollText, CircleHelp } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import {
@@ -8,6 +8,9 @@ import {
 } from '../../utils/civilianProtectionConfirm';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+
+const LOOT_STATUS_CACHE_KEY = 'mafia_loot_box_status_v1';
 
 const LOOT_BOX_STYLES = `
   @keyframes lb-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -410,6 +413,7 @@ function rewardLabel(reward) {
       return `${fmtInt(amt)} loot box piece${Number(amt) === 1 ? '' : 's'}`;
     }
     case 'perk':      return reward.name || 'Perk';
+    case 'mission_perk': return reward.name || "Commissioner's Pardon";
     case 'token': {
       const tokenLabels = {
         mission_skip: 'Mission Skip',
@@ -420,7 +424,7 @@ function rewardLabel(reward) {
       const label = tokenLabels[tt] || String(tt).replace(/_/g, ' ');
       return `${fmtInt(reward.amount ?? reward.value ?? 1)} ${label} token(s)`;
     }
-    default:          return JSON.stringify(reward);
+    default:          return reward.name || String(reward.type || 'Reward').replace(/_/g, ' ');
   }
 }
 
@@ -737,26 +741,51 @@ function ChestIcon({ shaking, exploding, ready, tier = 'common', openAnimLevel =
 }
 
 /* ─── Scarcity row ─── */
-function ScarcityRow({ icon: Icon, label, claimed, cap, holder }) {
+function ScarcityRow({ icon: Icon, label, claimed, cap, holder, info }) {
+  const [infoOpen, setInfoOpen] = useState(false);
   const full = claimed >= cap;
   const holderLabel = String(holder || '').trim();
+  const infoText = String(info || '').trim();
   return (
-    <li className={`flex items-center gap-2 py-1.5 px-2 rounded border ${full ? 'bg-red-500/10 border-red-500/25' : 'bg-primary/5 border-primary/15'}`}>
-      <Icon size={12} className={full ? 'text-red-400 shrink-0' : 'text-primary shrink-0'} />
-      <div className="flex-1 min-w-0">
-        <span className="block text-[10px] font-heading text-foreground truncate">{label}</span>
-        {holderLabel ? (
-          <span className={`block text-[8px] font-heading truncate mt-0.5 ${full ? 'text-red-300/90' : 'text-mutedForeground'}`}>
-            Held by {holderLabel}
-          </span>
+    <li className={`rounded border ${full ? 'bg-red-500/10 border-red-500/25' : 'bg-primary/5 border-primary/15'}`}>
+      <div className="flex items-center gap-2 py-1.5 px-2">
+        <Icon size={12} className={full ? 'text-red-400 shrink-0' : 'text-primary shrink-0'} />
+        <div className="flex-1 min-w-0">
+          <span className="block text-[10px] font-heading text-foreground truncate">{label}</span>
+          {holderLabel ? (
+            <span className={`block text-[8px] font-heading truncate mt-0.5 ${full ? 'text-red-300/90' : 'text-mutedForeground'}`}>
+              Held by {holderLabel}
+            </span>
+          ) : null}
+        </div>
+        {infoText ? (
+          <button
+            type="button"
+            onClick={() => setInfoOpen((v) => !v)}
+            className={`shrink-0 inline-flex items-center justify-center h-7 w-7 rounded border touch-manipulation tap-feedback active:scale-[0.96] transition-colors ${
+              infoOpen
+                ? 'border-primary/50 bg-primary/15 text-primary'
+                : 'border-primary/25 bg-primary/5 text-mutedForeground hover:text-primary hover:border-primary/40'
+            }`}
+            aria-expanded={infoOpen}
+            aria-label={`About ${label}`}
+            title="What this does"
+          >
+            <CircleHelp size={13} aria-hidden />
+          </button>
         ) : null}
+        <div className="flex gap-0.5 shrink-0">
+          {Array.from({ length: Math.max(1, Number(cap) || 1) }, (_, i) => (
+            <div key={i} className={`w-1.5 h-1.5 rounded-full border ${i < claimed ? (full ? 'bg-red-400 border-red-400' : 'bg-primary border-primary') : 'bg-zinc-600 border-zinc-500'}`} />
+          ))}
+        </div>
+        <span className={`text-[9px] font-heading min-w-[2rem] text-right shrink-0 ${full ? 'text-red-400' : 'text-mutedForeground'}`}>{claimed}/{cap}</span>
       </div>
-      <div className="flex gap-0.5 shrink-0">
-        {Array.from({ length: Math.max(1, Number(cap) || 1) }, (_, i) => (
-          <div key={i} className={`w-1.5 h-1.5 rounded-full border ${i < claimed ? (full ? 'bg-red-400 border-red-400' : 'bg-primary border-primary') : 'bg-zinc-600 border-zinc-500'}`} />
-        ))}
-      </div>
-      <span className={`text-[9px] font-heading min-w-[2rem] text-right shrink-0 ${full ? 'text-red-400' : 'text-mutedForeground'}`}>{claimed}/{cap}</span>
+      {infoOpen && infoText ? (
+        <div className={`px-2 pb-2 border-t ${full ? 'border-red-500/20' : 'border-primary/15'}`}>
+          <p className="text-[10px] font-heading text-mutedForeground leading-snug pt-1.5">{infoText}</p>
+        </div>
+      ) : null}
     </li>
   );
 }
@@ -867,11 +896,27 @@ let _cachedLootStatus = null;
 let _lootLastFetch = 0;
 const LOOT_REFRESH = 30_000;
 
+function readCachedLootStatus() {
+  if (_cachedLootStatus && typeof _cachedLootStatus === 'object') return _cachedLootStatus;
+  const stored = readSessionJson(LOOT_STATUS_CACHE_KEY);
+  if (stored && typeof stored === 'object' && stored.claimed_counts) {
+    _cachedLootStatus = stored;
+    return stored;
+  }
+  return null;
+}
+
+function writeCachedLootStatus(data) {
+  if (!data || typeof data !== 'object') return;
+  _cachedLootStatus = data;
+  writeSessionJson(LOOT_STATUS_CACHE_KEY, data);
+}
+
 export default function LootBox() {
   const animateIn = useRef(!_lbIntroPlayed).current;
   useEffect(() => { _lbIntroPlayed = true; }, []);
   const [searchParams] = useSearchParams();
-  const [status, setStatus] = useState(_cachedLootStatus);
+  const [status, setStatus] = useState(() => readCachedLootStatus());
   const [selectedTier, setSelectedTier] = useState(() => {
     const t = (searchParams.get('tier') || '').trim().toLowerCase();
     return PAID_TIERS.includes(t) ? t : 'common';
@@ -908,7 +953,7 @@ export default function LootBox() {
   const loadStatus = async (silent = false) => {
     try {
       const res = await api.get('/loot-box/status');
-      _cachedLootStatus = res.data;
+      writeCachedLootStatus(res.data);
       _lootLastFetch = Date.now();
       setStatus(res.data);
     } catch (e) {
@@ -1087,7 +1132,7 @@ export default function LootBox() {
             loot_box_free_rare_opens: Number(apiData.loot_box_free_rare_opens ?? prev.loot_box_free_rare_opens ?? 0),
             loot_box_free_ultra_opens: Number(apiData.loot_box_free_ultra_opens ?? prev.loot_box_free_ultra_opens ?? 0),
           };
-          _cachedLootStatus = next;
+          writeCachedLootStatus(next);
           return next;
         });
       }
@@ -1123,8 +1168,9 @@ export default function LootBox() {
   const freeUltraOpens = Number(status?.loot_box_free_ultra_opens || 0);
   const tierCost = resolveOpenCost(status, selectedTier);
   const tierTheme = LOOT_TIER_THEME[selectedTier] || LOOT_TIER_THEME.common;
-  const claimed = status?.claimed_counts ?? { weapon: 0, car: 0, car_sj: 0, car_540k: 0, armour: 0, property: 0, weed_strain: 0, weapon_bar: 0, armour_v2: 0, mission_perk: 0 };
-  const exclusiveCaps = status?.exclusive_caps ?? { weapon: 1, car: 1, car_sj: 1, car_540k: 1, armour: 1, property: 1, weed_strain: 5, weapon_bar: 1, armour_v2: 1, mission_perk: 1 };
+  const statusReady = Boolean(status?.claimed_counts && status?.exclusive_caps);
+  const claimed = status?.claimed_counts || {};
+  const exclusiveCaps = status?.exclusive_caps || {};
   const newExLive = Boolean(status?.new_exclusives_live);
   const newExLabels = status?.new_exclusives_labels || {};
   const missionPerkHolder = status?.mission_perk_holder || null;
@@ -1138,7 +1184,7 @@ export default function LootBox() {
   const canUseFreeRare = selectedTier === 'rare' && freeRareOpens > 0;
   const canUseFreeUltra = selectedTier === 'ultra_rare' && freeUltraOpens > 0;
   const canUseFree = canUseFreeRare || canUseFreeUltra;
-  const canOpen = (pieces >= tierCost || canUseFree) && phase === 'idle';
+  const canOpen = statusReady && (pieces >= tierCost || canUseFree) && phase === 'idle';
 
   const last10 = status?.last_10_wins ?? [];
 
@@ -1290,41 +1336,97 @@ export default function LootBox() {
                 <p className="text-[9px] text-amber-200/90 font-heading italic text-center mb-1.5 leading-snug">
                   Loot exclusives are not guaranteed—each vault opening is chance-based, and exclusives still depend on availability and global caps.
                 </p>
+                {!statusReady ? (
+                  <p className="text-[10px] text-mutedForeground font-heading text-center py-3">Loading exclusives…</p>
+                ) : (
                 <ul className="list-none p-0 m-0 flex flex-col gap-0.5">
-                  <ScarcityRow icon={Swords} label="Exclusive Weapon" claimed={claimed.weapon} cap={exclusiveCaps.weapon} />
+                  <ScarcityRow
+                    icon={Swords}
+                    label="Exclusive Weapon"
+                    claimed={Number(claimed.weapon ?? 0)}
+                    cap={Number(exclusiveCaps.weapon ?? 1)}
+                    info="Colt Monitor — loot-exclusive LMG (not sold in stores). Cap 2 worldwide; you can only hold one."
+                  />
                   {newExLive && (
                     <ScarcityRow
                       icon={Swords}
                       label={newExLabels.weapon_bar || 'Browning Automatic Rifle M1918A2'}
-                      claimed={claimed.weapon_bar ?? 0}
-                      cap={exclusiveCaps.weapon_bar ?? 1}
+                      claimed={Number(claimed.weapon_bar ?? 0)}
+                      cap={Number(exclusiveCaps.weapon_bar ?? 1)}
+                      info="Loot-exclusive BAR. Only one in the game. Transfers to your killer if you die."
                     />
                   )}
-                  <ScarcityRow icon={Car} label="Cadillac V-16 (exclusive pool)" claimed={claimed.car} cap={exclusiveCaps.car} />
-                  <ScarcityRow icon={Car} label="Model SJ (Rare 5% / UR 10%)" claimed={claimed.car_sj} cap={exclusiveCaps.car_sj ?? 1} />
-                  <ScarcityRow icon={Car} label="540K (Ultra Rare only)" claimed={claimed.car_540k} cap={exclusiveCaps.car_540k ?? 1} />
-                  <ScarcityRow icon={Shield} label="Exclusive Armour" claimed={claimed.armour} cap={exclusiveCaps.armour} />
+                  <ScarcityRow
+                    icon={Car}
+                    label="Cadillac V-16 (exclusive pool)"
+                    claimed={Number(claimed.car ?? 0)}
+                    cap={Number(exclusiveCaps.car ?? 1)}
+                    info="Loot-exclusive Cadillac from the exclusive car pool. Fast travel; contributes weekly loot pieces while owned. Cap 1 player copy (admin/mod copies ignored)."
+                  />
+                  <ScarcityRow
+                    icon={Car}
+                    label="Model SJ (Rare 5% / UR 10%)"
+                    claimed={Number(claimed.car_sj ?? 0)}
+                    cap={Number(exclusiveCaps.car_sj ?? 1)}
+                    info="Duesenberg Model SJ — 2s travel. Dedicated roll on Rare (5%) and Ultra Rare (10%) opens. Only one in the game; melting returns it to the loot pool."
+                  />
+                  <ScarcityRow
+                    icon={Car}
+                    label="540K (Ultra Rare only)"
+                    claimed={Number(claimed.car_540k ?? 0)}
+                    cap={Number(exclusiveCaps.car_540k ?? 1)}
+                    info="1936 Mercedes-Benz 540K — Ultra Rare boxes only. 2s travel plus daily 1s travel boosts. High weekly loot-piece payout. Cap 1; melting returns it to the pool."
+                  />
+                  <ScarcityRow
+                    icon={Shield}
+                    label="Exclusive Armour"
+                    claimed={Number(claimed.armour ?? 0)}
+                    cap={Number(exclusiveCaps.armour ?? 1)}
+                    info="Steel Plate Bulletproof Vest (1922) — armour level 7. Cap 2 worldwide; you can only wear one."
+                  />
                   {newExLive && (
                     <ScarcityRow
                       icon={Shield}
                       label={newExLabels.armour_v2 || 'Brewster Body Shield (1917)'}
-                      claimed={claimed.armour_v2 ?? 0}
-                      cap={exclusiveCaps.armour_v2 ?? 1}
+                      claimed={Number(claimed.armour_v2 ?? 0)}
+                      cap={Number(exclusiveCaps.armour_v2 ?? 1)}
+                      info="Armour level 8 — tougher than Steel Plate. Only one in the game. Transfers to your killer if you die."
                     />
                   )}
                   {newExLive && (
                     <ScarcityRow
                       icon={ScrollText}
                       label={newExLabels.mission_perk || "Commissioner's Pardon"}
-                      claimed={claimed.mission_perk ?? 0}
-                      cap={exclusiveCaps.mission_perk ?? 1}
+                      claimed={Number(claimed.mission_perk ?? 0)}
+                      cap={Number(exclusiveCaps.mission_perk ?? 1)}
                       holder={missionPerkHolder}
+                      info="Unique mission perk: long mission path, monthly mission skips, and weekly points while held. Limited transfers on death; then returns to the loot pool."
                     />
                   )}
-                  <ScarcityRow icon={Building2} label="Speakeasy" claimed={claimed.property} cap={exclusiveCaps.property} />
-                  <ScarcityRow icon={Leaf} label="Weed Empire specials" claimed={claimed.weed_strain} cap={exclusiveCaps.weed_strain} />
+                  <ScarcityRow
+                    icon={Building2}
+                    label="Speakeasy"
+                    claimed={Number(claimed.property ?? 0)}
+                    cap={Number(exclusiveCaps.property ?? 1)}
+                    info="Exclusive property. Collect once per day: $50M cash, 1,000 bullets, 10 loot pieces, and 25 points. Cap 2 worldwide."
+                  />
+                  <ScarcityRow
+                    icon={Building2}
+                    label={newExLabels.safehouse || 'Safehouse (Ultra Rare only)'}
+                    claimed={Number(claimed.safehouse ?? 0)}
+                    cap={Number(exclusiveCaps.safehouse ?? 1)}
+                    info="Ultra Rare exclusive property (1 in the game). Once per day: hide for 3 hours so searchers cannot find you (you also cannot attack, and may hire at most 1 robot bodyguard while hidden). Weekly $150M + 5,000 respect; every 3 days: 1 robot BG token, 1 mission token, 100 loot pieces. If you die, it returns to the loot pool."
+                  />
+                  <ScarcityRow
+                    icon={Leaf}
+                    label="Weed Empire specials"
+                    claimed={Number(claimed.weed_strain ?? 0)}
+                    cap={Number(exclusiveCaps.weed_strain ?? 5)}
+                    info="Five unique Weed Empire exclusive strains from loot (1 of each worldwide). Extra copies can also drop when you kill a holder."
+                  />
                 </ul>
-                {reclaimableCatalog.length > 0 && (
+                )}
+                {statusReady && reclaimableCatalog.length > 0 && (
                   <div className="mt-1.5 pt-1.5 border-t border-primary/15">
                     <p className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em] text-center mb-0.5">
                       Vault Relics
@@ -1347,6 +1449,7 @@ export default function LootBox() {
                             claimed={claimedN}
                             cap={Number(live.cap ?? item.cap ?? 1)}
                             holder={claimedN > 0 ? (live.owner_username || null) : null}
+                            info={`${item.buff_label || 'Passive bonus'}. Globally unique — returns to vaults if the holder is killed (not transferred).`}
                           />
                         );
                       })}
