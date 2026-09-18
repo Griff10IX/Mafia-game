@@ -1690,6 +1690,9 @@ export default function Store() {
                   {customPurchaseMode === 'points' ? (
                     <>
                       <span className="text-primary font-bold">{Number(customQuote.points).toLocaleString()} pts</span>
+                      {Number(customQuote.bonus_points || 0) > 0 && (
+                        <span className="text-amber-400/90"> (+{Number(customQuote.bonus_points).toLocaleString()} extra)</span>
+                      )}
                       {' · '}
                       <span className="text-emerald-400/90">£{Number(customQuote.price_gbp).toFixed(2)}</span>
                       {Number(customQuote.loot_box_pieces || 0) > 0 && (
@@ -1713,6 +1716,9 @@ export default function Store() {
                       Pay <span className="text-emerald-400/90 font-bold">£{Number(customQuote.price_gbp).toFixed(2)}</span>
                       {' → '}
                       <span className="text-primary font-bold">{Number(customQuote.points).toLocaleString()} pts</span>
+                      {Number(customQuote.bonus_points || 0) > 0 && (
+                        <span className="text-amber-400/90"> (+{Number(customQuote.bonus_points).toLocaleString()} extra)</span>
+                      )}
                       {Number(customQuote.loot_box_pieces || 0) > 0 && (
                         <>
                           {' · '}
