@@ -4,8 +4,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 # Catalog: hard-to-get themes (loot later). Image paths are public static assets.
-# fit: width = landscape banner; stretch = full-card fill (whole scene, slight aspect warp);
-# cover/contain also supported for future themes.
+# fit: width = landscape banner; height = portrait height-fit (full scene top-to-bottom);
+# stretch/cover/contain also supported.
 PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, str]] = {
     "godfather": {
         "id": "godfather",
@@ -17,7 +17,7 @@ PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, str]] = {
         "id": "godfather_empire",
         "name": "Godfather 2 — Empire",
         "image": "/images/profile-themes/godfather-empire.jpg",
-        "fit": "stretch",
+        "fit": "height",
     },
 }
 

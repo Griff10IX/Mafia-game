@@ -604,17 +604,18 @@ const ProfileInfoCard = ({
   const bgThemeImage = (bgTheme && typeof bgTheme.image === 'string' && bgTheme.image.trim())
     ? bgTheme.image.trim()
     : null;
-  const bgThemeFitRaw = String(bgTheme?.fit || 'stretch').toLowerCase();
-  const bgThemeFit = ['width', 'cover', 'contain', 'stretch'].includes(bgThemeFitRaw)
+  const bgThemeFitRaw = String(bgTheme?.fit || 'height').toLowerCase();
+  const bgThemeFit = ['width', 'height', 'cover', 'contain', 'stretch'].includes(bgThemeFitRaw)
     ? bgThemeFitRaw
-    : 'stretch';
+    : 'height';
   // Two background layers: gradient (always full card) + art (fit mode). Sizes MUST be listed
   // separately — a single "contain/cover" also shrinks the gradient and looks broken/zoomed.
   const artSize = (
     bgThemeFit === 'width' ? '100% auto'
-      : bgThemeFit === 'cover' ? 'cover'
-        : bgThemeFit === 'contain' ? 'contain'
-          : '100% 100%'
+      : bgThemeFit === 'height' ? 'auto 100%'
+        : bgThemeFit === 'cover' ? 'cover'
+          : bgThemeFit === 'contain' ? 'contain'
+            : '100% 100%'
   );
   const artPos = bgThemeFit === 'width' ? 'center top' : 'center center';
   const dossierCardStyle = {
@@ -622,7 +623,7 @@ const ProfileInfoCard = ({
     ...(bgThemeImage
       ? {
         backgroundColor: '#02060e',
-        backgroundImage: `linear-gradient(180deg, rgba(2,6,14,0.40) 0%, rgba(2,6,14,0.55) 45%, rgba(2,6,14,0.78) 100%), url(${bgThemeImage})`,
+        backgroundImage: `linear-gradient(180deg, rgba(2,6,14,0.32) 0%, rgba(2,6,14,0.48) 45%, rgba(2,6,14,0.70) 100%), url(${bgThemeImage})`,
         backgroundSize: `100% 100%, ${artSize}`,
         backgroundPosition: `center, ${artPos}`,
         backgroundRepeat: 'no-repeat, no-repeat',

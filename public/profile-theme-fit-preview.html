@@ -63,6 +63,11 @@
     paint('contain', empire, 'contain', 'center center');
     paint('cover', empire, 'cover', 'center center');
     paint('width', legacy, '100% auto', 'center top');
+    // height-fit card
+    const h = document.createElement('div');
+    h.innerHTML = '<div class="label">Empire height (auto 100%) — full scene top-to-bottom</div><div class="card" id="height"></div>';
+    document.querySelector('.row').appendChild(h);
+    paint('height', empire, 'auto 100%', 'center center');
   </script>
 </body>
 </html>
