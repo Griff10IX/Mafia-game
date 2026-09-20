@@ -1655,7 +1655,7 @@ def register(router):
             **profile_background_public_fields(fresh or current_user, include_owned=True, is_admin=admin),
         }
 
-    CUSTOM_THEME_RAW_MAX_BYTES = 6 * 1024 * 1024
+    CUSTOM_THEME_RAW_MAX_BYTES = 80 * 1024 * 1024  # sanity only (decoded then resized to 1024×931)
 
     @router.post("/profile/background-theme/custom")
     async def upload_profile_background_theme_custom(
@@ -1669,7 +1669,7 @@ def register(router):
         if not raw:
             raise HTTPException(status_code=400, detail="No file uploaded")
         if len(raw) > CUSTOM_THEME_RAW_MAX_BYTES:
-            raise HTTPException(status_code=400, detail="Image too large (max 6MB)")
+            raise HTTPException(status_code=400, detail="Image file is absurdly large (over 80MB)")
         try:
             jpeg_bytes, _mime = encode_theme_jpeg(raw)
             path = custom_theme_file_path(ROOT_DIR, current_user["id"])

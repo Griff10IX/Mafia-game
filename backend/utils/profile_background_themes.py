@@ -210,14 +210,22 @@ def custom_theme_file_path(root_dir: Path, user_id: str) -> Path:
 
 
 def encode_theme_jpeg(raw: bytes) -> Tuple[bytes, str]:
-    """Validate upload bytes and encode a center cover-crop JPEG at THEME_IMAGE_SIZE."""
+    """Validate upload bytes and encode a center cover-crop JPEG at THEME_IMAGE_SIZE.
+
+    No small size cap — admin test uploads are resized down to 1024×931 anyway.
+    """
     from PIL import Image
 
-    from utils.image_upload_security import verify_uploaded_file_bytes
+    from utils.image_upload_security import sniff_image_mime, verify_image_magic_bytes
 
-    mime, err = verify_uploaded_file_bytes(raw, None)
-    if not mime:
+    if not raw:
+        raise ValueError("Invalid or empty image file")
+    ok, err = verify_image_magic_bytes(raw, None)
+    if not ok:
         raise ValueError(err or "Invalid image")
+    mime = sniff_image_mime(raw)
+    if not mime:
+        raise ValueError("Invalid image type")
     try:
         im = Image.open(io.BytesIO(raw))
         im.load()
