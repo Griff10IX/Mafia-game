@@ -14,9 +14,8 @@ UID = "36425cb4-3755-4669-b4b5-5d86345991d0"
 OWNED = ["godfather", "godfather_empire"]
 db = MongoClient(os.environ["MONGO_URL"])[(os.environ.get("DB_NAME") or "mafia_game").strip()]
 u0 = db.users.find_one({"id": UID}, {"_id": 0, "profile_background_theme_id": 1})
-equip = (u0 or {}).get("profile_background_theme_id") or "godfather_empire"
-if equip not in OWNED:
-    equip = "godfather_empire"
+# Prefer new portrait theme for this grant so GhostFace can preview it immediately.
+equip = "godfather_empire"
 r = db.users.update_one(
     {"id": UID},
     {

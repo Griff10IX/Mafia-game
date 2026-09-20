@@ -604,15 +604,23 @@ const ProfileInfoCard = ({
   const bgThemeImage = (bgTheme && typeof bgTheme.image === 'string' && bgTheme.image.trim())
     ? bgTheme.image.trim()
     : null;
-  const bgThemeFit = String(bgTheme?.fit || 'cover').toLowerCase() === 'width' ? 'width' : 'cover';
+  const bgThemeFitRaw = String(bgTheme?.fit || 'contain').toLowerCase();
+  const bgThemeFit = ['width', 'cover', 'contain', 'stretch'].includes(bgThemeFitRaw)
+    ? bgThemeFitRaw
+    : 'contain';
+  const bgSize = (
+    bgThemeFit === 'width' ? '100% auto'
+      : bgThemeFit === 'cover' ? 'cover'
+        : bgThemeFit === 'stretch' ? '100% 100%'
+          : 'contain'
+  );
   const dossierCardStyle = {
     ...(dossierBorderStyle || {}),
     ...(bgThemeImage
       ? {
         backgroundColor: '#02060e',
-        backgroundImage: `linear-gradient(180deg, rgba(2,6,14,0.45) 0%, rgba(2,6,14,0.62) 38%, rgba(2,6,14,0.88) 100%), url(${bgThemeImage})`,
-        // width = landscape banner; cover = portrait fill for tall dossier themes
-        backgroundSize: bgThemeFit === 'width' ? '100% auto' : 'cover',
+        backgroundImage: `linear-gradient(180deg, rgba(2,6,14,0.42) 0%, rgba(2,6,14,0.58) 40%, rgba(2,6,14,0.82) 100%), url(${bgThemeImage})`,
+        backgroundSize: bgSize,
         backgroundPosition: bgThemeFit === 'width' ? 'center top' : 'center center',
         backgroundRepeat: 'no-repeat',
       }
