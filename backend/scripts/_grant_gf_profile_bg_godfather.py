@@ -1,4 +1,4 @@
-"""One-shot: grant GhostFace profile background themes (own both; keep current equip if set)."""
+"""One-shot: grant GhostFace all profile background themes."""
 from __future__ import annotations
 
 import os
@@ -8,14 +8,18 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BACKEND_DIR)
 load_dotenv(os.path.join(BACKEND_DIR, ".env"))
 
+from utils.profile_background_themes import THEME_DISPLAY_ORDER  # noqa: E402
+
 UID = "36425cb4-3755-4669-b4b5-5d86345991d0"
-OWNED = ["godfather", "godfather_empire"]
+OWNED = list(THEME_DISPLAY_ORDER)
 db = MongoClient(os.environ["MONGO_URL"])[(os.environ.get("DB_NAME") or "mafia_game").strip()]
 u0 = db.users.find_one({"id": UID}, {"_id": 0, "profile_background_theme_id": 1})
-# Prefer new portrait theme for this grant so GhostFace can preview it immediately.
-equip = "godfather_empire"
+equip = (u0 or {}).get("profile_background_theme_id")
+if equip not in OWNED:
+    equip = "halloween_heist"
 r = db.users.update_one(
     {"id": UID},
     {

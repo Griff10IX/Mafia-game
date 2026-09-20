@@ -4,8 +4,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 # Catalog: hard-to-get themes (loot later). Image paths are public static assets.
-# fit: width = landscape banner; height = portrait height-fit (full scene top-to-bottom);
-# stretch/cover/contain also supported.
+# fit: width = landscape banner; stretch = full dossier fill top→weapons (whole scene);
+# height/cover/contain also supported.
 PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, str]] = {
     "godfather": {
         "id": "godfather",
@@ -17,12 +17,39 @@ PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, str]] = {
         "id": "godfather_empire",
         "name": "Godfather 2 — Empire",
         "image": "/images/profile-themes/godfather-empire.jpg",
-        "fit": "height",
+        "fit": "stretch",
+    },
+    "halloween_heist": {
+        "id": "halloween_heist",
+        "name": "Halloween Heist",
+        "image": "/images/profile-themes/halloween-heist.jpg",
+        "fit": "stretch",
+    },
+    "ronin_fuji": {
+        "id": "ronin_fuji",
+        "name": "Ronin Fuji",
+        "image": "/images/profile-themes/ronin-fuji.jpg",
+        "fit": "stretch",
+    },
+    "london_snow": {
+        "id": "london_snow",
+        "name": "London Snow",
+        "image": "/images/profile-themes/london-snow.jpg",
+        "fit": "stretch",
+    },
+    "orbit_overlook": {
+        "id": "orbit_overlook",
+        "name": "Orbit Overlook",
+        "image": "/images/profile-themes/orbit-overlook.jpg",
+        "fit": "stretch",
     },
 }
 
 OWNED_FIELD = "profile_background_themes_owned"
 EQUIPPED_FIELD = "profile_background_theme_id"
+
+# Stable edit-profile order when granting / listing.
+THEME_DISPLAY_ORDER = tuple(PROFILE_BACKGROUND_THEMES.keys())
 
 
 def catalog_theme(theme_id: Optional[str]) -> Optional[Dict[str, str]]:
@@ -39,15 +66,20 @@ def owned_theme_ids(user: Optional[dict]) -> List[str]:
     raw = user.get(OWNED_FIELD) or []
     if not isinstance(raw, list):
         return []
-    out: List[str] = []
     seen = set()
+    collected: List[str] = []
     for x in raw:
         tid = str(x or "").strip().lower()
         if not tid or tid in seen or tid not in PROFILE_BACKGROUND_THEMES:
             continue
         seen.add(tid)
-        out.append(tid)
-    return out
+        collected.append(tid)
+    # Prefer catalog order for the Profile themes picker.
+    ordered = [tid for tid in THEME_DISPLAY_ORDER if tid in seen]
+    for tid in collected:
+        if tid not in ordered:
+            ordered.append(tid)
+    return ordered
 
 
 def user_owns_theme(user: Optional[dict], theme_id: Optional[str]) -> bool:

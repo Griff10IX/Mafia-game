@@ -604,12 +604,13 @@ const ProfileInfoCard = ({
   const bgThemeImage = (bgTheme && typeof bgTheme.image === 'string' && bgTheme.image.trim())
     ? bgTheme.image.trim()
     : null;
-  const bgThemeFitRaw = String(bgTheme?.fit || 'height').toLowerCase();
+  const bgThemeFitRaw = String(bgTheme?.fit || 'stretch').toLowerCase();
   const bgThemeFit = ['width', 'height', 'cover', 'contain', 'stretch'].includes(bgThemeFitRaw)
     ? bgThemeFitRaw
-    : 'height';
+    : 'stretch';
   // Two background layers: gradient (always full card) + art (fit mode). Sizes MUST be listed
   // separately — a single "contain/cover" also shrinks the gradient and looks broken/zoomed.
+  // stretch (100% 100%) fills the whole dossier including cars/weapons with the full scene.
   const artSize = (
     bgThemeFit === 'width' ? '100% auto'
       : bgThemeFit === 'height' ? 'auto 100%'
@@ -623,7 +624,7 @@ const ProfileInfoCard = ({
     ...(bgThemeImage
       ? {
         backgroundColor: '#02060e',
-        backgroundImage: `linear-gradient(180deg, rgba(2,6,14,0.32) 0%, rgba(2,6,14,0.48) 45%, rgba(2,6,14,0.70) 100%), url(${bgThemeImage})`,
+        backgroundImage: `linear-gradient(180deg, rgba(2,6,14,0.28) 0%, rgba(2,6,14,0.42) 40%, rgba(2,6,14,0.62) 100%), url(${bgThemeImage})`,
         backgroundSize: `100% 100%, ${artSize}`,
         backgroundPosition: `center, ${artPos}`,
         backgroundRepeat: 'no-repeat, no-repeat',
