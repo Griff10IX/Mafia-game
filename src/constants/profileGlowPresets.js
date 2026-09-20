@@ -56,6 +56,7 @@ export function customGlowBorderStyle(hex) {
   return {
     borderColor: `rgba(${rgb}, 0.7)`,
     boxShadow: `0 0 16px rgba(${rgb}, 0.4), inset 0 0 12px rgba(${rgb}, 0.08)`,
+    ['--prof-theme-seam-rgb']: rgb,
   };
 }
 
@@ -71,5 +72,5 @@ function hexToRgb(hex) {
 /** CSS for all .prof-border-<id> classes (dossier border + soft glow per preset). */
 export const PROFILE_GLOW_BORDER_CSS = PROFILE_GLOW_PRESETS.map((p) => {
   const rgb = hexToRgb(p.hex);
-  return `.prof-border-${p.id} { border-color: rgba(${rgb}, 0.7) !important; box-shadow: 0 0 16px rgba(${rgb}, 0.4), inset 0 0 12px rgba(${rgb}, 0.08) !important; }`;
+  return `.prof-border-${p.id} { border-color: rgba(${rgb}, 0.7) !important; box-shadow: 0 0 16px rgba(${rgb}, 0.4), inset 0 0 12px rgba(${rgb}, 0.08) !important; --prof-theme-seam-rgb: ${rgb}; }`;
 }).join('\n');

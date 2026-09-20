@@ -93,17 +93,29 @@ const PROFILE_STYLES = `
   .prof-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
   @keyframes prof-dossier-enter { from { opacity: 0.88; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .prof-dossier-enter { animation: prof-dossier-enter 0.34s ease-out both; }
-  /* Theme art: banner fit — catalog bitmaps are exactly 1024x931
-     (THEME_IMAGE_WIDTH x THEME_IMAGE_HEIGHT). width 100% / height auto, top-aligned;
-     panel color shows below (not stretched to fill the whole card). */
-  .prof-dossier-theme-bg {
+  /* Theme art: banner box at catalog aspect (1024x931), top-aligned.
+     Glow seam sits on the bottom edge of the picture (same colour as dossier border). */
+  .prof-dossier-theme-layer {
     position: absolute !important;
-    inset: 0 !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
     z-index: 0 !important;
     pointer-events: none !important;
+  }
+  .prof-dossier-theme-bg {
+    width: 100% !important;
+    aspect-ratio: 1024 / 931;
     background-repeat: no-repeat !important;
     background-position: center top !important;
-    background-size: 100% auto !important;
+    background-size: 100% 100% !important;
+  }
+  .prof-dossier-theme-bg[data-fit="stretch"],
+  .prof-dossier-theme-bg[data-fit="cover"] {
+    position: absolute !important;
+    inset: 0 !important;
+    width: auto !important;
+    aspect-ratio: auto !important;
   }
   .prof-dossier-theme-bg[data-fit="stretch"] {
     background-size: 100% 100% !important;
@@ -120,6 +132,17 @@ const PROFILE_STYLES = `
   .prof-dossier-theme-bg[data-fit="height"] {
     background-size: auto 100% !important;
     background-position: center center !important;
+    aspect-ratio: auto !important;
+    position: absolute !important;
+    inset: 0 !important;
+  }
+  .prof-dossier-theme-seam {
+    height: 2px;
+    width: 100%;
+    background: rgba(var(--prof-theme-seam-rgb, var(--noir-primary-rgb)), 0.7);
+    box-shadow:
+      0 0 14px rgba(var(--prof-theme-seam-rgb, var(--noir-primary-rgb)), 0.55),
+      0 0 4px rgba(var(--prof-theme-seam-rgb, var(--noir-primary-rgb)), 0.9);
   }
   .prof-dossier-theme-scrim {
     position: absolute;
@@ -606,7 +629,7 @@ const ProfileInfoCard = ({
       ? (isCustomBorder ? 'border-2' : `border-2 prof-border-${profile.profile_border_style}`)
       : 'border-2 border-primary/35');
   const dossierBorderStyle = isSystemAi
-    ? { boxShadow: '0 0 28px rgba(251,191,36,0.18)' }
+    ? { boxShadow: '0 0 28px rgba(251,191,36,0.18)', ['--prof-theme-seam-rgb']: '251, 191, 36' }
     : (isCustomBorder
       ? customGlowBorderStyle(profile.profile_name_glow_color)
       : undefined);
@@ -643,6 +666,9 @@ const ProfileInfoCard = ({
   const bgThemeFit = ['width', 'height', 'cover', 'contain', 'stretch'].includes(bgThemeFitRaw)
     ? bgThemeFitRaw
     : 'width';
+  const bgThemeW = Number(bgTheme?.width) > 0 ? Number(bgTheme.width) : 1024;
+  const bgThemeH = Number(bgTheme?.height) > 0 ? Number(bgTheme.height) : 931;
+  const showThemeSeam = Boolean(bgThemeImage) && (bgThemeFit === 'width' || bgThemeFit === 'contain');
   const dossierCardStyle = {
     ...(dossierBorderStyle || {}),
     ...(bgThemeImage ? { backgroundColor: '#02060e' } : {}),
@@ -652,12 +678,17 @@ const ProfileInfoCard = ({
     <div className={`relative ${styles.panel} rounded-lg overflow-hidden ${dossierBorderClass} shadow-2xl ${bgThemeImage ? '' : 'backdrop-blur-sm'} prof-card prof-dossier-enter mobile-panel`} style={dossierCardStyle}>
       {bgThemeImage ? (
         <>
-          <div
-            className="prof-dossier-theme-bg"
-            data-fit={bgThemeFit}
-            aria-hidden="true"
-            style={{ backgroundImage: `url(${bgThemeImage})` }}
-          />
+          <div className="prof-dossier-theme-layer" aria-hidden="true">
+            <div
+              className="prof-dossier-theme-bg"
+              data-fit={bgThemeFit}
+              style={{
+                backgroundImage: `url(${bgThemeImage})`,
+                ...(showThemeSeam ? { aspectRatio: `${bgThemeW} / ${bgThemeH}` } : {}),
+              }}
+            />
+            {showThemeSeam ? <div className="prof-dossier-theme-seam" /> : null}
+          </div>
           <div aria-hidden="true" className="prof-dossier-theme-scrim" />
         </>
       ) : null}
