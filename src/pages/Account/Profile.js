@@ -604,16 +604,16 @@ const ProfileInfoCard = ({
   const bgThemeImage = (bgTheme && typeof bgTheme.image === 'string' && bgTheme.image.trim())
     ? bgTheme.image.trim()
     : null;
+  const bgThemeFit = String(bgTheme?.fit || 'cover').toLowerCase() === 'width' ? 'width' : 'cover';
   const dossierCardStyle = {
     ...(dossierBorderStyle || {}),
     ...(bgThemeImage
       ? {
-        // Landscape theme art on a tall dossier: width-fit (not cover) so the full scene shows,
-        // not a zoomed crop of smoke/lights. Dark fill covers the rest of the card.
         backgroundColor: '#02060e',
         backgroundImage: `linear-gradient(180deg, rgba(2,6,14,0.45) 0%, rgba(2,6,14,0.62) 38%, rgba(2,6,14,0.88) 100%), url(${bgThemeImage})`,
-        backgroundSize: '100% auto',
-        backgroundPosition: 'center top',
+        // width = landscape banner; cover = portrait fill for tall dossier themes
+        backgroundSize: bgThemeFit === 'width' ? '100% auto' : 'cover',
+        backgroundPosition: bgThemeFit === 'width' ? 'center top' : 'center center',
         backgroundRepeat: 'no-repeat',
       }
       : {}),
@@ -2943,56 +2943,60 @@ export default function Profile() {
                 <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1.5">
                   <Image size={10} className="text-primary" />
                   <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] text-center">
-                    Profile background
+                    Profile themes
                   </h2>
                 </div>
                 <div className="p-3 space-y-2">
                   <p className="text-[11px] text-mutedForeground font-heading">
-                    Rare dossier themes you own. Equip one, or remove to use the normal profile look.
+                    Rare dossier background themes you own. Equip one at a time, or use Normal for the default look.
                   </p>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {me.profile_background_themes.map((theme) => {
                       const tid = theme?.id || '';
                       const equipped = (me.profile_background_theme_id || '') === tid;
+                      const portraitThumb = String(theme?.fit || '').toLowerCase() !== 'width';
                       return (
                         <div
                           key={tid}
-                          className="flex items-center gap-2 rounded-md border border-primary/20 bg-black/25 p-2"
+                          className={`flex items-center gap-2 rounded-md border p-2 ${equipped ? 'border-primary/50 bg-primary/10' : 'border-primary/20 bg-black/25'}`}
                         >
                           <div
-                            className="w-14 h-10 rounded border border-primary/25 bg-secondary bg-cover bg-center shrink-0"
+                            className={`rounded border border-primary/25 bg-secondary bg-cover bg-center shrink-0 ${portraitThumb ? 'w-12 h-16' : 'w-16 h-10'}`}
                             style={theme?.image ? { backgroundImage: `url(${theme.image})` } : undefined}
                             aria-hidden
                           />
                           <div className="min-w-0 flex-1">
                             <p className="text-[11px] font-heading font-bold text-foreground truncate">{theme?.name || tid}</p>
                             <p className="text-[9px] text-mutedForeground font-heading">
-                              {equipped ? 'Equipped on your dossier' : 'Owned'}
+                              {equipped ? 'Equipped' : 'Owned'}
                             </p>
                           </div>
-                          {equipped ? (
-                            <button
-                              type="button"
-                              onClick={() => saveProfileBackgroundTheme('')}
-                              disabled={savingBgTheme}
-                              className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md bg-secondary border border-border text-foreground font-heading font-bold text-[10px] uppercase hover:bg-primary/10 disabled:opacity-50"
-                            >
-                              Remove
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => saveProfileBackgroundTheme(tid)}
-                              disabled={savingBgTheme}
-                              className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md bg-primary/20 border border-primary/40 text-primary font-heading font-bold text-[10px] uppercase hover:bg-primary/30 disabled:opacity-50"
-                            >
-                              Use
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => saveProfileBackgroundTheme(equipped ? '' : tid)}
+                            disabled={savingBgTheme}
+                            className={`inline-flex items-center justify-center px-2.5 py-1.5 rounded-md border font-heading font-bold text-[10px] uppercase disabled:opacity-50 ${
+                              equipped
+                                ? 'bg-secondary border-border text-foreground hover:bg-primary/10'
+                                : 'bg-primary/20 border-primary/40 text-primary hover:bg-primary/30'
+                            }`}
+                          >
+                            {equipped ? 'Remove' : 'Use'}
+                          </button>
                         </div>
                       );
                     })}
                   </div>
+                  {me.profile_background_theme_id ? (
+                    <button
+                      type="button"
+                      onClick={() => saveProfileBackgroundTheme('')}
+                      disabled={savingBgTheme}
+                      className="w-full min-h-[36px] py-1.5 text-[10px] font-heading font-bold uppercase rounded-md bg-secondary border border-border text-mutedForeground hover:text-foreground hover:bg-primary/10 disabled:opacity-50"
+                    >
+                      Normal (no theme)
+                    </button>
+                  ) : null}
                 </div>
                 <div className="prof-art-line text-primary mx-3" />
               </div>

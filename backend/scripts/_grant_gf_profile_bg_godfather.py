@@ -1,4 +1,4 @@
-"""One-shot: grant GhostFace Godfather profile background (own + equip)."""
+"""One-shot: grant GhostFace profile background themes (own both; keep current equip if set)."""
 from __future__ import annotations
 
 import os
@@ -11,13 +11,18 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(BACKEND_DIR, ".env"))
 
 UID = "36425cb4-3755-4669-b4b5-5d86345991d0"
+OWNED = ["godfather", "godfather_empire"]
 db = MongoClient(os.environ["MONGO_URL"])[(os.environ.get("DB_NAME") or "mafia_game").strip()]
+u0 = db.users.find_one({"id": UID}, {"_id": 0, "profile_background_theme_id": 1})
+equip = (u0 or {}).get("profile_background_theme_id") or "godfather_empire"
+if equip not in OWNED:
+    equip = "godfather_empire"
 r = db.users.update_one(
     {"id": UID},
     {
         "$set": {
-            "profile_background_themes_owned": ["godfather"],
-            "profile_background_theme_id": "godfather",
+            "profile_background_themes_owned": OWNED,
+            "profile_background_theme_id": equip,
         }
     },
 )
