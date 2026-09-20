@@ -93,16 +93,32 @@ const PROFILE_STYLES = `
   .prof-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
   @keyframes prof-dossier-enter { from { opacity: 0.88; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .prof-dossier-enter { animation: prof-dossier-enter 0.34s ease-out both; }
-  /* Theme art: absolute non-replaced div. background-size 100% 100% shows the full
-     bitmap stretched to the dossier (no crop-zoom / no letterbox). */
+  /* Theme art: banner fit — full bitmap at natural aspect (width 100%, height auto),
+     top-aligned. Panel color shows below (not stretched to fill the whole card). */
   .prof-dossier-theme-bg {
     position: absolute !important;
     inset: 0 !important;
     z-index: 0 !important;
     pointer-events: none !important;
     background-repeat: no-repeat !important;
-    background-position: center center !important;
+    background-position: center top !important;
+    background-size: 100% auto !important;
+  }
+  .prof-dossier-theme-bg[data-fit="stretch"] {
     background-size: 100% 100% !important;
+    background-position: center center !important;
+  }
+  .prof-dossier-theme-bg[data-fit="cover"] {
+    background-size: cover !important;
+    background-position: center center !important;
+  }
+  .prof-dossier-theme-bg[data-fit="contain"] {
+    background-size: contain !important;
+    background-position: center center !important;
+  }
+  .prof-dossier-theme-bg[data-fit="height"] {
+    background-size: auto 100% !important;
+    background-position: center center !important;
   }
   .prof-dossier-theme-scrim {
     position: absolute;
@@ -622,6 +638,10 @@ const ProfileInfoCard = ({
   const bgThemeImage = (bgTheme && typeof bgTheme.image === 'string' && bgTheme.image.trim())
     ? bgTheme.image.trim()
     : null;
+  const bgThemeFitRaw = String(bgTheme?.fit || 'width').toLowerCase();
+  const bgThemeFit = ['width', 'height', 'cover', 'contain', 'stretch'].includes(bgThemeFitRaw)
+    ? bgThemeFitRaw
+    : 'width';
   const dossierCardStyle = {
     ...(dossierBorderStyle || {}),
     ...(bgThemeImage ? { backgroundColor: '#02060e' } : {}),
@@ -633,6 +653,7 @@ const ProfileInfoCard = ({
         <>
           <div
             className="prof-dossier-theme-bg"
+            data-fit={bgThemeFit}
             aria-hidden="true"
             style={{ backgroundImage: `url(${bgThemeImage})` }}
           />

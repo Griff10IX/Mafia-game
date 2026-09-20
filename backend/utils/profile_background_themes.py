@@ -4,44 +4,45 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 # Catalog: hard-to-get themes (loot later). Image paths are public static assets.
-# ?v= cache-bust when art is replaced. fit kept for API compat; UI always fills dossier.
-_THEME_ASSET_V = "20260921a"
+# ?v= cache-bust when art is replaced.
+# fit: width = natural-aspect banner (default); stretch = fill whole dossier.
+_THEME_ASSET_V = "20260921b"
 PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, str]] = {
     "godfather": {
         "id": "godfather",
         "name": "Godfather 1 — Legacy",
         "image": f"/images/profile-themes/godfather.jpg?v={_THEME_ASSET_V}",
-        "fit": "stretch",
+        "fit": "width",
     },
     "godfather_empire": {
         "id": "godfather_empire",
         "name": "Godfather 2 — Empire",
         "image": f"/images/profile-themes/godfather-empire.jpg?v={_THEME_ASSET_V}",
-        "fit": "stretch",
+        "fit": "width",
     },
     "halloween_heist": {
         "id": "halloween_heist",
         "name": "Halloween Heist",
         "image": f"/images/profile-themes/halloween-heist.jpg?v={_THEME_ASSET_V}",
-        "fit": "stretch",
+        "fit": "width",
     },
     "ronin_fuji": {
         "id": "ronin_fuji",
         "name": "Ronin Fuji",
         "image": f"/images/profile-themes/ronin-fuji.jpg?v={_THEME_ASSET_V}",
-        "fit": "stretch",
+        "fit": "width",
     },
     "london_snow": {
         "id": "london_snow",
         "name": "London Snow",
         "image": f"/images/profile-themes/london-snow.jpg?v={_THEME_ASSET_V}",
-        "fit": "stretch",
+        "fit": "width",
     },
     "orbit_overlook": {
         "id": "orbit_overlook",
         "name": "Orbit Overlook",
         "image": f"/images/profile-themes/orbit-overlook-v2.jpg?v={_THEME_ASSET_V}",
-        "fit": "stretch",
+        "fit": "width",
     },
 }
 
