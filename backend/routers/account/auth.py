@@ -2154,6 +2154,7 @@ def register(router):
     )
     async def get_me(request: Request, current_user: dict = Depends(get_current_user)):
         from utils.profile_cosmetics import profile_cosmetic_active
+        from utils.profile_background_themes import profile_background_public_fields
         from routers.game.notifications import normalize_toast_muted_pages
 
         user_id = current_user.get("id") or "unknown"
@@ -2524,6 +2525,7 @@ def register(router):
                 profile_border_style=u.get("profile_border_style") if profile_cosmetic_active(u) else None,
                 profile_cosmetic_until=u.get("profile_cosmetic_until"),
                 profile_cosmetic_permanent=bool(u.get("profile_cosmetic_permanent")),
+                **profile_background_public_fields(u, include_owned=True),
                 crew_oc_auto_apply_tokens=_safe_int(u.get("crew_oc_auto_apply_tokens"), 0),
                 crew_oc_auto_apply_until=u.get("crew_oc_auto_apply_until"),
                 crew_oc_auto_apply_max_fee=(

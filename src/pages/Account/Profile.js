@@ -600,9 +600,24 @@ const ProfileInfoCard = ({
   const profileNotepadStyle = profileNotepadBg
     ? { backgroundColor: profileNotepadBg, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04)' }
     : undefined;
+  const bgTheme = profile.profile_background_theme;
+  const bgThemeImage = (bgTheme && typeof bgTheme.image === 'string' && bgTheme.image.trim())
+    ? bgTheme.image.trim()
+    : null;
+  const dossierCardStyle = {
+    ...(dossierBorderStyle || {}),
+    ...(bgThemeImage
+      ? {
+        backgroundImage: `linear-gradient(180deg, rgba(2,6,14,0.62) 0%, rgba(2,6,14,0.72) 42%, rgba(2,6,14,0.82) 100%), url(${bgThemeImage})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center top',
+        backgroundRepeat: 'no-repeat',
+      }
+      : {}),
+  };
 
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden ${dossierBorderClass} shadow-2xl backdrop-blur-sm prof-card prof-dossier-enter mobile-panel`} style={dossierBorderStyle}>
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden ${dossierBorderClass} shadow-2xl backdrop-blur-sm prof-card prof-dossier-enter mobile-panel`} style={dossierCardStyle}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
       <div className="px-2.5 py-2 md:px-3 md:py-2.5 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border-b border-primary/25">
         <div className="flex items-start gap-2 md:gap-3 min-w-0">
@@ -1645,6 +1660,7 @@ export default function Profile() {
   const [savingAvatar, setSavingAvatar] = useState(false);
   const [savingCustomBadge, setSavingCustomBadge] = useState(false);
   const [savingGlow, setSavingGlow] = useState(false);
+  const [savingBgTheme, setSavingBgTheme] = useState(false);
   const [avatarLightbox, setAvatarLightbox] = useState(null);
   const [messagePopupOpen, setMessagePopupOpen] = useState(false);
   const spotifyPlayerRef = React.useRef(null);
@@ -1834,6 +1850,21 @@ export default function Profile() {
       toast.error(getApiErrorMessage(e) || 'Failed to update glow colour');
     } finally {
       setSavingGlow(false);
+    }
+  };
+
+  const saveProfileBackgroundTheme = async (themeId) => {
+    if (savingBgTheme) return;
+    setSavingBgTheme(true);
+    try {
+      await api.patch('/profile/background-theme', { theme_id: themeId || '' });
+      toast.success(themeId ? 'Background theme equipped' : 'Background theme removed');
+      await refetchMe();
+      await refetchProfile();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Failed to update background theme');
+    } finally {
+      setSavingBgTheme(false);
     }
   };
 
@@ -2897,6 +2928,67 @@ export default function Profile() {
                         Remove
                       </button>
                     </div>
+                  </div>
+                </div>
+                <div className="prof-art-line text-primary mx-3" />
+              </div>
+            )}
+
+            {Array.isArray(me?.profile_background_themes) && me.profile_background_themes.length > 0 && (
+              <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
+                <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1.5">
+                  <Image size={10} className="text-primary" />
+                  <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] text-center">
+                    Profile background
+                  </h2>
+                </div>
+                <div className="p-3 space-y-2">
+                  <p className="text-[11px] text-mutedForeground font-heading">
+                    Rare dossier themes you own. Equip one, or remove to use the normal profile look.
+                  </p>
+                  <div className="space-y-2">
+                    {me.profile_background_themes.map((theme) => {
+                      const tid = theme?.id || '';
+                      const equipped = (me.profile_background_theme_id || '') === tid;
+                      return (
+                        <div
+                          key={tid}
+                          className="flex items-center gap-2 rounded-md border border-primary/20 bg-black/25 p-2"
+                        >
+                          <div
+                            className="w-14 h-10 rounded border border-primary/25 bg-secondary bg-cover bg-center shrink-0"
+                            style={theme?.image ? { backgroundImage: `url(${theme.image})` } : undefined}
+                            aria-hidden
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-heading font-bold text-foreground truncate">{theme?.name || tid}</p>
+                            <p className="text-[9px] text-mutedForeground font-heading">
+                              {equipped ? 'Equipped on your dossier' : 'Owned'}
+                            </p>
+                          </div>
+                          {equipped ? (
+                            <button
+                              type="button"
+                              onClick={() => saveProfileBackgroundTheme('')}
+                              disabled={savingBgTheme}
+                              className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md bg-secondary border border-border text-foreground font-heading font-bold text-[10px] uppercase hover:bg-primary/10 disabled:opacity-50"
+                            >
+                              Remove
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => saveProfileBackgroundTheme(tid)}
+                              disabled={savingBgTheme}
+                              className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md bg-primary/20 border border-primary/40 text-primary font-heading font-bold text-[10px] uppercase hover:bg-primary/30 disabled:opacity-50"
+                            >
+                              Use
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="prof-art-line text-primary mx-3" />

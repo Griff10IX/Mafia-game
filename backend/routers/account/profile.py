@@ -66,6 +66,12 @@ from fastapi import Body, Depends, File, HTTPException, Query, Request, UploadFi
 from pydantic import BaseModel, ConfigDict, Field
 
 from utils.profile_cosmetics import profile_cosmetic_public_fields
+from utils.profile_background_themes import (
+    EQUIPPED_FIELD as PROFILE_BG_EQUIPPED_FIELD,
+    normalize_equip_theme_id,
+    profile_background_public_fields,
+    user_owns_theme,
+)
 from utils.civilian_protection import (
     civilian_protection_status_payload,
     civilian_protection_public_fields,
@@ -628,6 +634,8 @@ def register(router):
                 "profile_cosmetic_until": 1,
                 "profile_name_glow_color": 1,
                 "profile_border_style": 1,
+                "profile_background_theme_id": 1,
+                "profile_background_themes_owned": 1,
             },
         )
         if not user:
@@ -745,6 +753,7 @@ def register(router):
             "founding_member": bool(user.get("founding_member")),
             "modkill_wipe": bool(user.get("modkill_wipe")),
             **profile_cosmetic_public_fields(user),
+            **profile_background_public_fields(user),
             **civilian_protection_public_fields(user),
         }
 
@@ -1118,6 +1127,7 @@ def register(router):
             "founding_member": bool(user.get("founding_member")),
             "modkill_wipe": bool(user.get("modkill_wipe")),
             **profile_cosmetic_public_fields(user),
+            **profile_background_public_fields(user, include_owned=is_own_profile),
             **civilian_protection_public_fields(user),
             "achievement_badges": achievement_badges,
         }
@@ -1598,6 +1608,40 @@ def register(router):
             "profile_border_style": preset["border"],
             "profile_cosmetic_permanent": True,
             "profile_cosmetic_active": True,
+        }
+
+    class ProfileBackgroundThemeUpdateRequest(BaseModel):
+        theme_id: Optional[str] = None
+
+    @router.patch("/profile/background-theme")
+    async def update_profile_background_theme(
+        request: ProfileBackgroundThemeUpdateRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Equip or clear a owned dossier background theme (empty theme_id = normal)."""
+        try:
+            theme_id = normalize_equip_theme_id(request.theme_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        if theme_id and not user_owns_theme(current_user, theme_id):
+            raise HTTPException(status_code=403, detail="You do not own that profile background theme")
+        if theme_id:
+            await db.users.update_one(
+                {"id": current_user["id"]},
+                {"$set": {PROFILE_BG_EQUIPPED_FIELD: theme_id}},
+            )
+        else:
+            await db.users.update_one(
+                {"id": current_user["id"]},
+                {"$unset": {PROFILE_BG_EQUIPPED_FIELD: ""}},
+            )
+        fresh = await db.users.find_one(
+            {"id": current_user["id"]},
+            {"_id": 0, "password_hash": 0},
+        )
+        return {
+            "message": "Profile background theme updated",
+            **profile_background_public_fields(fresh or current_user, include_owned=True),
         }
 
     @router.get("/profile/theme")

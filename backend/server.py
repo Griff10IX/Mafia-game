@@ -1018,6 +1018,10 @@ class UserResponse(BaseModel):
     profile_border_style: Optional[str] = None
     profile_cosmetic_until: Optional[str] = None
     profile_cosmetic_permanent: bool = False
+    profile_background_theme_id: Optional[str] = None
+    profile_background_theme: Optional[dict] = None
+    profile_background_themes_owned: List[str] = []
+    profile_background_themes: List[dict] = []
     crew_oc_auto_apply_tokens: int = 0
     crew_oc_auto_apply_until: Optional[str] = None
     crew_oc_auto_apply_max_fee: Optional[int] = None
