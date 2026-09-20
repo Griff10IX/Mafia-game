@@ -93,8 +93,9 @@ const PROFILE_STYLES = `
   .prof-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
   @keyframes prof-dossier-enter { from { opacity: 0.88; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .prof-dossier-enter { animation: prof-dossier-enter 0.34s ease-out both; }
-  /* Theme art: banner fit — full bitmap at natural aspect (width 100%, height auto),
-     top-aligned. Panel color shows below (not stretched to fill the whole card). */
+  /* Theme art: banner fit — catalog bitmaps are exactly 1024x931
+     (THEME_IMAGE_WIDTH x THEME_IMAGE_HEIGHT). width 100% / height auto, top-aligned;
+     panel color shows below (not stretched to fill the whole card). */
   .prof-dossier-theme-bg {
     position: absolute !important;
     inset: 0 !important;
@@ -2990,19 +2991,19 @@ export default function Profile() {
                 <div className="p-3 space-y-2">
                   <p className="text-[11px] text-mutedForeground font-heading">
                     Rare dossier background themes you own. Equip one at a time, or use Normal for the default look.
+                    Art size: 1024×931.
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {me.profile_background_themes.map((theme) => {
                       const tid = theme?.id || '';
                       const equipped = (me.profile_background_theme_id || '') === tid;
-                      const portraitThumb = String(theme?.fit || '').toLowerCase() !== 'width';
                       return (
                         <div
                           key={tid}
                           className={`flex items-center gap-2 rounded-md border p-2 ${equipped ? 'border-primary/50 bg-primary/10' : 'border-primary/20 bg-black/25'}`}
                         >
                           <div
-                            className={`rounded border border-primary/25 bg-secondary bg-cover bg-center shrink-0 ${portraitThumb ? 'w-12 h-16' : 'w-16 h-10'}`}
+                            className="w-16 h-10 rounded border border-primary/25 bg-secondary bg-cover bg-center shrink-0"
                             style={theme?.image ? { backgroundImage: `url(${theme.image})` } : undefined}
                             aria-hidden
                           />

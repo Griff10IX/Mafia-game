@@ -3,10 +3,16 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+# Canonical dossier banner bitmap — every theme JPEG must be exactly this size.
+# CSS: .prof-dossier-theme-bg uses width-fit (100% auto). See
+# public/images/profile-themes/README.md and scripts/check_profile_theme_images.py.
+THEME_IMAGE_WIDTH = 1024
+THEME_IMAGE_HEIGHT = 931
+THEME_IMAGE_SIZE = (THEME_IMAGE_WIDTH, THEME_IMAGE_HEIGHT)  # (w, h)
+
 # Catalog: hard-to-get themes (loot later). Image paths are public static assets.
 # ?v= cache-bust when art is replaced.
 # fit: width = natural-aspect banner (default); stretch = fill whole dossier.
-# All theme bitmaps are dossier-banner aspect (~1024x931) so width-fit matches Orbit.
 _THEME_ASSET_V = "20260921c"
 PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, str]] = {
     "godfather": {
@@ -54,12 +60,17 @@ EQUIPPED_FIELD = "profile_background_theme_id"
 THEME_DISPLAY_ORDER = tuple(PROFILE_BACKGROUND_THEMES.keys())
 
 
-def catalog_theme(theme_id: Optional[str]) -> Optional[Dict[str, str]]:
+def catalog_theme(theme_id: Optional[str]) -> Optional[Dict[str, Any]]:
     tid = (theme_id or "").strip().lower()
     if not tid:
         return None
     t = PROFILE_BACKGROUND_THEMES.get(tid)
-    return dict(t) if t else None
+    if not t:
+        return None
+    out: Dict[str, Any] = dict(t)
+    out["width"] = THEME_IMAGE_WIDTH
+    out["height"] = THEME_IMAGE_HEIGHT
+    return out
 
 
 def owned_theme_ids(user: Optional[dict]) -> List[str]:
