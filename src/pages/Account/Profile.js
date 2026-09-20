@@ -1913,6 +1913,48 @@ export default function Profile() {
     }
   };
 
+  const uploadAdminCustomTheme = async (file) => {
+    if (!file || !isAdmin) return;
+    const valid = validateSafeImageFile(file);
+    if (!valid.ok) {
+      toast.error(valid.reason);
+      return;
+    }
+    setSavingBgTheme(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file, file.name || 'theme.jpg');
+      await api.post('/profile/background-theme/custom', formData);
+      toast.success('Custom theme uploaded (1024×931) and equipped');
+      await refetchMe();
+      await refetchProfile();
+    } catch (e) {
+      const st = e.response?.status;
+      if (st === 413) {
+        toast.error('Upload too large (HTTP 413). Try a smaller image.');
+      } else {
+        toast.error(getApiErrorMessage(e) || 'Failed to upload custom theme');
+      }
+    } finally {
+      setSavingBgTheme(false);
+    }
+  };
+
+  const clearAdminCustomTheme = async () => {
+    if (!isAdmin || savingBgTheme) return;
+    setSavingBgTheme(true);
+    try {
+      await api.delete('/profile/background-theme/custom');
+      toast.success('Custom theme cleared');
+      await refetchMe();
+      await refetchProfile();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Failed to clear custom theme');
+    } finally {
+      setSavingBgTheme(false);
+    }
+  };
+
   const removeAvatar = async () => {
     setSavingAvatar(true);
     try {
@@ -2979,7 +3021,9 @@ export default function Profile() {
               </div>
             )}
 
-            {Array.isArray(me?.profile_background_themes) && me.profile_background_themes.length > 0 && (
+            {((Array.isArray(me?.profile_background_themes) && me.profile_background_themes.length > 0)
+              || isAdmin
+              || me?.profile_background_theme_can_upload) && (
               <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
                 <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
                 <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1.5">
@@ -2993,10 +3037,45 @@ export default function Profile() {
                     Rare dossier background themes you own. Equip one at a time, or use Normal for the default look.
                     Art size: 1024×931.
                   </p>
+                  {(isAdmin || me?.profile_background_theme_can_upload) && (
+                    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 space-y-1.5">
+                      <p className="text-[10px] font-heading text-amber-200/90">
+                        Admin test upload — JPEG/PNG/WebP/GIF (auto-cropped to 1024×931). Others cannot upload.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md border border-amber-500/40 bg-amber-500/15 text-amber-100 font-heading font-bold text-[10px] uppercase cursor-pointer hover:bg-amber-500/25 disabled:opacity-50">
+                          {savingBgTheme ? 'Uploading…' : 'Upload test theme'}
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
+                            className="hidden"
+                            disabled={savingBgTheme}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              e.target.value = '';
+                              if (f) uploadAdminCustomTheme(f);
+                            }}
+                          />
+                        </label>
+                        {(me?.profile_background_themes || []).some((t) => t?.id === 'admin_custom' && t?.image) && (
+                          <button
+                            type="button"
+                            onClick={clearAdminCustomTheme}
+                            disabled={savingBgTheme}
+                            className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md border border-border bg-secondary text-mutedForeground font-heading font-bold text-[10px] uppercase hover:bg-primary/10 disabled:opacity-50"
+                          >
+                            Clear custom
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {me.profile_background_themes.map((theme) => {
+                    {(me?.profile_background_themes || []).map((theme) => {
                       const tid = theme?.id || '';
                       const equipped = (me.profile_background_theme_id || '') === tid;
+                      const isCustom = tid === 'admin_custom';
+                      const canUse = !isCustom || !!theme?.image;
                       return (
                         <div
                           key={tid}
@@ -3010,13 +3089,13 @@ export default function Profile() {
                           <div className="min-w-0 flex-1">
                             <p className="text-[11px] font-heading font-bold text-foreground truncate">{theme?.name || tid}</p>
                             <p className="text-[9px] text-mutedForeground font-heading">
-                              {equipped ? 'Equipped' : 'Owned'}
+                              {equipped ? 'Equipped' : (isCustom && !theme?.image ? 'Upload required' : 'Owned')}
                             </p>
                           </div>
                           <button
                             type="button"
                             onClick={() => saveProfileBackgroundTheme(equipped ? '' : tid)}
-                            disabled={savingBgTheme}
+                            disabled={savingBgTheme || (!equipped && !canUse)}
                             className={`inline-flex items-center justify-center px-2.5 py-1.5 rounded-md border font-heading font-bold text-[10px] uppercase disabled:opacity-50 ${
                               equipped
                                 ? 'bg-secondary border-border text-foreground hover:bg-primary/10'

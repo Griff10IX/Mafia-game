@@ -67,7 +67,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from utils.profile_cosmetics import profile_cosmetic_public_fields
 from utils.profile_background_themes import (
+    CUSTOM_THEME_ID,
+    CUSTOM_URL_FIELD,
     EQUIPPED_FIELD as PROFILE_BG_EQUIPPED_FIELD,
+    custom_theme_file_path,
+    custom_theme_upload_dir,
+    encode_theme_jpeg,
     normalize_equip_theme_id,
     profile_background_public_fields,
     user_owns_theme,
@@ -137,6 +142,7 @@ def register(router):
     WAR_RAT_BADGE_UNSET = {"war_rat_badge_until": "", "war_rat_family_id": "", "war_rat_war_ids": ""}
 
     db = srv.db
+    ROOT_DIR = srv.ROOT_DIR
     effective_player_kill_count = srv.effective_player_kill_count
     mongodb_effective_kill_count_expr = srv.mongodb_effective_kill_count_expr
     mongodb_lifetime_rank_points_expr = srv.mongodb_lifetime_rank_points_expr
@@ -1127,7 +1133,7 @@ def register(router):
             "founding_member": bool(user.get("founding_member")),
             "modkill_wipe": bool(user.get("modkill_wipe")),
             **profile_cosmetic_public_fields(user),
-            **profile_background_public_fields(user, include_owned=is_own_profile),
+            **profile_background_public_fields(user, include_owned=is_own_profile, is_admin=_is_admin(current_user) if is_own_profile else False),
             **civilian_protection_public_fields(user),
             "achievement_badges": achievement_badges,
         }
@@ -1623,7 +1629,12 @@ def register(router):
             theme_id = normalize_equip_theme_id(request.theme_id)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        if theme_id and not user_owns_theme(current_user, theme_id):
+        admin = _is_admin(current_user)
+        if theme_id and not user_owns_theme(current_user, theme_id, is_admin=admin):
+            if theme_id == CUSTOM_THEME_ID and not admin:
+                raise HTTPException(status_code=403, detail="Only admins can use custom background themes")
+            if theme_id == CUSTOM_THEME_ID:
+                raise HTTPException(status_code=400, detail="Upload a custom theme image first")
             raise HTTPException(status_code=403, detail="You do not own that profile background theme")
         if theme_id:
             await db.users.update_one(
@@ -1641,8 +1652,92 @@ def register(router):
         )
         return {
             "message": "Profile background theme updated",
-            **profile_background_public_fields(fresh or current_user, include_owned=True),
+            **profile_background_public_fields(fresh or current_user, include_owned=True, is_admin=admin),
         }
+
+    CUSTOM_THEME_RAW_MAX_BYTES = 6 * 1024 * 1024
+
+    @router.post("/profile/background-theme/custom")
+    async def upload_profile_background_theme_custom(
+        file: UploadFile = File(...),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Admin-only: upload a test dossier theme. Auto-resized to 1024×931 and equipped."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Only admins can upload custom profile themes")
+        raw = await file.read()
+        if not raw:
+            raise HTTPException(status_code=400, detail="No file uploaded")
+        if len(raw) > CUSTOM_THEME_RAW_MAX_BYTES:
+            raise HTTPException(status_code=400, detail="Image too large (max 6MB)")
+        try:
+            jpeg_bytes, _mime = encode_theme_jpeg(raw)
+            path = custom_theme_file_path(ROOT_DIR, current_user["id"])
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        custom_theme_upload_dir(ROOT_DIR).mkdir(parents=True, exist_ok=True)
+        path.write_bytes(jpeg_bytes)
+        bust = int(datetime.now(timezone.utc).timestamp())
+        url = f"/api/profile/background-theme/custom-image/{current_user['id']}?v={bust}"
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {
+                "$set": {
+                    CUSTOM_URL_FIELD: url,
+                    PROFILE_BG_EQUIPPED_FIELD: CUSTOM_THEME_ID,
+                }
+            },
+        )
+        fresh = await db.users.find_one(
+            {"id": current_user["id"]},
+            {"_id": 0, "password_hash": 0},
+        )
+        return {
+            "message": "Custom theme uploaded and equipped (1024×931)",
+            **profile_background_public_fields(fresh or current_user, include_owned=True, is_admin=True),
+        }
+
+    @router.delete("/profile/background-theme/custom")
+    async def clear_profile_background_theme_custom(
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Admin-only: remove custom test theme file and unequip if it was equipped."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Only admins can clear custom profile themes")
+        uid = current_user["id"]
+        try:
+            path = custom_theme_file_path(ROOT_DIR, uid)
+            if path.is_file():
+                path.unlink()
+        except Exception:
+            pass
+        unset_fields = {CUSTOM_URL_FIELD: ""}
+        equipped = str(current_user.get(PROFILE_BG_EQUIPPED_FIELD) or "").strip().lower()
+        if equipped == CUSTOM_THEME_ID:
+            unset_fields[PROFILE_BG_EQUIPPED_FIELD] = ""
+        await db.users.update_one({"id": uid}, {"$unset": unset_fields})
+        fresh = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
+        return {
+            "message": "Custom theme cleared",
+            **profile_background_public_fields(fresh or current_user, include_owned=True, is_admin=True),
+        }
+
+    @router.get("/profile/background-theme/custom-image/{user_id}")
+    async def serve_profile_background_theme_custom(user_id: str):
+        """Serve an admin custom theme JPEG (public if that user equipped/uploaded it)."""
+        from fastapi.responses import FileResponse
+
+        try:
+            path = custom_theme_file_path(ROOT_DIR, user_id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Not found")
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="Not found")
+        return FileResponse(
+            path,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
 
     @router.get("/profile/theme")
     async def get_profile_theme(current_user: dict = Depends(get_current_user)):

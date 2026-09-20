@@ -16,7 +16,10 @@ colour below).
 5. Do **not** use tall 9:16 portraits or wide 16:9 without cropping to 1024×931
    first — those look wrong next to Orbit.
 
-## Check
+## Admin test upload
+
+Admins can upload a personal test theme from **Edit profile → Profile themes**.
+The API auto cover-crops to 1024×931. Non-admins cannot upload.
 
 From repo root:
 

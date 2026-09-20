@@ -1,7 +1,10 @@
 """Loot-style profile dossier background themes (own + equip separately)."""
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import io
+import re
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 # Canonical dossier banner bitmap — every theme JPEG must be exactly this size.
 # CSS: .prof-dossier-theme-bg uses width-fit (100% auto). See
@@ -9,6 +12,11 @@ from typing import Any, Dict, List, Optional
 THEME_IMAGE_WIDTH = 1024
 THEME_IMAGE_HEIGHT = 931
 THEME_IMAGE_SIZE = (THEME_IMAGE_WIDTH, THEME_IMAGE_HEIGHT)  # (w, h)
+
+# Admin-only test upload (not in public loot catalog).
+CUSTOM_THEME_ID = "admin_custom"
+CUSTOM_URL_FIELD = "profile_background_custom_url"
+CUSTOM_THEME_NAME = "Admin custom (test)"
 
 # Catalog: hard-to-get themes (loot later). Image paths are public static assets.
 # ?v= cache-bust when art is replaced.
@@ -59,10 +67,12 @@ EQUIPPED_FIELD = "profile_background_theme_id"
 # Stable edit-profile order when granting / listing.
 THEME_DISPLAY_ORDER = tuple(PROFILE_BACKGROUND_THEMES.keys())
 
+_SAFE_USER_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,80}$")
+
 
 def catalog_theme(theme_id: Optional[str]) -> Optional[Dict[str, Any]]:
     tid = (theme_id or "").strip().lower()
-    if not tid:
+    if not tid or tid == CUSTOM_THEME_ID:
         return None
     t = PROFILE_BACKGROUND_THEMES.get(tid)
     if not t:
@@ -71,6 +81,26 @@ def catalog_theme(theme_id: Optional[str]) -> Optional[Dict[str, Any]]:
     out["width"] = THEME_IMAGE_WIDTH
     out["height"] = THEME_IMAGE_HEIGHT
     return out
+
+
+def custom_theme_payload(image_url: Optional[str] = None) -> Dict[str, Any]:
+    url = (image_url or "").strip()
+    return {
+        "id": CUSTOM_THEME_ID,
+        "name": CUSTOM_THEME_NAME,
+        "image": url,
+        "fit": "width",
+        "width": THEME_IMAGE_WIDTH,
+        "height": THEME_IMAGE_HEIGHT,
+        "custom": True,
+    }
+
+
+def custom_image_url(user: Optional[dict]) -> Optional[str]:
+    if not user:
+        return None
+    url = str(user.get(CUSTOM_URL_FIELD) or "").strip()
+    return url or None
 
 
 def owned_theme_ids(user: Optional[dict]) -> List[str]:
@@ -95,44 +125,116 @@ def owned_theme_ids(user: Optional[dict]) -> List[str]:
     return ordered
 
 
-def user_owns_theme(user: Optional[dict], theme_id: Optional[str]) -> bool:
+def user_owns_theme(user: Optional[dict], theme_id: Optional[str], *, is_admin: bool = False) -> bool:
     tid = (theme_id or "").strip().lower()
-    return bool(tid) and tid in owned_theme_ids(user)
+    if not tid:
+        return False
+    if tid == CUSTOM_THEME_ID:
+        return bool(is_admin and custom_image_url(user))
+    return tid in owned_theme_ids(user)
 
 
 def equipped_theme_id(user: Optional[dict]) -> Optional[str]:
     if not user:
         return None
     tid = str(user.get(EQUIPPED_FIELD) or "").strip().lower()
-    if not tid or tid not in PROFILE_BACKGROUND_THEMES:
+    if not tid:
+        return None
+    if tid == CUSTOM_THEME_ID:
+        return CUSTOM_THEME_ID if custom_image_url(user) else None
+    if tid not in PROFILE_BACKGROUND_THEMES:
         return None
     if not user_owns_theme(user, tid):
         return None
     return tid
 
 
-def profile_background_public_fields(user: Optional[dict], *, include_owned: bool = False) -> Dict[str, Any]:
+def resolve_equipped_theme(user: Optional[dict]) -> Optional[Dict[str, Any]]:
+    tid = equipped_theme_id(user)
+    if not tid:
+        return None
+    if tid == CUSTOM_THEME_ID:
+        return custom_theme_payload(custom_image_url(user))
+    return catalog_theme(tid)
+
+
+def profile_background_public_fields(
+    user: Optional[dict],
+    *,
+    include_owned: bool = False,
+    is_admin: bool = False,
+) -> Dict[str, Any]:
     """Public dossier fields. Own list only for self (/auth/me or own profile edit)."""
     eq = equipped_theme_id(user)
-    theme = catalog_theme(eq) if eq else None
+    theme = resolve_equipped_theme(user)
     out: Dict[str, Any] = {
         "profile_background_theme_id": eq,
         "profile_background_theme": theme,
     }
     if include_owned:
         owned = owned_theme_ids(user)
+        themes = [catalog_theme(t) for t in owned if catalog_theme(t)]
+        if is_admin:
+            themes.append(custom_theme_payload(custom_image_url(user)))
+            if CUSTOM_THEME_ID not in owned:
+                owned = list(owned) + [CUSTOM_THEME_ID]
         out["profile_background_themes_owned"] = owned
-        out["profile_background_themes"] = [catalog_theme(t) for t in owned if catalog_theme(t)]
+        out["profile_background_themes"] = themes
+        out["profile_background_theme_can_upload"] = bool(is_admin)
     return out
 
 
 def normalize_equip_theme_id(raw: Optional[str]) -> Optional[str]:
-    """Empty / none / null -> unequip. Else must be a known catalog id."""
+    """Empty / none / null -> unequip. Else must be a known catalog id or admin_custom."""
     if raw is None:
         return None
     s = str(raw).strip().lower()
     if not s or s in ("none", "null", "off", "default"):
         return None
+    if s == CUSTOM_THEME_ID:
+        return CUSTOM_THEME_ID
     if s not in PROFILE_BACKGROUND_THEMES:
         raise ValueError("Unknown profile background theme")
     return s
+
+
+def custom_theme_upload_dir(root_dir: Path) -> Path:
+    return Path(root_dir) / "uploads" / "profile_themes"
+
+
+def custom_theme_file_path(root_dir: Path, user_id: str) -> Path:
+    uid = str(user_id or "").strip()
+    if not _SAFE_USER_ID_RE.match(uid):
+        raise ValueError("Invalid user id")
+    return custom_theme_upload_dir(root_dir) / f"{uid}.jpg"
+
+
+def encode_theme_jpeg(raw: bytes) -> Tuple[bytes, str]:
+    """Validate upload bytes and encode a center cover-crop JPEG at THEME_IMAGE_SIZE."""
+    from PIL import Image
+
+    from utils.image_upload_security import verify_uploaded_file_bytes
+
+    mime, err = verify_uploaded_file_bytes(raw, None)
+    if not mime:
+        raise ValueError(err or "Invalid image")
+    try:
+        im = Image.open(io.BytesIO(raw))
+        im.load()
+    except Exception as e:
+        raise ValueError("Could not read image") from e
+    im = im.convert("RGB")
+    tw, th = THEME_IMAGE_WIDTH, THEME_IMAGE_HEIGHT
+    sw, sh = im.size
+    if sw < 1 or sh < 1:
+        raise ValueError("Invalid image dimensions")
+    scale = max(tw / sw, th / sh)
+    nw = max(tw, int(round(sw * scale)))
+    nh = max(th, int(round(sh * scale)))
+    im = im.resize((nw, nh), Image.Resampling.LANCZOS)
+    left = max(0, (nw - tw) // 2)
+    top = max(0, (nh - th) // 2)
+    im = im.crop((left, top, left + tw, top + th))
+    buf = io.BytesIO()
+    im.save(buf, format="JPEG", quality=92, optimize=True)
+    return buf.getvalue(), "image/jpeg"

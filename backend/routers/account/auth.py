@@ -2525,7 +2525,7 @@ def register(router):
                 profile_border_style=u.get("profile_border_style") if profile_cosmetic_active(u) else None,
                 profile_cosmetic_until=u.get("profile_cosmetic_until"),
                 profile_cosmetic_permanent=bool(u.get("profile_cosmetic_permanent")),
-                **profile_background_public_fields(u, include_owned=True),
+                **profile_background_public_fields(u, include_owned=True, is_admin=_is_admin(u)),
                 crew_oc_auto_apply_tokens=_safe_int(u.get("crew_oc_auto_apply_tokens"), 0),
                 crew_oc_auto_apply_until=u.get("crew_oc_auto_apply_until"),
                 crew_oc_auto_apply_max_fee=(

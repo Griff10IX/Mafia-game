@@ -1022,6 +1022,7 @@ class UserResponse(BaseModel):
     profile_background_theme: Optional[dict] = None
     profile_background_themes_owned: List[str] = []
     profile_background_themes: List[dict] = []
+    profile_background_theme_can_upload: bool = False
     crew_oc_auto_apply_tokens: int = 0
     crew_oc_auto_apply_until: Optional[str] = None
     crew_oc_auto_apply_max_fee: Optional[int] = None
