@@ -608,32 +608,40 @@ const ProfileInfoCard = ({
   const bgThemeFit = ['width', 'height', 'cover', 'contain', 'stretch'].includes(bgThemeFitRaw)
     ? bgThemeFitRaw
     : 'stretch';
-  // Two background layers: gradient (always full card) + art (fit mode). Sizes MUST be listed
-  // separately — a single "contain/cover" also shrinks the gradient and looks broken/zoomed.
-  // stretch (100% 100%) fills the whole dossier including cars/weapons with the full scene.
-  const artSize = (
-    bgThemeFit === 'width' ? '100% auto'
-      : bgThemeFit === 'height' ? 'auto 100%'
-        : bgThemeFit === 'cover' ? 'cover'
-          : bgThemeFit === 'contain' ? 'contain'
-            : '100% 100%'
+  // Absolute <img> layer (not CSS background) so theme `background: … !important` cannot
+  // wipe size. stretch/fill = whole scene visible + full dossier height (no crop-zoom, no grey void).
+  const themeImgObjectFit = (
+    bgThemeFit === 'cover' ? 'cover'
+      : bgThemeFit === 'contain' ? 'contain'
+        : 'fill'
   );
-  const artPos = bgThemeFit === 'width' ? 'center top' : 'center center';
   const dossierCardStyle = {
     ...(dossierBorderStyle || {}),
-    ...(bgThemeImage
-      ? {
-        backgroundColor: '#02060e',
-        backgroundImage: `linear-gradient(180deg, rgba(2,6,14,0.28) 0%, rgba(2,6,14,0.42) 40%, rgba(2,6,14,0.62) 100%), url(${bgThemeImage})`,
-        backgroundSize: `100% 100%, ${artSize}`,
-        backgroundPosition: `center, ${artPos}`,
-        backgroundRepeat: 'no-repeat, no-repeat',
-      }
-      : {}),
+    ...(bgThemeImage ? { backgroundColor: '#02060e' } : {}),
   };
 
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden ${dossierBorderClass} shadow-2xl backdrop-blur-sm prof-card prof-dossier-enter mobile-panel`} style={dossierCardStyle}>
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden ${dossierBorderClass} shadow-2xl ${bgThemeImage ? '' : 'backdrop-blur-sm'} prof-card prof-dossier-enter mobile-panel`} style={dossierCardStyle}>
+      {bgThemeImage ? (
+        <>
+          <img
+            src={bgThemeImage}
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-0 max-w-none"
+            style={{ width: '100%', height: '100%', objectFit: themeImgObjectFit, objectPosition: 'center center' }}
+            draggable={false}
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-0"
+            style={{
+              background: 'linear-gradient(180deg, rgba(2,6,14,0.28) 0%, rgba(2,6,14,0.42) 40%, rgba(2,6,14,0.62) 100%)',
+            }}
+          />
+        </>
+      ) : null}
+      <div className="relative z-[1]">
       <div className="h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
       <div className="px-2.5 py-2 md:px-3 md:py-2.5 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border-b border-primary/25">
         <div className="flex items-start gap-2 md:gap-3 min-w-0">
@@ -1236,6 +1244,7 @@ const ProfileInfoCard = ({
       )}
 
       <div className="prof-art-line text-primary mx-3" />
+      </div>
     </div>
   );
 };

@@ -11,7 +11,7 @@ PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, str]] = {
         "id": "godfather",
         "name": "Godfather 1 — Legacy",
         "image": "/images/profile-themes/godfather.jpg",
-        "fit": "width",
+        "fit": "stretch",
     },
     "godfather_empire": {
         "id": "godfather_empire",
