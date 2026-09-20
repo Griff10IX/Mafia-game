@@ -3745,11 +3745,10 @@ async def _user_owns_any_property(user_id: str):
 from routers.account import auth, profile, prestige, user_progress, users
 from routers.admin import admin, security_admin, airport, investigate
 from routers.cars import gta
-from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, mp_8ball, horseracing, slots, keno, coin_flip, video_poker, mdg, sports_betting, wheel_of_fortune
+from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, horseracing, slots, keno, coin_flip, video_poker, mdg, sports_betting, wheel_of_fortune
 from routers.crime import crimes, jail, organised_crime, oc
 from routers.game import families, leaderboard, states, stats, store, dead_alive, events, notifications, meta, entertainer, entertainer_staff, achievements
 from routers.kill import attack, armoury, bodyguards, hitlist, witness_statements
-from routers.minigames import gauntlet, boxing, racing, snake
 from routers.money import bank, stock_market, properties, quicktrade, crack_safe, illegal_business, booze_run, racket, payments, lottery, grave_robber, weed_empire
 from routers.social import forum, game_chat, giphy, image_host, designer_auctions
 from routers.account import objectives
@@ -3800,7 +3799,6 @@ roulette.register(api_router)
 blackjack.register(api_router)
 mp_blackjack.register(api_router)
 mp_poker.register(api_router)
-mp_8ball.register(api_router)
 horseracing.register(api_router)
 if SLOTS_FEATURE_ENABLED:
     slots.register(api_router)
@@ -3854,24 +3852,6 @@ crack_safe.register(api_router)
 prestige.register(api_router)
 from routers.game import daily_rewards
 daily_rewards.register(api_router)
-gauntlet.register(api_router)
-boxing.register(api_router)
-racing.register(api_router)
-snake.register(api_router)
-from routers.minigames import minigame_leaderboard
-minigame_leaderboard.register(api_router)
-from routers.minigames import minesweeper
-minesweeper.register(api_router)
-from routers.minigames import battleships
-battleships.register(api_router)
-from routers.minigames import the_getaway
-the_getaway.register(api_router)
-from routers.minigames import family_run
-family_run.register(api_router)
-from routers.minigames import whack_a_copper
-whack_a_copper.register(api_router)
-from routers.minigames import mafia_rpg
-mafia_rpg.register(api_router)
 from routers.account import auto_rank as auto_rank_router
 auto_rank_router.register(api_router)
 
@@ -3900,14 +3880,6 @@ class OPTIONSResponder(BaseHTTPMiddleware):
                 headers["Access-Control-Allow-Credentials"] = "true"
             return Response(status_code=200, headers=headers)
         return await call_next(request)
-
-# Minigame routes: same browser-like UA / Sec-Fetch checks as auth (register before SecurityMiddleware so IP/spam runs outer)
-try:
-    from middleware.minigame_client_middleware import MinigameClientGuardMiddleware
-
-    app.add_middleware(MinigameClientGuardMiddleware, db=db)
-except ImportError:
-    print("Warning: minigame_client_middleware.py not found - minigame client guard disabled")
 
 # Import security middleware
 try:
@@ -4179,15 +4151,6 @@ async def startup_db():
         logging.getLogger(__name__).info(
             "Robot bodyguard auto-search: using cron only (ROBOT_BG_AUTO_SEARCH_USE_CRON=1). Call POST /api/attack/cron/robot-bg-auto-search every ~15m. Header: X-Cron-Secret: <CRON_SECRET>"
         )
-    # Racing: 2 automated races per day (morning/evening UTC); in-process ticker or cron
-    from routers.minigames import racing as racing_router
-    racing_use_cron = (os.environ.get("RACING_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
-    if not racing_use_cron:
-        asyncio.create_task(racing_router.run_racing_automated_race_ticker())
-    else:
-        logging.getLogger(__name__).info(
-            "Racing: using cron only (RACING_USE_CRON=1). Call POST /api/racing/cron/automated-races every minute. Header: X-Cron-Secret: <CRON_SECRET>"
-        )
     # Sports betting auto-settle: in-process ticker (kickoff + delay) vs external cron only
     sports_settle_use_cron = (os.environ.get("SPORTS_AUTO_SETTLE_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
     # Default ON so old open bets get settled automatically without extra setup.
@@ -4362,34 +4325,6 @@ async def startup_db():
                 logging.exception("Weekly leaderboard payout ticker: %s", e)
             await asyncio.sleep(60)
     asyncio.create_task(leaderboard_payout_ticker())
-    # Mini games weekly leaderboard payout: run once per week (check every 60s), pay top 5 for previous week (Sunday UTC)
-    from routers.minigames import minigame_leaderboard as minigame_lb_router
-    async def minigame_payout_ticker():
-        while True:
-            try:
-                await minigame_lb_router.run_minigame_weekly_payout(db)
-            except Exception as e:
-                logging.exception("Mini games weekly payout ticker: %s", e)
-            await asyncio.sleep(60)
-    asyncio.create_task(minigame_payout_ticker())
-    # Boxing: expire stale challenges (every 30s) + weekly league payout (every 60s)
-    from routers.minigames import boxing as boxing_router
-    async def boxing_challenge_expiry_ticker():
-        while True:
-            try:
-                await boxing_router.expire_stale_challenges(db)
-            except Exception as e:
-                logging.exception("Boxing challenge expiry ticker: %s", e)
-            await asyncio.sleep(30)
-    asyncio.create_task(boxing_challenge_expiry_ticker())
-    async def boxing_weekly_payout_ticker():
-        while True:
-            try:
-                await boxing_router.run_weekly_boxing_league_payout(db)
-            except Exception as e:
-                logging.exception("Boxing weekly payout ticker: %s", e)
-            await asyncio.sleep(60)
-    asyncio.create_task(boxing_weekly_payout_ticker())
     # Telegram: register webhook
     _tg_token = getattr(security_module, "TELEGRAM_BOT_TOKEN", "") or ""
     if _tg_token:

@@ -1038,17 +1038,6 @@ export default function Admin() {
   const [inspectCrimesLoading, setInspectCrimesLoading] = useState(false);
   const [inspectCrimesData, setInspectCrimesData] = useState(null);
   const [dedupCrimesLoading, setDedupCrimesLoading] = useState(false);
-  const [clearMinigameRecordsLoading, setClearMinigameRecordsLoading] = useState(false);
-  const [minigameLbStripLoading, setMinigameLbStripLoading] = useState(false);
-  const [minigameLbAddLoading, setMinigameLbAddLoading] = useState(false);
-  const [minigameLbWeekScope, setMinigameLbWeekScope] = useState('current');
-  const [minigameLbStripWeekly, setMinigameLbStripWeekly] = useState(true);
-  const [minigameLbStripPerGame, setMinigameLbStripPerGame] = useState(true);
-  const [minigameLbStripGames, setMinigameLbStripGames] = useState('');
-  const [minigameLbAddGame, setMinigameLbAddGame] = useState('gauntlet');
-  const [minigameLbAddScore, setMinigameLbAddScore] = useState('100');
-  const [minigameLbAddWeekly, setMinigameLbAddWeekly] = useState(true);
-  const [minigameLbAddPerGame, setMinigameLbAddPerGame] = useState(false);
   const [mainLbStripLoading, setMainLbStripLoading] = useState(false);
   const [mainLbScope, setMainLbScope] = useState('current');
   const [mainLbRespect, setMainLbRespect] = useState(true);
@@ -1414,10 +1403,6 @@ export default function Admin() {
   const [activityFeedExcludeAutoRank, setActivityFeedExcludeAutoRank] = useState(true);
   const [activityFeedAutoRefresh, setActivityFeedAutoRefresh] = useState(false);
   const activityFeedIntervalRef = useRef(null);
-  const [minigamePayouts, setMinigamePayouts] = useState({ entries: [] });
-  const [minigamePayoutsLoading, setMinigamePayoutsLoading] = useState(false);
-  const [minigamePayoutsUsername, setMinigamePayoutsUsername] = useState('');
-  const [minigamePayoutsGame, setMinigamePayoutsGame] = useState('');
   const [weeklyLeaderboardPayouts, setWeeklyLeaderboardPayouts] = useState({ entries: [] });
   const [weeklyLeaderboardPayoutsLoading, setWeeklyLeaderboardPayoutsLoading] = useState(false);
   const [weeklyLeaderboardPayoutsUsername, setWeeklyLeaderboardPayoutsUsername] = useState('');
@@ -1578,7 +1563,6 @@ export default function Admin() {
   const [attackTurnstileMode, setAttackTurnstileMode] = useState('execute_only');
   const [attackTurnstileEnforce, setAttackTurnstileEnforce] = useState('off');
   const [attackTurnstileTargetUsernames, setAttackTurnstileTargetUsernames] = useState('');
-  const [minigameTurnstileEnabled, setMinigameTurnstileEnabled] = useState(false);
   const [minigameTurnstileSiteKey, setMinigameTurnstileSiteKey] = useState('');
   const [loginTurnstileEnabled, setLoginTurnstileEnabled] = useState(false);
   const [sustainedRlScopes, setSustainedRlScopes] = useState({});
@@ -2522,7 +2506,6 @@ export default function Admin() {
           ? res.data.attack_turnstile_target_usernames.join('\n')
           : '',
       );
-      setMinigameTurnstileEnabled(!!res.data?.minigame_turnstile_enabled);
       setMinigameTurnstileSiteKey((res.data?.minigame_turnstile_site_key ?? '').trim());
       setLoginTurnstileEnabled(!!res.data?.login_turnstile_enabled);
       setSustainedRlScopes((prev) => mergeSustainedRlScopesFromSettings(prev, res.data));
@@ -2614,7 +2597,6 @@ export default function Admin() {
       setAttackTurnstileMode('execute_only');
       setAttackTurnstileEnforce('off');
       setAttackTurnstileTargetUsernames('');
-      setMinigameTurnstileEnabled(false);
       setMinigameTurnstileSiteKey('');
       setLoginTurnstileEnabled(false);
       setSustainedRlScopes(sustainedRlScopesPayload({}));
@@ -2772,7 +2754,6 @@ export default function Admin() {
           }
           return out;
         })(),
-        minigame_turnstile_enabled: minigameTurnstileEnabled,
         minigame_turnstile_site_key: minigameTurnstileSiteKey.trim(),
         login_turnstile_enabled: loginTurnstileEnabled,
         ...sustainedRlScopesPayload(sustainedRlScopes),
@@ -2826,7 +2807,6 @@ export default function Admin() {
           res.data.attack_turnstile_target_usernames.length ? res.data.attack_turnstile_target_usernames.join('\n') : '',
         );
       }
-      setMinigameTurnstileEnabled(!!res.data?.minigame_turnstile_enabled);
       if (res.data?.minigame_turnstile_site_key !== undefined) {
         setMinigameTurnstileSiteKey((res.data.minigame_turnstile_site_key ?? '').trim());
       }
@@ -4311,20 +4291,6 @@ export default function Admin() {
       setTokenInspectData(res.data);
     } catch (err) { toast.error(err.response?.data?.detail || 'Failed to fetch token data'); }
     setTokenInspectLoading(false);
-  };
-
-  const handlePoolClearCueUpgrades = async () => {
-    if (!(formData.targetUsername || '').trim()) {
-      toast.error('Enter target username');
-      return;
-    }
-    if (!window.confirm(`Reset ALL 8-ball pool cue upgrades for ${formData.targetUsername}? Every owned cue goes to 0/250.`)) return;
-    try {
-      const response = await api.post(`/admin/pool-clear-cue-upgrades?target_username=${encodeURIComponent(formData.targetUsername)}`);
-      toast.success(response.data?.message || 'Done');
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed');
-    }
   };
 
   const handleResetKillInflation = async () => {
@@ -5939,66 +5905,6 @@ export default function Admin() {
       setInspectCrimesData(null);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed to dedup'); }
     finally { setDedupCrimesLoading(false); }
-  };
-
-  const handleClearUserMinigameRecords = async () => {
-    const username = (formData.targetUsername || '').trim();
-    if (!username) { toast.error('Enter a username'); return; }
-    if (!window.confirm(`Clear all minigame records for ${username}?`)) return;
-    setClearMinigameRecordsLoading(true);
-    try {
-      const res = await api.post(`/admin/minigames/clear-user-records?target_username=${encodeURIComponent(username)}`);
-      toast.success(res.data?.message || 'Minigame records cleared');
-    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
-    finally { setClearMinigameRecordsLoading(false); }
-  };
-
-  const handleMinigameLbStrip = async () => {
-    const username = (formData.targetUsername || '').trim();
-    if (!username) { toast.error('Enter target username'); return; }
-    if (!minigameLbStripWeekly && !minigameLbStripPerGame) { toast.error('Select at least one: weekly plays or per-game scores'); return; }
-    if (!window.confirm(`Strip minigame leaderboard data for ${username}?`)) return;
-    setMinigameLbStripLoading(true);
-    try {
-      const games = (minigameLbStripGames || '').trim()
-        ? minigameLbStripGames.split(/[\s,]+/).map((g) => g.trim().toLowerCase()).filter(Boolean)
-        : null;
-      const res = await api.post('/admin/minigames/leaderboard/strip-user', {
-        target_username: username,
-        remove_weekly_plays: minigameLbStripWeekly,
-        weekly_scope: minigameLbWeekScope,
-        remove_per_game_scores: minigameLbStripPerGame,
-        games,
-      });
-      toast.success(res.data?.message || 'Stripped');
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed');
-    } finally {
-      setMinigameLbStripLoading(false);
-    }
-  };
-
-  const handleMinigameLbAddPlay = async () => {
-    const username = (formData.targetUsername || '').trim();
-    if (!username) { toast.error('Enter target username'); return; }
-    const score = parseInt(String(minigameLbAddScore), 10);
-    if (Number.isNaN(score) || score < 0) { toast.error('Invalid score'); return; }
-    if (!minigameLbAddWeekly && !minigameLbAddPerGame) { toast.error('Select weekly play and/or per-game row'); return; }
-    setMinigameLbAddLoading(true);
-    try {
-      const res = await api.post('/admin/minigames/leaderboard/add-play', {
-        target_username: username,
-        game: minigameLbAddGame,
-        score,
-        record_weekly_play: minigameLbAddWeekly,
-        record_per_game_score: minigameLbAddPerGame,
-      });
-      toast.success(res.data?.message || 'Recorded');
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed');
-    } finally {
-      setMinigameLbAddLoading(false);
-    }
   };
 
   const handleMainLeaderboardStrip = async () => {
@@ -8222,22 +8128,6 @@ export default function Admin() {
       setWalletActivity(null);
     } finally {
       setWalletActivityLoading(false);
-    }
-  };
-
-  const fetchMinigamePayouts = async () => {
-    setMinigamePayoutsLoading(true);
-    try {
-      const params = { limit: 200 };
-      if (minigamePayoutsUsername.trim()) params.username = minigamePayoutsUsername.trim();
-      if (minigamePayoutsGame.trim()) params.game = minigamePayoutsGame.trim();
-      const res = await api.get('/admin/minigame-payouts', { params });
-      setMinigamePayouts(res.data);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to load minigame payouts');
-      setMinigamePayouts({ entries: [] });
-    } finally {
-      setMinigamePayoutsLoading(false);
     }
   };
 
@@ -10571,105 +10461,6 @@ export default function Admin() {
                 </div>
               </div>
 
-              <div className={`relative rounded-lg overflow-hidden border border-amber-500/25`}>
-                <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
-                <SectionHeader
-                  icon={BarChart3}
-                  title="Minigame leaderboards & records"
-                  toolAnchor="minigameLbAdmin"
-                  isCollapsed={collapsed.minigameLbAdmin}
-                  onToggle={() => toggleSection('minigameLbAdmin')}
-                />
-                {!collapsed.minigameLbAdmin && (
-                  <div className="p-2 space-y-1 bg-zinc-950/40">
-                    <ActionRow icon={Trash2} label="Clear minigame records (user)" description="Delete minigame scores/history rows across all minigame collections" color="text-red-400">
-                      <BtnDanger onClick={handleClearUserMinigameRecords} disabled={clearMinigameRecordsLoading || !(formData.targetUsername || '').trim()}>
-                        {clearMinigameRecordsLoading ? '...' : 'Clear'}
-                      </BtnDanger>
-                    </ActionRow>
-
-                    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2 ml-0 sm:ml-0">
-                      <div className="text-[10px] font-heading text-amber-200/90 uppercase tracking-wider">Weekly board + per-game tables</div>
-                      <p className="text-[9px] text-mutedForeground font-heading">
-                        Strip: remove <code className="text-[8px] bg-zinc-800/80 px-1 rounded">minigame_plays</code> (combined weekly points) and/or per-game score collections. Does not delete{' '}
-                        <code className="text-[8px] bg-zinc-800/80 px-1 rounded">minigame_run_sessions</code> — use &quot;Clear minigame records&quot; for a full wipe.
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
-                        <label className="flex items-center gap-1 cursor-pointer">
-                          <input type="checkbox" checked={minigameLbStripWeekly} onChange={(e) => setMinigameLbStripWeekly(e.target.checked)} />
-                          Weekly plays
-                        </label>
-                        <select
-                          value={minigameLbWeekScope}
-                          onChange={(e) => setMinigameLbWeekScope(e.target.value)}
-                          disabled={!minigameLbStripWeekly}
-                          className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1 text-xs"
-                        >
-                          <option value="current">This week (Mon UTC)</option>
-                          <option value="all">All weeks</option>
-                        </select>
-                        <label className="flex items-center gap-1 cursor-pointer">
-                          <input type="checkbox" checked={minigameLbStripPerGame} onChange={(e) => setMinigameLbStripPerGame(e.target.checked)} />
-                          Per-game scores
-                        </label>
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="Optional: gauntlet, snake (comma-separated slugs; empty = all)"
-                        value={minigameLbStripGames}
-                        onChange={(e) => setMinigameLbStripGames(e.target.value)}
-                        className="w-full max-w-md bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
-                      />
-                      <div>
-                        <BtnDanger type="button" onClick={handleMinigameLbStrip} disabled={minigameLbStripLoading || !(formData.targetUsername || '').trim()}>
-                          {minigameLbStripLoading ? '…' : 'Strip leaderboard rows'}
-                        </BtnDanger>
-                      </div>
-                      <hr className="border-zinc-700/50 my-2" />
-                      <p className="text-[9px] text-mutedForeground font-heading">
-                        Add: append one synthetic play for combined weekly points and/or one high-score row. No cash/respect payout. Per-game row supported for snake, gauntlet, shooting_range, mafia_rpg, family_run, whack_a_copper only.
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
-                        <select
-                          value={minigameLbAddGame}
-                          onChange={(e) => setMinigameLbAddGame(e.target.value)}
-                          className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1 text-xs"
-                        >
-                          <option value="gauntlet">gauntlet (Flappy)</option>
-                          <option value="snake">snake</option>
-                          <option value="shooting_range">shooting_range</option>
-                          <option value="mafia_rpg">mafia_rpg</option>
-                          <option value="family_run">family_run</option>
-                          <option value="whack_a_copper">whack_a_copper</option>
-                          <option value="minesweeper">minesweeper (weekly only)</option>
-                          <option value="battleships">battleships (weekly only)</option>
-                          <option value="the_getaway">the_getaway (weekly only)</option>
-                          <option value="pool_8ball">pool_8ball (weekly only)</option>
-                        </select>
-                        <input
-                          type="number"
-                          min={0}
-                          value={minigameLbAddScore}
-                          onChange={(e) => setMinigameLbAddScore(e.target.value)}
-                          className="w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
-                        />
-                        <label className="flex items-center gap-1 cursor-pointer">
-                          <input type="checkbox" checked={minigameLbAddWeekly} onChange={(e) => setMinigameLbAddWeekly(e.target.checked)} />
-                          Weekly points
-                        </label>
-                        <label className="flex items-center gap-1 cursor-pointer">
-                          <input type="checkbox" checked={minigameLbAddPerGame} onChange={(e) => setMinigameLbAddPerGame(e.target.checked)} />
-                          Per-game row
-                        </label>
-                        <BtnPrimary type="button" onClick={handleMinigameLbAddPlay} disabled={minigameLbAddLoading || !(formData.targetUsername || '').trim()}>
-                          {minigameLbAddLoading ? '…' : 'Add play / score'}
-                        </BtnPrimary>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
               <div className={`relative rounded-lg overflow-hidden border border-cyan-500/25`}>
                 <div className="h-0.5 bg-gradient-to-r from-transparent via-cyan-500/35 to-transparent" />
                 <SectionHeader
@@ -11905,10 +11696,6 @@ export default function Admin() {
                 )}
               </div>
             )}
-
-            <ActionRow icon={Layers} label="Clear pool cue upgrades" description="8-ball minigame: reset power/curve/luck/aim/control on every owned cue (target username above)">
-              <BtnDanger onClick={handlePoolClearCueUpgrades}>Clear all</BtnDanger>
-            </ActionRow>
 
             <ActionRow
               icon={Gift}
@@ -16306,19 +16093,10 @@ export default function Admin() {
               </label>
             </div>
             <div className="space-y-2 pt-2 border-t border-primary/10">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Minigames — Cloudflare Turnstile</p>
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Cloudflare Turnstile</p>
               <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                Require a captcha before each minigame run (and gauntlet). Set <code className="text-[9px] bg-muted px-1 rounded">TURNSTILE_SECRET_KEY</code> in the server environment; optionally override the public site key here or via <code className="text-[9px] bg-muted px-1 rounded">TURNSTILE_SITE_KEY</code>. Login Turnstile uses the same public site key and secret.
+                Set <code className="text-[9px] bg-muted px-1 rounded">TURNSTILE_SECRET_KEY</code> in the server environment; optionally override the public site key here or via <code className="text-[9px] bg-muted px-1 rounded">TURNSTILE_SITE_KEY</code>.
               </p>
-              <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
-                <input
-                  type="checkbox"
-                  checked={minigameTurnstileEnabled}
-                  onChange={(e) => setMinigameTurnstileEnabled(e.target.checked)}
-                  className="rounded border-input"
-                />
-                <span>Enable Turnstile before minigame / gauntlet runs</span>
-              </label>
               <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
                 <input
                   type="checkbox"
@@ -16336,7 +16114,7 @@ export default function Admin() {
                   className="rounded border-input mt-0.5"
                 />
                 <span>
-                  Require Turnstile before GTA melt/scrap and booze sell (same public site key as minigames; not used on crime
+                  Require Turnstile before GTA melt/scrap and booze sell (not used on crime
                   commits)
                 </span>
               </label>
@@ -16349,7 +16127,7 @@ export default function Admin() {
                 />
                 <span>
                   Require Turnstile before joining E-Games in the entertainer forum (anti-bot layer 2; the always-on join token
-                  layer stays active either way). Same public site key as minigames.
+                  layer stays active either way).
                 </span>
               </label>
               <div className="rounded border border-red-500/20 bg-red-500/5 p-2 space-y-2">
@@ -22467,7 +22245,6 @@ export default function Admin() {
                   <option value="buy-custom-car">Custom car</option>
                   <option value="buy-health">Full health</option>
                   <option value="buy-hitlist-npc-bonus-slot">Hitlist NPC slot</option>
-                  <option value="buy-shooting-range-bonus">Shooting range bonus</option>
                   <option value="buy-token-selectable-bundle">Selectable token bundle</option>
                   <option value="upgrade-garage-batch">Garage batch upgrade</option>
                 </select>
@@ -23071,91 +22848,6 @@ export default function Admin() {
                     </table>
                   )}
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Minigame Payouts */}
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={Trophy}
-            title="Minigame Payouts"
-            badge={minigamePayouts.entries?.length ? <span className="text-[10px] font-heading text-primary">{minigamePayouts.count} entries</span> : null}
-            toolAnchor="minigamePayouts"
-            isCollapsed={collapsed.minigamePayouts}
-            onToggle={() => toggleSection('minigamePayouts')}
-          />
-          {!collapsed.minigamePayouts && (
-            <div className="p-3 space-y-2">
-              <p className="text-[10px] text-mutedForeground font-heading">Every individual minigame play and what rewards were paid out.</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  value={minigamePayoutsUsername}
-                  onChange={(e) => setMinigamePayoutsUsername(e.target.value)}
-                  placeholder="Filter by username"
-                  className="flex-1 min-w-[120px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
-                />
-                <select
-                  value={minigamePayoutsGame}
-                  onChange={(e) => setMinigamePayoutsGame(e.target.value)}
-                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
-                >
-                  <option value="">All Games</option>
-                  <option value="family_run">Family Run</option>
-                  <option value="snake">Package Run</option>
-                  <option value="gauntlet">Flappy Gangster</option>
-                  <option value="famiglia">Famiglia</option>
-                  <option value="battleships">Battleships</option>
-                  <option value="minesweeper">Minesweeper</option>
-                  <option value="whack_a_copper">Whack a Copper</option>
-                  <option value="the_getaway">The Getaway</option>
-                  <option value="shooting_range">Shooting Range</option>
-                </select>
-                <BtnPrimary onClick={fetchMinigamePayouts} disabled={minigamePayoutsLoading}>
-                  {minigamePayoutsLoading ? '...' : 'Load'}
-                </BtnPrimary>
-              </div>
-              {minigamePayouts.entries?.length > 0 && (
-                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-                  <table className="w-full text-[10px] font-mono">
-                    <thead className="sticky top-0 bg-zinc-900/90">
-                      <tr className="text-left text-mutedForeground">
-                        <th className="p-2">Time</th>
-                        <th className="p-2">User</th>
-                        <th className="p-2">Game</th>
-                        <th className="p-2">Score</th>
-                        <th className="p-2">Cash</th>
-                        <th className="p-2">Respect</th>
-                        <th className="p-2">Other</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {minigamePayouts.entries.map((e) => {
-                        const r = e.rewards || {};
-                        const cash = r.money || 0;
-                        const respect = r.respect_points || 0;
-                        const other = Object.entries(r).filter(([k]) => k !== 'money' && k !== 'respect_points' && k !== 'missions').filter(([, v]) => v > 0).map(([k, v]) => `${k}: ${v}`).join(', ');
-                        return (
-                          <tr key={e.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
-                            <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? formatAdminDateTime(e.created_at) : '—'}</td>
-                            <td className="p-2 text-foreground">{e.username}</td>
-                            <td className="p-2 text-primary">{e.game}</td>
-                            <td className="p-2 text-foreground">{Number(e.score).toLocaleString()}</td>
-                            <td className="p-2 text-green-400">{cash > 0 ? `$${cash.toLocaleString()}` : '—'}</td>
-                            <td className="p-2 text-blue-400">{respect > 0 ? respect.toLocaleString() : '—'}</td>
-                            <td className="p-2 text-mutedForeground">{other || '—'}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              {minigamePayouts.entries?.length === 0 && !minigamePayoutsLoading && (
-                <p className="text-[10px] text-mutedForeground font-heading">No payout records found. Load data or adjust filters.</p>
               )}
             </div>
           )}

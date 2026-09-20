@@ -103,21 +103,6 @@ const Bodyguards = lazy(() => import("./pages/Kill/Bodyguards"));
 const HitlistPage = lazy(() => import("./pages/Kill/HitlistPage"));
 const HitmanForHire = lazy(() => import("./pages/Kill/HitmanForHire"));
 
-// MiniGames pages
-const Battleships = lazy(() => import("./pages/MiniGames/Battleships"));
-const Boxing = lazy(() => import("./pages/MiniGames/Boxing"));
-const Gauntlet = lazy(() => import("./pages/MiniGames/Gauntlet"));
-const Minesweeper = lazy(() => import("./pages/MiniGames/Minesweeper"));
-const MiniGamesLeaderboard = lazy(() => import("./pages/MiniGames/MiniGamesLeaderboard"));
-const Racing = lazy(() => import("./pages/MiniGames/Racing"));
-const ShootingRange = lazy(() => import("./pages/MiniGames/ShootingRange"));
-const ShootingRange3D = lazy(() => import("./pages/MiniGames/ShootingRange3D"));
-const Snake = lazy(() => import("./pages/MiniGames/Snake"));
-const TheGetaway = lazy(() => import("./pages/MiniGames/TheGetaway"));
-const FamilyRun = lazy(() => import("./pages/MiniGames/FamilyRun"));
-const WhackACopper = lazy(() => import("./pages/MiniGames/WhackACopper"));
-const Famiglia = lazy(() => import("./pages/MiniGames/Famiglia"));
-const EightBallPool = lazy(() => import("./pages/MiniGames/EightBallPool"));
 
 // Money pages
 const Bank = lazy(() => import("./pages/Money/Bank"));
@@ -256,14 +241,6 @@ function InboxChatRedirect() {
 function ForumTopicRedirect() {
   const { topicId } = useParams();
   return <Navigate to={`/social/forum/${topicId}`} replace />;
-}
-function BoxingArenaRedirect() {
-  const { matchId } = useParams();
-  return <Navigate to={`/casino/mini-games/boxing/${matchId}`} replace />;
-}
-function ShootingRangePlayRedirect() {
-  const { weaponId } = useParams();
-  return <Navigate to={weaponId ? `/casino/mini-games/shooting-range/play/${weaponId}` : '/casino/mini-games/shooting-range/play'} replace />;
 }
 function AttackShortcutRedirect() {
   const { search } = useLocation();
@@ -525,36 +502,7 @@ function App() {
 
           {/* ═══ GAMES GROUP ═══ */}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-          {/* Games redirects */}
-          <Route path="/snake" element={<Navigate to="/casino/mini-games/snake" replace />} />
-          <Route path="/battleships" element={<Navigate to="/casino/mini-games/battleships" replace />} />
-          <Route path="/the-getaway" element={<Navigate to="/casino/mini-games/the-getaway" replace />} />
-          <Route path="/family-run" element={<Navigate to="/casino/mini-games/family-run" replace />} />
-          <Route path="/famiglia" element={<Navigate to="/casino/mini-games/famiglia" replace />} />
-          <Route path="/minesweeper" element={<Navigate to="/casino/mini-games/minesweeper" replace />} />
-          <Route path="/flappygangster" element={<Navigate to="/casino/mini-games/flappy" replace />} />
-          <Route path="/gauntlet" element={<Navigate to="/casino/mini-games/flappy" replace />} />
-          <Route path="/shooting-range" element={<Navigate to="/casino/mini-games/shooting-range" replace />} />
-          <Route path="/shooting-range/play/:weaponId?" element={<ShootingRangePlayRedirect />} />
-          <Route path="/minigames-leaderboard" element={<Navigate to="/casino/mini-games/leaderboard" replace />} />
-          <Route path="/boxing" element={<Navigate to="/casino/mini-games/boxing" replace />} />
-          <Route path="/boxing/arena/:matchId" element={<BoxingArenaRedirect />} />
-          <Route path="/racing" element={<Navigate to="/casino/mini-games/racing" replace />} />
-          <Route path="/8-ball-pool" element={<Navigate to="/casino/mini-games/8-ball-pool" replace />} />
+          
 
           <Route path="/leaderboard" element={<Navigate to="/game/leaderboard" replace />} />
 
@@ -992,96 +940,6 @@ function App() {
             {/* World Cup 2026 retired — history lives in Admin Tools → World Cup */}
             <Route path="/game/world-cup/staff" element={<Navigate to="/account/dashboard" replace />} />
             <Route path="/game/world-cup" element={<Navigate to="/account/dashboard" replace />} />
-            <Route
-              path="/casino/mini-games/snake"
-              element={
-              <Snake />
-              }
-            />
-            <Route
-              path="/casino/mini-games/battleships"
-              element={
-              <Battleships />
-              }
-            />
-            <Route
-              path="/casino/mini-games/the-getaway"
-              element={
-              <TheGetaway />
-              }
-            />
-            <Route
-              path="/casino/mini-games/family-run"
-              element={
-              <FamilyRun />
-              }
-            />
-            <Route
-              path="/casino/mini-games/whack-a-copper"
-              element={
-              <WhackACopper />
-              }
-            />
-            <Route
-              path="/casino/mini-games/famiglia"
-              element={
-              <Famiglia />
-              }
-            />
-            <Route
-              path="/casino/mini-games/minesweeper"
-              element={
-              <Minesweeper />
-              }
-            />
-            <Route
-              path="/casino/mini-games/flappy"
-              element={
-              <Gauntlet />
-              }
-            />
-            <Route
-              path="/casino/mini-games/shooting-range"
-              element={
-              <ShootingRange />
-              }
-            />
-            <Route
-              path="/casino/mini-games/shooting-range/play/:weaponId?"
-              element={
-              <ShootingRange3D />
-              }
-            />
-            <Route
-              path="/casino/mini-games/8-ball-pool"
-              element={
-              <EightBallPool />
-              }
-            />
-            <Route
-              path="/casino/mini-games/leaderboard"
-              element={
-              <MiniGamesLeaderboard />
-              }
-            />
-            <Route
-              path="/casino/mini-games/boxing"
-              element={
-              <Boxing />
-              }
-            />
-            <Route
-              path="/casino/mini-games/boxing/:matchId"
-              element={
-              <Boxing />
-              }
-            />
-            <Route
-              path="/casino/mini-games/racing"
-              element={
-              <Racing />
-              }
-            />
             <Route
               path="/game/leaderboard"
               element={

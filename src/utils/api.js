@@ -301,7 +301,6 @@ function _shouldIgnoreServerUnavailableStrike(config) {
   return (
     url.includes('/attack/turnstile-nonce')
     || url.includes('/attack/turnstile-config')
-    || url.includes('/minigame/turnstile')
   );
 }
 

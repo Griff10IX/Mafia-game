@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Factory, Package, User, ShoppingCart, Flame, Gauge, Shield, Crosshair, Swords, DollarSign } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
-import { formatMasteryTrainCooldownLabel, useMasteryCooldownTick } from '../../utils/shootingRangeCooldown';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
@@ -340,10 +339,6 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
   const [buyingWeaponId, setBuyingWeaponId] = useState(null);
   const [equippingWeaponId, setEquippingWeaponId] = useState(null);
   const [equippingArmourLevel, setEquippingArmourLevel] = useState(null);
-  const [masteryData, setMasteryData] = useState(null);
-  const [trainingWeaponId, setTrainingWeaponId] = useState(null);
-  useMasteryCooldownTick(masteryData);
-
   useEffect(() => {
     if (meProp?.money != null) {
       setMe(meProp);
@@ -407,33 +402,6 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
     })();
     return () => { cancelled = true; };
   }, [data, effectiveState]);
-
-  const fetchMastery = useCallback(async () => {
-    try {
-      const res = await api.get('/shooting-range/mastery');
-      setMasteryData(res.data);
-    } catch {
-      setMasteryData(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (activeTab === 'shooting-range') fetchMastery();
-  }, [activeTab, fetchMastery]);
-
-  const trainWeapon = async (weaponId) => {
-    setTrainingWeaponId(weaponId);
-    try {
-      const res = await api.post('/shooting-range/train', { weapon_id: weaponId, mode: 'auto_sim' });
-      toast.success(res.data?.message || 'Trained');
-      fetchMastery();
-    } catch (e) {
-      const detail = e.response?.data?.detail;
-      toast.error(typeof detail === 'string' ? detail : 'Training failed');
-    } finally {
-      setTrainingWeaponId(null);
-    }
-  };
 
   const claim = async () => {
     if (claiming) return;
@@ -786,9 +754,6 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
             <Tab active={activeTab === 'shop'} onClick={() => setActiveTab('shop')} icon={ShoppingCart}>
               Shop
             </Tab>
-            <Tab active={activeTab === 'shooting-range'} onClick={() => setActiveTab('shooting-range')} icon={Crosshair}>
-              Range
-            </Tab>
             {(!hasOwner || isOwner) && (
               <Tab active={activeTab === 'production'} onClick={() => setActiveTab('production')} icon={Factory}>
                 Ops
@@ -1041,109 +1006,6 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                   </div>
                 </ArmSection>
               </div>
-            </div>
-          )}
-
-          {activeTab === 'shooting-range' && (
-            <div className="space-y-3">
-              <ArmSection icon={Crosshair} title="Weapon mastery" subtitle="Up to 10% fewer bullets at 100% · train owned guns in power order">
-                <p className="text-[11px] text-mutedForeground font-heading mb-3 leading-relaxed">
-                  Train guns you own. Weaker owned guns must hit 100% before stronger ones unlock. Unowned guns never block progress.
-                  Colt Monitor appears only after a loot drop — not sold here.
-                </p>
-                {masteryData?.weapons?.length
-                  ? (
-                      <div className="space-y-2">
-                        {masteryData.weapons.map((w) => {
-                          if (w.id === 'weapon1') return null;
-                          const info = masteryData.mastery?.[w.id] || { mastery_pct: 0 };
-                          const pct = Number(info.mastery_pct) || 0;
-                          const canTrain = info.can_train !== false;
-                          const owned = typeof w.owned === 'boolean' ? w.owned : weaponsList.some((x) => x.id === w.id && x.owned);
-                          const training = trainingWeaponId === w.id;
-                          const cooldownLabel = formatMasteryTrainCooldownLabel(info.next_train_at);
-                          const onCooldown = Boolean(cooldownLabel);
-                          const disabled = !owned || training || pct >= 100 || !canTrain || onCooldown;
-                          return (
-                            <div key={w.id} className="rounded-lg border border-primary/12 bg-black/25 px-2.5 py-2.5 space-y-2">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                  <div className="text-[12px] sm:text-[13px] font-heading font-semibold text-foreground truncate">
-                                    {w.name}
-                                    {owned ? <span className="text-emerald-400 ml-1.5 text-[10px] font-bold">Owned</span> : null}
-                                  </div>
-                                  {w.loot_box_exclusive ? (
-                                    <div className="text-[10px] text-amber-400/90 font-heading mt-0.5">Loot box only</div>
-                                  ) : null}
-                                  {w.profile_showable && owned ? (
-                                    <div className="flex flex-wrap items-center gap-2 mt-1">
-                                      <Link
-                                        to={`/weapons/view?id=${encodeURIComponent(w.id)}`}
-                                        className="text-[10px] font-heading text-primary hover:underline"
-                                      >
-                                        View 3D
-                                      </Link>
-                                      <button
-                                        type="button"
-                                        className="text-[10px] font-heading text-primary hover:underline"
-                                        onClick={async () => {
-                                          try {
-                                            const res = await api.patch('/profile/weapon-preferences', {
-                                              show_weapon_on_profile: true,
-                                              profile_weapon_id: w.id,
-                                            });
-                                            toast.success(res.data?.message || 'Shown on profile');
-                                          } catch (e) {
-                                            toast.error(e.response?.data?.detail || 'Failed to update profile weapon');
-                                          }
-                                        }}
-                                      >
-                                        Show on profile
-                                      </button>
-                                    </div>
-                                  ) : null}
-                                </div>
-                                <span className="text-[11px] text-mutedForeground tabular-nums font-heading shrink-0">{pct}%</span>
-                              </div>
-                              <div className="h-2 rounded-full bg-black/50 overflow-hidden border border-white/5">
-                                <div
-                                  className="h-full bg-primary/85 rounded-full transition-all duration-300"
-                                  style={{ width: `${Math.min(100, pct)}%` }}
-                                />
-                              </div>
-                              <ArmActionBtn
-                                className="w-full sm:w-auto"
-                                disabled={disabled}
-                                title={
-                                  onCooldown
-                                    ? '5 min cooldown after each train on this weapon'
-                                    : !canTrain
-                                      ? 'Master weaker owned guns to 100% first (in list order)'
-                                      : undefined
-                                }
-                                onClick={() => trainWeapon(w.id)}
-                              >
-                                {training
-                                  ? 'Training…'
-                                  : pct >= 100
-                                    ? 'Mastered'
-                                    : !canTrain
-                                      ? 'Master previous first'
-                                      : cooldownLabel
-                                        ? `Wait ${cooldownLabel}`
-                                        : 'Train 5 min'}
-                              </ArmActionBtn>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )
-                  : masteryData ? (
-                      <p className="text-[11px] text-mutedForeground font-heading">No guns available to train.</p>
-                    ) : (
-                      <p className="text-[11px] text-mutedForeground font-heading">Loading mastery…</p>
-                    )}
-              </ArmSection>
             </div>
           )}
 

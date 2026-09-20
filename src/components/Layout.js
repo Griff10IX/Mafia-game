@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment, lazy, Suspense } from 'react';
 import { Link, useNavigate, useLocation, useNavigationType, Navigate } from 'react-router-dom';
 import { SAME_ROUTE_NAV_CLICK } from '../constants/navigationEvents';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Leaf, Ban, BookOpen } from './layoutLucideIcons';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Leaf, Ban, BookOpen } from './layoutLucideIcons';
 import api, {
   getApiErrorMessage,
   onCooldownChange,
@@ -243,27 +243,6 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
               .filter((item) => item.path !== '/tjjeujr3wa/overview')
               .map((item) => ({ path: item.path, label: item.label }))
           : []),
-      ],
-    },
-    {
-      type: 'group',
-      id: 'minigames',
-      icon: Gamepad2,
-      label: 'Mini games',
-      mobileShortLabel: 'Mini',
-      items: [
-        { path: '/casino/mini-games/racing', label: 'Racing' },
-        { path: '/casino/mini-games/boxing', label: 'Boxing' },
-        { path: '/casino/mini-games/flappy', label: 'Flappy Gangster' },
-        { path: '/casino/mini-games/shooting-range', label: 'Shooting range' },
-        { path: '/casino/mini-games/snake', label: 'Package Run' },
-        { path: '/casino/mini-games/minesweeper', label: 'Minefield' },
-        { path: '/casino/mini-games/battleships', label: 'Rum Runner' },
-        { path: '/casino/mini-games/the-getaway', label: 'The Getaway' },
-        { path: '/casino/mini-games/whack-a-copper', label: 'Whack-A-Copper' },
-        { path: '/casino/mini-games/famiglia', label: 'Famiglia' },
-        { path: '/casino/mini-games/8-ball-pool', label: '8-Ball Pool' },
-        { path: '/casino/mini-games/leaderboard', label: 'Leaderboard' },
       ],
     },
     {
@@ -662,7 +641,6 @@ export default function Layout({ children }) {
   };
   const [rankingOpen, setRankingOpen] = useState(() => getNavSectionOpen('ranking'));
   const [casinoOpen, setCasinoOpen] = useState(() => getNavSectionOpen('casino'));
-  const [miniGamesOpen, setMiniGamesOpen] = useState(() => getNavSectionOpen('minigames'));
   const [combatOpen, setCombatOpen] = useState(() => getNavSectionOpen('combat'));
   const [messagingMenuOpen, setMessagingMenuOpen] = useState(() => getNavSectionOpen('messaging-menu'));
   const [categoryOpen, setCategoryOpen] = useState(() => ({ information: true, travel: true, messaging: true, money: true, other: true }));
@@ -2228,39 +2206,37 @@ export default function Layout({ children }) {
         '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information', '/account/game-events': 'information',
         '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information', '/game/system-ai': 'information', '/game/help-desk-hub': 'information', '/game/leaderboard': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
-        '__combat__': 'combat', '/kill/attack': 'combat', '/kill/witness-statements': 'combat', '/kill/attempts': 'combat', '/kill/combat-timeline': 'combat', '/kill/hitlist': 'combat', '/kill/hitman': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
+        '__combat__': 'combat', '/kill/attack': 'combat', '/kill/witness-statements': 'combat', '/kill/attempts': 'combat', '/kill/combat-timeline': 'combat', '/kill/hitlist': 'combat', '/kill/hitman': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '__messaging__': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/game/entertainer': 'casino', '/money/distillery': 'money', '/money/weed-empire': 'money',
         '/cars/garage': 'money', '/cars/buy': 'money', '/cars/sell': 'money', '/money/crack-safe': 'money', '/money/grave-robber': 'money', '/money/lottery': 'money', '/money/loot-box': 'money',
         '/casino': 'casino',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
-        '/mini-games': 'minigames',
       }
     : {
         '/account/dashboard': 'information', '/verify-email': 'information', '/account/objectives': 'information', '/account/missions': 'information', '__tutorial__': 'information',
         '/account/inventory': 'information', '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information', '/account/game-events': 'information',
         '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information', '/game/system-ai': 'information', '/game/help-desk-hub': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
-        '__combat__': 'combat', '/kill/attack': 'combat', '/kill/witness-statements': 'combat', '/kill/attempts': 'combat', '/kill/combat-timeline': 'combat', '/kill/hitlist': 'combat', '/kill/hitman': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
+        '__combat__': 'combat', '/kill/attack': 'combat', '/kill/witness-statements': 'combat', '/kill/attempts': 'combat', '/kill/combat-timeline': 'combat', '/kill/hitlist': 'combat', '/kill/hitman': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '__messaging__': 'messaging',
-        '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/game/entertainer': 'casino', '/casino/mini-games/flappy': 'money', '/money/distillery': 'money', '/money/weed-empire': 'money',
+        '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/game/entertainer': 'casino', '/money/distillery': 'money', '/money/weed-empire': 'money',
         '/cars/garage': 'money', '/cars/buy': 'money', '/cars/sell': 'money', '/money/crack-safe': 'money', '/money/grave-robber': 'money', '/money/lottery': 'money', '/money/loot-box': 'money', '/game/leaderboard': 'money',
         '/casino': 'casino',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
-        '/mini-games': 'minigames',
       };
   const SIDEBAR_CATEGORIES = isCategorizedClassic
     ? [
         { id: 'information', label: 'INFORMATION' }, { id: 'combat', label: 'COMBAT' }, { id: 'travel', label: 'TRAVEL' },
         { id: 'ranking', label: 'RANKING' }, { id: 'messaging', label: 'MESSAGING' }, { id: 'money', label: 'MONEY' }, { id: 'casino', label: 'CASINO' },
-        { id: 'other', label: 'OTHER' }, { id: 'minigames', label: 'MINI GAMES' },
+        { id: 'other', label: 'OTHER' },
       ]
     : [
         { id: 'information', label: 'You' }, { id: 'combat', label: 'Combat' }, { id: 'travel', label: 'Travel' },
         { id: 'ranking', label: 'Ranking' }, { id: 'messaging', label: 'Messages' }, { id: 'money', label: 'Money' }, { id: 'casino', label: 'Casino' },
-        { id: 'other', label: 'Other' }, { id: 'minigames', label: 'Mini Games' },
+        { id: 'other', label: 'Other' },
       ];
 
   const navItems = [
@@ -2307,7 +2283,6 @@ export default function Layout({ children }) {
     { path: '/cars/buy', icon: ShoppingBag, label: 'Buy Cars' },
     { path: '/cars/sell', icon: DollarSign, label: 'Sell Cars' },
     { path: '/money/property', icon: Building, label: 'Properties' },
-    { path: '/mini-games', icon: Gamepad2, label: 'Mini games' },
     { path: '/casino', icon: Dice5, label: 'Casino' },
     { path: '/money/crack-safe', icon: Lock, label: 'Crack the Safe' },
     { path: '/money/grave-robber', icon: Skull, label: 'Grave Robber' },
@@ -2671,48 +2646,6 @@ export default function Layout({ children }) {
     </div>
   );
 
-  const isMiniGamesPath = (p) => p && p.startsWith('/casino/mini-games/');
-  const miniGamesNavBlock = (
-    <div className="space-y-0.5">
-      <button type="button" data-testid="nav-minigames-group" onClick={() => setMiniGamesOpen((v) => { const next = !v; setNavSectionOpen('minigames', next); return next; })}
-        className={`sidebar-inline-rule${leftRulePlain ? ' sidebar-inline-rule--plain' : ''} w-full rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isMiniGamesPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
-        style={osSectionBtnStyle}>
-        <span style={osSectionLabelStyle(isMiniGamesPath(location.pathname))}>Mini games</span>
-        {miniGamesOpen ? <ChevronDown size={9} style={osSectionChevronStyle} className="shrink-0" /> : <ChevronRight size={9} style={osSectionChevronStyle} className="shrink-0" />}
-      </button>
-      {miniGamesOpen && (
-        <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
-          {[
-            { to: '/casino/mini-games/racing', label: 'Racing', testId: 'nav-racing', Icon: Car },
-            { to: '/casino/mini-games/boxing', label: 'Boxing', testId: 'nav-boxing', matchPrefix: true, Icon: Activity },
-            { to: '/casino/mini-games/flappy', label: 'Flappy Gangster', testId: 'nav-flappygangster', Icon: Gamepad2 },
-            { to: '/casino/mini-games/shooting-range', label: 'Shooting range', testId: 'nav-shooting-range', matchPrefix: true, Icon: Crosshair },
-            { to: '/casino/mini-games/snake', label: 'Package Run', testId: 'nav-snake', Icon: Package },
-            { to: '/casino/mini-games/minesweeper', label: 'Minefield', testId: 'nav-minesweeper', Icon: LayoutGrid },
-            { to: '/casino/mini-games/battleships', label: 'Rum Runner', testId: 'nav-battleships', Icon: Wine },
-            { to: '/casino/mini-games/the-getaway', label: 'The Getaway', testId: 'nav-the-getaway', Icon: Plane },
-            { to: '/casino/mini-games/whack-a-copper', label: 'Whack-A-Copper', testId: 'nav-whack-a-copper', Icon: Zap },
-            { to: '/casino/mini-games/famiglia', label: 'Famiglia', testId: 'nav-famiglia', Icon: Landmark },
-            { to: '/casino/mini-games/8-ball-pool', label: '8-Ball Pool', testId: 'nav-8-ball-pool', Icon: CircleDot },
-            { to: '/casino/mini-games/leaderboard', label: 'Leaderboard', testId: 'nav-minigames-leaderboard', Icon: Trophy },
-          ].map((item, idx) => {
-            const IconComp = item.Icon;
-            const isActive = item.matchPrefix ? (location.pathname === item.to || location.pathname.startsWith(item.to + '/')) : location.pathname === item.to;
-            return (
-              <Fragment key={item.to}>
-                {showSidebarDividers && idx > 0 && navDividerEl(`mg${idx}`)}
-                <SameRouteAwareLink to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[24px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
-                  {IconComp && <IconComp size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />}
-                  <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
-                </SameRouteAwareLink>
-              </Fragment>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-
   const renderNavItem = (item, showDivider, compact = false) => {
     const itemKey = item.navKey || item.path;
     const navDivider = showDivider ? navDividerEl(`div-${itemKey}`) : null;
@@ -2739,7 +2672,6 @@ export default function Layout({ children }) {
       );
     }
     if (item.path === '/casino') return <Fragment key="nav-casino-group">{navDivider}{casinoNavBlock}</Fragment>;
-    if (item.path === '/mini-games') return <Fragment key="nav-minigames-group">{navDivider}{miniGamesNavBlock}</Fragment>;
     const Icon = item.icon;
     const isActive = location.pathname === item.path;
     const isFamiliesAtWar = item.path === '/game/family/list' && atWar;
@@ -3069,7 +3001,7 @@ export default function Layout({ children }) {
                     }
                     if (!items.length) return null;
                     const useClassicHeader = sidebarLayout === 'categorized_classic';
-                    const isBlockCategory = ['combat', 'ranking', 'messaging', 'minigames', 'casino'].includes(cat.id);
+                    const isBlockCategory = ['combat', 'ranking', 'messaging', 'casino'].includes(cat.id);
                     const open = isBlockCategory ? true : (categoryOpen[cat.id] !== false);
                     const setOpen = (v) => setCategoryOpen((prev) => ({ ...prev, [cat.id]: typeof v === 'function' ? v(prev[cat.id]) : v }));
                     return (
@@ -4039,7 +3971,6 @@ export default function Layout({ children }) {
                 { path: '/sports-betting', label: 'Sports', Icon: LineChart },
                 { path: '/last-man-standing', label: 'LMS', Icon: Trophy },
                 { path: '/casino/gambling-ban', label: 'Gambling Ban', Icon: Ban },
-                { path: '/mini-games', label: 'Mini Games', Icon: Gamepad2 },
                 ...(user?.is_entertainer ? [{ path: '/game/entertainer', label: 'Entertainer', Icon: Mic2 }] : []),
               ],
               social: [
