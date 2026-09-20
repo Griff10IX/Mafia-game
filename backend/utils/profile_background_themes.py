@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 # Catalog: hard-to-get themes (loot later). Image paths are public static assets.
 # ?v= cache-bust when art is replaced. fit kept for API compat; UI always fills dossier.
-_THEME_ASSET_V = "20260920c"
+_THEME_ASSET_V = "20260921a"
 PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, str]] = {
     "godfather": {
         "id": "godfather",
@@ -40,7 +40,7 @@ PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, str]] = {
     "orbit_overlook": {
         "id": "orbit_overlook",
         "name": "Orbit Overlook",
-        "image": f"/images/profile-themes/orbit-overlook.jpg?v={_THEME_ASSET_V}",
+        "image": f"/images/profile-themes/orbit-overlook-v2.jpg?v={_THEME_ASSET_V}",
         "fit": "stretch",
     },
 }
