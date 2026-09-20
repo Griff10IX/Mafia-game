@@ -4,43 +4,43 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 # Catalog: hard-to-get themes (loot later). Image paths are public static assets.
-# fit: width = landscape banner; stretch = full dossier fill top→weapons (whole scene);
-# height/cover/contain also supported.
+# ?v= cache-bust when art is replaced. fit kept for API compat; UI always fills dossier.
+_THEME_ASSET_V = "20260920c"
 PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, str]] = {
     "godfather": {
         "id": "godfather",
         "name": "Godfather 1 — Legacy",
-        "image": "/images/profile-themes/godfather.jpg",
+        "image": f"/images/profile-themes/godfather.jpg?v={_THEME_ASSET_V}",
         "fit": "stretch",
     },
     "godfather_empire": {
         "id": "godfather_empire",
         "name": "Godfather 2 — Empire",
-        "image": "/images/profile-themes/godfather-empire.jpg",
+        "image": f"/images/profile-themes/godfather-empire.jpg?v={_THEME_ASSET_V}",
         "fit": "stretch",
     },
     "halloween_heist": {
         "id": "halloween_heist",
         "name": "Halloween Heist",
-        "image": "/images/profile-themes/halloween-heist.jpg",
+        "image": f"/images/profile-themes/halloween-heist.jpg?v={_THEME_ASSET_V}",
         "fit": "stretch",
     },
     "ronin_fuji": {
         "id": "ronin_fuji",
         "name": "Ronin Fuji",
-        "image": "/images/profile-themes/ronin-fuji.jpg",
+        "image": f"/images/profile-themes/ronin-fuji.jpg?v={_THEME_ASSET_V}",
         "fit": "stretch",
     },
     "london_snow": {
         "id": "london_snow",
         "name": "London Snow",
-        "image": "/images/profile-themes/london-snow.jpg",
+        "image": f"/images/profile-themes/london-snow.jpg?v={_THEME_ASSET_V}",
         "fit": "stretch",
     },
     "orbit_overlook": {
         "id": "orbit_overlook",
         "name": "Orbit Overlook",
-        "image": "/images/profile-themes/orbit-overlook.jpg",
+        "image": f"/images/profile-themes/orbit-overlook.jpg?v={_THEME_ASSET_V}",
         "fit": "stretch",
     },
 }

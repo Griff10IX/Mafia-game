@@ -93,15 +93,25 @@ const PROFILE_STYLES = `
   .prof-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
   @keyframes prof-dossier-enter { from { opacity: 0.88; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .prof-dossier-enter { animation: prof-dossier-enter 0.34s ease-out both; }
-  /* Theme art: must be a non-replaced layer. Absolute <img> ignores top/bottom stretch
-     (replaced-element quirk + height:auto) so art stops mid-card with grey below. */
+  /* Theme art: absolute <img> with !important sizing — CSS background + plain img
+     both failed (height:auto / theme panel background / cache). fill = full scene. */
   .prof-dossier-theme-bg {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    background-repeat: no-repeat;
-    background-position: center center;
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
+    overflow: hidden !important;
+  }
+  .prof-dossier-theme-bg img {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: fill !important;
+    object-position: center center !important;
   }
   .prof-dossier-theme-scrim {
     position: absolute;
@@ -621,19 +631,6 @@ const ProfileInfoCard = ({
   const bgThemeImage = (bgTheme && typeof bgTheme.image === 'string' && bgTheme.image.trim())
     ? bgTheme.image.trim()
     : null;
-  const bgThemeFitRaw = String(bgTheme?.fit || 'stretch').toLowerCase();
-  const bgThemeFit = ['width', 'height', 'cover', 'contain', 'stretch'].includes(bgThemeFitRaw)
-    ? bgThemeFitRaw
-    : 'stretch';
-  // Div background layer (not <img>): abspos replaced imgs won't stretch to card height.
-  // 100% 100% = full artwork visible across the whole dossier (no crop-zoom, no grey void).
-  const themeBgSize = (
-    bgThemeFit === 'cover' ? 'cover'
-      : bgThemeFit === 'contain' ? 'contain'
-        : bgThemeFit === 'width' ? '100% auto'
-          : bgThemeFit === 'height' ? 'auto 100%'
-            : '100% 100%'
-  );
   const dossierCardStyle = {
     ...(dossierBorderStyle || {}),
     ...(bgThemeImage ? { backgroundColor: '#02060e' } : {}),
@@ -643,14 +640,9 @@ const ProfileInfoCard = ({
     <div className={`relative ${styles.panel} rounded-lg overflow-hidden ${dossierBorderClass} shadow-2xl ${bgThemeImage ? '' : 'backdrop-blur-sm'} prof-card prof-dossier-enter mobile-panel`} style={dossierCardStyle}>
       {bgThemeImage ? (
         <>
-          <div
-            aria-hidden="true"
-            className="prof-dossier-theme-bg"
-            style={{
-              backgroundImage: `url(${bgThemeImage})`,
-              backgroundSize: themeBgSize,
-            }}
-          />
+          <div className="prof-dossier-theme-bg" aria-hidden="true">
+            <img src={bgThemeImage} alt="" draggable={false} />
+          </div>
           <div aria-hidden="true" className="prof-dossier-theme-scrim" />
         </>
       ) : null}
