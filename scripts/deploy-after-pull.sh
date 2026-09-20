@@ -79,6 +79,22 @@ if [ ! -f build.next/index.html ]; then
   exit 1
 fi
 
+# BUILD_PATH=build.next sometimes omits non-hashed public/ files (images, smileys, …).
+# Force-sync so /images/* keeps working after rotate (profile themes, weapons, etc.).
+if [ -d public ]; then
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --exclude 'index.html' public/ build.next/
+  else
+    for f in public/* public/.[!.]*; do
+      [ -e "$f" ] || continue
+      base=$(basename "$f")
+      [ "$base" = "index.html" ] && continue
+      cp -a "$f" build.next/
+    done
+  fi
+  ok "Synced public/ into build.next (images & static public assets)"
+fi
+
 # Bust Cloudflare/HTML caches that ignore query strings: unique comment changes ETag/size.
 printf '\n<!-- build %s -->\n' "$(date -u +%Y%m%dT%H%M%SZ)" >> build.next/index.html
 
