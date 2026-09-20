@@ -6,6 +6,18 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-20[/color][/b] — [b]Mini Games removed[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Removed:[/b] The entire [b]Mini Games[/b] section is offline — no nav entry and no playable pages.[/color]
+[*][color=#888888]That includes [b]Flappy Gangster[/b], [b]Racing[/b], [b]Boxing[/b], [b]Package Run[/b], [b]Minefield[/b], [b]Rum Runner[/b], [b]The Getaway[/b], [b]Whack-A-Copper[/b], [b]Famiglia[/b], [b]8-Ball Pool[/b], [b]Shooting range[/b], the mini-games [b]leaderboard[/b], and related weekly mini-game payouts.[/color]
+[*][color=#888888][b]Unchanged:[/b] Normal casino games (slots, roulette, blackjack, etc.) stay as they are.[/color]
+[*][color=#888888]Hard refresh once if you still see Mini Games in the menu.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-14[/color][/b] — [b]Safehouse loot exclusive[/b][/size]
 [quote]
 [list]
