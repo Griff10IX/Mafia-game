@@ -2354,6 +2354,141 @@ async def _get_weapon_mastery_pct(user_id: str, weapon_id: str | None) -> int:
 
 
 
+def _tokens_from_user(user: dict) -> dict:
+    """Build tokens dict for inventory: count and active_until per token type."""
+    from utils.cooldown_skip import TOKEN_TYPE_TO_SKIP_KIND
+
+    now = datetime.now(timezone.utc)
+    out = {}
+    perk_stats_all = user.get("token_perk_stats") or {}
+    for t in TOKEN_TYPES:
+        cfg = TOKEN_CONFIG.get(t)
+        if not cfg:
+            continue
+        count_field = cfg["count_field"]
+        until_field = cfg["until_field"]
+        expiry_field = cfg.get("expiry_field")
+        count = int(user.get(count_field) or 0)
+        until_raw = user.get(until_field)
+        active_until = None
+        if until_raw:
+            until = _parse_utc(until_raw)
+            if until and until > now:
+                active_until = until.isoformat()
+        expires_at = None
+        if expiry_field:
+            expires_raw = user.get(expiry_field)
+            if expires_raw:
+                expires_dt = _parse_utc(expires_raw)
+                if expires_dt:
+                    expires_at = expires_dt.isoformat()
+        row: Dict[str, Any] = {"count": count, "active_until": active_until, "expires_at": expires_at}
+        if t in TOKEN_TYPE_TO_SKIP_KIND:
+            # Activated-but-unspent skip credits, so My Inventory can show them as "in use".
+            row["credits"] = int(user.get(f"{t}_credits") or 0)
+        ps = perk_stats_all.get(t)
+        if isinstance(ps, dict) and ps:
+            row["perk_stats"] = {k: int(v) for k, v in ps.items() if isinstance(v, (int, float))}
+        if t in ("auto_collect_12h", "auto_collect_24h"):
+            s = user.get("auto_collect_stats") or {}
+            row["auto_collect_stats"] = {
+                "property_cash": int(s.get("property_cash") or 0),
+                "racket_cash": int(s.get("racket_cash") or 0),
+                "collects": int(s.get("collects") or 0),
+                "last_collected_at": s.get("last_collected_at"),
+                "last_cash": int(s.get("last_cash") or 0),
+            }
+        if t == "crew_oc_auto_3h":
+            cap_raw = user.get("crew_oc_auto_apply_max_fee")
+            # Auto-apply ticker only runs when a cap is set; UI treats the perk as inactive until then.
+            row["auto_apply_ready"] = cap_raw is not None
+            try:
+                row["max_join_fee"] = int(cap_raw) if cap_raw is not None else None
+            except (TypeError, ValueError):
+                row["max_join_fee"] = None
+        out[t] = row
+    # Count-only tokens (no Armoury activation; used elsewhere, e.g. Jail / Missions).
+    out["jail_bailout"] = {
+        "count": int(user.get("jail_bailout_tokens") or 0),
+        "active_until": None,
+        "expires_at": None,
+    }
+    ps = perk_stats_all.get("jail_bailout")
+    if isinstance(ps, dict) and ps:
+        out["jail_bailout"]["perk_stats"] = {
+            k: int(v) for k, v in ps.items() if isinstance(v, (int, float))
+        }
+    out["mission_skip"] = {
+        "count": int(user.get("mission_skip_tokens") or 0),
+        "active_until": None,
+        "expires_at": None,
+    }
+    out["robot_bodyguard_hire"] = {
+        "count": int(user.get("robot_bodyguard_hire_tokens") or 0),
+        "active_until": None,
+        "expires_at": None,
+    }
+    return out
+
+
+def _parse_until(iso_str):
+    """Parse ISO datetime; return timezone-aware datetime or None."""
+    if not iso_str:
+        return None
+    if hasattr(iso_str, "year"):
+        dt = iso_str
+    else:
+        try:
+            dt = datetime.fromisoformat(str(iso_str).strip().replace("Z", "+00:00"))
+        except Exception:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _format_boost_until_utc(dt: datetime) -> str:
+    """Readable UTC time for toasts (no ISO/microsecond noise)."""
+    if dt is None:
+        return "—"
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.strftime("%d %b %Y · %H:%M UTC")
+
+
+def _tokens_to_reach_stack_cap(user_doc: dict, token_type: str) -> Tuple[int, Optional[datetime]]:
+    """How many tokens to consume and final until, without wasting tokens at stack cap."""
+    cfg = TOKEN_CONFIG[token_type]
+    count_field = cfg["count_field"]
+    until_field = cfg["until_field"]
+    duration_hours = cfg.get("duration_hours", TOKEN_DURATION_HOURS)
+    max_stack_hours = cfg["max_stack_hours"]
+    count = int(user_doc.get(count_field) or 0)
+    if count < 1:
+        return 0, None
+    now = datetime.now(timezone.utc)
+    cap_until = now + timedelta(hours=max_stack_hours)
+    current_until = _parse_until(user_doc.get(until_field))
+    baseline = current_until if current_until and current_until > now else now
+
+    duration_seconds = int(timedelta(hours=duration_hours).total_seconds())
+    if duration_seconds <= 0:
+        return 0, None
+
+    headroom_seconds = int((cap_until - baseline).total_seconds())
+    if headroom_seconds < duration_seconds:
+        return 0, None
+
+    full_tokens_that_fit = headroom_seconds // duration_seconds
+    to_use = min(count, full_tokens_that_fit)
+    if to_use < 1:
+        return 0, None
+
+    return to_use, baseline + timedelta(seconds=duration_seconds * to_use)
+
+
 async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depends(get_current_user)):
     """Use one consumable token, or many with use_all (stack up to max_stack_hours without wasting)."""
     if req.token_type not in TOKEN_TYPES:
