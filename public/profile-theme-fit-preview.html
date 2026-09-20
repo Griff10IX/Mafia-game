@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Profile theme fit preview</title>
+  <style>
+    body { margin: 0; background: #0a0a0c; color: #ddd; font-family: system-ui; padding: 16px; }
+    h1 { font-size: 14px; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; }
+    .card {
+      width: 360px;
+      height: 720px;
+      border: 2px solid rgba(220,38,38,.55);
+      border-radius: 10px;
+      overflow: hidden;
+      position: relative;
+      background-color: #02060e;
+      box-shadow: 0 0 18px rgba(220,38,38,.25);
+    }
+    .label { font-size: 11px; margin: 8px 0 4px; opacity: .8; }
+    .ui {
+      position: relative;
+      padding: 12px;
+      font-size: 11px;
+      text-shadow: 0 1px 2px #000;
+    }
+    .ui .name { color: #f87171; font-weight: 800; font-size: 18px; }
+  </style>
+</head>
+<body>
+  <h1>Dossier theme fit preview (360×720 card ≈ phone dossier)</h1>
+  <div class="row">
+    <div>
+      <div class="label">Empire stretch (100% 100%) — whole scene fills card</div>
+      <div class="card" id="stretch"></div>
+    </div>
+    <div>
+      <div class="label">Empire contain — letterbox / broken look</div>
+      <div class="card" id="contain"></div>
+    </div>
+    <div>
+      <div class="label">Empire cover — cropped zoom</div>
+      <div class="card" id="cover"></div>
+    </div>
+    <div>
+      <div class="label">Legacy width (100% auto)</div>
+      <div class="card" id="width"></div>
+    </div>
+  </div>
+  <script>
+    const overlay = 'linear-gradient(180deg, rgba(2,6,14,0.40) 0%, rgba(2,6,14,0.55) 45%, rgba(2,6,14,0.78) 100%)';
+    const empire = './images/profile-themes/godfather-empire.jpg';
+    const legacy = './images/profile-themes/godfather.jpg';
+    function paint(id, url, artSize, artPos) {
+      const el = document.getElementById(id);
+      el.style.backgroundImage = overlay + ', url(' + url + ')';
+      el.style.backgroundSize = '100% 100%, ' + artSize;
+      el.style.backgroundPosition = 'center, ' + artPos;
+      el.style.backgroundRepeat = 'no-repeat, no-repeat';
+      el.innerHTML = '<div class="ui"><div class="name">GhostFace</div><div>Admin · Luciani</div><div style="margin-top:40px">stats / badges / cars sit on top</div></div>';
+    }
+    paint('stretch', empire, '100% 100%', 'center center');
+    paint('contain', empire, 'contain', 'center center');
+    paint('cover', empire, 'cover', 'center center');
+    paint('width', legacy, '100% auto', 'center top');
+  </script>
+</body>
+</html>

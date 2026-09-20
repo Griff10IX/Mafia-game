@@ -604,25 +604,28 @@ const ProfileInfoCard = ({
   const bgThemeImage = (bgTheme && typeof bgTheme.image === 'string' && bgTheme.image.trim())
     ? bgTheme.image.trim()
     : null;
-  const bgThemeFitRaw = String(bgTheme?.fit || 'contain').toLowerCase();
+  const bgThemeFitRaw = String(bgTheme?.fit || 'stretch').toLowerCase();
   const bgThemeFit = ['width', 'cover', 'contain', 'stretch'].includes(bgThemeFitRaw)
     ? bgThemeFitRaw
-    : 'contain';
-  const bgSize = (
+    : 'stretch';
+  // Two background layers: gradient (always full card) + art (fit mode). Sizes MUST be listed
+  // separately — a single "contain/cover" also shrinks the gradient and looks broken/zoomed.
+  const artSize = (
     bgThemeFit === 'width' ? '100% auto'
       : bgThemeFit === 'cover' ? 'cover'
-        : bgThemeFit === 'stretch' ? '100% 100%'
-          : 'contain'
+        : bgThemeFit === 'contain' ? 'contain'
+          : '100% 100%'
   );
+  const artPos = bgThemeFit === 'width' ? 'center top' : 'center center';
   const dossierCardStyle = {
     ...(dossierBorderStyle || {}),
     ...(bgThemeImage
       ? {
         backgroundColor: '#02060e',
-        backgroundImage: `linear-gradient(180deg, rgba(2,6,14,0.42) 0%, rgba(2,6,14,0.58) 40%, rgba(2,6,14,0.82) 100%), url(${bgThemeImage})`,
-        backgroundSize: bgSize,
-        backgroundPosition: bgThemeFit === 'width' ? 'center top' : 'center center',
-        backgroundRepeat: 'no-repeat',
+        backgroundImage: `linear-gradient(180deg, rgba(2,6,14,0.40) 0%, rgba(2,6,14,0.55) 45%, rgba(2,6,14,0.78) 100%), url(${bgThemeImage})`,
+        backgroundSize: `100% 100%, ${artSize}`,
+        backgroundPosition: `center, ${artPos}`,
+        backgroundRepeat: 'no-repeat, no-repeat',
       }
       : {}),
   };
