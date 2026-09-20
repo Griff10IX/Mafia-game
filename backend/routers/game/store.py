@@ -2018,34 +2018,6 @@ async def buy_store_token_selectable_bundle(
     }
 
 
-async def buy_shooting_range_bonus(
-    current_user: dict = Depends(get_current_user),
-):
-    """+2 max shooting range plays per 2h window (stacking), up to +10 from store (20 per 2h total with base 10)."""
-    cur = int(current_user.get("shooting_range_bonus_plays") or 0)
-    if cur >= SHOOTING_RANGE_BONUS_CAP:
-        raise HTTPException(status_code=400, detail="Shooting range bonus plays are already maxed")
-    add = min(SHOOTING_RANGE_BONUS_STEP, SHOOTING_RANGE_BONUS_CAP - cur)
-    cost_used, inc, gte_filter = _store_cost_inc(current_user, SHOOTING_RANGE_BONUS_COST_POINTS)
-    if not cost_used:
-        raise HTTPException(status_code=400, detail="Insufficient points")
-    inc["shooting_range_bonus_plays"] = inc.get("shooting_range_bonus_plays", 0) + add
-    result = await db.users.update_one(
-        {"id": current_user["id"], **gte_filter},
-        {"$inc": inc},
-    )
-    if result.modified_count == 0:
-        raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user, inc, "buy-shooting-range-bonus", cost_used=cost_used, extra={"bonus_plays_added": add})
-    new_bonus = cur + add
-    base = 10  # SHOOTING_RANGE_MAX_PLAYS_PER_HOUR in armoury
-    return {
-        "message": f"+{add} plays for shooting range ({base + new_bonus} per 2h cap). Cost {cost_used} points.",
-        "cost": cost_used,
-        "shooting_range_bonus_plays": new_bonus,
-        "shooting_range_hourly_limit": base + new_bonus,
-    }
-
 
 async def buy_hitlist_npc_bonus_slot(
     pay_with: str = Query("auto"),
@@ -2801,7 +2773,6 @@ def register(router):
     router.add_api_route("/store/buy-token", buy_store_token, methods=["POST"])
     router.add_api_route("/store/buy-token-bundle", buy_store_token_bundle, methods=["POST"])
     router.add_api_route("/store/buy-token-selectable-bundle", buy_store_token_selectable_bundle, methods=["POST"])
-    router.add_api_route("/store/buy-shooting-range-bonus", buy_shooting_range_bonus, methods=["POST"])
     router.add_api_route("/store/buy-hitlist-npc-bonus-slot", buy_hitlist_npc_bonus_slot, methods=["POST"])
     router.add_api_route("/store/send-points", send_points, methods=["POST"])
     router.add_api_route(
