@@ -21,7 +21,7 @@ CUSTOM_THEME_NAME = "Admin custom (test)"
 # Catalog: hard-to-get themes (loot later). Image paths are public static assets.
 # ?v= cache-bust when art is replaced.
 # fit: width = natural-aspect banner (default); stretch = fill whole dossier.
-_THEME_ASSET_V = "20260921gp6"
+_THEME_ASSET_V = "20260921gp6smooth"
 PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, Any]] = {
     "godfather": {
         "id": "godfather",
@@ -226,21 +226,21 @@ PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, Any]] = {
     "gp_s6_risitas": {
         "id": "gp_s6_risitas",
         "name": "El Risitas",
-        "image": f"/images/profile-themes/gp-s6-risitas.jpg?v={_THEME_ASSET_V}",
+        "image": f"/images/profile-themes/gp-s6-risitas.gif?v={_THEME_ASSET_V}",
         "fit": "width",
         "game_pass_season6": True,
     },
     "gp_s6_hasbulla_sideeye": {
         "id": "gp_s6_hasbulla_sideeye",
         "name": "Hasbulla Side-Eye",
-        "image": f"/images/profile-themes/gp-s6-hasbulla-sideeye.jpg?v={_THEME_ASSET_V}",
+        "image": f"/images/profile-themes/gp-s6-hasbulla-sideeye.gif?v={_THEME_ASSET_V}",
         "fit": "width",
         "game_pass_season6": True,
     },
     "gp_s6_nebula_c": {
         "id": "gp_s6_nebula_c",
         "name": "Nebula Drift",
-        "image": f"/images/profile-themes/gp-s6-nebula-c.jpg?v={_THEME_ASSET_V}",
+        "image": f"/images/profile-themes/gp-s6-nebula-c.gif?v={_THEME_ASSET_V}",
         "fit": "width",
         "game_pass_season6": True,
     },
@@ -254,21 +254,21 @@ PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, Any]] = {
     "gp_s6_godfather": {
         "id": "gp_s6_godfather",
         "name": "The Don",
-        "image": f"/images/profile-themes/gp-s6-godfather.jpg?v={_THEME_ASSET_V}",
+        "image": f"/images/profile-themes/gp-s6-godfather.gif?v={_THEME_ASSET_V}",
         "fit": "width",
         "game_pass_season6": True,
     },
     "gp_s6_peaky": {
         "id": "gp_s6_peaky",
         "name": "Peaky Blinders",
-        "image": f"/images/profile-themes/gp-s6-peaky.jpg?v={_THEME_ASSET_V}",
+        "image": f"/images/profile-themes/gp-s6-peaky.gif?v={_THEME_ASSET_V}",
         "fit": "width",
         "game_pass_season6": True,
     },
     "gp_s6_vader_still": {
         "id": "gp_s6_vader_still",
         "name": "Darth Vader",
-        "image": f"/images/profile-themes/gp-s6-vader-still.jpg?v={_THEME_ASSET_V}",
+        "image": f"/images/profile-themes/gp-s6-vader-still.gif?v={_THEME_ASSET_V}",
         "fit": "width",
         "game_pass_season6": True,
     },
@@ -289,35 +289,35 @@ PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, Any]] = {
     "gp_s6_joker_nurse": {
         "id": "gp_s6_joker_nurse",
         "name": "Joker Nurse",
-        "image": f"/images/profile-themes/gp-s6-joker-nurse.jpg?v={_THEME_ASSET_V}",
+        "image": f"/images/profile-themes/gp-s6-joker-nurse.gif?v={_THEME_ASSET_V}",
         "fit": "width",
         "game_pass_season6": True,
     },
     "gp_s6_hasbulla_stare": {
         "id": "gp_s6_hasbulla_stare",
         "name": "Hasbulla Stare",
-        "image": f"/images/profile-themes/gp-s6-hasbulla-stare.jpg?v={_THEME_ASSET_V}",
+        "image": f"/images/profile-themes/gp-s6-hasbulla-stare.gif?v={_THEME_ASSET_V}",
         "fit": "width",
         "game_pass_season6": True,
     },
     "gp_s6_blobby": {
         "id": "gp_s6_blobby",
         "name": "Mr Blobby",
-        "image": f"/images/profile-themes/gp-s6-blobby.jpg?v={_THEME_ASSET_V}",
+        "image": f"/images/profile-themes/gp-s6-blobby.gif?v={_THEME_ASSET_V}",
         "fit": "width",
         "game_pass_season6": True,
     },
     "gp_s6_nebula_a": {
         "id": "gp_s6_nebula_a",
         "name": "Nebula Core",
-        "image": f"/images/profile-themes/gp-s6-nebula-a.jpg?v={_THEME_ASSET_V}",
+        "image": f"/images/profile-themes/gp-s6-nebula-a.gif?v={_THEME_ASSET_V}",
         "fit": "width",
         "game_pass_season6": True,
     },
     "gp_s6_nebula_b": {
         "id": "gp_s6_nebula_b",
         "name": "Nebula Spark",
-        "image": f"/images/profile-themes/gp-s6-nebula-b.jpg?v={_THEME_ASSET_V}",
+        "image": f"/images/profile-themes/gp-s6-nebula-b.gif?v={_THEME_ASSET_V}",
         "fit": "width",
         "game_pass_season6": True,
     },
@@ -741,23 +741,41 @@ def encode_theme_image(raw: bytes, *, prefer_gif: bool = True) -> Tuple[bytes, s
         raise ValueError("Could not read image") from e
 
     tw, th = THEME_IMAGE_WIDTH, THEME_IMAGE_HEIGHT
-    is_gif = bool(prefer_gif and mime == "image/gif" and getattr(im, "is_animated", False) and int(getattr(im, "n_frames", 1) or 1) > 1)
+    n_frames = int(getattr(im, "n_frames", 1) or 1)
+    is_animated = bool(getattr(im, "is_animated", False) and n_frames > 1)
+    # Keep animation for GIF and animated WebP (encode as GIF for broad browser support)
+    is_gif = bool(prefer_gif and is_animated and mime in ("image/gif", "image/webp"))
 
     if is_gif:
+        # Cap frames so themes stay smooth and don't balloon to 10MB+ (picker + dossier).
+        max_frames = 36
+        step = max(1, (n_frames + max_frames - 1) // max_frames)
         frames = []
         durations = []
         try:
-            for frame in ImageSequence.Iterator(im):
+            pending_ms = 0
+            for i, frame in enumerate(ImageSequence.Iterator(im)):
+                frame_ms = int(frame.info.get("duration") or 100)
+                if frame_ms < 20:
+                    frame_ms = 20
+                pending_ms += frame_ms
+                if i % step != 0 and i != n_frames - 1:
+                    continue
                 fr = _cover_crop_rgb(frame.copy(), tw, th)
-                # GIF palette path — quantize via adaptive
                 if fr.mode == "RGBA":
                     bg = Image.new("RGBA", fr.size, (0, 0, 0, 255))
                     bg.paste(fr, mask=fr.split()[3])
                     fr = bg.convert("RGB")
                 else:
                     fr = fr.convert("RGB")
-                frames.append(fr.convert("P", palette=Image.Palette.ADAPTIVE, colors=255))
-                durations.append(int(frame.info.get("duration") or 100))
+                frames.append(fr.convert("P", palette=Image.Palette.ADAPTIVE, colors=128))
+                # Keep playback speed: merge skipped-frame time into kept frames
+                # Cap so themes don't look "laggy" / stuttery in the dossier.
+                dur = max(40, min(100, pending_ms if pending_ms > 0 else 80))
+                durations.append(dur)
+                pending_ms = 0
+                if len(frames) >= max_frames:
+                    break
         except Exception as e:
             raise ValueError("Could not process animated GIF") from e
         if not frames:
@@ -769,11 +787,28 @@ def encode_theme_image(raw: bytes, *, prefer_gif: bool = True) -> Tuple[bytes, s
             save_all=True,
             append_images=frames[1:],
             duration=durations,
-            loop=int(im.info.get("loop") or 0),
+            loop=0,
             optimize=False,
             disposal=2,
         )
-        return buf.getvalue(), "image/gif", "gif"
+        data = buf.getvalue()
+        # If still huge, drop to half the frames (keep duration sum ≈ same speed feel)
+        if len(data) > 4_500_000 and len(frames) > 16:
+            frames2 = frames[::2]
+            durs2 = [min(120, d * 2) for d in durations[::2]]
+            buf = io.BytesIO()
+            frames2[0].save(
+                buf,
+                format="GIF",
+                save_all=True,
+                append_images=frames2[1:],
+                duration=durs2,
+                loop=0,
+                optimize=False,
+                disposal=2,
+            )
+            data = buf.getvalue()
+        return data, "image/gif", "gif"
 
     # Static: JPEG (works for jpeg/png/webp/single-frame gif)
     cropped = _cover_crop_rgb(im, tw, th).convert("RGB")

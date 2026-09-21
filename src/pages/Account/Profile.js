@@ -3289,6 +3289,15 @@ export default function Profile() {
                       const equipped = (me.profile_background_theme_id || '') === tid;
                       const isCustom = tid === 'admin_custom';
                       const canUse = !isCustom || !!theme?.image;
+                      // GIF list thumbs: use static -thumb.jpg so the picker doesn't decode every animation at once.
+                      const thumbSrc = (() => {
+                        const src = theme?.image || '';
+                        if (!src) return '';
+                        if (/\.gif(\?|$)/i.test(src)) {
+                          return src.replace(/\.gif(\?|$)/i, '-thumb.jpg$1');
+                        }
+                        return src;
+                      })();
                       return (
                         <div
                           key={tid}
@@ -3296,7 +3305,7 @@ export default function Profile() {
                         >
                           <div
                             className="w-16 h-10 rounded border border-primary/25 bg-secondary bg-cover bg-center shrink-0"
-                            style={theme?.image ? { backgroundImage: `url(${theme.image})` } : undefined}
+                            style={thumbSrc ? { backgroundImage: `url(${thumbSrc})` } : undefined}
                             aria-hidden
                           />
                           <div className="min-w-0 flex-1">
