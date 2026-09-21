@@ -93,8 +93,7 @@ const PROFILE_STYLES = `
   .prof-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
   @keyframes prof-dossier-enter { from { opacity: 0.88; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .prof-dossier-enter { animation: prof-dossier-enter 0.34s ease-out both; }
-  /* Theme art: banner box at catalog aspect (1024x931), top-aligned.
-     Seam sits on a separate z-[2] strip so it draws above content at the art edge. */
+  /* Theme art: real <img> drives height so the seam sits flush on the picture bottom. */
   .prof-dossier-theme-layer {
     position: absolute !important;
     top: 0 !important;
@@ -102,50 +101,57 @@ const PROFILE_STYLES = `
     right: 0 !important;
     z-index: 0 !important;
     pointer-events: none !important;
-    aspect-ratio: 1024 / 931;
   }
-  .prof-dossier-theme-bg {
-    position: absolute !important;
-    inset: 0 !important;
-    background-repeat: no-repeat !important;
-    background-position: center top !important;
-    background-size: 100% 100% !important;
+  .prof-dossier-theme-layer-inner {
+    position: relative;
+    width: 100%;
   }
-  .prof-dossier-theme-bg[data-fit="stretch"],
-  .prof-dossier-theme-bg[data-fit="cover"],
-  .prof-dossier-theme-bg[data-fit="height"] {
-    /* full-card fits: layer stretches with parent via JS (no aspect box) */
+  .prof-dossier-theme-img {
+    display: block;
+    width: 100%;
+    height: auto;
+    vertical-align: top;
   }
-  .prof-dossier-theme-bg[data-fit="stretch"] {
-    background-size: 100% 100% !important;
-    background-position: center center !important;
+  .prof-dossier-theme-layer[data-fit="stretch"] .prof-dossier-theme-img,
+  .prof-dossier-theme-layer[data-fit="cover"] .prof-dossier-theme-img,
+  .prof-dossier-theme-layer[data-fit="height"] .prof-dossier-theme-img {
+    display: none;
   }
-  .prof-dossier-theme-bg[data-fit="cover"] {
-    background-size: cover !important;
-    background-position: center center !important;
+  .prof-dossier-theme-layer[data-fit="stretch"],
+  .prof-dossier-theme-layer[data-fit="cover"],
+  .prof-dossier-theme-layer[data-fit="height"] {
+    bottom: 0 !important;
   }
-  .prof-dossier-theme-bg[data-fit="contain"] {
-    background-size: contain !important;
-    background-position: center center !important;
+  .prof-dossier-theme-bg-fill {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background-repeat: no-repeat;
+    background-position: center top;
+    background-size: 100% 100%;
   }
-  .prof-dossier-theme-bg[data-fit="height"] {
-    background-size: auto 100% !important;
-    background-position: center center !important;
+  .prof-dossier-theme-layer[data-fit="stretch"] .prof-dossier-theme-bg-fill,
+  .prof-dossier-theme-layer[data-fit="cover"] .prof-dossier-theme-bg-fill,
+  .prof-dossier-theme-layer[data-fit="height"] .prof-dossier-theme-bg-fill {
+    display: block;
+  }
+  .prof-dossier-theme-layer[data-fit="stretch"] .prof-dossier-theme-bg-fill {
+    background-size: 100% 100%;
+    background-position: center center;
+  }
+  .prof-dossier-theme-layer[data-fit="cover"] .prof-dossier-theme-bg-fill {
+    background-size: cover;
+    background-position: center center;
+  }
+  .prof-dossier-theme-layer[data-fit="height"] .prof-dossier-theme-bg-fill {
+    background-size: auto 100%;
+    background-position: center center;
   }
   .prof-dossier-theme-scrim {
     position: absolute;
     inset: 0;
     pointer-events: none;
     background: linear-gradient(180deg, rgba(2,6,14,0.22) 0%, rgba(2,6,14,0.36) 45%, rgba(2,6,14,0.55) 100%);
-  }
-  .prof-dossier-theme-seam-anchor {
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    z-index: 2 !important;
-    pointer-events: none !important;
-    aspect-ratio: 1024 / 931;
   }
   .prof-dossier-theme-seam {
     position: absolute;
@@ -155,8 +161,8 @@ const PROFILE_STYLES = `
     height: 2px;
     background: rgb(var(--prof-theme-seam-rgb));
     box-shadow:
-      0 0 10px rgba(var(--prof-theme-seam-rgb), 0.55),
-      0 0 3px rgba(var(--prof-theme-seam-rgb), 0.85);
+      0 0 10px rgba(var(--prof-theme-seam-rgb), 0.5),
+      0 0 3px rgba(var(--prof-theme-seam-rgb), 0.8);
   }
   @media (hover: hover) and (pointer: fine) {
     .prof-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
@@ -485,7 +491,8 @@ const ProfileInfoCard = ({
   const [killDebugError, setKillDebugError] = useState(null);
   const [staffPortalClientTick, setStaffPortalClientTick] = useState(0);
   const dossierRef = useRef(null);
-  const [themeSeamFits, setThemeSeamFits] = useState(false);
+  const themeImgRef = useRef(null);
+  const [themeSeamTop, setThemeSeamTop] = useState(null);
 
   const staffViewerCaps = isAdmin || isModerator || hasAdminEmail;
   const staffShellGateOk = staffViewerCaps && staffLoginSession;
@@ -675,43 +682,44 @@ const ProfileInfoCard = ({
   const bgThemeFit = ['width', 'height', 'cover', 'contain', 'stretch'].includes(bgThemeFitRaw)
     ? bgThemeFitRaw
     : 'width';
-  const bgThemeW = Number(bgTheme?.width) > 0 ? Number(bgTheme.width) : 1024;
-  const bgThemeH = Number(bgTheme?.height) > 0 ? Number(bgTheme.height) : 931;
   const showThemeSeam = Boolean(bgThemeImage) && (bgThemeFit === 'width' || bgThemeFit === 'contain');
-  const themeAspect = `${bgThemeW} / ${bgThemeH}`;
   const themeScrimOn = profile.profile_theme_scrim !== false;
 
   useEffect(() => {
     if (!showThemeSeam) {
-      setThemeSeamFits(false);
+      setThemeSeamTop(null);
       return undefined;
     }
-    const el = dossierRef.current;
-    if (!el) return undefined;
+    const card = dossierRef.current;
+    const img = themeImgRef.current;
+    if (!card) return undefined;
     const measure = () => {
-      const w = el.clientWidth;
-      const h = el.clientHeight;
-      if (w < 8 || h < 8) {
-        setThemeSeamFits(false);
+      // Use the painted <img> height only — catalog aspect is often taller than the file
+      // and left a grey strip between the art and the seam glow.
+      const imgH = img?.offsetHeight || 0;
+      if (!imgH || imgH < 8) {
+        setThemeSeamTop(null);
         return;
       }
-      const bannerH = w * (bgThemeH / bgThemeW);
-      // Skip when banner fills the card — seam would sit on the outer border and look doubled.
-      setThemeSeamFits(bannerH < h - 14);
+      if (imgH >= card.clientHeight - 10) {
+        setThemeSeamTop(null);
+        return;
+      }
+      setThemeSeamTop(imgH);
     };
     measure();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
-    ro?.observe(el);
+    if (img) ro?.observe(img);
+    ro?.observe(card);
     window.addEventListener('resize', measure);
     return () => {
       ro?.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, [showThemeSeam, bgThemeW, bgThemeH, bgThemeImage]);
+  }, [showThemeSeam, bgThemeImage]);
 
   const dossierCardStyle = {
     ...(dossierBorderStyle || {}),
-    // Always set seam colour (glow preset/custom sets it; otherwise match primary cyan)
     ...(!dossierBorderStyle?.['--prof-theme-seam-rgb'] && !hasCosmeticBorder
       ? { ['--prof-theme-seam-rgb']: '14, 165, 233' }
       : {}),
@@ -726,20 +734,36 @@ const ProfileInfoCard = ({
     >
       {bgThemeImage ? (
         <>
-          <div
-            className="prof-dossier-theme-layer"
-            aria-hidden="true"
-            style={showThemeSeam ? { aspectRatio: themeAspect } : { inset: 0, aspectRatio: 'auto' }}
-          >
-            <div
-              className="prof-dossier-theme-bg"
-              data-fit={bgThemeFit}
-              style={{ backgroundImage: `url(${bgThemeImage})` }}
-            />
-            {themeScrimOn ? <div className="prof-dossier-theme-scrim" /> : null}
+          <div className="prof-dossier-theme-layer" data-fit={bgThemeFit} aria-hidden="true">
+            <div className="prof-dossier-theme-layer-inner">
+              <img
+                ref={themeImgRef}
+                className="prof-dossier-theme-img"
+                src={bgThemeImage}
+                alt=""
+                decoding="async"
+                onLoad={() => {
+                  const card = dossierRef.current;
+                  const img = themeImgRef.current;
+                  if (!showThemeSeam || !card || !img) return;
+                  const imgH = img.offsetHeight;
+                  if (!imgH || imgH >= card.clientHeight - 10) setThemeSeamTop(null);
+                  else setThemeSeamTop(imgH);
+                }}
+              />
+              <div
+                className="prof-dossier-theme-bg-fill"
+                style={{ backgroundImage: `url(${bgThemeImage})` }}
+              />
+              {themeScrimOn ? <div className="prof-dossier-theme-scrim" /> : null}
+            </div>
           </div>
-          {showThemeSeam && themeSeamFits ? (
-            <div className="prof-dossier-theme-seam-anchor" style={{ aspectRatio: themeAspect }} aria-hidden="true">
+          {themeSeamTop != null ? (
+            <div
+              className="pointer-events-none absolute left-0 right-0 z-[2]"
+              style={{ top: 0, height: themeSeamTop }}
+              aria-hidden="true"
+            >
               <div className="prof-dossier-theme-seam" />
             </div>
           ) : null}
