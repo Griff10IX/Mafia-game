@@ -503,9 +503,9 @@ export default function Leaderboard() {
               </ol>
               <div className="rounded border border-primary/15 bg-black/20 p-2.5 text-[9px] font-heading text-zinc-400 space-y-0.5">
                 <p className="text-primary/80 font-bold uppercase tracking-wider">Top rewards (fortnight)</p>
-                <p>1st — $75M treasury + 750 pts + 75 loot · 40k points split by contribution · flair + theme</p>
-                <p>2nd — $40M + 400 pts + 40 loot · 20k points split</p>
-                <p>3rd — $15M + 150 pts + 15 loot · 8k points split</p>
+                <p>1st — $75M treasury + 750 pts + 75 loot · 20k points split by contribution · flair + theme</p>
+                <p>2nd — $40M + 400 pts + 40 loot · 12.5k points split</p>
+                <p>3rd — $15M + 150 pts + 15 loot · 5k points split</p>
               </div>
             </div>
           </section>

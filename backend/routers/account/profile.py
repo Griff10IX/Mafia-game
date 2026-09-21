@@ -1169,7 +1169,6 @@ def register(router):
             cotf_until = user.get("crew_of_fortnight_until")
             cotf_active = False
             if cotf_until:
-                from datetime import datetime, timezone
                 until_dt = cotf_until if isinstance(cotf_until, datetime) else datetime.fromisoformat(str(cotf_until).replace("Z", "+00:00"))
                 if until_dt.tzinfo is None:
                     until_dt = until_dt.replace(tzinfo=timezone.utc)

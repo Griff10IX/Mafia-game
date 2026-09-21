@@ -59,9 +59,9 @@ PEN_QT_SELL_FAM = 1000
 
 # Payout defaults (fortnight)
 DEFAULT_PAYOUTS = {
-    1: {"treasury_cash": 75_000_000, "treasury_points": 750, "treasury_loot": 75, "member_pot": 40_000},
-    2: {"treasury_cash": 40_000_000, "treasury_points": 400, "treasury_loot": 40, "member_pot": 20_000},
-    3: {"treasury_cash": 15_000_000, "treasury_points": 150, "treasury_loot": 15, "member_pot": 8_000},
+    1: {"treasury_cash": 75_000_000, "treasury_points": 750, "treasury_loot": 75, "member_pot": 20_000},
+    2: {"treasury_cash": 40_000_000, "treasury_points": 400, "treasury_loot": 40, "member_pot": 12_500},
+    3: {"treasury_cash": 15_000_000, "treasury_points": 150, "treasury_loot": 15, "member_pot": 5_000},
     "crumb": {"treasury_cash": 3_000_000, "treasury_points": 0, "treasury_loot": 0, "member_pot": 0},
 }
 RACKET_BUFF_HOURS = 72
@@ -221,6 +221,17 @@ async def ensure_default_config(db) -> None:
                 }
             },
             upsert=True,
+        )
+        # Member pots live on the stored config after first insert. Keep them on the code defaults.
+        await db.game_config.update_one(
+            {"id": PAYOUT_CONFIG_ID},
+            {
+                "$set": {
+                    "payouts.1.member_pot": DEFAULT_PAYOUTS[1]["member_pot"],
+                    "payouts.2.member_pot": DEFAULT_PAYOUTS[2]["member_pot"],
+                    "payouts.3.member_pot": DEFAULT_PAYOUTS[3]["member_pot"],
+                }
+            },
         )
     except Exception:
         logger.exception("family_fortnight ensure_default_config failed")
