@@ -228,16 +228,35 @@ def is_ur_loot_theme(theme_id: Optional[str]) -> bool:
     return tid in UR_LOOT_THEME_IDS
 
 
+# GhostFace admin account — always ignored for 1/1 UR theme scarcity (same idea as BAR admin_grant).
+_GHOSTFACE_USER_ID = "36425cb4-3755-4669-b4b5-5d86345991d0"
+
+
+async def _staff_ids_excluded_from_theme_pool(db, staff_user_ids: Optional[Set[str]] = None) -> List[Any]:
+    """Staff + GhostFace ids that must not consume UR theme loot slots."""
+    staff: Set[str] = set(str(x) for x in (staff_user_ids or ()) if x)
+    if not staff:
+        try:
+            from server import _get_staff_user_ids
+
+            staff.update(str(x) for x in (await _get_staff_user_ids(db)) if x)
+        except Exception:
+            pass
+    staff.add(_GHOSTFACE_USER_ID)
+    from server import expand_user_ids_for_mongo_nin
+
+    return expand_user_ids_for_mongo_nin(list(staff))
+
+
 async def theme_player_claimed_live(db, theme_id: str, *, staff_user_ids: Optional[Set[str]] = None) -> int:
     """1 if a non-staff player owns this UR theme. Staff/admin (e.g. GhostFace) do not block the loot pool."""
     tid = str(theme_id or "").strip().lower()
     if tid not in UR_LOOT_THEME_IDS:
         return 0
     q: Dict[str, Any] = {OWNED_FIELD: tid}
-    staff = set(staff_user_ids or ())
-    if staff:
-        from server import expand_user_ids_for_mongo_nin
-        q["id"] = {"$nin": expand_user_ids_for_mongo_nin(list(staff))}
+    excluded = await _staff_ids_excluded_from_theme_pool(db, staff_user_ids)
+    if excluded:
+        q["id"] = {"$nin": excluded}
     n = int(await db.users.count_documents(q))
     return 1 if n > 0 else 0
 
@@ -251,7 +270,7 @@ async def list_available_ur_themes_for_loot(db, *, staff_user_ids: Optional[Set[
 
 
 async def grant_ur_theme_to_user(db, user_id: str, theme_id: str, *, count_toward_pool: bool = True) -> Optional[Dict[str, Any]]:
-    """Grant theme ownership. Staff grants should pass count_toward_pool=False (still just $addToSet)."""
+    """Grant theme ownership. Staff ownership never blocks the player pool (staff ids are $nin'd)."""
     tid = str(theme_id or "").strip().lower()
     meta = PROFILE_BACKGROUND_THEMES.get(tid)
     if not meta:
