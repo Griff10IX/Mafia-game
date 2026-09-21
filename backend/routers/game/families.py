@@ -646,7 +646,18 @@ async def _racket_payout_breakdown(
     war_bonus_pct = float((fam.get("racket_income_bonus_percent") or 0) or 0)
     perk_mods = await family_perk_modifiers(db, family_id)
     perk_bonus_pct = float(perk_mods.get("racket_bonus_percent") or 0)
-    family_bonus_mult = 1.0 + (war_bonus_pct + perk_bonus_pct) / 100.0
+    fortnight_bonus_pct = 0.0
+    try:
+        until = fam.get("fortnight_racket_buff_until")
+        if until:
+            until_dt = until if isinstance(until, datetime) else datetime.fromisoformat(str(until).replace("Z", "+00:00"))
+            if until_dt.tzinfo is None:
+                until_dt = until_dt.replace(tzinfo=timezone.utc)
+            if until_dt > now:
+                fortnight_bonus_pct = float(fam.get("fortnight_racket_buff_pct") or 0)
+    except Exception:
+        fortnight_bonus_pct = 0.0
+    family_bonus_mult = 1.0 + (war_bonus_pct + perk_bonus_pct + fortnight_bonus_pct) / 100.0
     founding_mult = founding_member_income_mult(actor) if actor else 1.0
     family_event_mult = _active_family_event_multiplier(fam, now)
     final_income = int(income_after_global_event * family_bonus_mult * founding_mult * family_event_mult)
@@ -2310,6 +2321,11 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "crew_oc_forum_topic_id": fam.get("crew_oc_forum_topic_id") if fam.get("crew_oc_forum_topic_id") and await db.forum_topics.find_one({"id": fam["crew_oc_forum_topic_id"]}, {"_id": 1}) else None,
             "profile_text": (fam.get("profile_text") or "").strip() or None,
             "profile_notepad_color": notepad_color_for_api_response(fam.get("profile_notepad_color")),
+            "fortnight_theme_image": fam.get("fortnight_theme_image"),
+            "fortnight_theme_until": fam.get("fortnight_theme_until").isoformat() if hasattr(fam.get("fortnight_theme_until"), "isoformat") else fam.get("fortnight_theme_until"),
+            "fortnight_flair_until": fam.get("fortnight_flair_until").isoformat() if hasattr(fam.get("fortnight_flair_until"), "isoformat") else fam.get("fortnight_flair_until"),
+            "fortnight_place": fam.get("fortnight_place"),
+            "crew_of_fortnight_period_id": fam.get("crew_of_fortnight_period_id"),
             "avatar_url": fam.get("avatar_url"),
             "emblem_preset_id": fam.get("emblem_preset_id"),
             "premium_crest_unlocked": bool(fam.get("premium_crest_unlocked")),
@@ -2514,6 +2530,11 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
         "head_of_state": fam.get("head_of_state"),
         "profile_text": (fam.get("profile_text") or "").strip() or None,
         "profile_notepad_color": notepad_color_for_api_response(fam.get("profile_notepad_color")),
+        "fortnight_theme_image": fam.get("fortnight_theme_image"),
+        "fortnight_theme_until": fam.get("fortnight_theme_until").isoformat() if hasattr(fam.get("fortnight_theme_until"), "isoformat") else fam.get("fortnight_theme_until"),
+        "fortnight_flair_until": fam.get("fortnight_flair_until").isoformat() if hasattr(fam.get("fortnight_flair_until"), "isoformat") else fam.get("fortnight_flair_until"),
+        "fortnight_place": fam.get("fortnight_place"),
+        "crew_of_fortnight_period_id": fam.get("crew_of_fortnight_period_id"),
         "avatar_url": fam.get("avatar_url"),
         "emblem_preset_id": fam.get("emblem_preset_id"),
         "premium_crest_unlocked": bool(fam.get("premium_crest_unlocked")),
@@ -2953,6 +2974,20 @@ async def families_melt_settings(request: FamilyMeltSettingsRequest, current_use
         return {"message": "No changes"}
     await db.families.update_one({"id": family_id}, {"$set": updates})
     _invalidate_my_cache(current_user["id"])
+    if "melt_treasury_pct" in updates and int(updates["melt_treasury_pct"]) == 0:
+        try:
+            from utils.family_fortnight import on_melt_pct_set
+
+            await on_melt_pct_set(
+                db,
+                current_user["id"],
+                current_user.get("username") or "?",
+                family_id,
+                0,
+                intentional=True,
+            )
+        except Exception:
+            logging.exception("family_fortnight melt_pct hook")
     return {"message": "Melt settings updated", **updates}
 
 
@@ -2987,6 +3022,13 @@ async def families_leave(current_user: dict = Depends(get_current_user)):
         _user_id_filter_for_users_collection(current_user["id"]),
         {"$set": leave_set},
     )
+    if in_war:
+        try:
+            from utils.family_fortnight import on_war_leave
+
+            await on_war_leave(db, current_user["id"], current_user.get("username") or "?", family_id)
+        except Exception:
+            logging.exception("family_fortnight war_leave hook")
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
 
@@ -3032,6 +3074,14 @@ async def families_kick(request: FamilyKickRequest, current_user: dict = Depends
         _user_id_filter_for_users_collection(request.user_id),
         {"$set": {"family_id": None, "family_role": None, **_family_melt_stats_reset_fields()}},
     )
+    try:
+        in_war = await _family_in_active_war(family_id)
+        if in_war:
+            from utils.family_fortnight import on_war_kick
+
+            await on_war_kick(db, current_user["id"], current_user.get("username") or "?", family_id)
+    except Exception:
+        logging.exception("family_fortnight war_kick hook")
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
     _invalidate_my_cache(request.user_id)
@@ -3208,6 +3258,12 @@ async def families_sell_on_trade(
         "family_quicktrade_list",
         {"family_id": family_id, "points": pts},
     )
+    try:
+        from utils.family_fortnight import on_qt_sell
+
+        await on_qt_sell(db, current_user["id"], current_user.get("username") or "?", family_id)
+    except Exception:
+        logging.exception("family_fortnight qt_sell hook")
     return {"message": f"Crew listed for {pts:,} points on Quick Trade", "listing_id": str(listing_id)}
 
 
@@ -3311,6 +3367,17 @@ async def families_deposit(request: FamilyDepositRequest, current_user: dict = D
         cash_delta=amount,
         bullets_delta=bullets,
     )
+    try:
+        from utils.family_fortnight import on_vault_deposit
+
+        await on_vault_deposit(
+            db,
+            current_user["id"],
+            current_user.get("username") or "?",
+            cash=amount,
+        )
+    except Exception:
+        logging.exception("family_fortnight deposit hook")
     _invalidate_my_cache(current_user["id"])
     await log_activity(current_user["id"], current_user.get("username", "?"), "family_deposit", {"cash": amount, "bullets": bullets})
     return {"message": "Deposited to treasury"}
@@ -3352,6 +3419,18 @@ async def families_withdraw(request: FamilyWithdrawRequest, current_user: dict =
         cash_delta=-amount,
         bullets_delta=-bullets,
     )
+    try:
+        from utils.family_fortnight import on_vault_withdraw
+
+        await on_vault_withdraw(
+            db,
+            current_user["id"],
+            current_user.get("username") or "?",
+            cash=amount,
+            bullets=bullets,
+        )
+    except Exception:
+        logging.exception("family_fortnight withdraw hook")
     _invalidate_my_cache(current_user["id"])
     await log_activity(current_user["id"], current_user.get("username", "?"), "family_withdraw", {"cash": amount, "bullets": bullets})
     return {"message": "Withdrew from treasury"}
@@ -5005,6 +5084,12 @@ async def _execute_crew_oc_commit(
             "reward",
             category="crew_oc",
         )
+        try:
+            from utils.family_fortnight import on_crew_oc
+
+            await on_crew_oc(db, uid, u.get("username") or "?")
+        except Exception:
+            logging.exception("family_fortnight crew_oc hook")
     await db.families.update_one(
         {"id": family_id},
         {
@@ -5185,6 +5270,12 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
         )
     except Exception:
         logger.exception("Family daily racket progress failed user_id=%s", current_user.get("id"))
+    try:
+        from utils.family_fortnight import on_racket_collect
+
+        await on_racket_collect(db, current_user["id"], current_user.get("username") or "?")
+    except Exception:
+        logger.exception("family_fortnight racket_collect hook")
     msg = _rng.choice(FAMILY_RACKET_COLLECT_SUCCESS_MESSAGES).format(income=income_final)
     if bullets_bonus > 0:
         msg = f"{msg} +{bullets_bonus} bullets."
@@ -5746,6 +5837,12 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
             msg = _rng.choice(FAMILY_RACKET_RAID_SUCCESS_MESSAGES).format(amount=actual, family_name=family_name, racket_name=racket_name)
             if destroyed_name:
                 msg = f"{msg} Destroyed their {destroyed_name}."
+            try:
+                from utils.family_fortnight import on_racket_raid
+
+                await on_racket_raid(db, current_user["id"], current_user.get("username") or "?")
+            except Exception:
+                logger.exception("family_fortnight racket_raid hook")
             _invalidate_list_cache()
             _invalidate_my_cache(current_user["id"])
             return {
@@ -6448,6 +6545,28 @@ async def state_takeover_accept(current_user: dict = Depends(get_current_user)):
     }
 
 
+async def families_fortnight_leaderboard(current_user: dict = Depends(get_current_user)):
+    from utils.family_fortnight import get_leaderboard
+
+    return await get_leaderboard(db, limit=10)
+
+
+async def families_fortnight_contribution(current_user: dict = Depends(get_current_user)):
+    from utils.family_fortnight import get_my_contribution, mark_login
+
+    try:
+        await mark_login(db, current_user["id"])
+    except Exception:
+        pass
+    return await get_my_contribution(db, current_user["id"])
+
+
+async def families_fortnight_vices(current_user: dict = Depends(get_current_user)):
+    from utils.family_fortnight import vices_payload, is_enabled
+
+    return {"enabled": await is_enabled(db), **vices_payload()}
+
+
 async def relinquish_head_of_state(current_user: dict = Depends(get_current_user)):
     """Voluntarily release this state's head-of-state slot. One use per family (flag on family doc)."""
     member = await db.family_members.find_one({"user_id": current_user["id"]}, {"_id": 0, "family_id": 1, "role": 1})
@@ -6637,3 +6756,6 @@ def register(router):
     router.add_api_route("/families/cron/crew-oc-auto-apply", families_cron_crew_oc_auto_apply, methods=["POST"])
     router.add_api_route("/families/cron/crew-oc-auto-commit", families_cron_crew_oc_auto_commit, methods=["POST"])
     router.add_api_route("/families/airport-crew-perk", families_set_airport_crew_perk, methods=["PATCH"])
+    router.add_api_route("/families/fortnight-leaderboard", families_fortnight_leaderboard, methods=["GET"], dependencies=_families_rl_u)
+    router.add_api_route("/families/me/fortnight-contribution", families_fortnight_contribution, methods=["GET"], dependencies=_families_rl_u)
+    router.add_api_route("/families/fortnight-vices", families_fortnight_vices, methods=["GET"], dependencies=_families_rl_u)

@@ -293,6 +293,19 @@ async def record_family_daily_activity(
         },
         {"$inc": {"progress": int(amount)}, "$set": {"updated_at": now}},
     )
+    try:
+        from utils.family_fortnight import on_daily_progress
+
+        u = await db.users.find_one({"id": str(user_id)}, {"_id": 0, "username": 1})
+        await on_daily_progress(
+            db,
+            str(user_id),
+            (u or {}).get("username") or "?",
+            int(amount),
+            now=now,
+        )
+    except Exception:
+        pass
     completed = await db.family_daily_progress.find_one_and_update(
         {
             "family_id": family_id,

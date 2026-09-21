@@ -393,6 +393,24 @@ export default function FamilyProfilePage() {
         {/* Top accent line */}
         <div className="h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
 
+        {family.fortnight_theme_image && (() => {
+          const until = family.fortnight_theme_until ? new Date(family.fortnight_theme_until).getTime() : 0;
+          if (until && until < Date.now()) return null;
+          return (
+            <div className="w-full overflow-hidden border-b border-primary/20">
+              <img
+                src={family.fortnight_theme_image}
+                alt=""
+                className="w-full h-auto block"
+                style={{ maxHeight: 280, objectFit: 'cover', objectPosition: 'center top' }}
+              />
+              <div className="px-3 py-1 text-[8px] font-heading uppercase tracking-widest text-amber-300/80 bg-amber-500/10">
+                Crew of the Fortnight
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="px-5 pt-4 pb-5">
           {isWiped && (
             <div className="mb-4 py-2.5 px-3 rounded-lg border border-amber-500/40 bg-amber-500/10 flex items-center gap-2">

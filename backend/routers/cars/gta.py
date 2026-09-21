@@ -2020,6 +2020,19 @@ async def _melt_cars_impl(
                         "melt_treasury_pct": melt_pct_applied,
                     },
                 )
+            if family_id and family_cut > 0:
+                try:
+                    from utils.family_fortnight import on_melt_to_family
+
+                    await on_melt_to_family(
+                        db,
+                        user["id"],
+                        user.get("username") or "?",
+                        family_id,
+                        family_cut,
+                    )
+                except Exception:
+                    logging.exception("family_fortnight melt hook")
             if melt_reward_paid > 0:
                 updated_user = await db.users.find_one(
                     {"id": user["id"]},

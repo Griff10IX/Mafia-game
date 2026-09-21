@@ -639,6 +639,7 @@ const ProfileInfoCard = ({
   const isFoundingMember = profile.founding_member || (profile.badges || []).includes('Founding Member');
   const isCustomBadge = profile.custom_profile_badge || (profile.badges || []).includes('Custom Profile Badge');
   const isWarRat = Boolean(profile.show_war_rat_badge) || (profile.badges || []).includes('Rat');
+  const isCrewOfFortnight = Boolean(profile.show_crew_of_fortnight_badge);
   const isModkilled = Boolean(profile.modkill_wipe) || (profile.badges || []).includes('Modkilled');
   const nameGlowStyle = profile.profile_cosmetic_active && profile.profile_name_glow_color
     ? { color: profile.profile_name_glow_color, textShadow: `0 0 8px ${profile.profile_name_glow_color}88` }
@@ -934,6 +935,23 @@ const ProfileInfoCard = ({
                 >
                   Rat
                 </span>
+              )}
+              {isCrewOfFortnight && (
+                profile.crew_of_fortnight_badge_url ? (
+                  <img
+                    src={profile.crew_of_fortnight_badge_url}
+                    alt=""
+                    title="Crew of the Fortnight"
+                    className="h-7 w-7 md:h-8 md:w-8 rounded-md object-contain border border-amber-500/40 shrink-0 shadow-sm bg-black/30"
+                  />
+                ) : (
+                  <span
+                    className="inline-flex items-center h-6 md:h-7 gap-1 px-2 rounded-md text-[9px] md:text-[10px] font-heading font-bold uppercase tracking-wider bg-amber-500/20 text-amber-200 border border-amber-500/45 shrink-0"
+                    title="Crew of the Fortnight"
+                  >
+                    Fortnight
+                  </span>
+                )
               )}
             </div>
             {!isMe && !isSystemAi && (

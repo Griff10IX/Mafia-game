@@ -4034,6 +4034,12 @@ async def startup_db():
 
     asyncio.create_task(run_family_daily_tasks_worker(db))
     try:
+        from utils.family_fortnight import run_family_fortnight_worker
+
+        asyncio.create_task(run_family_fortnight_worker(db))
+    except Exception:
+        logging.exception("family_fortnight worker failed to start")
+    try:
         async def _prestige_points_backfill_once():
             try:
                 from utils.prestige_points_rewards import backfill_alive_prestige_points_rewards

@@ -142,6 +142,7 @@ export default function Leaderboard() {
   const [lastRewardWinners, setLastRewardWinners] = useState(
     () => readLbEntry(readPersistedPeriod(), 10, false)?.last_reward_winners ?? null,
   );
+  const [familyFortnight, setFamilyFortnight] = useState(null);
   const intervalRef = useRef(null);
   const deepLinkConsumedRef = useRef(false);
   const [pendingHighlight, setPendingHighlight] = useState(null);
@@ -279,6 +280,19 @@ export default function Leaderboard() {
     }, 100);
     return () => clearTimeout(timer);
   }, [pendingHighlight, fetchingBoards, boards]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/families/fortnight-leaderboard');
+        if (!cancelled) setFamilyFortnight(res.data || null);
+      } catch (_) {
+        if (!cancelled) setFamilyFortnight(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [refreshing]);
 
   return (
     <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="leaderboard-page">
@@ -564,6 +578,43 @@ export default function Leaderboard() {
               );
             })}
           </div>
+        </section>
+      )}
+
+      {familyFortnight && (
+        <section className="mt-6 rounded-sm border border-amber-500/30 bg-amber-500/5 p-4" data-testid="family-fortnight-board">
+          <h2 className="text-amber-300 font-heading font-bold uppercase tracking-wider text-sm mb-1 flex items-center gap-2">
+            <Trophy size={16} />
+            Families (Fortnight)
+          </h2>
+          <p className="text-[9px] text-zinc-500 font-heading italic mb-3">
+            UK time · 2-week family power board
+            {familyFortnight.enabled === false ? ' · scoring off (kill-switch)' : ''}
+          </p>
+          {(familyFortnight.vices?.vices || []).length > 0 && (
+            <div className="mb-3 text-[9px] font-heading text-amber-200/80">
+              Active vices:{' '}
+              {(familyFortnight.vices.vices || []).map((v) => v.label).join(' · ')}
+            </div>
+          )}
+          <ol className="space-y-1.5">
+            {(familyFortnight.leaderboard || []).map((row, idx) => (
+              <li key={row.family_id || idx} className="flex items-center justify-between gap-2 text-sm border border-primary/15 rounded px-2 py-1.5 bg-black/20">
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className="text-amber-400/80 font-heading text-xs w-5">#{idx + 1}</span>
+                  <Link to={`/family/${row.family_id}`} className="truncate font-heading font-bold text-foreground hover:text-primary">
+                    {row.name}{row.tag ? ` [${row.tag}]` : ''}
+                  </Link>
+                </span>
+                <span className="text-[10px] font-heading tabular-nums text-mutedForeground shrink-0">
+                  {Number(row.score || 0).toLocaleString()} · {row.unique_contributors || 0} contrib
+                </span>
+              </li>
+            ))}
+            {!(familyFortnight.leaderboard || []).length && (
+              <li className="text-[10px] text-mutedForeground font-heading">No family scores this fortnight yet.</li>
+            )}
+          </ol>
         </section>
       )}
     </div>

@@ -6,6 +6,18 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-21[/color][/b] — [b]Family Fortnight Leaderboard[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Family Fortnight[/b] — a [b]2-week[/b] (UK time) family power board. Families score from dailies, racket collect/raids, Crew OC, vault deposits, and melts to the treasury.[/color]
+[*][color=#888888][b]Rewards:[/b] Top [b]3[/b] crews get treasury cash/points/loot plus store points split by [b]contribution[/b]. [b]#1[/b] also gets [b]Crew of the Fortnight[/b] flair, a family dossier background, member profile badges, and a short racket-income boost.[/color]
+[*][color=#888888][b]Vices:[/b] Rotating challenges/penalties during the day (e.g. melt enough bullets for the family). Skip tokens are [b]not[/b] penalised.[/color]
+[*][color=#888888][b]Where:[/b] See [b]Leaderboard → Families (Fortnight)[/b] and the family command panel.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-21[/color][/b] — [b]Points Sale — double card points[/b][/size]
 [quote]
 [list]

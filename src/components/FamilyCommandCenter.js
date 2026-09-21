@@ -94,6 +94,7 @@ export default function FamilyCommandCenter({ onCloseSidebar, hasFamily }) {
   const [activeWars, setActiveWars] = useState([]);
   const [dailyTask, setDailyTask] = useState(null);
   const [dailyTaskUnavailable, setDailyTaskUnavailable] = useState(false);
+  const [fortnight, setFortnight] = useState(null);
   const myFamilyRef = useRef(myFamily);
   myFamilyRef.current = myFamily;
 
@@ -126,13 +127,15 @@ export default function FamilyCommandCenter({ onCloseSidebar, hasFamily }) {
         return;
       }
 
-      const [warRes, taskRes] = await Promise.all([
+      const [warRes, taskRes, fnRes] = await Promise.all([
         api.get('/families/war').catch(() => ({ data: { wars: [] } })),
         api.get('/families/daily-objective', { params: { _: Date.now() } }).catch(() => null),
+        api.get('/families/me/fortnight-contribution').catch(() => null),
       ]);
       setActiveWars(warRes.data?.wars || []);
       setDailyTask(taskRes?.data || null);
       setDailyTaskUnavailable(!taskRes);
+      setFortnight(fnRes?.data || null);
     } catch (_) {
       if (!silent && !hadFamily) {
         setMyFamily({ family: null, members: [], rackets: [], my_role: null });
@@ -321,6 +324,31 @@ export default function FamilyCommandCenter({ onCloseSidebar, hasFamily }) {
                     </span>
                     <span className={`text-[9px] font-heading font-bold tabular-nums shrink-0 ${dailyComplete ? 'text-emerald-400' : 'text-primary'}`}>
                       {dailyComplete ? 'DONE' : dailyEligible ? `${formatInt(dailyCurrent)}/${formatInt(dailyTarget)}` : 'TOMORROW'}
+                    </span>
+                  </Link>
+                )}
+                {fortnight?.in_family && (
+                  <Link
+                    to="/leaderboard"
+                    onClick={handleOpenFamily}
+                    className="flex items-center justify-between gap-2 py-2 px-2 rounded-sm border border-amber-500/20 bg-amber-500/8 transition-colors hover:opacity-90"
+                    title="Family Fortnight"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-[9px] font-heading uppercase tracking-wide text-amber-500/80">
+                        Fortnight{fortnight.enabled === false ? ' (off)' : ''}
+                      </span>
+                      <span className="block text-[9px] font-heading text-zinc-300 truncate">
+                        {fortnight.rank ? `#${fortnight.rank}` : '—'} · {((fortnight.share || 0) * 100).toFixed(1)}% share
+                      </span>
+                      {(fortnight.vices?.vices || []).length > 0 && (
+                        <span className="block text-[8px] font-heading text-amber-200/70 truncate mt-0.5">
+                          {(fortnight.vices.vices || []).map((v) => v.label).join(' · ')}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[9px] font-heading font-bold tabular-nums text-amber-300 shrink-0">
+                      melt {formatInt(fortnight.melt_to_family_today || 0)}/{formatInt(fortnight.melt_floor || 1000)}
                     </span>
                   </Link>
                 )}

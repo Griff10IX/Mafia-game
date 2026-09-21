@@ -1164,6 +1164,21 @@ def register(router):
             if "Rat" not in b:
                 b.append("Rat")
             out["badges"] = b
+        # Crew of the Fortnight badge (time-limited)
+        try:
+            cotf_until = user.get("crew_of_fortnight_until")
+            cotf_active = False
+            if cotf_until:
+                from datetime import datetime, timezone
+                until_dt = cotf_until if isinstance(cotf_until, datetime) else datetime.fromisoformat(str(cotf_until).replace("Z", "+00:00"))
+                if until_dt.tzinfo is None:
+                    until_dt = until_dt.replace(tzinfo=timezone.utc)
+                cotf_active = until_dt > datetime.now(timezone.utc)
+            out["show_crew_of_fortnight_badge"] = cotf_active
+            out["crew_of_fortnight_badge_url"] = (user.get("crew_of_fortnight_badge_url") if cotf_active else None)
+            out["crew_of_fortnight_until"] = cotf_until if cotf_active else None
+        except Exception:
+            out["show_crew_of_fortnight_badge"] = False
         if is_own_profile:
             out["show_country_flag_on_profile"] = _show_country_flag
             out["last_seen_country"] = _profile_cc
