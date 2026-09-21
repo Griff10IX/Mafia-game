@@ -75,6 +75,8 @@ LOOT_REWARD_TIER_WEIGHTS: Dict[str, Dict[str, float]] = {
     "uncommon": {"common": 0.12, "uncommon": 0.72, "rare": 0.13, "ultra_rare": 0.03},
 }
 EXCLUSIVE_CHANCE = 0.1
+# Ultra Rare dossier themes — separate quiet rate (not admin exclusive_chance, not public).
+UR_THEME_DROP_CHANCE = 0.01
 # Game-wide max loot-exclusive claims per type (car remains 1; weapon, armour, Speakeasy allow one extra each).
 EXCLUSIVE_CAP_BY_TYPE: Dict[str, int] = {
     "weapon": 2,
@@ -1849,8 +1851,8 @@ async def open_loot_box(
                 available_themes = await list_available_ur_themes_for_loot(db, staff_user_ids=staff_ids)
                 already = set(owned_theme_ids(current_user))
                 available_themes = [t for t in available_themes if t not in already]
-                # Quiet roll among available (do not expose %). Prefer exclusive_chance style.
-                if available_themes and (_rng.random() < exclusive_chance or is_admin_test):
+                # Quiet roll among available (do not expose %). Separate from exclusive_chance.
+                if available_themes and (_rng.random() < UR_THEME_DROP_CHANCE or is_admin_test):
                     pick = _rng.choice(available_themes)
                     theme_reward = await grant_ur_theme_to_user(db, user_id, pick)
                     if theme_reward:
