@@ -170,6 +170,8 @@ def profile_background_public_fields(
     out: Dict[str, Any] = {
         "profile_background_theme_id": eq,
         "profile_background_theme": theme,
+        # Default on (darken). Owner can disable for true-colour art.
+        "profile_theme_scrim": False if user and user.get("profile_theme_scrim") is False else True,
     }
     if include_owned:
         owned = owned_theme_ids(user)

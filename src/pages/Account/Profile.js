@@ -94,7 +94,7 @@ const PROFILE_STYLES = `
   @keyframes prof-dossier-enter { from { opacity: 0.88; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .prof-dossier-enter { animation: prof-dossier-enter 0.34s ease-out both; }
   /* Theme art: banner box at catalog aspect (1024x931), top-aligned.
-     Glow seam sits on the bottom edge of the picture (same colour as dossier border). */
+     Seam sits on a separate z-[2] strip so it draws above content at the art edge. */
   .prof-dossier-theme-layer {
     position: absolute !important;
     top: 0 !important;
@@ -102,20 +102,19 @@ const PROFILE_STYLES = `
     right: 0 !important;
     z-index: 0 !important;
     pointer-events: none !important;
+    aspect-ratio: 1024 / 931;
   }
   .prof-dossier-theme-bg {
-    width: 100% !important;
-    aspect-ratio: 1024 / 931;
+    position: absolute !important;
+    inset: 0 !important;
     background-repeat: no-repeat !important;
     background-position: center top !important;
     background-size: 100% 100% !important;
   }
   .prof-dossier-theme-bg[data-fit="stretch"],
-  .prof-dossier-theme-bg[data-fit="cover"] {
-    position: absolute !important;
-    inset: 0 !important;
-    width: auto !important;
-    aspect-ratio: auto !important;
+  .prof-dossier-theme-bg[data-fit="cover"],
+  .prof-dossier-theme-bg[data-fit="height"] {
+    /* full-card fits: layer stretches with parent via JS (no aspect box) */
   }
   .prof-dossier-theme-bg[data-fit="stretch"] {
     background-size: 100% 100% !important;
@@ -132,24 +131,33 @@ const PROFILE_STYLES = `
   .prof-dossier-theme-bg[data-fit="height"] {
     background-size: auto 100% !important;
     background-position: center center !important;
-    aspect-ratio: auto !important;
-    position: absolute !important;
-    inset: 0 !important;
-  }
-  .prof-dossier-theme-seam {
-    height: 2px;
-    width: 100%;
-    background: rgba(var(--prof-theme-seam-rgb, var(--noir-primary-rgb)), 0.7);
-    box-shadow:
-      0 0 14px rgba(var(--prof-theme-seam-rgb, var(--noir-primary-rgb)), 0.55),
-      0 0 4px rgba(var(--prof-theme-seam-rgb, var(--noir-primary-rgb)), 0.9);
   }
   .prof-dossier-theme-scrim {
     position: absolute;
     inset: 0;
-    z-index: 0;
     pointer-events: none;
-    background: linear-gradient(180deg, rgba(2,6,14,0.22) 0%, rgba(2,6,14,0.36) 45%, rgba(2,6,14,0.52) 100%);
+    background: linear-gradient(180deg, rgba(2,6,14,0.22) 0%, rgba(2,6,14,0.36) 45%, rgba(2,6,14,0.55) 100%);
+  }
+  .prof-dossier-theme-seam-anchor {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 2 !important;
+    pointer-events: none !important;
+    aspect-ratio: 1024 / 931;
+  }
+  .prof-dossier-theme-seam {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: rgb(var(--prof-theme-seam-rgb));
+    box-shadow:
+      0 0 16px rgba(var(--prof-theme-seam-rgb), 0.75),
+      0 0 6px rgba(var(--prof-theme-seam-rgb), 1),
+      0 -1px 0 rgba(var(--prof-theme-seam-rgb), 0.9);
   }
   @media (hover: hover) and (pointer: fine) {
     .prof-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
@@ -669,8 +677,14 @@ const ProfileInfoCard = ({
   const bgThemeW = Number(bgTheme?.width) > 0 ? Number(bgTheme.width) : 1024;
   const bgThemeH = Number(bgTheme?.height) > 0 ? Number(bgTheme.height) : 931;
   const showThemeSeam = Boolean(bgThemeImage) && (bgThemeFit === 'width' || bgThemeFit === 'contain');
+  const themeAspect = `${bgThemeW} / ${bgThemeH}`;
+  const themeScrimOn = profile.profile_theme_scrim !== false;
   const dossierCardStyle = {
     ...(dossierBorderStyle || {}),
+    // Always set seam colour (glow preset/custom sets it; otherwise match primary cyan)
+    ...(!dossierBorderStyle?.['--prof-theme-seam-rgb'] && !hasCosmeticBorder
+      ? { ['--prof-theme-seam-rgb']: '14, 165, 233' }
+      : {}),
     ...(bgThemeImage ? { backgroundColor: '#02060e' } : {}),
   };
 
@@ -678,18 +692,23 @@ const ProfileInfoCard = ({
     <div className={`relative ${styles.panel} rounded-lg overflow-hidden ${dossierBorderClass} shadow-2xl ${bgThemeImage ? '' : 'backdrop-blur-sm'} prof-card prof-dossier-enter mobile-panel`} style={dossierCardStyle}>
       {bgThemeImage ? (
         <>
-          <div className="prof-dossier-theme-layer" aria-hidden="true">
+          <div
+            className="prof-dossier-theme-layer"
+            aria-hidden="true"
+            style={showThemeSeam ? { aspectRatio: themeAspect } : { inset: 0, aspectRatio: 'auto' }}
+          >
             <div
               className="prof-dossier-theme-bg"
               data-fit={bgThemeFit}
-              style={{
-                backgroundImage: `url(${bgThemeImage})`,
-                ...(showThemeSeam ? { aspectRatio: `${bgThemeW} / ${bgThemeH}` } : {}),
-              }}
+              style={{ backgroundImage: `url(${bgThemeImage})` }}
             />
-            {showThemeSeam ? <div className="prof-dossier-theme-seam" /> : null}
+            {themeScrimOn ? <div className="prof-dossier-theme-scrim" /> : null}
           </div>
-          <div aria-hidden="true" className="prof-dossier-theme-scrim" />
+          {showThemeSeam ? (
+            <div className="prof-dossier-theme-seam-anchor" style={{ aspectRatio: themeAspect }} aria-hidden="true">
+              <div className="prof-dossier-theme-seam" />
+            </div>
+          ) : null}
         </>
       ) : null}
       <div className="relative z-[1]">
@@ -1737,6 +1756,8 @@ export default function Profile() {
   const [savingCustomBadge, setSavingCustomBadge] = useState(false);
   const [savingGlow, setSavingGlow] = useState(false);
   const [savingBgTheme, setSavingBgTheme] = useState(false);
+  const [themeScrimEnabled, setThemeScrimEnabled] = useState(true);
+  const [savingThemeScrim, setSavingThemeScrim] = useState(false);
   const [avatarLightbox, setAvatarLightbox] = useState(null);
   const [messagePopupOpen, setMessagePopupOpen] = useState(false);
   const spotifyPlayerRef = React.useRef(null);
@@ -1986,6 +2007,25 @@ export default function Profile() {
     }
   };
 
+  const saveThemeScrim = async (enabled) => {
+    if (savingThemeScrim) return;
+    setSavingThemeScrim(true);
+    const next = enabled !== false;
+    setThemeScrimEnabled(next);
+    try {
+      await api.patch('/profile/background-theme/scrim', { enabled: next });
+      toast.success(next ? 'Theme darken overlay on' : 'Theme darken overlay off (true colour)');
+      setProfile((p) => (p ? { ...p, profile_theme_scrim: next } : p));
+      await refetchMe();
+      await refetchProfile();
+    } catch (e) {
+      setThemeScrimEnabled(!next);
+      toast.error(getApiErrorMessage(e) || 'Failed to update theme overlay');
+    } finally {
+      setSavingThemeScrim(false);
+    }
+  };
+
   const removeAvatar = async () => {
     setSavingAvatar(true);
     try {
@@ -2188,6 +2228,7 @@ export default function Profile() {
         setSpotifyUrlInput(warm.spotify_url || '');
         setCensorProfanity(warm.censor_profanity === true);
         setProfileAutoplayVideo(warm.profile_autoplay_video !== false);
+        setThemeScrimEnabled(warm.profile_theme_scrim !== false);
         setHideKillsOnProfile(warm.hide_kills_on_profile === true);
         setHideJailbustsOnProfile(warm.hide_jailbusts_on_profile === true);
         setHideLeaderboardUsername(warm.hide_leaderboard_username === true);
@@ -2195,6 +2236,7 @@ export default function Profile() {
         setShowProfileViewCount(warm.show_profile_view_count === true);
       } else {
         setProfileAutoplayVideo(me?.profile_autoplay_video !== false);
+        setThemeScrimEnabled(me?.profile_theme_scrim !== false);
         setHideKillsOnProfile(profile?.hide_kills_on_profile === true);
         setHideJailbustsOnProfile(profile?.hide_jailbusts_on_profile === true);
         setHideLeaderboardUsername(profile?.hide_leaderboard_username === true);
@@ -3068,6 +3110,24 @@ export default function Profile() {
                     Rare dossier background themes you own. Equip one at a time, or use Normal for the default look.
                     Art size: 1024×931.
                   </p>
+                  <div className="flex items-center justify-between gap-3 py-1">
+                    <div className="min-w-0 pr-2">
+                      <span className="text-sm text-foreground block">Darken theme art</span>
+                      <span className="text-[10px] text-mutedForeground">
+                        Overlay makes text easier to read. Turn off to see the image&apos;s true colours.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={themeScrimEnabled}
+                      disabled={savingThemeScrim}
+                      onClick={() => saveThemeScrim(!themeScrimEnabled)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${themeScrimEnabled ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingThemeScrim ? 'opacity-60' : ''}`}
+                    >
+                      <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${themeScrimEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
                   {(isAdmin || me?.profile_background_theme_can_upload) && (
                     <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 space-y-1.5">
                       <p className="text-[10px] font-heading text-amber-200/90">

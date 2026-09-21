@@ -1722,6 +1722,24 @@ def register(router):
             **profile_background_public_fields(fresh or current_user, include_owned=True, is_admin=True),
         }
 
+    @router.patch("/profile/background-theme/scrim")
+    async def update_profile_theme_scrim(
+        current_user: dict = Depends(get_current_user),
+        enabled: Optional[bool] = Body(None, embed=True),
+    ):
+        """Toggle darkening overlay on dossier theme art (false = true-colour image)."""
+        if enabled is None:
+            cur = False if current_user.get("profile_theme_scrim") is False else True
+            return {"message": "No change", "profile_theme_scrim": cur}
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"profile_theme_scrim": bool(enabled)}},
+        )
+        return {
+            "message": "Theme overlay updated",
+            "profile_theme_scrim": bool(enabled),
+        }
+
     @router.get("/profile/background-theme/custom-image/{user_id}")
     async def serve_profile_background_theme_custom(user_id: str):
         """Serve an admin custom theme JPEG (public if that user equipped/uploaded it)."""
