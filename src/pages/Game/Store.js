@@ -26,19 +26,33 @@ const STORE_STYLES = `
   .store-fade-in { animation: store-fade-in 0.4s ease-out both; }
   @keyframes store-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .store-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+  [data-page="store"] { overflow-x: clip; }
+  [data-page="store"] input,
+  [data-page="store"] textarea {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  [data-page="store"] button:focus-visible,
+  [data-page="store"] a:focus-visible,
+  [data-page="store"] input:focus-visible,
+  [data-page="store"] summary:focus-visible {
+    outline: 2px solid rgba(234, 179, 8, 0.92);
+    outline-offset: 2px;
+  }
   .store-chrome {
     position: sticky;
     top: 0;
     z-index: 25;
     margin-left: -0.75rem;
     margin-right: -0.75rem;
-    padding: 0.5rem 0.75rem 0.65rem;
-    background: linear-gradient(180deg, rgba(12,12,14,0.97) 0%, rgba(12,12,14,0.92) 70%, rgba(12,12,14,0.78) 100%);
+    padding: 0.45rem 0.75rem 0.6rem;
+    background: linear-gradient(180deg, rgba(12,12,14,0.98) 0%, rgba(12,12,14,0.94) 72%, rgba(12,12,14,0.8) 100%);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border-bottom: 1px solid rgba(234, 179, 8, 0.18);
   }
-  @media (min-width: 640px) {
+  @media (min-width: 768px) {
     .store-chrome {
       position: static;
       margin-left: 0;
@@ -50,18 +64,91 @@ const STORE_STYLES = `
       border-bottom: none;
     }
   }
+  .store-hero {
+    position: relative;
+    isolation: isolate;
+    min-height: 6.75rem;
+    padding: 0.55rem 0.75rem 0.45rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(234, 179, 8, 0.28);
+    background:
+      radial-gradient(ellipse 55% 80% at 50% 18%, rgba(212, 168, 74, 0.28), transparent 62%),
+      linear-gradient(180deg, rgba(28, 22, 14, 0.2) 0%, rgba(0, 0, 0, 0.55) 100%),
+      linear-gradient(180deg, #241c12 0%, #12100e 58%, #0c0c0e 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 220, 150, 0.08);
+  }
+  .store-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.45) 100%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .store-hero-copy, .store-balance-grid { position: relative; z-index: 1; }
+  .store-hero-copy { text-align: center; }
+  .store-kicker {
+    margin: 0;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgb(250, 204, 21);
+  }
+  .store-title {
+    margin: 0.12rem 0 0;
+    font-size: 1.05rem;
+    line-height: 1.15;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #f4f4f5;
+  }
+  .store-balance-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.28rem 0.55rem;
+    margin-top: 0.4rem;
+  }
+  .store-balance-cell {
+    min-width: 0;
+    padding: 0.18rem 0.35rem;
+    border-radius: 0.45rem;
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(234, 179, 8, 0.12);
+  }
+  .store-balance-label {
+    display: block;
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(228, 228, 231, 0.62);
+    line-height: 1.2;
+  }
+  .store-balance-value {
+    display: block;
+    margin-top: 0.08rem;
+    font-size: 0.92rem;
+    font-weight: 700;
+    line-height: 1.15;
+    color: rgb(250, 204, 21);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
   .store-tab-scroll {
     display: flex;
-    gap: 0.35rem;
+    gap: 0.4rem;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    padding-bottom: 1px;
+    padding: 0.15rem 0.05rem 0.2rem;
+    scroll-snap-type: x proximity;
   }
   .store-tab-scroll::-webkit-scrollbar { display: none; }
   .store-chip-scroll {
     display: flex;
-    gap: 0.35rem;
+    gap: 0.4rem;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
@@ -70,21 +157,120 @@ const STORE_STYLES = `
   .store-chip-scroll::-webkit-scrollbar { display: none; }
   .store-rec-scroll {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.65rem;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     scroll-snap-type: x mandatory;
-    padding-bottom: 2px;
+    scroll-padding-left: 0.15rem;
+    padding: 0.1rem 0.15rem 0.35rem;
   }
   .store-rec-scroll::-webkit-scrollbar { display: none; }
   .store-rec-card {
     scroll-snap-align: start;
-    flex: 0 0 min(78%, 17.5rem);
+    flex: 0 0 86%;
+    max-width: 24rem;
   }
-  @media (min-width: 640px) {
-    .store-rec-scroll { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: visible; scroll-snap-type: none; }
-    .store-rec-card { flex: none; }
+  .store-product-art {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 4.75rem;
+    margin: 0.35rem 0 0.55rem;
+    border-radius: 0.65rem;
+    color: rgb(250, 204, 21);
+    background:
+      radial-gradient(circle at 50% 42%, rgba(234, 179, 8, 0.2), transparent 62%),
+      rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(234, 179, 8, 0.14);
+  }
+  .store-qty-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .store-qty-row::-webkit-scrollbar { display: none; }
+  .store-pack-grid,
+  .store-loot-grid,
+  .store-upgrade-grid,
+  .store-token-grid,
+  .store-bullet-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.65rem;
+  }
+  .store-sale {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.7rem 0.8rem;
+  }
+  .store-sale-cta {
+    min-height: 44px;
+    min-width: 7.5rem;
+    padding: 0 0.85rem;
+    flex-shrink: 0;
+  }
+  @media (max-width: 359px) {
+    .store-sale { flex-direction: column; align-items: stretch; }
+    .store-sale-cta { width: 100%; }
+  }
+  @media (min-width: 768px) {
+    .store-hero {
+      min-height: 10.5rem;
+      padding: 1.15rem 1.25rem;
+      background:
+        radial-gradient(ellipse 42% 90% at 78% 40%, rgba(196, 140, 48, 0.32), transparent 58%),
+        radial-gradient(ellipse 28% 70% at 12% 80%, rgba(90, 42, 18, 0.4), transparent 55%),
+        linear-gradient(100deg, #1a140e 0%, #221a12 46%, #0c0c0e 100%);
+    }
+    .store-rec-scroll {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      overflow: visible;
+      scroll-snap-type: none;
+    }
+    .store-rec-card { flex: none; max-width: none; }
+    .store-loot-grid,
+    .store-upgrade-grid,
+    .store-bullet-grid,
+    .store-pack-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (min-width: 1024px) {
+    .store-hero {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1.5rem;
+      min-height: 13.5rem;
+      padding: 1.6rem 1.5rem 1.35rem;
+    }
+    .store-hero-copy { text-align: left; flex: 1 1 auto; }
+    .store-title { font-size: 1.85rem; letter-spacing: 0.16em; }
+    .store-kicker { font-size: 0.75rem; }
+    .store-balance-grid {
+      flex: 0 1 34rem;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-top: 0;
+      gap: 0.5rem;
+    }
+    .store-token-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .store-product-art { height: 5.75rem; }
+    .store-sale { padding: 1rem 1.25rem; }
+  }
+  @media (min-width: 1280px) {
+    .store-hero { min-height: 15.5rem; padding: 1.85rem 1.75rem 1.5rem; }
+    .store-title { font-size: 2.15rem; }
+    .store-rec-scroll { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .store-pack-grid,
+    .store-upgrade-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .store-bullet-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .store-product-art { height: 6.5rem; }
   }
   @media (prefers-reduced-motion: reduce) {
     .store-fade-in { animation: none !important; }
@@ -268,6 +454,22 @@ function buildStoreRecommendations(user, { pointsTabLocked } = {}) {
 }
 
 const CUSTOM_POINTS_PACKAGE = 'custom';
+/** Base point knots from backend POINT_PACKAGES (points-crediting packs only). Prices come from the live quote. */
+const POINT_AMOUNT_PRESETS = [2740, 6590, 13190, 24190, 58290, 110000, 209000, 302500, 385000];
+
+function formatStoreBalance(n) {
+  const v = Number(n) || 0;
+  const abs = Math.abs(v);
+  const trim = (x) => (Math.abs(x) >= 10 ? String(Math.round(x)) : String(Math.round(x * 10) / 10));
+  if (abs >= 1_000_000_000) return `${trim(v / 1_000_000_000)}B`;
+  if (abs >= 1_000_000) return `${trim(v / 1_000_000)}M`;
+  return v.toLocaleString();
+}
+
+function storeScrollBehavior() {
+  if (typeof window === 'undefined' || !window.matchMedia) return 'auto';
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+}
 
 const BULLET_PACKS = [
   { bullets: 5000, cost: 100 },
@@ -498,10 +700,18 @@ function isQtAnonDisplayName(name) {
   return !n || n === '[Anonymous]' || (n.startsWith('[') && n.endsWith(']'));
 }
 
+function StoreUsername({ name }) {
+  if (isQtAnonDisplayName(name)) return <span className="text-primary">{name}</span>;
+  return (
+    <Link to={`/profile/${encodeURIComponent(name)}`} className="text-primary hover:underline">{name}</Link>
+  );
+}
+
 function StorePointsTransferRow({ t, compact }) {
   const amt = Number(t.amount).toLocaleString();
-  const when = t.created_at ? formatGameDateTime(t.created_at) : '';
-  const summary = `${amt} pts: ${t.from_username} → ${t.to_username}${when ? ` · ${when}` : ''}`;
+  const whenFull = t.created_at ? formatGameDateTime(t.created_at) : '';
+  const whenShort = t.created_at ? formatGameDateOnly(t.created_at) : '';
+  const summary = `${amt} pts: ${t.from_username} → ${t.to_username}${whenFull ? ` · ${whenFull}` : ''}`;
   const onCopy = async (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -510,40 +720,26 @@ function StorePointsTransferRow({ t, compact }) {
     else toast.error('Could not copy');
   };
   return (
-    <li
-      className={`text-[10px] font-heading border-b border-zinc-800/50 last:border-0 ${
-        compact ? 'flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-0.5' : 'py-1'
-      }`}
-    >
-      <div className={`flex items-center justify-between gap-2 min-w-0 ${compact ? 'w-full' : ''}`}>
-        <span className="text-mutedForeground truncate min-w-0 flex-1">
-          {isQtAnonDisplayName(t.from_username) ? (
-            <span className="text-primary">{t.from_username}</span>
-          ) : (
-            <Link to={`/profile/${encodeURIComponent(t.from_username)}`} className="text-primary hover:underline">{t.from_username}</Link>
-          )}
-          {' → '}
-          {isQtAnonDisplayName(t.to_username) ? (
-            <span className="text-primary">{t.to_username}</span>
-          ) : (
-            <Link to={`/profile/${encodeURIComponent(t.to_username)}`} className="text-primary hover:underline">{t.to_username}</Link>
-          )}
-        </span>
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            type="button"
-            onClick={onCopy}
-            className="p-1 rounded-md border border-transparent text-zinc-500 hover:text-primary hover:bg-primary/15 hover:border-primary/25 transition-colors touch-manipulation"
-            title="Copy points, users & date"
-            aria-label="Copy transfer details"
-          >
-            <Copy size={compact ? 12 : 14} />
-          </button>
-          <span className="text-primary whitespace-nowrap">{amt} pts</span>
-        </div>
+    <li className={`font-heading border-b border-zinc-800/50 last:border-0 ${compact ? 'py-1.5' : 'py-2'}`}>
+      <div className="flex items-start justify-between gap-2 min-w-0">
+        <p className="text-[12px] text-zinc-200 truncate min-w-0">
+          <StoreUsername name={t.from_username} />
+          <span className="text-zinc-500"> → </span>
+          <StoreUsername name={t.to_username} />
+        </p>
+        <button
+          type="button"
+          onClick={onCopy}
+          className="min-h-[44px] min-w-[44px] -my-2 -mr-1 inline-flex items-center justify-center rounded-md text-zinc-500 hover:text-primary hover:bg-primary/15 touch-manipulation shrink-0"
+          title="Copy points, users and date"
+          aria-label="Copy transfer details"
+        >
+          <Copy size={14} />
+        </button>
       </div>
-      {when ? (
-        <span className={`text-[9px] text-zinc-600 w-full shrink-0 block ${compact ? '' : 'mt-0.5'}`}>{when}</span>
+      <p className="text-[13px] font-bold text-primary tabular-nums leading-tight">{amt} pts</p>
+      {whenShort ? (
+        <p className="text-[11px] text-zinc-500 mt-0.5" title={whenFull}>{whenShort}</p>
       ) : null}
     </li>
   );
@@ -554,10 +750,12 @@ const Tab = ({ active, onClick, children, disabled, className = '', icon: Icon }
     type="button"
     onClick={disabled ? undefined : onClick}
     disabled={disabled}
-    className={`shrink-0 min-w-[4.35rem] sm:flex-1 sm:min-w-0 min-h-[48px] sm:min-h-[44px] px-2.5 sm:px-3 rounded-md text-[9px] sm:text-[9px] font-heading font-bold uppercase tracking-wider transition-all border touch-manipulation flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 ${
+    role="tab"
+    aria-selected={active}
+    className={`shrink-0 w-[5.5rem] min-w-[5.25rem] max-w-[6.75rem] min-h-[48px] px-2 rounded-md text-[10px] font-heading font-bold uppercase tracking-wider transition-all border touch-manipulation flex flex-col items-center justify-center gap-0.5 snap-start ${
       active
-        ? 'text-primary bg-primary/15 border-primary/35 shadow-[inset_0_0_0_1px_rgba(234,179,8,0.12)]'
-        : 'text-zinc-500 hover:text-zinc-300 border-transparent bg-zinc-900/35'
+        ? 'text-primary bg-primary/15 border-primary/50 shadow-[0_0_14px_rgba(234,179,8,0.35)]'
+        : 'text-zinc-400 hover:text-zinc-200 border-zinc-800 bg-zinc-900/50'
     } ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`.trim()}
   >
     {Icon ? <Icon size={14} className={active ? 'text-primary' : 'text-zinc-500'} /> : null}
@@ -582,7 +780,7 @@ function StorePayWithSelect({ value, onChange, showCash = false }) {
               key={o.id}
               type="button"
               onClick={() => onChange(o.id)}
-              className={`flex-1 sm:flex-none min-h-[36px] px-2.5 rounded text-[9px] font-heading font-bold uppercase tracking-wider touch-manipulation transition-colors ${
+              className={`flex-1 sm:flex-none min-h-[44px] px-3 rounded text-[10px] font-heading font-bold uppercase tracking-wider touch-manipulation transition-colors ${
                 active
                   ? 'bg-primary/20 text-primary border border-primary/35'
                   : 'text-zinc-500 border border-transparent hover:text-zinc-300'
@@ -609,7 +807,7 @@ function StoreFilterChips({ options, value, onChange, ariaLabel }) {
             role="tab"
             aria-selected={active}
             onClick={() => onChange(opt.id)}
-            className={`shrink-0 min-h-[34px] px-2.5 rounded-full text-[9px] font-heading font-bold uppercase tracking-wider border touch-manipulation ${
+            className={`shrink-0 min-h-[44px] px-3 rounded-full text-[10px] font-heading font-bold uppercase tracking-wider border touch-manipulation ${
               active
                 ? 'bg-primary/20 text-primary border-primary/40'
                 : 'bg-zinc-900/50 text-zinc-500 border-zinc-700/50'
@@ -649,6 +847,7 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, 
         )
       )
     );
+  const fmtPts = (n) => Number(n || 0).toLocaleString();
   const priceLabel = loading
     ? '...'
     : payWith === 'cash'
@@ -656,31 +855,33 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, 
       : respectPrice != null
         ? (
           payWith === 'points'
-            ? `${price} pts`
+            ? `${fmtPts(price)} pts`
             : payWith === 'respect'
-              ? `${respectPrice} resp`
-              : `${price} pts or ${respectPrice} resp`
+              ? `${fmtPts(respectPrice)} resp`
+              : `${fmtPts(price)} pts or ${fmtPts(respectPrice)} resp`
         )
-        : `${price} pts`;
+        : `${fmtPts(price)} pts`;
+  const statusLabel = owned ? (ownedLabel || 'Owned') : (comingSoon && !staffPreview ? 'Coming soon' : null);
   return (
   <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel ${comingSoon && !staffPreview ? 'opacity-60' : ''}`}>
     <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
-      <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">{title}</span>
-      <div className="flex items-center gap-1 shrink-0">
-        {comingSoon && !staffPreview && <span className="text-[8px] font-heading uppercase text-zinc-500 border border-zinc-600/50 rounded px-1 py-0.5">Coming soon</span>}
-        {staffPreview && <span className="text-[8px] font-heading uppercase text-amber-400/90 border border-amber-500/40 rounded px-1 py-0.5">Staff preview</span>}
-        {Icon && <Icon className="text-primary shrink-0" size={14} />}
+    <div className="p-3">
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-[13px] font-heading font-bold text-foreground uppercase tracking-wide leading-tight">{title}</h3>
+        <div className="flex items-center gap-1 shrink-0">
+          {comingSoon && !staffPreview && <span className="text-[9px] font-heading uppercase text-zinc-400 border border-zinc-600/50 rounded px-1.5 py-0.5">Soon</span>}
+          {staffPreview && <span className="text-[9px] font-heading uppercase text-amber-400/90 border border-amber-500/40 rounded px-1.5 py-0.5">Staff</span>}
+        </div>
       </div>
-    </div>
-    <div className="p-2.5">
-      <p className="text-[10px] text-mutedForeground font-heading mb-1.5 leading-snug sm:leading-normal line-clamp-3 sm:line-clamp-none">{desc}</p>
+      <div className="store-product-art" aria-hidden>
+        {Icon ? <Icon size={32} /> : null}
+      </div>
+      {desc ? <p className="text-[13px] text-zinc-300 font-heading leading-snug">{desc}</p> : null}
       {children}
-      {owned ? (
-        <div className="py-1.5 text-center text-[10px] font-heading font-bold text-primary uppercase">{ownedLabel || 'Owned'}</div>
-      ) : confirming && needsConfirm ? (
-        <div className="mt-1 space-y-1.5">
-          <p className="text-[9px] text-mutedForeground font-heading leading-snug">Confirm this purchase?</p>
+      <p className="mt-2 text-[15px] font-heading font-bold text-primary tabular-nums break-words">{statusLabel || priceLabel}</p>
+      {owned ? null : confirming && needsConfirm ? (
+        <div className="mt-2 space-y-1.5">
+          <p className="text-[12px] text-zinc-400 font-heading leading-snug">Confirm this purchase?</p>
           <div className="flex gap-1.5">
             <button
               type="button"
@@ -689,7 +890,7 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, 
                 onBuy();
               }}
               disabled={buyDisabled}
-              className="flex-1 min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
+              className="flex-1 min-h-[48px] py-2.5 text-[12px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
             >
               {loading ? '...' : 'Confirm'}
             </button>
@@ -697,7 +898,7 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, 
               type="button"
               onClick={() => setConfirming(false)}
               disabled={loading}
-              className="min-h-[44px] px-3 py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-foreground disabled:opacity-50 touch-manipulation"
+              className="min-h-[48px] px-3 py-2.5 text-[12px] font-heading font-bold uppercase rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-foreground disabled:opacity-50 touch-manipulation"
             >
               Cancel
             </button>
@@ -711,9 +912,9 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, 
             else onBuy();
           }}
           disabled={buyDisabled}
-          className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 mt-1 touch-manipulation"
+          className="w-full min-h-[48px] mt-2 py-2.5 text-[12px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
         >
-          {priceLabel}
+          {loading ? '...' : 'Buy'}
         </button>
       )}
     </div>
@@ -1389,12 +1590,13 @@ export default function Store() {
     setActiveTab(tab);
     setSearchParams(tab === 'points' ? {} : { tab });
     if (tab !== 'upgrades' && tab !== 'tokens') setStoreQuery('');
+    const behavior = storeScrollBehavior();
     if (hash) {
       window.setTimeout(() => {
-        document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.getElementById(hash)?.scrollIntoView({ behavior, block: 'center' });
       }, 80);
     } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior });
     }
   };
 
@@ -1436,30 +1638,40 @@ export default function Store() {
   };
 
   return (
-    <div className={`space-y-3 sm:space-y-6 ${styles.pageContent} mobile-page-root px-3 sm:px-4 pb-24 sm:pb-6`} data-testid="store-page" data-page="store">
+    <div className={`space-y-3 md:space-y-4 lg:space-y-6 ${styles.pageContent} mobile-page-root px-3 sm:px-4 pb-24 md:pb-6`} data-testid="store-page" data-page="store">
       <style>{STORE_STYLES}</style>
 
       <div className="store-chrome store-fade-in space-y-2">
-        <div className="flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] sm:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.18em]">Point Store</p>
-            <p className="text-[10px] text-zinc-500 font-heading italic truncate">Buy points · loot pieces · upgrades · tokens · bullets</p>
+        <div className="store-hero">
+          <div className="store-hero-copy">
+            <p className="store-kicker font-heading">Point Store</p>
+            <h1 className="store-title font-heading">The Black Market</h1>
           </div>
           {user != null && (
-            <div className="shrink-0 text-right">
-              <p className="text-sm font-heading font-bold text-primary tabular-nums leading-none">
-                {Number(user.points ?? 0).toLocaleString()} <span className="text-[10px] font-semibold">pts</span>
-              </p>
-              <p className="text-[10px] text-mutedForeground font-heading tabular-nums mt-0.5">
-                {Number(user.respect_points ?? 0).toLocaleString()} respect
-                <span className="text-zinc-600"> · </span>
-                {Number(user.bullets ?? 0).toLocaleString()} bullets
-              </p>
+            <div className="store-balance-grid" aria-label="Balances">
+              {[
+                ['Points', user.points],
+                ['Respect', user.respect_points],
+                ['Bullets', user.bullets],
+                ['Loot', user.loot_box_pieces],
+              ].map(([label, value]) => {
+                const full = Number(value ?? 0).toLocaleString();
+                return (
+                  <div key={label} className="store-balance-cell" title={full}>
+                    <span className="store-balance-label font-heading">{label}</span>
+                    <span className="store-balance-value font-heading">
+                      <span className="sr-only">{full}</span>
+                      <span aria-hidden="true" className="lg:hidden">{formatStoreBalance(value)}</span>
+                      <span aria-hidden="true" className="hidden lg:inline">{full}</span>
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
 
-        <div className="relative rounded-lg border border-primary/20 bg-primary/5 p-1 store-tab-scroll">
+        <div className="relative rounded-lg border border-primary/20 bg-primary/5 p-1 store-tab-scroll" role="tablist" aria-label="Store categories">
           <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent rounded-t-lg pointer-events-none" aria-hidden />
           {STORE_TAB_META.map((t) => (
             <Tab
@@ -1497,18 +1709,16 @@ export default function Store() {
                   key={rec.id}
                   type="button"
                   onClick={() => goStoreTab(rec.tab, rec.hash)}
-                  className={`store-rec-card text-left rounded-lg border border-primary/25 bg-gradient-to-br from-primary/10 via-zinc-950/80 to-zinc-950/40 p-2.5 touch-manipulation active:scale-[0.99] transition-transform ${styles.panel}`}
+                  className={`store-rec-card text-left rounded-lg border border-primary/25 bg-gradient-to-br from-primary/10 via-zinc-950/80 to-zinc-950/40 p-3 touch-manipulation active:scale-[0.99] transition-transform ${styles.panel}`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider truncate">{rec.title}</p>
-                      <p className="text-[9px] text-zinc-400 font-heading mt-0.5 leading-snug line-clamp-2">{rec.reason}</p>
-                    </div>
-                    <RecIcon size={14} className="text-primary/80 shrink-0 mt-0.5" />
+                  <div className="store-product-art" aria-hidden>
+                    <RecIcon size={32} />
                   </div>
+                  <p className="text-[14px] font-heading font-bold text-foreground uppercase tracking-wide leading-tight">{rec.title}</p>
+                  <p className="text-[13px] text-zinc-300 font-heading mt-1 leading-snug line-clamp-2">{rec.reason}</p>
                   <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className="text-[9px] font-heading text-amber-200/90">{rec.price}</span>
-                    <span className="text-[8px] font-heading uppercase tracking-wider text-zinc-500">Open →</span>
+                    <span className="text-[14px] font-heading font-bold text-primary">{rec.price}</span>
+                    <span className="min-h-[44px] inline-flex items-center text-[11px] font-heading font-bold uppercase tracking-wider text-primary">Open</span>
                   </div>
                 </button>
               );
@@ -1597,7 +1807,7 @@ export default function Store() {
               type="button"
               onClick={handleClaimPendingPoints}
               disabled={claimingPending}
-              className="mt-2 min-h-[40px] px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50 touch-manipulation"
+              className="mt-2 min-h-[44px] px-3 py-2 text-[12px] font-heading font-bold uppercase rounded bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50 touch-manipulation"
             >
               {claimingPending ? 'Releasing...' : 'Claim Pending Points'}
             </button>
@@ -1616,95 +1826,146 @@ export default function Store() {
           ) : (
           <>
           {storePointsSale?.active && (
-            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-500/40 mobile-panel`}>
-              <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
-              <div className="px-3 py-2.5 flex items-start gap-2 bg-amber-500/10">
-                <Tag size={14} className="text-amber-300 shrink-0 mt-0.5" aria-hidden />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-heading font-bold text-amber-300 uppercase tracking-[0.14em]">
-                    Points sale — +{Math.round(Number(storePointsSale.bonus_rate || 1) * 100)}% extra
-                  </p>
-                  <p className="text-[9px] text-amber-100/80 font-heading mt-0.5 leading-snug">
-                    {storePointsSale.message
-                      || 'Card checkouts credit double points. Quotes below already include the sale bonus.'}
-                  </p>
-                </div>
+            <div className={`store-sale relative ${styles.panel} rounded-lg overflow-hidden border border-amber-500/40 bg-amber-500/10 mobile-panel`}>
+              <div className="min-w-0">
+                <p className="text-[13px] font-heading font-bold text-amber-200 uppercase tracking-[0.12em]">
+                  <Tag size={14} className="inline mr-1 -mt-0.5" aria-hidden />
+                  Double points
+                </p>
+                <p className="text-[15px] font-heading font-bold text-amber-100 mt-0.5">
+                  +{Math.round(Number(storePointsSale.bonus_rate || 1) * 100)}% bonus
+                </p>
+                <p className="text-[12px] text-amber-100/80 font-heading mt-0.5 leading-snug line-clamp-2">
+                  {storePointsSale.message
+                    || 'Card checkouts include this bonus. Quotes already show the extra points.'}
+                </p>
               </div>
+              <button
+                type="button"
+                className="store-sale-cta rounded bg-amber-400/20 text-amber-100 border border-amber-300/40 text-[12px] font-heading font-bold uppercase tracking-wider touch-manipulation"
+                onClick={() => document.getElementById('store-buy-points')?.scrollIntoView({ behavior: storeScrollBehavior(), block: 'start' })}
+              >
+                Buy points
+              </button>
             </div>
           )}
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div id="store-buy-points" className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-            <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
-              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Buy points</span>
-              <p className="text-[8px] text-mutedForeground font-heading mt-0.5 leading-snug">
-                {pointsPaymentMode === 'card'
-                  ? (
-                    <>
-                      Enter whole points from 2,740–1,000,000, or a GBP budget — the server prices along the standard store curve (Stripe checkout).
-                      {storePointsSale?.active ? (
-                        <>
-                          {' '}
-                          <span className="text-amber-300/95 font-bold">SALE: +{Math.round(Number(storePointsSale.bonus_rate || 1) * 100)}% extra points on card buys</span>
-                          {' '}
-                          (shown in the quote).
-                        </>
-                      ) : null}
-                      {' '}
-                      <span className="text-violet-400/90">GBP card checkouts earn 1,100 loot box pieces per whole £10 charged</span> (110 per whole £1; credited when your points are). Any GBP store checkout also earns{' '}
-                      <span className="text-amber-400/90">2 Wheel of Fortune free spins per whole £10</span> (banked; leftover under £10 on that checkout does not carry).
-                    </>
-                  )
-                  : (
-                    <>
-                      Buy points with in-game cash at Quick Trade pricing (avg of cheapest 3 sell offers; min $550,000/pt).
-                      {' '}
-                      Monthly allowance: $2B per IP and per verified email (London month) — purchase must fit under both.
-                    </>
-                  )}
-              </p>
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+              <span className="text-[13px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Buy points</span>
+              <details className="mt-1">
+                <summary className="text-[12px] text-zinc-400 font-heading cursor-pointer min-h-[44px] flex items-center">Pricing details</summary>
+                <p className="text-[12px] text-zinc-400 font-heading mt-1 leading-snug pb-1">
+                  {pointsPaymentMode === 'card'
+                    ? (
+                      <>
+                        Enter whole points from 2,740–1,000,000, or a GBP budget — the server prices along the standard store curve (Stripe checkout).
+                        {storePointsSale?.active ? (
+                          <>
+                            {' '}
+                            <span className="text-amber-300/95 font-bold">SALE: +{Math.round(Number(storePointsSale.bonus_rate || 1) * 100)}% extra points on card buys</span>
+                            {' '}
+                            (shown in the quote).
+                          </>
+                        ) : null}
+                        {' '}
+                        <span className="text-violet-400/90">GBP card checkouts earn 1,100 loot box pieces per whole £10 charged</span> (110 per whole £1; credited when your points are). Any GBP store checkout also earns{' '}
+                        <span className="text-amber-400/90">2 Wheel of Fortune free spins per whole £10</span> (banked; leftover under £10 on that checkout does not carry).
+                      </>
+                    )
+                    : (
+                      <>
+                        Buy points with in-game cash at Quick Trade pricing (avg of cheapest 3 sell offers; min $550,000/pt).
+                        {' '}
+                        Monthly allowance: $2B per IP and per verified email (London month) — purchase must fit under both.
+                      </>
+                    )}
+                </p>
+              </details>
             </div>
             <div className="p-3 space-y-2">
-              <div className="flex gap-1">
+              <div className="flex gap-1" role="group" aria-label="Pay with card or cash">
                 <button
                   type="button"
                   onClick={() => { setPointsPaymentMode('card'); setPointsCashQuote(null); }}
-                  className={`flex-1 py-1.5 text-[9px] font-heading font-bold uppercase rounded border ${pointsPaymentMode === 'card' ? 'border-primary/50 bg-primary/15 text-primary' : 'border-primary/20 text-mutedForeground'}`}
+                  className={`flex-1 min-h-[44px] text-[11px] font-heading font-bold uppercase rounded border touch-manipulation ${pointsPaymentMode === 'card' ? 'border-primary/50 bg-primary/15 text-primary' : 'border-primary/20 text-mutedForeground'}`}
                 >
                   Card
                 </button>
                 <button
                   type="button"
                   onClick={() => { setPointsPaymentMode('cash'); setCustomQuote(null); }}
-                  className={`flex-1 py-1.5 text-[9px] font-heading font-bold uppercase rounded border ${pointsPaymentMode === 'cash' ? 'border-primary/50 bg-primary/15 text-primary' : 'border-primary/20 text-mutedForeground'}`}
+                  className={`flex-1 min-h-[44px] text-[11px] font-heading font-bold uppercase rounded border touch-manipulation ${pointsPaymentMode === 'cash' ? 'border-primary/50 bg-primary/15 text-primary' : 'border-primary/20 text-mutedForeground'}`}
                 >
                   Cash ($)
                 </button>
               </div>
               {pointsPaymentMode === 'card' ? (
               <>
-              <div className="flex gap-1">
+              <div className="flex gap-1" role="group" aria-label="Price by points or GBP">
                 <button
                   type="button"
                   onClick={() => { setCustomPurchaseMode('points'); setCustomQuote(null); }}
-                  className={`flex-1 py-1.5 text-[9px] font-heading font-bold uppercase rounded border ${customPurchaseMode === 'points' ? 'border-primary/50 bg-primary/15 text-primary' : 'border-primary/20 text-mutedForeground'}`}
+                  className={`flex-1 min-h-[44px] text-[11px] font-heading font-bold uppercase rounded border touch-manipulation ${customPurchaseMode === 'points' ? 'border-primary/50 bg-primary/15 text-primary' : 'border-primary/20 text-mutedForeground'}`}
                 >
                   By points
                 </button>
                 <button
                   type="button"
                   onClick={() => { setCustomPurchaseMode('gbp'); setCustomQuote(null); }}
-                  className={`flex-1 py-1.5 text-[9px] font-heading font-bold uppercase rounded border ${customPurchaseMode === 'gbp' ? 'border-primary/50 bg-primary/15 text-primary' : 'border-primary/20 text-mutedForeground'}`}
+                  className={`flex-1 min-h-[44px] text-[11px] font-heading font-bold uppercase rounded border touch-manipulation ${customPurchaseMode === 'gbp' ? 'border-primary/50 bg-primary/15 text-primary' : 'border-primary/20 text-mutedForeground'}`}
                 >
                   By GBP
                 </button>
               </div>
               {customPurchaseMode === 'points' ? (
+                <>
+                <div className="store-pack-grid">
+                  {POINT_AMOUNT_PRESETS.map((amount) => {
+                    const selected = parseInt(String(customPointsInput).replace(/\D/g, ''), 10) === amount;
+                    const ready = selected && customQuote && customQuote.price_gbp != null;
+                    return (
+                      <div key={amount} className={`rounded-lg border p-3 ${selected ? 'border-primary/50 bg-primary/10' : 'border-primary/20 bg-zinc-950/40'}`}>
+                        <h3 className="text-[14px] font-heading font-bold text-foreground uppercase tracking-wide">{amount.toLocaleString()} points</h3>
+                        <div className="store-product-art" aria-hidden><Coins size={32} /></div>
+                        <p className="text-[13px] font-heading text-zinc-300 min-h-[1.25rem]">
+                          {ready ? (
+                            <>
+                              <span className="text-primary font-bold">{Number(customQuote.points).toLocaleString()} pts</span>
+                              {Number(customQuote.bonus_points || 0) > 0 ? (
+                                <span className="text-amber-300"> +{Number(customQuote.bonus_points).toLocaleString()}</span>
+                              ) : null}
+                            </>
+                          ) : 'Card checkout'}
+                        </p>
+                        <p className="mt-1 text-[15px] font-heading font-bold text-emerald-300 tabular-nums">
+                          {ready ? `£${Number(customQuote.price_gbp).toFixed(2)}` : '—'}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (ready) handleCustomPointsPurchase();
+                            else setCustomPointsInput(String(amount));
+                          }}
+                          disabled={loading || (ready && !customQuote)}
+                          className="mt-2 w-full min-h-[48px] text-[12px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
+                        >
+                          {loading && selected ? '...' : ready ? `Buy £${Number(customQuote.price_gbp).toFixed(2)}` : selected ? 'Pricing…' : 'Select'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <label className="block text-[12px] font-heading text-zinc-400 uppercase tracking-wider" htmlFor="store-custom-points">Custom amount</label>
                 <FormattedNumberInput
+                  id="store-custom-points"
                   value={customPointsInput}
                   onChange={setCustomPointsInput}
                   placeholder="Points (e.g. 160000)"
-                  className="w-full px-3 py-2 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none text-foreground font-heading"
+                  aria-label="Custom points amount"
+                  className="w-full min-h-[44px] px-3 py-2 text-sm bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none text-foreground font-heading"
                 />
+                </>
               ) : (
                 <input
                   type="text"
@@ -1712,7 +1973,8 @@ export default function Store() {
                   value={customGbpInput}
                   onChange={(e) => setCustomGbpInput(e.target.value)}
                   placeholder="GBP (e.g. 40)"
-                  className="w-full px-3 py-2 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none text-foreground font-heading"
+                  aria-label="Custom GBP amount"
+                  className="w-full min-h-[44px] px-3 py-2 text-sm bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none text-foreground font-heading"
                 />
               )}
               {customQuote && (
@@ -1773,7 +2035,7 @@ export default function Store() {
                 type="button"
                 onClick={handleCustomPointsPurchase}
                 disabled={loading || !customQuote}
-                className="w-full min-h-[44px] py-2.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                className="w-full min-h-[48px] py-2.5 text-[12px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
               >
                 {loading ? '...' : 'Buy with card'}
               </button>
@@ -1819,7 +2081,7 @@ export default function Store() {
                     value={pointsCashInput}
                     onChange={setPointsCashInput}
                     placeholder="Points (e.g. 100)"
-                    className="w-full px-3 py-2 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none text-foreground font-heading"
+                    className="w-full min-h-[44px] px-3 py-2 text-sm bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none text-foreground font-heading"
                   />
                   {pointsCashQuote && (
                     <p className="text-[10px] font-heading text-zinc-300">
@@ -1893,13 +2155,13 @@ export default function Store() {
                 placeholder="Recipient username"
                 value={sendToUsername}
                 onChange={(e) => setSendToUsername(e.target.value)}
-                className="w-full px-3 py-2.5 sm:py-2 text-sm sm:text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none min-h-[44px] sm:min-h-0"
+                className="w-full px-3 py-2.5 text-sm bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none min-h-[44px]"
               />
               <FormattedNumberInput
                 value={sendAmount}
                 onChange={setSendAmount}
                 placeholder="Amount"
-                className="w-full px-3 py-2.5 sm:py-2 text-sm sm:text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none min-h-[44px] sm:min-h-0 text-foreground font-heading"
+                className="w-full px-3 py-2.5 text-sm bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none min-h-[44px] text-foreground font-heading"
               />
               <button
                 type="button"
@@ -2007,7 +2269,7 @@ export default function Store() {
                 value={storeQuery}
                 onChange={(e) => setStoreQuery(e.target.value)}
                 placeholder="Search upgrades…"
-                className="w-full min-h-[40px] pl-8 pr-3 rounded-md border border-primary/20 bg-zinc-950/70 text-[11px] font-heading text-foreground placeholder:text-zinc-600 focus:border-primary/45 focus:outline-none"
+                className="w-full min-h-[44px] pl-8 pr-3 rounded-md border border-primary/20 bg-zinc-950/70 text-[13px] font-heading text-foreground placeholder:text-zinc-600 focus:border-primary/45 focus:outline-none"
               />
             </div>
             <StoreFilterChips
@@ -2016,7 +2278,7 @@ export default function Store() {
               onChange={setUpgradeFilter}
               ariaLabel="Upgrade categories"
             />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
+            <div className="store-upgrade-grid">
           {UPGRADES.filter(upgradeIsListed).map((u) => {
             const extra = u.extra?.(user, boozeConfig, weedEmpireSummary, familySafeDepositSummary);
             const priceVal = typeof u.price === 'function' ? Number(u.price(user, boozeConfig)) : Number(u.price);
@@ -2121,7 +2383,7 @@ export default function Store() {
                   <GlowPresetPicker
                     value={glowPresetId}
                     onChange={setGlowPresetId}
-                    buttonClassName="mb-1.5 text-[9px] font-heading px-2 py-1 rounded border border-zinc-700 flex items-center gap-1.5 hover:border-zinc-500"
+                    buttonClassName="mb-1.5 min-h-[44px] text-[12px] font-heading px-3 py-2 rounded border border-zinc-700 flex items-center gap-1.5 hover:border-zinc-500 touch-manipulation"
                   />
                 )}
                 {extra && (
@@ -2219,7 +2481,7 @@ export default function Store() {
                   value={customCarName}
                   onChange={(e) => setCustomCarName(e.target.value)}
                   maxLength={30}
-                  className="w-full min-h-[40px] px-2 py-1.5 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded mb-1.5 focus:border-primary/50 focus:outline-none"
+                  className="w-full min-h-[44px] px-3 py-2 text-sm bg-zinc-900/50 border border-zinc-700/50 rounded mb-1.5 focus:border-primary/50 focus:outline-none"
                 />
                 <div className="flex gap-1.5">
                   <button
@@ -2280,37 +2542,41 @@ export default function Store() {
               </Link>
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
+          <div className="store-loot-grid">
             {LOOT_PIECE_PACKS.map((pack) => {
               const stripeBusy = lootStripePackageId === pack.packageId;
               return (
                 <div
                   key={pack.packageId}
-                  className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}
+                  className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}
                 >
                   <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
                   <div className="p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">
-                          {pack.pieces.toLocaleString()} pieces
-                        </p>
-                        <p className="text-[9px] text-zinc-400 font-heading mt-0.5 leading-snug">
-                          {pack.wheelSpins} Wheel free spin{pack.wheelSpins === 1 ? '' : 's'} · {formatLootPackGbp(pack.priceGbp / (pack.pieces / 1000))} per 1,000
-                        </p>
-                      </div>
-                      <Gift size={14} className="text-primary/80 shrink-0 mt-0.5" />
+                    <h3 className="text-[15px] font-heading font-bold text-foreground uppercase tracking-wide">
+                      {pack.pieces.toLocaleString()} pieces
+                    </h3>
+                    <div className="store-product-art" aria-hidden>
+                      <Gift size={34} />
                     </div>
+                    <p className="text-[13px] text-zinc-300 font-heading">
+                      {pack.wheelSpins} wheel free spin{pack.wheelSpins === 1 ? '' : 's'}
+                    </p>
+                    <p className="mt-1 text-[15px] font-heading font-bold text-emerald-300 tabular-nums">
+                      {formatLootPackGbp(pack.priceGbp)}
+                    </p>
+                    <p className="text-[11px] text-zinc-500 font-heading mt-0.5">
+                      {formatLootPackGbp(pack.priceGbp / (pack.pieces / 1000))} per 1,000
+                    </p>
                     <button
                       type="button"
                       disabled={!!lootStripePackageId || pointsTabLocked}
                       onClick={() => handleBuyLootPiecesStripe(pack.packageId)}
-                      className="mt-2 w-full min-h-[44px] py-2.5 text-[10px] font-heading font-bold uppercase rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/35 hover:bg-emerald-500/25 disabled:opacity-50 touch-manipulation"
+                      className="mt-2 w-full min-h-[48px] py-2.5 text-[12px] font-heading font-bold uppercase rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/35 hover:bg-emerald-500/25 disabled:opacity-50 touch-manipulation"
                     >
                       {stripeBusy ? '...' : `Buy ${formatLootPackGbp(pack.priceGbp)}`}
                     </button>
                     {pointsTabLocked && (
-                      <p className="text-[8px] text-zinc-500 font-heading mt-1.5">Card checkout locked with Points purchase.</p>
+                      <p className="text-[12px] text-zinc-400 font-heading mt-1.5">Card checkout locked with Points purchase.</p>
                     )}
                   </div>
                 </div>
@@ -2376,7 +2642,7 @@ export default function Store() {
                 value={storeQuery}
                 onChange={(e) => setStoreQuery(e.target.value)}
                 placeholder="Search tokens…"
-                className="w-full min-h-[40px] pl-8 pr-3 rounded-md border border-primary/20 bg-zinc-950/70 text-[11px] font-heading text-foreground placeholder:text-zinc-600 focus:border-primary/45 focus:outline-none"
+                className="w-full min-h-[44px] pl-8 pr-3 rounded-md border border-primary/20 bg-zinc-950/70 text-[13px] font-heading text-foreground placeholder:text-zinc-600 focus:border-primary/45 focus:outline-none"
               />
             </div>
             <StoreFilterChips
@@ -2385,7 +2651,7 @@ export default function Store() {
               onChange={setTokenFilter}
               ariaLabel="Token categories"
             />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
+            <div className="store-token-grid">
               {TOKEN_STORE_ITEMS.filter(tokenMatchesFilter).map((t) => {
                 const held = Number(user?.[t.userKey] ?? 0);
                 const maxQty = tokenBuyMaxQty(t.tokenType);
@@ -2427,13 +2693,14 @@ export default function Store() {
                     }}
                   >
                     <p className="text-[10px] text-mutedForeground mb-1.5">Held: {held.toLocaleString()} · {t.price} pts each · buy up to {maxQty.toLocaleString()}</p>
-                    <div className="flex items-center gap-1.5 mb-1.5">
+                    <div className="store-qty-row mb-1.5">
                       <button
                         type="button"
                         onClick={() => setTokenBuyQty(t.tokenType, qty - bigStep)}
                         disabled={qty <= 1}
-                        className="min-h-[32px] min-w-[32px] rounded border border-primary/30 bg-primary/10 text-primary text-[9px] font-bold disabled:opacity-40"
+                        className="min-h-[44px] min-w-[44px] text-[12px] touch-manipulation rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
                         title={`−${bigStep}`}
+                        aria-label={`Decrease by ${bigStep}`}
                       >
                         −{bigStep}
                       </button>
@@ -2441,7 +2708,8 @@ export default function Store() {
                         type="button"
                         onClick={() => setTokenBuyQty(t.tokenType, qty - 1)}
                         disabled={qty <= 1}
-                        className="min-h-[32px] min-w-[32px] rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
+                        className="min-h-[44px] min-w-[44px] text-[12px] touch-manipulation rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
+                        aria-label="Decrease quantity"
                       >
                         −
                       </button>
@@ -2451,14 +2719,15 @@ export default function Store() {
                         max={maxQty}
                         value={qty}
                         onChange={(e) => setTokenBuyQty(t.tokenType, e.target.value)}
-                        className="flex-1 min-w-0 h-8 rounded border border-primary/30 bg-background/80 px-2 text-center text-[11px] font-heading font-bold text-foreground tabular-nums"
+                        className="flex-1 min-w-0 h-11 min-h-[44px] rounded border border-primary/30 bg-background/80 px-2 text-center text-[15px] font-heading font-bold text-foreground tabular-nums"
                         aria-label={`${t.title} quantity`}
                       />
                       <button
                         type="button"
                         onClick={() => setTokenBuyQty(t.tokenType, qty + 1)}
                         disabled={qty >= maxQty}
-                        className="min-h-[32px] min-w-[32px] rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
+                        className="min-h-[44px] min-w-[44px] text-[12px] touch-manipulation rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
+                        aria-label="Increase quantity"
                       >
                         +
                       </button>
@@ -2466,8 +2735,9 @@ export default function Store() {
                         type="button"
                         onClick={() => setTokenBuyQty(t.tokenType, qty + bigStep)}
                         disabled={qty >= maxQty}
-                        className="min-h-[32px] min-w-[32px] rounded border border-primary/30 bg-primary/10 text-primary text-[9px] font-bold disabled:opacity-40"
+                        className="min-h-[44px] min-w-[44px] text-[12px] touch-manipulation rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
                         title={`+${bigStep}`}
+                        aria-label={`Increase by ${bigStep}`}
                       >
                         +{bigStep}
                       </button>
@@ -2504,7 +2774,7 @@ export default function Store() {
             <p className="text-[9px] text-zinc-500 font-heading italic max-w-2xl mt-2">
               Pick 1–{SELECTABLE_BUNDLE_SIZE} eligible tokens (duplicates allowed). Game Pass token is excluded.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2 mt-2">
+            <div className="store-token-grid mt-2">
               {SELECTABLE_BUNDLE_ITEMS.map((t) => {
                 const held = Number(user?.[t.userKey] ?? 0);
                 const picked = Number(selectableBundleQtyByToken[t.tokenType] || 0);
@@ -2522,12 +2792,12 @@ export default function Store() {
                       <p className="text-[10px] text-mutedForeground mb-1.5">
                         Held: {held.toLocaleString()} · {t.price} pts each
                       </p>
-                      <div className="flex items-center gap-2">
+                      <div className="store-qty-row">
                         <button
                           type="button"
                           onClick={() => adjustSelectableBundleQty(t.tokenType, -10)}
                           disabled={!canRemove}
-                          className="min-h-[36px] min-w-[36px] rounded border border-primary/30 bg-primary/10 text-primary text-[9px] font-bold disabled:opacity-40"
+                          className="min-h-[44px] min-w-[44px] text-[12px] touch-manipulation rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
                           title="Remove 10"
                         >
                           −10
@@ -2536,7 +2806,7 @@ export default function Store() {
                           type="button"
                           onClick={() => adjustSelectableBundleQty(t.tokenType, -1)}
                           disabled={!canRemove}
-                          className="min-h-[36px] min-w-[36px] rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
+                          className="min-h-[44px] min-w-[44px] text-[12px] touch-manipulation rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
                         >
                           -
                         </button>
@@ -2545,7 +2815,7 @@ export default function Store() {
                           type="button"
                           onClick={() => adjustSelectableBundleQty(t.tokenType, +1)}
                           disabled={!canAdd}
-                          className="min-h-[36px] min-w-[36px] rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
+                          className="min-h-[44px] min-w-[44px] text-[12px] touch-manipulation rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
                         >
                           +
                         </button>
@@ -2553,7 +2823,7 @@ export default function Store() {
                           type="button"
                           onClick={() => adjustSelectableBundleQty(t.tokenType, +10)}
                           disabled={!canAdd}
-                          className="min-h-[36px] min-w-[36px] rounded border border-primary/30 bg-primary/10 text-primary text-[9px] font-bold disabled:opacity-40"
+                          className="min-h-[44px] min-w-[44px] text-[12px] touch-manipulation rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
                           title="Add 10"
                         >
                           +10
@@ -2589,7 +2859,7 @@ export default function Store() {
                   Cash total: {cashPriceAvailable ? <span className="text-primary font-bold">${selectableBundleFinalCash.toLocaleString()}</span> : 'Unavailable'}
                 </p>
               )}
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-col md:flex-row gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -2623,7 +2893,7 @@ export default function Store() {
                         ? (user.points ?? 0) < selectableBundleFinalPoints
                         : (user.respect_points ?? 0) < selectableBundleFinalRespect))
                   }
-                  className="min-h-[40px] rounded border border-primary/40 bg-primary/20 px-3 py-2 text-[10px] font-heading font-bold uppercase text-primary hover:bg-primary/30 disabled:opacity-50"
+                  className="w-full md:w-auto min-h-[48px] rounded border border-primary/40 bg-primary/20 px-3 py-2 text-[12px] font-heading font-bold uppercase text-primary hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                 >
                   {storePayWith === 'cash'
                     ? `Buy bundle · $${selectableBundleFinalCash.toLocaleString()}`
@@ -2635,7 +2905,7 @@ export default function Store() {
                   type="button"
                   onClick={clearSelectableBundle}
                   disabled={loading || selectableBundlePickedTotal === 0}
-                  className="min-h-[40px] rounded border border-zinc-700/60 bg-zinc-900/40 px-3 py-2 text-[10px] font-heading font-bold uppercase text-zinc-300 hover:bg-zinc-800/50 disabled:opacity-50"
+                  className="w-full md:w-auto min-h-[48px] rounded border border-zinc-700/60 bg-zinc-900/40 px-3 py-2 text-[12px] font-heading font-bold uppercase text-zinc-300 hover:bg-zinc-800/50 disabled:opacity-50 touch-manipulation"
                 >
                   Clear
                 </button>
@@ -2645,7 +2915,7 @@ export default function Store() {
 
           <div className="space-y-2">
             <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Quick bundles</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-2">
+            <div className="store-upgrade-grid">
               {TOKEN_BUNDLES.map((b) => {
                 const bundleCashPrice = cashPriceAvailable ? Math.round(b.price * cashPricePerPoint) : 0;
                 return (
@@ -2684,7 +2954,7 @@ export default function Store() {
           <p className="text-[9px] text-zinc-500 font-heading px-0.5">
             Packs first — or enter a custom amount below (max {CUSTOM_BULLETS_MAX.toLocaleString()}).
           </p>
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-2">
+          <div className="store-bullet-grid">
             {BULLET_PACKS.map((pack) => {
               const respectCost = storeRespectForPoints(pack.cost);
               const canAfford =
@@ -2695,20 +2965,21 @@ export default function Store() {
               return (
                 <div key={pack.bullets} className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden mobile-panel`}>
                   <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-                  <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1.5">
-                    <Crosshair size={14} className="text-primary shrink-0" />
-                    <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">{(pack.bullets / 1000).toFixed(0)}k</span>
-                  </div>
-                  <div className="p-2.5 text-center">
-                    <p className="text-[11px] text-foreground font-heading font-bold tabular-nums mb-0.5">
-                      {storePayWith === 'points' ? `${pack.cost} pts` : `${respectCost} resp`}
+                  <div className="p-3">
+                    <h3 className="text-[15px] font-heading font-bold text-foreground uppercase tracking-wide">
+                      {pack.bullets.toLocaleString()} bullets
+                    </h3>
+                    <div className="store-product-art" aria-hidden>
+                      <Crosshair size={34} />
+                    </div>
+                    <p className="text-[15px] font-heading font-bold text-primary tabular-nums">
+                      {storePayWith === 'points' ? `${pack.cost.toLocaleString()} pts` : `${respectCost.toLocaleString()} resp`}
                     </p>
-                    <p className="text-[8px] text-zinc-500 font-heading mb-2">{pack.bullets.toLocaleString()} bullets</p>
                     <button
                       type="button"
                       onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}&pay_with=${encodeURIComponent(storePayWith)}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`)}
                       disabled={!canAfford}
-                      className="w-full min-h-[44px] py-2.5 sm:py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
+                      className="mt-2 w-full min-h-[48px] py-2.5 text-[12px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                     >
                       Buy
                     </button>
@@ -2726,7 +2997,8 @@ export default function Store() {
                 value={customBullets}
                 onChange={setCustomBullets}
                 placeholder={`Up to ${CUSTOM_BULLETS_MAX.toLocaleString()}`}
-                className="w-full mt-1 px-3 py-2 text-lg font-heading font-bold text-primary bg-zinc-900/80 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none text-center"
+                aria-label="Custom bullet amount"
+                className="w-full mt-1 min-h-[44px] px-3 py-2 text-lg font-heading font-bold text-primary bg-zinc-900/80 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none text-center"
               />
               <p className="text-[10px] text-zinc-500 font-heading italic mt-1">
                 {customBullets ? (
@@ -2784,7 +3056,7 @@ export default function Store() {
           </p>
           {paymentTransactions.length > 0 ? (
             <div className="rounded border border-primary/20 bg-zinc-900/50 overflow-hidden">
-              <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto] gap-2 px-2 py-1.5 text-[9px] font-heading font-bold text-primary uppercase tracking-wider border-b border-primary/20">
+              <div className="hidden lg:grid grid-cols-[1fr_auto_auto_auto] gap-2 px-2 py-1.5 text-[9px] font-heading font-bold text-primary uppercase tracking-wider border-b border-primary/20">
                 <span>Date</span>
                 <span>Package</span>
                 <span className="text-right">Points</span>
@@ -2815,9 +3087,9 @@ export default function Store() {
                           ? 'Manual credit'
                           : t.payment_status || 'Pending';
                 return (
-                  <div key={t.session_id || i} className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-1 sm:gap-2 px-2 py-2 sm:py-1.5 text-[10px] font-heading border-b border-zinc-800/50 last:border-0">
+                  <div key={t.session_id || i} className="grid grid-cols-1 lg:grid-cols-[1fr_auto_auto_auto] gap-1 lg:gap-2 px-2 py-2 lg:py-1.5 text-[12px] font-heading border-b border-zinc-800/50 last:border-0">
                     <span className="text-mutedForeground truncate" title={t.created_at}>{t.created_at ? formatGameDateTime(t.created_at) : '—'}</span>
-                    <div className="flex items-center justify-between gap-2 sm:contents">
+                    <div className="flex items-center justify-between gap-2 lg:contents">
                       <span className="capitalize">{t.package_id || '—'}</span>
                       <span className="text-right font-mono">+{Number(t.points || 0).toLocaleString()}</span>
                       <span className={statusClass}>{statusText}</span>
