@@ -474,6 +474,7 @@ function App() {
           {/* Family redirects */}
           <Route path="/families" element={<Navigate to="/game/family/list" replace />} />
           <Route path="/families/:familyId" element={<FamilyRedirect />} />
+          <Route path="/family/:familyId" element={<FamilyRedirect />} />
 
           <Route path="/properties" element={<Navigate to="/money/property" replace />} />
           <Route path="/property" element={<Navigate to="/money/property" replace />} />

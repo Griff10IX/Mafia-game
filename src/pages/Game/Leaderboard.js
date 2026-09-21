@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Trophy, Target, Flame, Car, Lock, RefreshCw, Medal, Award, Skull, History, DollarSign, Star, Zap, TrendingUp, Wine } from 'lucide-react';
+import { Trophy, Target, Flame, Car, Lock, RefreshCw, Medal, Award, Skull, History, DollarSign, Star, Zap, TrendingUp, Wine, Users } from 'lucide-react';
 import api from '../../utils/api';
 import {
   LB_BOARD_KEYS,
@@ -143,6 +143,8 @@ export default function Leaderboard() {
     () => readLbEntry(readPersistedPeriod(), 10, false)?.last_reward_winners ?? null,
   );
   const [familyFortnight, setFamilyFortnight] = useState(null);
+  const [familyFortnightErr, setFamilyFortnightErr] = useState(null);
+  const [myFortnight, setMyFortnight] = useState(null);
   const intervalRef = useRef(null);
   const deepLinkConsumedRef = useRef(false);
   const [pendingHighlight, setPendingHighlight] = useState(null);
@@ -285,14 +287,24 @@ export default function Leaderboard() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await api.get('/families/fortnight-leaderboard');
-        if (!cancelled) setFamilyFortnight(res.data || null);
-      } catch (_) {
-        if (!cancelled) setFamilyFortnight(null);
+        const [lb, me] = await Promise.all([
+          api.get('/families/fortnight-leaderboard'),
+          api.get('/families/me/fortnight-contribution').catch(() => null),
+        ]);
+        if (!cancelled) {
+          setFamilyFortnight(lb.data || { leaderboard: [], enabled: false });
+          setMyFortnight(me?.data || null);
+          setFamilyFortnightErr(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setFamilyFortnight({ leaderboard: [], enabled: false });
+          setFamilyFortnightErr(e?.response?.data?.detail || 'Could not load family fortnight board');
+        }
       }
     })();
     return () => { cancelled = true; };
-  }, [refreshing]);
+  }, [refreshing, period]);
 
   return (
     <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="leaderboard-page">
@@ -322,12 +334,28 @@ export default function Leaderboard() {
           >
             <History size={10} /> All-time
           </button>
+          <button
+            type="button"
+            onClick={() => setPeriodPersist('families')}
+            className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${
+              period === 'families'
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+                : `${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20`
+            }`}
+            data-testid="lb-period-families"
+          >
+            <Users size={10} /> Families
+          </button>
         </div>
         <p className="text-[9px] text-zinc-500 font-heading italic mb-2 text-center">
-          {period === 'weekly'
-            ? (viewMode === 'alive' ? 'This week\'s top players (Mon–Sun UTC)' : 'This week\'s top dead by stats')
+          {period === 'families'
+            ? '2-week family power board (UK time) — melt, deposit, rackets, Crew OC & dailies score points'
+            : period === 'weekly'
+            ? (viewMode === 'alive' ? 'This week\'s top players (Mon–Sun UK time)' : 'This week\'s top dead by stats')
             : (viewMode === 'alive' ? 'The most powerful players in the underworld' : 'Top dead accounts by stats')}
         </p>
+        {period !== 'families' && (
+          <>
         <AutoRefreshNote seconds={60} className="mb-2 text-center" />
         <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
           <span className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">View:</span>
@@ -380,15 +408,110 @@ export default function Leaderboard() {
             type="button"
             onClick={() => fetchLeaderboard(true)}
             disabled={refreshing}
-            className="flex items-center gap-1 text-[10px] text-mutedForeground hover:text-primary border border-primary/20 hover:border-primary/40 rounded-sm px-2 py-1 transition-colors font-heading disabled:opacity-50"
-            title="Refresh leaderboards"
+            className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider ${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20 disabled:opacity-50`}
           >
-            <RefreshCw size={10} className={refreshing ? 'animate-spin' : ''} />
-            {refreshing ? 'Updating…' : 'Refresh'}
+            <RefreshCw size={10} className={refreshing ? 'animate-spin' : ''} /> Refresh
           </button>
         </div>
+          </>
+        )}
+        {period === 'families' && (
+          <div className="flex justify-center mb-2">
+            <button
+              type="button"
+              onClick={() => fetchLeaderboard(true)}
+              disabled={refreshing}
+              className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider ${styles.surface} ${styles.raisedHover} text-foreground border border-amber-500/30 disabled:opacity-50`}
+            >
+              <RefreshCw size={10} className={refreshing ? 'animate-spin' : ''} /> Refresh
+            </button>
+          </div>
+        )}
       </header>
 
+      {period === 'families' ? (
+        <div className="space-y-3" data-testid="family-fortnight-board">
+          {familyFortnightErr && (
+            <p className="text-center text-[10px] text-rose-300 font-heading">{familyFortnightErr}</p>
+          )}
+          <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-500/30`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
+            <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/25">
+              <h2 className="text-[10px] font-heading font-bold text-amber-300 uppercase tracking-[0.12em] flex items-center gap-1.5">
+                <Users size={14} /> Family Fortnight
+                {familyFortnight?.enabled === false ? ' (scoring off)' : ''}
+              </h2>
+              <p className="text-[9px] text-zinc-400 font-heading mt-1 leading-snug">
+                Score for your crew over 2 UK weeks. Top 3 share treasury + contribution-split points.
+                #1 also gets Crew of the Fortnight flair + family profile background.
+              </p>
+            </div>
+            <div className="p-3 space-y-3">
+              <div className="rounded border border-amber-500/20 bg-black/25 p-2.5">
+                <p className="text-[9px] font-heading font-bold uppercase tracking-wider text-amber-200/90 mb-1.5">How to score</p>
+                <ul className="text-[9px] font-heading text-zinc-300 space-y-0.5 list-disc pl-3.5">
+                  <li>Family daily objective progress</li>
+                  <li>Racket collect / successful raids</li>
+                  <li>Crew OC (each participating member)</li>
+                  <li>Vault cash deposits (+ score, daily soft-cap)</li>
+                  <li>Melt cars → family treasury bullets (uncapped)</li>
+                </ul>
+              </div>
+              {(familyFortnight?.vices?.vices || []).length > 0 && (
+                <div className="rounded border border-rose-500/25 bg-rose-500/8 p-2.5">
+                  <p className="text-[9px] font-heading font-bold uppercase tracking-wider text-rose-200 mb-1">Active vices now</p>
+                  <ul className="text-[9px] font-heading text-zinc-300 space-y-0.5">
+                    {(familyFortnight.vices.vices || []).map((v) => (
+                      <li key={v.id}>• {v.label}</li>
+                    ))}
+                  </ul>
+                  <p className="text-[8px] text-zinc-500 font-heading mt-1.5">
+                    Rotates every 8h UTC · war leave / QT sell crew always penalise
+                  </p>
+                </div>
+              )}
+              {myFortnight?.in_family && (
+                <div className="rounded border border-primary/25 bg-primary/8 p-2.5 text-[9px] font-heading text-zinc-200">
+                  <span className="text-primary font-bold uppercase tracking-wider">Your crew</span>
+                  {' · '}rank {myFortnight.rank ?? '—'}
+                  {' · '}{((myFortnight.share || 0) * 100).toFixed(1)}% of score
+                  {' · '}melt today {Number(myFortnight.melt_to_family_today || 0).toLocaleString()}
+                  /{Number(myFortnight.melt_floor || 1000).toLocaleString()}
+                  {' · '}
+                  <Link to="/families" className="text-primary underline">Open Families</Link>
+                </div>
+              )}
+              <ol className="space-y-1.5">
+                {(familyFortnight?.leaderboard || []).map((row, idx) => (
+                  <li key={row.family_id || idx} className="flex items-center justify-between gap-2 text-sm border border-primary/15 rounded px-2.5 py-2 bg-black/20">
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="text-amber-400/90 font-heading text-xs w-5">#{idx + 1}</span>
+                      <Link to={`/game/family/${row.family_id}`} className="truncate font-heading font-bold text-foreground hover:text-primary">
+                        {row.name}{row.tag ? ` [${row.tag}]` : ''}
+                      </Link>
+                    </span>
+                    <span className="text-[10px] font-heading tabular-nums text-mutedForeground shrink-0">
+                      {Number(row.score || 0).toLocaleString()} pts · {row.unique_contributors || 0} contrib
+                    </span>
+                  </li>
+                ))}
+                {!(familyFortnight?.leaderboard || []).length && !familyFortnightErr && (
+                  <li className="text-[10px] text-mutedForeground font-heading py-4 text-center">
+                    No family scores yet — melt to treasury, collect rackets, or hit the family daily to get on the board.
+                  </li>
+                )}
+              </ol>
+              <div className="rounded border border-primary/15 bg-black/20 p-2.5 text-[9px] font-heading text-zinc-400 space-y-0.5">
+                <p className="text-primary/80 font-bold uppercase tracking-wider">Top rewards (fortnight)</p>
+                <p>1st — $75M treasury + 750 pts + 75 loot · 40k points split by contribution · flair + theme</p>
+                <p>2nd — $40M + 400 pts + 40 loot · 20k points split</p>
+                <p>3rd — $15M + 150 pts + 15 loot · 8k points split</p>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : (
+        <>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Rank Points' : 'Most Rank Points Earned'}
@@ -580,42 +703,7 @@ export default function Leaderboard() {
           </div>
         </section>
       )}
-
-      {familyFortnight && (
-        <section className="mt-6 rounded-sm border border-amber-500/30 bg-amber-500/5 p-4" data-testid="family-fortnight-board">
-          <h2 className="text-amber-300 font-heading font-bold uppercase tracking-wider text-sm mb-1 flex items-center gap-2">
-            <Trophy size={16} />
-            Families (Fortnight)
-          </h2>
-          <p className="text-[9px] text-zinc-500 font-heading italic mb-3">
-            UK time · 2-week family power board
-            {familyFortnight.enabled === false ? ' · scoring off (kill-switch)' : ''}
-          </p>
-          {(familyFortnight.vices?.vices || []).length > 0 && (
-            <div className="mb-3 text-[9px] font-heading text-amber-200/80">
-              Active vices:{' '}
-              {(familyFortnight.vices.vices || []).map((v) => v.label).join(' · ')}
-            </div>
-          )}
-          <ol className="space-y-1.5">
-            {(familyFortnight.leaderboard || []).map((row, idx) => (
-              <li key={row.family_id || idx} className="flex items-center justify-between gap-2 text-sm border border-primary/15 rounded px-2 py-1.5 bg-black/20">
-                <span className="flex items-center gap-2 min-w-0">
-                  <span className="text-amber-400/80 font-heading text-xs w-5">#{idx + 1}</span>
-                  <Link to={`/family/${row.family_id}`} className="truncate font-heading font-bold text-foreground hover:text-primary">
-                    {row.name}{row.tag ? ` [${row.tag}]` : ''}
-                  </Link>
-                </span>
-                <span className="text-[10px] font-heading tabular-nums text-mutedForeground shrink-0">
-                  {Number(row.score || 0).toLocaleString()} · {row.unique_contributors || 0} contrib
-                </span>
-              </li>
-            ))}
-            {!(familyFortnight.leaderboard || []).length && (
-              <li className="text-[10px] text-mutedForeground font-heading">No family scores this fortnight yet.</li>
-            )}
-          </ol>
-        </section>
+        </>
       )}
     </div>
   );

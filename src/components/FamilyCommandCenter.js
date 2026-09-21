@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import api, { apiRequestWith429Retry } from '../utils/api';
 import { getFamiliesPrefetch, setFamiliesPrefetch } from '../utils/prefetchCache';
+import { LB_PERIOD_STORAGE_KEY } from '../utils/leaderboardTopCache';
 
 const POLL_INTERVAL_MS = 30000;
 const MINIMIZED_KEY = 'family_command_center_minimized';
@@ -330,16 +331,19 @@ export default function FamilyCommandCenter({ onCloseSidebar, hasFamily }) {
                 {fortnight?.in_family && (
                   <Link
                     to="/leaderboard"
-                    onClick={handleOpenFamily}
+                    onClick={() => {
+                      try { sessionStorage.setItem(LB_PERIOD_STORAGE_KEY, 'families'); } catch (_) {}
+                      handleOpenFamily();
+                    }}
                     className="flex items-center justify-between gap-2 py-2 px-2 rounded-sm border border-amber-500/20 bg-amber-500/8 transition-colors hover:opacity-90"
-                    title="Family Fortnight"
+                    title="Family Fortnight — how to score & board"
                   >
                     <span className="min-w-0">
                       <span className="block text-[9px] font-heading uppercase tracking-wide text-amber-500/80">
-                        Fortnight{fortnight.enabled === false ? ' (off)' : ''}
+                        Fortnight board{fortnight.enabled === false ? ' (off)' : ''}
                       </span>
                       <span className="block text-[9px] font-heading text-zinc-300 truncate">
-                        {fortnight.rank ? `#${fortnight.rank}` : '—'} · {((fortnight.share || 0) * 100).toFixed(1)}% share
+                        {fortnight.rank ? `#${fortnight.rank}` : '—'} · {((fortnight.share || 0) * 100).toFixed(1)}% share · tap for how to score
                       </span>
                       {(fortnight.vices?.vices || []).length > 0 && (
                         <span className="block text-[8px] font-heading text-amber-200/70 truncate mt-0.5">

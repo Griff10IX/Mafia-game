@@ -45,7 +45,7 @@ function lbCacheKey(period, topLimit, dead) {
 export function readPersistedPeriod() {
   try {
     const s = sessionStorage.getItem(LB_PERIOD_STORAGE_KEY);
-    if (s === 'weekly' || s === 'alltime') return s;
+    if (s === 'weekly' || s === 'alltime' || s === 'families') return s;
   } catch (_) {}
   return 'weekly';
 }
