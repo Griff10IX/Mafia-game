@@ -61,6 +61,7 @@ export { default as Flag } from 'lucide-react/dist/esm/icons/flag';
 export { default as SquareStack } from 'lucide-react/dist/esm/icons/square-stack';
 export { default as Video } from 'lucide-react/dist/esm/icons/video';
 export { default as Sparkles } from 'lucide-react/dist/esm/icons/sparkles';
+export { default as Tag } from 'lucide-react/dist/esm/icons/tag';
 export { default as Crown } from 'lucide-react/dist/esm/icons/crown';
 export { default as LineChart } from 'lucide-react/dist/esm/icons/line-chart';
 export { default as Image } from 'lucide-react/dist/esm/icons/image';

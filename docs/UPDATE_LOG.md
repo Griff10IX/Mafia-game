@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-21[/color][/b] — [b]Points Sale — double card points[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Sale:[/b] Card point purchases now credit [b]+100%[/b] extra points ([b]double[/b]). Example: a pack that was [b]14,000[/b] pts ([b]+4,000[/b] extra) is now [b]20,000[/b]; roughly [b]£50 → ~100,000[/b] pts instead of ~70,000.[/color]
+[*][color=#888888][b]UI:[/b] [b]SALE[/b] badge next to [b]Store[/b] in the menus, plus a sale banner on the Points tab. Quotes already include the bonus.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-21[/color][/b] — [b]Grave Robber themes + bigger digs[/b][/size]
 [quote]
 [list]

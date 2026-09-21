@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment, lazy, Suspense } from 'react';
 import { Link, useNavigate, useLocation, useNavigationType, Navigate } from 'react-router-dom';
 import { SAME_ROUTE_NAV_CLICK } from '../constants/navigationEvents';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Leaf, Ban, BookOpen } from './layoutLucideIcons';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Leaf, Ban, BookOpen, Tag } from './layoutLucideIcons';
 import api, {
   getApiErrorMessage,
   onCooldownChange,
@@ -674,6 +674,7 @@ export default function Layout({ children }) {
   const [sportsBettingEventCount, setSportsBettingEventCount] = useState(0);
   const [weedEmpireReadyCount, setWeedEmpireReadyCount] = useState(() => Number(chromeBootRef.current.weedEmpireReadyCount) || 0);
   const [gtaExclusiveInPool, setGtaExclusiveInPool] = useState(false);
+  const [storePointsSaleActive, setStorePointsSaleActive] = useState(false);
   const [ocStatus, setOcStatus] = useState(null);
   const [atWar, setAtWar] = useState(() => !!chromeBootRef.current.atWar);
   const [autoRankPrefs, setAutoRankPrefs] = useState(() => ({
@@ -926,6 +927,9 @@ export default function Layout({ children }) {
             if (sub.path === '/money/weed-empire' && weedEmpireReadyCount > 0) {
               next = { ...next, badge: weedEmpireReadyCount, badgeTone: 'emerald' };
             }
+            if (sub.path === '/game/store' && storePointsSaleActive) {
+              next = { ...next, saleBadge: true };
+            }
             return next;
           }),
         };
@@ -955,7 +959,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, adminPreviewAsMod, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, weedEmpireReadyCount, hitmanForHireVisible, weedEmpireNavVisible, gameChatVisible, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
+  }, [isAdmin, isModerator, hasAdminEmail, adminPreviewAsMod, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, weedEmpireReadyCount, hitmanForHireVisible, weedEmpireNavVisible, gameChatVisible, storePointsSaleActive, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -1111,6 +1115,12 @@ export default function Layout({ children }) {
       >
         {Icon && <Icon size={16} className="shrink-0" />}
         <span className="truncate flex-1">{item.label}</span>
+        {item.saleBadge && (
+          <span className="shrink-0 inline-flex items-center gap-0.5 rounded border border-amber-500/50 bg-amber-500/15 px-1 py-0.5 text-[8px] font-heading font-bold uppercase tracking-wider text-amber-300" title="Points sale — double card points">
+            <Tag size={9} className="shrink-0" aria-hidden />
+            Sale
+          </span>
+        )}
         {item.exclusive && <span className="text-violet-400 text-[10px] font-bold shrink-0" aria-hidden>★</span>}
         {badgeEl}
       </SameRouteAwareLink>
@@ -1644,6 +1654,20 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     let intervalId;
+    const fetchSale = () => {
+      api.get('/payments/store-points-event').then((res) => {
+        setStorePointsSaleActive(!!res.data?.event?.active);
+      }).catch(() => {});
+    };
+    const deferred = setTimeout(() => {
+      fetchSale();
+      intervalId = setInterval(() => { if (!isChromeTabHidden()) fetchSale(); }, 180000);
+    }, 3500);
+    return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
+  }, []); // eslint-disable-line
+
+  useEffect(() => {
+    let intervalId;
     const deferred = setTimeout(() => {
       fetchUsersOnlineCount();
       intervalId = setInterval(() => { if (!isChromeTabHidden()) fetchUsersOnlineCount(); }, 90000);
@@ -1830,6 +1854,11 @@ export default function Layout({ children }) {
               const n = Math.max(0, Number(res.data?.ready_count) || 0);
               setWeedEmpireReadyCount(n);
               saveLayoutChrome(userId, { weedEmpireReadyCount: n });
+            }).catch(() => {});
+          },
+          () => {
+            api.get('/payments/store-points-event').then((res) => {
+              setStorePointsSaleActive(!!res.data?.event?.active);
             }).catch(() => {});
           },
         ];
@@ -2691,6 +2720,15 @@ export default function Layout({ children }) {
         >
           <Icon size={13} className="shrink-0" style={isFamiliesAtWar ? { color: '#f87171' } : { color: 'var(--noir-primary)' }} />
           <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">{item.label}</span>
+          {(item.saleBadge || (item.path === '/game/store' && storePointsSaleActive)) && (
+            <span
+              className="shrink-0 inline-flex items-center gap-0.5 rounded border border-amber-500/50 bg-amber-500/15 px-1 py-0.5 text-[7px] font-heading font-bold uppercase tracking-wider text-amber-300 leading-none"
+              title="Points sale — double card points"
+            >
+              <Tag size={8} className="shrink-0" aria-hidden />
+              Sale
+            </span>
+          )}
           {isFamiliesAtWar && (
             <span
               className="text-[8px] font-heading font-bold uppercase tracking-tight text-red-400 bg-red-500/15 border border-red-500/35 rounded px-1 py-0.5 shrink-0 leading-none"
@@ -3864,7 +3902,7 @@ export default function Layout({ children }) {
                 { path: '/money/bank', label: 'Bank', Icon: Landmark },
                 { path: '/money/stocks', label: 'Stocks', Icon: TrendingUp },
                 { path: '/money/quick-trade', label: 'Quick Trade', Icon: ArrowLeftRight },
-                { path: '/game/store', label: 'Store', Icon: ShoppingBag },
+                { path: '/game/store', label: 'Store', Icon: ShoppingBag, saleBadge: storePointsSaleActive },
                 { path: '/game-pass', label: 'Game Pass', Icon: Package },
                 { path: '/game/daily-rewards', label: 'Daily Rewards', Icon: Gift },
                 { path: '/money/lottery', label: 'Lottery', Icon: Ticket },
@@ -3986,7 +4024,7 @@ export default function Layout({ children }) {
               ],
               more: [
                 { path: '/account/settings', label: 'IP & Devices', Icon: Globe },
-                { path: '/game/store', label: 'Store', Icon: ShoppingBag },
+                { path: '/game/store', label: 'Store', Icon: ShoppingBag, saleBadge: storePointsSaleActive },
                 { path: '/game-pass', label: 'Game Pass', Icon: Package },
                 ...(staffTopBarEntry ? [{ path: staffTopBarEntry.path, label: isAdmin ? 'Admin' : 'Staff', Icon: staffTopBarEntry.icon || Shield }] : []),
                 { action: 'tutorial', label: 'Tutorial' },

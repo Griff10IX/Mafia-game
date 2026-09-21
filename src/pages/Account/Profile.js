@@ -102,6 +102,8 @@ const PROFILE_STYLES = `
     right: 0 !important;
     z-index: 0 !important;
     pointer-events: none !important;
+    max-height: var(--prof-theme-clip-h, none);
+    overflow: hidden;
   }
   .prof-dossier-theme-layer-inner {
     position: relative;
@@ -154,6 +156,7 @@ const PROFILE_STYLES = `
     pointer-events: none;
     background: linear-gradient(180deg, rgba(2,6,14,0.22) 0%, rgba(2,6,14,0.36) 45%, rgba(2,6,14,0.55) 100%);
   }
+  /* Sits on the bottom edge of the theme <img> stack (not a measured sibling) so it can't drift. */
   .prof-dossier-theme-seam {
     position: absolute;
     left: 0;
@@ -493,7 +496,9 @@ const ProfileInfoCard = ({
   const [staffPortalClientTick, setStaffPortalClientTick] = useState(0);
   const dossierRef = useRef(null);
   const themeImgRef = useRef(null);
-  const [themeSeamTop, setThemeSeamTop] = useState(null);
+  const themeClipRef = useRef(null); // first opaque block under the art (notepad)
+  /** Pixel Y of the theme seam inside the dossier (null = hidden). */
+  const [themeSeamY, setThemeSeamY] = useState(null);
 
   const staffViewerCaps = isAdmin || isModerator || hasAdminEmail;
   const staffShellGateOk = staffViewerCaps && staffLoginSession;
@@ -688,36 +693,54 @@ const ProfileInfoCard = ({
 
   useEffect(() => {
     if (!showThemeSeam) {
-      setThemeSeamTop(null);
+      setThemeSeamY(null);
+      if (dossierRef.current) dossierRef.current.style.removeProperty('--prof-theme-clip-h');
       return undefined;
     }
     const card = dossierRef.current;
     const img = themeImgRef.current;
     if (!card) return undefined;
     const measure = () => {
-      // Use the painted <img> height only — catalog aspect is often taller than the file
-      // and left a grey strip between the art and the seam glow.
-      const imgH = img?.offsetHeight || 0;
+      // Visible theme ends where opaque notepad (or the painted img) starts covering it.
+      // Without clipping, a solid notepad colour paints over the art and the neon seam
+      // sits too low — grey strip between “background” and glow.
+      if (!img) {
+        setThemeSeamY(null);
+        card.style.removeProperty('--prof-theme-clip-h');
+        return;
+      }
+      const imgH = img.offsetHeight || 0;
       if (!imgH || imgH < 8) {
-        setThemeSeamTop(null);
+        setThemeSeamY(null);
+        card.style.removeProperty('--prof-theme-clip-h');
         return;
       }
-      if (imgH >= card.clientHeight - 10) {
-        setThemeSeamTop(null);
+      const clipEl = themeClipRef.current;
+      let clipH = imgH;
+      if (clipEl && profileNotepadBg) {
+        const top = clipEl.getBoundingClientRect().top - card.getBoundingClientRect().top
+          - (parseFloat(getComputedStyle(card).borderTopWidth) || 0);
+        if (Number.isFinite(top) && top > 8) clipH = Math.min(imgH, top);
+      }
+      if (clipH >= card.clientHeight - 10) {
+        setThemeSeamY(null);
+        card.style.removeProperty('--prof-theme-clip-h');
         return;
       }
-      setThemeSeamTop(imgH);
+      card.style.setProperty('--prof-theme-clip-h', `${Math.round(clipH)}px`);
+      setThemeSeamY(clipH);
     };
     measure();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
     if (img) ro?.observe(img);
+    if (themeClipRef.current) ro?.observe(themeClipRef.current);
     ro?.observe(card);
     window.addEventListener('resize', measure);
     return () => {
       ro?.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, [showThemeSeam, bgThemeImage]);
+  }, [showThemeSeam, bgThemeImage, profileNotepadBg]);
 
   const dossierCardStyle = {
     ...(dossierBorderStyle || {}),
@@ -748,8 +771,24 @@ const ProfileInfoCard = ({
                   const img = themeImgRef.current;
                   if (!showThemeSeam || !card || !img) return;
                   const imgH = img.offsetHeight;
-                  if (!imgH || imgH >= card.clientHeight - 10) setThemeSeamTop(null);
-                  else setThemeSeamTop(imgH);
+                  if (!imgH || imgH < 8) {
+                    setThemeSeamY(null);
+                    return;
+                  }
+                  const clipEl = themeClipRef.current;
+                  let clipH = imgH;
+                  if (clipEl && profileNotepadBg) {
+                    const top = clipEl.getBoundingClientRect().top - card.getBoundingClientRect().top
+                      - (parseFloat(getComputedStyle(card).borderTopWidth) || 0);
+                    if (Number.isFinite(top) && top > 8) clipH = Math.min(imgH, top);
+                  }
+                  if (clipH >= card.clientHeight - 10) {
+                    setThemeSeamY(null);
+                    card.style.removeProperty('--prof-theme-clip-h');
+                    return;
+                  }
+                  card.style.setProperty('--prof-theme-clip-h', `${Math.round(clipH)}px`);
+                  setThemeSeamY(clipH);
                 }}
               />
               <div
@@ -759,13 +798,13 @@ const ProfileInfoCard = ({
               {themeScrimOn ? <div className="prof-dossier-theme-scrim" /> : null}
             </div>
           </div>
-          {themeSeamTop != null ? (
+          {themeSeamY != null ? (
             <div
               className="pointer-events-none absolute left-0 right-0 z-[2]"
-              style={{ top: 0, height: themeSeamTop }}
+              style={{ top: Math.max(0, themeSeamY - 2), height: 2 }}
               aria-hidden="true"
             >
-              <div className="prof-dossier-theme-seam" />
+              <div className="prof-dossier-theme-seam" style={{ position: 'relative', bottom: 'auto' }} />
             </div>
           ) : null}
         </>
@@ -1255,6 +1294,7 @@ const ProfileInfoCard = ({
         const renderedHtml = displayText ? parseForumContent(displayText, { censorProfanity }) : '';
         return (
           <div
+            ref={themeClipRef}
             className="border-t border-zinc-700/30"
             style={profileNotepadStyle}
           >

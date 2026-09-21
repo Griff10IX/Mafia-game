@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package, Copy, Swords, Award, Gauge, Coins, Sparkles, Search, Landmark, Gift } from 'lucide-react';
+import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package, Copy, Swords, Award, Gauge, Coins, Sparkles, Search, Landmark, Gift, Tag } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { copyTextToClipboard } from '../../utils/copyToClipboard';
 import { toast } from 'sonner';
@@ -779,6 +779,7 @@ export default function Store() {
   const [storePointsAutoCredit, setStorePointsAutoCredit] = useState(() => storeBoot?.storePointsAutoCredit !== false);
   const [manualCreditEta, setManualCreditEta] = useState(() => storeBoot?.manualCreditEta ?? null);
   const [pendingPoints, setPendingPoints] = useState(() => storeBoot?.pendingPoints ?? 0);
+  const [storePointsSale, setStorePointsSale] = useState(() => storeBoot?.storePointsSale ?? null);
   const [claimingPending, setClaimingPending] = useState(false);
   const [storePayWith, setStorePayWith] = useState('points');
   const [upgradeFilter, setUpgradeFilter] = useState('all');
@@ -981,7 +982,7 @@ export default function Store() {
 
   const fetchData = useCallback(async ({ silent = false } = {}) => {
     try {
-      const [userRes, boozeRes, weedRes, familySafeRes, eventsRes, adminRes, locksRes, pendingRes, flagsRes] = await Promise.all([
+      const [userRes, boozeRes, weedRes, familySafeRes, eventsRes, adminRes, locksRes, pendingRes, flagsRes, pointsSaleRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/booze-run/config').catch(() => ({ data: null })),
         api.get('/store/weed-empire-summary').catch(() => ({ data: null })),
@@ -991,6 +992,7 @@ export default function Store() {
         api.get('/page-locks').catch(() => ({ data: { paths: {} } })),
         api.get('/payments/pending-points').catch(() => ({ data: { pending_points: 0 } })),
         api.get('/store/item-flags').catch(() => ({ data: { flags: {} } })),
+        api.get('/payments/store-points-event').catch(() => ({ data: { event: null } })),
       ]);
       setUser(userRes.data);
       const nextBooze = boozeRes?.data || null;
@@ -1003,6 +1005,8 @@ export default function Store() {
       const nextEventsEnabled = !!eventsRes.data?.events_enabled;
       setEvent(nextEvent);
       setEventsEnabled(nextEventsEnabled);
+      const nextSale = pointsSaleRes?.data?.event ?? null;
+      setStorePointsSale(nextSale);
       const nextIsAdmin = !!adminRes.data?.is_admin;
       const nextIsMod = !!adminRes.data?.is_moderator;
       const nextHasAdminEmail = !!adminRes.data?.has_admin_email;
@@ -1049,6 +1053,7 @@ export default function Store() {
         manualCreditEta: nextManualEta,
         pendingPoints: nextPendingPts,
         paymentTransactions: txs,
+        storePointsSale: nextSale,
       });
     } catch {
       if (!silent) toast.error('Failed to load data');
@@ -1610,6 +1615,23 @@ export default function Store() {
             </div>
           ) : (
           <>
+          {storePointsSale?.active && (
+            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-500/40 mobile-panel`}>
+              <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
+              <div className="px-3 py-2.5 flex items-start gap-2 bg-amber-500/10">
+                <Tag size={14} className="text-amber-300 shrink-0 mt-0.5" aria-hidden />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-heading font-bold text-amber-300 uppercase tracking-[0.14em]">
+                    Points sale — +{Math.round(Number(storePointsSale.bonus_rate || 1) * 100)}% extra
+                  </p>
+                  <p className="text-[9px] text-amber-100/80 font-heading mt-0.5 leading-snug">
+                    {storePointsSale.message
+                      || 'Card checkouts credit double points. Quotes below already include the sale bonus.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
@@ -1619,6 +1641,14 @@ export default function Store() {
                   ? (
                     <>
                       Enter whole points from 2,740–1,000,000, or a GBP budget — the server prices along the standard store curve (Stripe checkout).
+                      {storePointsSale?.active ? (
+                        <>
+                          {' '}
+                          <span className="text-amber-300/95 font-bold">SALE: +{Math.round(Number(storePointsSale.bonus_rate || 1) * 100)}% extra points on card buys</span>
+                          {' '}
+                          (shown in the quote).
+                        </>
+                      ) : null}
                       {' '}
                       <span className="text-violet-400/90">GBP card checkouts earn 1,100 loot box pieces per whole £10 charged</span> (110 per whole £1; credited when your points are). Any GBP store checkout also earns{' '}
                       <span className="text-amber-400/90">2 Wheel of Fortune free spins per whole £10</span> (banked; leftover under £10 on that checkout does not carry).

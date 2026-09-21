@@ -13114,9 +13114,9 @@ export default function Admin() {
               <div className="h-px bg-zinc-700/30" />
 
               <div className="space-y-3">
-                <p className="text-[10px] font-heading font-bold text-emerald-400 uppercase tracking-wider">Store Points Bonus (+100%)</p>
+                <p className="text-[10px] font-heading font-bold text-emerald-400 uppercase tracking-wider">Points Sale (+100% / double)</p>
                 <p className="text-[10px] text-mutedForeground">
-                  Permanent card pricing: when enabled, card point purchases credit +100% extra points (double). No player-facing sale/event UI — this is standard store pricing. Disable only as a kill switch.
+                  When enabled, card point purchases credit +100% extra points (double). Shows a SALE badge next to Store and a banner on the Points tab. Disable only as a kill switch.
                 </p>
                 {storePointsEventForceUntil && (
                   <p className="rounded border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-300 font-heading">
@@ -13138,8 +13138,8 @@ export default function Admin() {
                   </button>
                   <p className="text-[10px] text-mutedForeground flex-1">
                     {storePointsEventEnabled
-                      ? '+100% is applied on every eligible card points checkout.'
-                      : 'Bonus paused — players only receive base points.'}
+                      ? '+100% (double) is applied on every eligible card points checkout. SALE badge shows in nav.'
+                      : 'Sale paused — players only receive base points.'}
                   </p>
                 </div>
                 <button
