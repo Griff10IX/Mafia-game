@@ -135,6 +135,16 @@ const PROFILE_META = {
     missionSkip: 5,
     robotHire: 10,
   },
+  v6: {
+    points: 45_000,
+    loot: 5_000,
+    molotovs: 1_000,
+    cash: 25_000_000_000,
+    extraTokensEach: 20,
+    missionSkip: 10,
+    robotHire: 10,
+    themes: true,
+  },
 };
 
 const MONEY_BASE_TIER = 10;
@@ -162,7 +172,7 @@ const GP_STRAIN_BY_TIER = {
     name: 'Sour Diesel',
     label: '+5% ranking (RP)',
     description:
-      'While owned, all rank points you earn are increased by 5% (stacks with active VIP Game Pass +10% RP).',
+      'While owned, all rank points you earn are increased by 5% (stacks with active VIP Game Pass +25% RP).',
   },
   28: {
     id: 'gp_girl_scout_cookies',
@@ -193,11 +203,42 @@ const GP_STRAIN_BY_TIER = {
       'Weed Empire upgrade costs (equipment, house tiers, and dealers) cost 10% less business cash while owned.',
   },
 };
+
+/** Season 6 dossier themes — keep in sync with backend/utils/game_pass_s6_themes.py */
+const GP_S6_FREE_THEME_BY_TIER = {
+  20: { id: 'gp_s6_quagmire', name: 'Quagmire Nod' },
+  40: { id: 'gp_s6_patrick_finger', name: 'Patrick Contemplates' },
+  60: { id: 'gp_s6_risitas', name: 'El Risitas' },
+  80: { id: 'gp_s6_hasbulla_sideeye', name: 'Hasbulla Side-Eye' },
+  100: { id: 'gp_s6_nebula_c', name: 'Nebula Drift' },
+};
+const GP_S6_VIP_THEME_BY_TIER = {
+  15: { id: 'gp_s6_joker_me', name: 'Joker — Me' },
+  19: { id: 'gp_s6_godfather', name: 'The Don' },
+  24: { id: 'gp_s6_peaky', name: 'Peaky Blinders' },
+  28: { id: 'gp_s6_vader_still', name: 'Darth Vader' },
+  32: { id: 'gp_s6_vader_mist', name: 'Vader in the Mist' },
+  36: { id: 'gp_s6_stormtrooper_dance', name: 'Stormtrooper Dance' },
+  40: { id: 'gp_s6_joker_nurse', name: 'Joker Nurse' },
+  44: { id: 'gp_s6_hasbulla_stare', name: 'Hasbulla Stare' },
+  48: { id: 'gp_s6_blobby', name: 'Mr Blobby' },
+  52: { id: 'gp_s6_nebula_a', name: 'Nebula Core' },
+  56: { id: 'gp_s6_nebula_b', name: 'Nebula Spark' },
+  60: { id: 'gp_s6_patrick_scheme', name: 'Patrick Scheming' },
+  64: { id: 'gp_s6_wanderlust', name: 'Wanderlust' },
+  68: { id: 'gp_s6_dump_01', name: 'Season 6 Theme I' },
+  72: { id: 'gp_s6_dump_02', name: 'Season 6 Theme II' },
+  76: { id: 'gp_s6_dump_03', name: 'Season 6 Theme III' },
+  82: { id: 'gp_s6_dump_04', name: 'Season 6 Theme IV' },
+  90: { id: 'gp_s6_dump_05', name: 'Season 6 Theme V' },
+  100: { id: 'gp_s6_dump_06', name: 'Season 6 Theme VI' },
+};
 const ROT_PRIM_KEYS = ['money', 'bullets', 'xp_crimes_tokens', 'xp_gta_tokens', 'points'];
 const ROT_TOKEN_KEYS = ['melt_tokens', 'jailbust_tokens', 'travel_tokens', 'properties_tokens'];
 
 function profileKeyForSeason(seasonId) {
   const n = parseInt(String(seasonId ?? '0'), 10);
+  if (Number.isFinite(n) && n >= 6) return 'v6';
   if (Number.isFinite(n) && n >= 5) return 'v5';
   if (Number.isFinite(n) && n >= 4) return 'v4';
   if (Number.isFinite(n) && n >= 3) return 'v3';
@@ -222,11 +263,20 @@ function v4ExtraTokenGrantsForTier(t) {
 
 const V5_MISSION_SKIP_TIERS = new Set([20, 40, 60, 80, 100]);
 const V5_ROBOT_HIRE_TIERS = new Set([10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+const V6_MISSION_SKIP_TIERS = new Set([10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+const V6_ROBOT_HIRE_TIERS = V5_ROBOT_HIRE_TIERS;
 
 function v5SpecialTokenGrantsForTier(t) {
   const out = {};
   if (V5_MISSION_SKIP_TIERS.has(t)) out.mission_skip_tokens = 1;
   if (V5_ROBOT_HIRE_TIERS.has(t)) out.robot_bodyguard_hire_tokens = 1;
+  return out;
+}
+
+function v6SpecialTokenGrantsForTier(t) {
+  const out = {};
+  if (V6_MISSION_SKIP_TIERS.has(t)) out.mission_skip_tokens = 1;
+  if (V6_ROBOT_HIRE_TIERS.has(t)) out.robot_bodyguard_hire_tokens = 1;
   return out;
 }
 
@@ -352,6 +402,17 @@ REWARD_PROFILES.v5 = {
   }),
   profileKey: 'v5',
 };
+REWARD_PROFILES.v6 = {
+  ...buildMicroRewardProfile({
+    seedFree: 'game_pass_micro_rewards:free:v6',
+    targetPoints: PROFILE_META.v6.points,
+    targetLootPieces: PROFILE_META.v6.loot,
+    targetMolotovs: PROFILE_META.v6.molotovs,
+    includeMolotovs: true,
+    targetCash: PROFILE_META.v6.cash,
+  }),
+  profileKey: 'v6',
+};
 
 function initialBaseGuess(tiers, baseTier, targetTotal) {
   const denom = tiers.reduce((acc, tt) => acc + (tt / baseTier), 0);
@@ -434,7 +495,7 @@ function getRewardsForMicroTier(microTier, profile = REWARD_PROFILES.v3) {
   if (!Number.isFinite(t) || t < 1) return {};
   const tier = Math.max(1, Math.min(100, Math.floor(t)));
   const base = { ...(profile?.precomputedByTier?.[tier] || {}) };
-  if (profile?.profileKey === 'v4' || profile?.profileKey === 'v5') {
+  if (profile?.profileKey === 'v4' || profile?.profileKey === 'v5' || profile?.profileKey === 'v6') {
     const extras = v4ExtraTokenGrantsForTier(tier);
     Object.entries(extras).forEach(([k, v]) => {
       base[k] = (base[k] || 0) + v;
@@ -453,6 +514,22 @@ function getRewardsForMicroTier(microTier, profile = REWARD_PROFILES.v3) {
     Object.entries(specials).forEach(([k, v]) => {
       base[k] = (base[k] || 0) + v;
     });
+  }
+  if (profile?.profileKey === 'v6') {
+    const specials = v6SpecialTokenGrantsForTier(tier);
+    Object.entries(specials).forEach(([k, v]) => {
+      base[k] = (base[k] || 0) + v;
+    });
+    const vipTheme = GP_S6_VIP_THEME_BY_TIER[tier];
+    if (vipTheme) {
+      base._game_pass_theme_name = vipTheme.name;
+      base._game_pass_theme_track = 'vip';
+    }
+    const freeTheme = GP_S6_FREE_THEME_BY_TIER[tier];
+    if (freeTheme) {
+      base._game_pass_free_theme_name = freeTheme.name;
+      base._game_pass_theme_track_free = 'free';
+    }
   }
   return base;
 }
@@ -526,7 +603,9 @@ function TierRewards({ rewards, isFreeMembership, isTierCompleted, microTier, re
   const perkLines = PERKS_FOR_TIER[microTier] || [];
   const hasNumeric = !!rewards && Object.values(rewards).some((v) => Number(v || 0) > 0);
   const hasStrain = !!rewards?._game_pass_strain_name;
-  const hasAny = hasNumeric || perkLines.length > 0 || hasStrain || (microTier === 100 && !isFreeMembership);
+  const hasVipTheme = !!rewards?._game_pass_theme_name;
+  const hasFreeTheme = !!rewards?._game_pass_free_theme_name;
+  const hasAny = hasNumeric || perkLines.length > 0 || hasStrain || hasVipTheme || hasFreeTheme || (microTier === 100 && !isFreeMembership);
   if (!hasAny) return null;
 
   const freeUnlockedRewardKey = isFreeMembership ? rewardProfile?.freeUnlockedKeyByTier?.[microTier] : null;
@@ -548,6 +627,16 @@ function TierRewards({ rewards, isFreeMembership, isTierCompleted, microTier, re
           {rewards._game_pass_strain_description ? (
             <div className="text-zinc-400 font-normal leading-snug">{rewards._game_pass_strain_description}</div>
           ) : null}
+        </div>
+      )}
+      {rewards?._game_pass_theme_name && !isFreeMembership && (
+        <div className="text-[9px] font-heading text-amber-300/95">
+          Dossier theme: {rewards._game_pass_theme_name}
+        </div>
+      )}
+      {rewards?._game_pass_free_theme_name && isFreeMembership && (
+        <div className="text-[9px] font-heading text-amber-300/95">
+          Free dossier theme: {rewards._game_pass_free_theme_name}
         </div>
       )}
       {REWARD_DISPLAY_ORDER.map((k) => {
@@ -1052,6 +1141,14 @@ export default function GamePass() {
                     <span className="text-primary font-bold">{seasonTargets.robotHire} Free Robot Bodyguard</span> tokens.
                   </>
                 ) : null}
+                {rewardProfileKey === 'v6' ? (
+                  <>
+                    {' '}Also <span className="text-primary font-bold">20 of each missing Store token</span>,{' '}
+                    <span className="text-primary font-bold">{seasonTargets.missionSkip} Mission Skip</span> tokens,{' '}
+                    <span className="text-primary font-bold">{seasonTargets.robotHire} Free Robot Bodyguard</span> tokens, and{' '}
+                    <span className="text-primary font-bold">Season 6 dossier themes</span> (5 free + 19 VIP, spread across the pass).
+                  </>
+                ) : null}
               </p>
 
               {vipClaimed && (
@@ -1157,7 +1254,7 @@ export default function GamePass() {
                     VIP rewards are applied automatically: when you activate the pass, anything you already earned this season (season rank XP) is granted immediately; after that, each new tier credits on its own as soon as you pass the next milestone (you don’t need to buy again).
                   </p>
                   <p className="text-[9px] text-emerald-400/90 font-heading leading-relaxed">
-                    While VIP is active: <span className="text-emerald-300 font-bold">+10% rank points</span> from all sources (crimes, kills, GTA, missions, objectives, and more).{" "}
+                    While VIP is active: <span className="text-emerald-300 font-bold">+25% rank points</span> from all sources (crimes, kills, GTA, OC, Crew OC, jail busts, missions, objectives, and more).{" "}
                     <span className="text-emerald-300 font-bold">Action waits are 25% shorter</span> (crimes, GTA, OC, jail, and similar). Travel, airport, and Kill page timers stay the same.
                   </p>
                 </>

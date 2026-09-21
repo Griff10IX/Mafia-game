@@ -4299,6 +4299,25 @@ def register(router):
         sid = await current_game_pass_season_id(db)
         return await preview_complete_remaining_vip(db, season_id=sid)
 
+    @router.post("/admin/game-pass/complete-remaining-vip-ghostface-preview")
+    async def admin_complete_remaining_vip_ghostface_preview(
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Send GhostFace an inbox PREVIEW of the close-out message + who/count (no grants)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from server import send_notification
+        from utils.game_pass_complete_remaining_vip import send_ghostface_complete_remaining_preview
+        from utils.game_pass_season_rp import current_game_pass_season_id
+
+        sid = await current_game_pass_season_id(db)
+        result = await send_ghostface_complete_remaining_preview(
+            db, send_notification=send_notification, season_id=sid
+        )
+        if not result.get("ok"):
+            raise HTTPException(status_code=404, detail=result.get("error") or "Preview failed")
+        return result
+
     class CompleteRemainingVipRunRequest(BaseModel):
         confirm: str = Field(..., min_length=1)
         dry_run: bool = False
@@ -4320,7 +4339,7 @@ def register(router):
         from utils.game_pass_complete_remaining_vip import (
             COMPLETE_REMAINING_VIP_CONFIRM_PHRASE,
             aggregate_vip_increment_after_cursor_for_season,
-            eligible_vip_users_filter,
+            complete_remaining_vip_users_filter,
             first_vip_completion_user_projection,
             get_season_completion_stamp,
             set_season_completion_stamp,
@@ -4345,10 +4364,10 @@ def register(router):
                 ),
             )
 
-        filt = eligible_vip_users_filter()
+        filt = complete_remaining_vip_users_filter()
         proj = first_vip_completion_user_projection()
         # Prefer each user's own season_id when set; fall back to global current.
-        proj = {**proj, "game_pass_season_id": 1, "points": 1}
+        proj = {**proj, "game_pass_season_id": 1, "points": 1, "is_dead": 1}
         live_updated = 0
         skipped_complete = 0
         skipped_no_op = 0
@@ -22373,16 +22392,19 @@ def register(router):
         )
         players_reconciled = 0
         if force_reconcile:
-            from utils.game_pass_season_rp import reconcile_all_stale_game_pass_users
+            # Wipe every player onto the new season_id so prior £15 VIP and £10 Prestige
+            # never carry over (must repurchase both).
+            from utils.game_pass_season_rp import force_reconcile_all_users_to_season
 
-            players_reconciled = await reconcile_all_stale_game_pass_users(db)
+            players_reconciled = await force_reconcile_all_users_to_season(db, season_id_out)
             try:
                 await srv.send_notification_to_all(
                     "New Game Pass season",
                     (
-                        f"Game Pass season {season_id_out} is live. Previous VIP does not carry over — "
-                        "buy Game Pass again to unlock this season's VIP track. After you finish VIP, "
-                        "you can buy Prestige once this season and climb the same VIP track again."
+                        f"Game Pass season {season_id_out} is live. "
+                        "Your previous Game Pass (£15 VIP) and Prestige (£10) do not carry over — "
+                        "buy Game Pass again for this season's VIP track. After you finish VIP, "
+                        "you can buy Prestige once this season to climb the track again with bonus rewards."
                     ),
                     notification_type="system",
                     exclude_npc=True,
@@ -22393,7 +22415,7 @@ def register(router):
             "message": (
                 f"Game Pass season updated"
                 + (
-                    f"; cleared prior VIP/progress for {players_reconciled} player(s) — must repurchase"
+                    f"; cleared prior VIP + Prestige for {players_reconciled} player(s) — must repurchase both"
                     if force_reconcile
                     else ""
                 )

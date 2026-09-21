@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 from utils.game_pass_micro_rewards import vip_game_pass_entitlement_active
 from utils.game_pass_season import get_game_pass_season_public
 
-VIP_RANK_POINTS_BONUS_MULT = 1.10
+VIP_RANK_POINTS_BONUS_MULT = 1.25
 
 _RECONCILE_UNSET_FIELDS = {
     "rank_xp_pass_token_expires_at": "",
@@ -24,7 +24,7 @@ async def current_game_pass_season_id(db) -> str:
 
 
 def scale_rank_points_for_vip(base_rp: int, user: Optional[Dict[str, Any]]) -> int:
-    """+10% rank points while active VIP Game Pass; +5% more if Sour Diesel GP strain owned."""
+    """+25% rank points while active VIP Game Pass; +5% more if Sour Diesel GP strain owned."""
     try:
         rp = int(base_rp or 0)
     except (TypeError, ValueError):

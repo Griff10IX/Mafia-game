@@ -1567,10 +1567,14 @@ async def get_current_user(
                         for t in range(last_micro + 1, current_micro + 1):
                             rewards = rewards_for_micro_tier(t, season_id=grant_season_id)
                             free_key = free_unlocked_key_for_micro_tier(t, rewards, season_id=grant_season_id)
-                            if not free_key:
-                                continue
-                            reward_amount = int(rewards.get(free_key) or 0)
-                            if reward_amount <= 0:
+                            reward_amount = int(rewards.get(free_key) or 0) if free_key else 0
+                            update_doc: dict = {"$set": {"rank_xp_pass_free_last_micro_tier_granted": t}}
+                            if free_key and reward_amount > 0:
+                                update_doc["$inc"] = {free_key: reward_amount}
+                            elif not free_key:
+                                # Still advance cursor so free themes / empty tiers do not soft-lock.
+                                pass
+                            else:
                                 continue
                             res = await db.users.update_one(
                                 {
@@ -1580,16 +1584,49 @@ async def get_current_user(
                                         {"rank_xp_pass_free_last_micro_tier_granted": {"$exists": False}},
                                     ],
                                 },
-                                {"$inc": {free_key: reward_amount}, "$set": {"rank_xp_pass_free_last_micro_tier_granted": t}},
+                                update_doc,
                             )
                             if res.modified_count <= 0:
                                 continue
-                            user[free_key] = int(user.get(free_key) or 0) + reward_amount
-                            if free_key == "points":
-                                asyncio.create_task(log_points_event(db, user_id=user_id, points=reward_amount,
-                                    event_type="game_pass_free_grant", event_ref=f"tier:{t}",
-                                    wallet_points_before=int(user.get("points") or 0) - reward_amount,
-                                    wallet_points_after=int(user.get("points") or 0)))
+                            if free_key and reward_amount > 0:
+                                user[free_key] = int(user.get(free_key) or 0) + reward_amount
+                                if free_key == "points":
+                                    asyncio.create_task(log_points_event(db, user_id=user_id, points=reward_amount,
+                                        event_type="game_pass_free_grant", event_ref=f"tier:{t}",
+                                        wallet_points_before=int(user.get("points") or 0) - reward_amount,
+                                        wallet_points_after=int(user.get("points") or 0)))
+
+                            try:
+                                from utils.game_pass_micro_rewards import season_reward_profile_key
+                                from utils.game_pass_s6_themes import (
+                                    game_pass_s6_theme_display_name,
+                                    theme_for_free_micro_tier,
+                                )
+                                from utils.profile_background_themes import grant_ur_theme_to_user
+
+                                free_theme_id = theme_for_free_micro_tier(
+                                    t, profile_key=season_reward_profile_key(grant_season_id)
+                                )
+                                if free_theme_id:
+                                    await grant_ur_theme_to_user(
+                                        db, user_id, free_theme_id, count_toward_pool=False
+                                    )
+                                    asyncio.create_task(
+                                        send_notification(
+                                            user_id,
+                                            "Game Pass free theme",
+                                            f"You unlocked the dossier theme {game_pass_s6_theme_display_name(free_theme_id)} (free track tier {t}).",
+                                            "reward",
+                                            tier_micro=t,
+                                            theme_id=free_theme_id,
+                                        )
+                                    )
+                            except Exception:
+                                logging.exception(
+                                    "game_pass s6 free theme grant failed user_id=%s tier=%s",
+                                    user_id,
+                                    t,
+                                )
 
                             next_tier = t + 1 if t < MAX_MICRO_TIER else None
                             next_summary = (
@@ -1598,6 +1635,8 @@ async def get_current_user(
                                 else "Max tier reached"
                             )
 
+                            if not free_key or reward_amount <= 0:
+                                continue
                             if free_key == "money":
                                 received_text = f"${reward_amount:,} cash"
                             elif free_key in ("bullets", "points", "respect_points", "molotovs"):

@@ -385,6 +385,28 @@ async def _try_grant_rank_xp_pass_micro_tier(
                 "game_pass strain grant failed user_id=%s tier=%s", user_id, t
             )
 
+    # Season 6+ dossier themes on £15 VIP track (not Prestige).
+    try:
+        from utils.game_pass_micro_rewards import season_reward_profile_key
+        from utils.game_pass_s6_themes import (
+            game_pass_s6_theme_display_name,
+            theme_for_vip_micro_tier,
+        )
+        from utils.profile_background_themes import grant_ur_theme_to_user
+
+        theme_id = theme_for_vip_micro_tier(t, profile_key=season_reward_profile_key(season_id))
+        if theme_id:
+            await grant_ur_theme_to_user(db, user_id, theme_id, count_toward_pool=False)
+            rewards = dict(rewards)
+            rewards["_game_pass_theme"] = theme_id
+            rewards["_game_pass_theme_name"] = game_pass_s6_theme_display_name(theme_id)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "game_pass s6 theme grant failed user_id=%s tier=%s", user_id, t
+        )
+
     if t == MAX_MICRO_TIER:
         try:
             from utils.game_pass_vip_car import grant_game_pass_vip_car_if_eligible

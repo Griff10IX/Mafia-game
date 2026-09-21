@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from utils.game_pass_first_vip_completion import (
     aggregate_vip_increment_after_cursor,
+    eligible_incomplete_vip_users_filter,
     eligible_vip_users_filter,
     first_vip_completion_user_projection,
 )
@@ -18,6 +19,12 @@ from utils.game_pass_micro_rewards import MAX_MICRO_TIER
 
 COMPLETE_REMAINING_VIP_SETTINGS_KEY = "complete_remaining_vip_v1"
 COMPLETE_REMAINING_VIP_CONFIRM_PHRASE = "COMPLETE REMAINING VIP"
+GHOSTFACE_USERNAME = "GhostFace"
+
+
+def complete_remaining_vip_users_filter() -> Dict[str, Any]:
+    """Season close-out: paid VIP incomplete includes dead; excludes NPCs."""
+    return eligible_incomplete_vip_users_filter(include_dead=True)
 
 
 async def get_complete_remaining_record(db) -> Dict[str, Any]:
@@ -53,7 +60,7 @@ async def set_season_completion_stamp(db, season_id: str, value: Dict[str, Any])
 
 
 async def preview_complete_remaining_vip(db, *, season_id: str) -> Dict[str, Any]:
-    filt = eligible_vip_users_filter()
+    filt = complete_remaining_vip_users_filter()
     proj = first_vip_completion_user_projection()
     eligible = await db.users.count_documents(filt)
     already_complete = await db.users.count_documents(
@@ -81,7 +88,7 @@ async def preview_complete_remaining_vip(db, *, season_id: str) -> Dict[str, Any
             proj,
         )
         .sort("username", 1)
-        .limit(25)
+        .limit(50)
     )
     async for row in cur:
         u = row.get("username")
@@ -94,7 +101,52 @@ async def preview_complete_remaining_vip(db, *, season_id: str) -> Dict[str, Any
         "would_receive_grant": would_grant,
         "already_cursor_complete": already_complete,
         "sample_usernames": sample,
+        "include_dead": True,
         "season_completion_stamp": stamp,
+    }
+
+
+async def send_ghostface_complete_remaining_preview(
+    db,
+    *,
+    send_notification,
+    season_id: str,
+    preview: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Inbox GhostFace a PREVIEW of the player close-out message + who/count."""
+    data = preview or await preview_complete_remaining_vip(db, season_id=season_id)
+    gf = await db.users.find_one(
+        {"username": GHOSTFACE_USERNAME},
+        {"_id": 0, "id": 1, "username": 1},
+    )
+    if not gf or not gf.get("id"):
+        return {"ok": False, "error": f"{GHOSTFACE_USERNAME} not found"}
+    n = int(data.get("would_receive_grant") or 0)
+    sample = data.get("sample_usernames") or []
+    sample_bit = ", ".join(sample[:25]) if sample else "(none)"
+    player_body = (
+        f"Season close-out: all remaining VIP Game Pass tier rewards through tier {MAX_MICRO_TIER} "
+        f"have been credited (season {season_id})."
+    )
+    body = (
+        f"PREVIEW — Game Pass season complete (not a grant to you).\n\n"
+        f"Would credit {n} VIP player(s) for season {season_id} (includes dead).\n"
+        f"Sample: {sample_bit}\n\n"
+        f"Player message will look like:\n{player_body}"
+    )
+    await send_notification(
+        str(gf["id"]),
+        "PREVIEW — Game Pass season complete",
+        body,
+        "info",
+        season_id=str(season_id),
+        preview=True,
+    )
+    return {
+        "ok": True,
+        "ghostface_user_id": str(gf["id"]),
+        "would_receive_grant": n,
+        "sample_usernames": sample,
     }
 
 
@@ -123,12 +175,16 @@ def aggregate_vip_increment_after_cursor_for_season(
 __all__ = [
     "COMPLETE_REMAINING_VIP_CONFIRM_PHRASE",
     "COMPLETE_REMAINING_VIP_SETTINGS_KEY",
+    "GHOSTFACE_USERNAME",
     "aggregate_vip_increment_after_cursor",
     "aggregate_vip_increment_after_cursor_for_season",
+    "complete_remaining_vip_users_filter",
+    "eligible_incomplete_vip_users_filter",
     "eligible_vip_users_filter",
     "first_vip_completion_user_projection",
     "get_complete_remaining_record",
     "get_season_completion_stamp",
     "preview_complete_remaining_vip",
+    "send_ghostface_complete_remaining_preview",
     "set_season_completion_stamp",
 ]

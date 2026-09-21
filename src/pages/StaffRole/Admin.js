@@ -4567,6 +4567,22 @@ export default function Admin() {
     }
   };
 
+  const sendCompleteRemainingVipGhostfacePreview = async () => {
+    setCompleteRemainingVipPreviewLoading(true);
+    try {
+      const res = await api.post('/admin/game-pass/complete-remaining-vip-ghostface-preview');
+      toast.success(
+        res.data?.ok
+          ? `GhostFace preview sent (${res.data.would_receive_grant ?? '?'} players)`
+          : 'GhostFace preview sent'
+      );
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'GhostFace preview failed');
+    } finally {
+      setCompleteRemainingVipPreviewLoading(false);
+    }
+  };
+
   const runCompleteRemainingVip = async (dryRun) => {
     if ((completeRemainingVipConfirm || '').trim() !== COMPLETE_REMAINING_VIP_CONFIRM) {
       toast.error(`Type exactly: ${COMPLETE_REMAINING_VIP_CONFIRM}`);
@@ -11941,14 +11957,16 @@ export default function Admin() {
                   <span className="text-[10px] font-heading font-bold text-cyan-300 uppercase tracking-wider">Complete remaining VIP tiers (per season)</span>
                 </div>
                 <p className="text-[9px] text-mutedForeground font-heading">
-                  Same grant as First Game Pass completion, but reusable: once live per{' '}
-                  <span className="font-mono">season_id</span>
-                  . Grants missing VIP tiers and any missing season-4 Weed Empire strains (already owned strains are skipped). Confirm phrase:{' '}
-                  <span className="font-mono">{COMPLETE_REMAINING_VIP_CONFIRM}</span>.
+                  Credits remaining VIP micro tiers through 100 for every VIP-claimed user this season
+                  (includes dead; excludes NPCs). Also grants missing season-4 Weed Empire strains.
+                  Confirm phrase: <span className="font-mono">{COMPLETE_REMAINING_VIP_CONFIRM}</span>.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <BtnSecondary type="button" onClick={loadCompleteRemainingVipPreview} disabled={completeRemainingVipPreviewLoading || completeRemainingVipRunLoading}>
                     {completeRemainingVipPreviewLoading ? '…' : 'Preview'}
+                  </BtnSecondary>
+                  <BtnSecondary type="button" onClick={sendCompleteRemainingVipGhostfacePreview} disabled={completeRemainingVipPreviewLoading || completeRemainingVipRunLoading}>
+                    Send GhostFace preview
                   </BtnSecondary>
                   <input
                     type="text"

@@ -14,8 +14,10 @@ Season profiles:
   - v2 (season_id < 3): legacy totals — 25k points, 2k loot, no molotovs.
   - v3 (season_id == 3): 30k points, 2.5k loot, 1k molotovs every tier.
   - v4 (season_id == 4): v3 totals + 20 of each extra Store token + 5 permanent Weed strains.
-  - v5 (season_id >= 5): 38k points, $10B cash, 3k loot, v4 Store tokens, 5 Mission Skip,
+  - v5 (season_id == 5): 38k points, $10B cash, 3k loot, v4 Store tokens, 5 Mission Skip,
     10 Free Robot Bodyguard tokens. No new Weed strains (existing unlocks still work).
+  - v6 (season_id >= 6): 45k points, $25B cash, 5k loot, v4 Store tokens, 10 Mission Skip
+    (tiers 10..100), 10 robot hires; Season 6 dossier themes granted separately.
 """
 
 from __future__ import annotations
@@ -327,18 +329,28 @@ _PROFILE_V5 = _build_micro_reward_profile(
     include_molotovs=True,
     target_cash=10_000_000_000,
 )
+# v6: Season 6 VIP totals (themes granted outside this numeric profile).
+_PROFILE_V6 = _build_micro_reward_profile(
+    seed_free="game_pass_micro_rewards:free:v6",
+    target_points=45_000,
+    target_loot_pieces=5_000,
+    target_molotovs=1_000,
+    include_molotovs=True,
+    target_cash=25_000_000_000,
+)
 _REWARD_PROFILES: dict[str, _RewardProfile] = {
     "v2": _PROFILE_V2,
     "v3": _PROFILE_V3,
     "v4": _PROFILE_V4,
     "v5": _PROFILE_V5,
+    "v6": _PROFILE_V6,
 }
 
 # Season 3–4 public targets (keep in sync with src/pages/Game/GamePass.js PROFILE_V3 / V4).
 TARGET_POINTS_TOTAL = 30_000
 TARGET_LOOT_PIECES_TOTAL = 2_500
 TARGET_MOLOTOVS_TOTAL = 1_000
-# Season 5+ (keep in sync with GamePass.js PROFILE_META.v5).
+# Season 5 (keep in sync with GamePass.js PROFILE_META.v5).
 TARGET_CASH_TOTAL_V5 = 10_000_000_000
 TARGET_POINTS_TOTAL_V5 = 38_000
 TARGET_LOOT_PIECES_TOTAL_V5 = 3_000
@@ -346,17 +358,27 @@ TARGET_MISSION_SKIP_TOTAL_V5 = 5
 TARGET_ROBOT_HIRE_TOTAL_V5 = 10
 _V5_MISSION_SKIP_TIERS = (20, 40, 60, 80, 100)
 _V5_ROBOT_HIRE_TIERS = (10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
+# Season 6+
+TARGET_CASH_TOTAL_V6 = 25_000_000_000
+TARGET_POINTS_TOTAL_V6 = 45_000
+TARGET_LOOT_PIECES_TOTAL_V6 = 5_000
+TARGET_MISSION_SKIP_TOTAL_V6 = 10
+TARGET_ROBOT_HIRE_TOTAL_V6 = 10
+_V6_MISSION_SKIP_TIERS = (10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
+_V6_ROBOT_HIRE_TIERS = _V5_ROBOT_HIRE_TIERS
 
 # Back-compat alias for admin/tools that expect a single baseline map.
 MICRO_TIER_REWARD_BASELINES = _PROFILE_V3["baselines"]
 
 
 def season_reward_profile_key(season_id: Optional[str]) -> str:
-    """Map game_pass_season_id → v2 (<3), v3 (3), v4 (4), v5 (5+)."""
+    """Map game_pass_season_id → v2 (<3), v3 (3), v4 (4), v5 (5), v6 (6+)."""
     try:
         n = int(str(season_id or "0").strip() or "0")
     except ValueError:
         return "v2"
+    if n >= 6:
+        return "v6"
     if n >= 5:
         return "v5"
     if n >= 4:
@@ -397,6 +419,16 @@ def _v5_special_token_grants_for_tier(t: int) -> Dict[str, int]:
     return out
 
 
+def _v6_special_token_grants_for_tier(t: int) -> Dict[str, int]:
+    """Mission Skip (10) and Free Robot Bodyguard (10) on decade VIP tiers."""
+    out: Dict[str, int] = {}
+    if t in _V6_MISSION_SKIP_TIERS:
+        out["mission_skip_tokens"] = 1
+    if t in _V6_ROBOT_HIRE_TIERS:
+        out["robot_bodyguard_hire_tokens"] = 1
+    return out
+
+
 def _rewards_for_micro_tier_from_profile(
     micro_tier: int,
     profile: _RewardProfile,
@@ -422,12 +454,16 @@ def _rewards_for_micro_tier_from_profile(
     ar_amt = int(math.ceil(float(ar_cfg["baseAmount"]) * _reward_weight(t, int(ar_cfg["baseTier"]))))
     if ar_amt > 0:
         out["auto_rank_2h_tokens"] = ar_amt
-    if profile_key in ("v4", "v5"):
+    if profile_key in ("v4", "v5", "v6"):
         for k, v in _v4_extra_token_grants_for_tier(t).items():
             if int(v or 0) > 0:
                 out[k] = int(out.get(k) or 0) + int(v)
     if profile_key == "v5":
         for k, v in _v5_special_token_grants_for_tier(t).items():
+            if int(v or 0) > 0:
+                out[k] = int(out.get(k) or 0) + int(v)
+    if profile_key == "v6":
+        for k, v in _v6_special_token_grants_for_tier(t).items():
             if int(v or 0) > 0:
                 out[k] = int(out.get(k) or 0) + int(v)
     return out
@@ -644,3 +680,58 @@ def format_rewards_summary(rewards: Dict[str, int], *, include_zero: bool = Fals
         else:
             parts.append(f"{_format_amount(amt)}x {label}")
     return ", ".join(parts)
+
+
+def verify_season_payout_spread(
+    season_id: Optional[str] = None,
+    *,
+    keys: Optional[tuple] = ("money", "points"),
+    max_single_tier_frac: float = 0.12,
+    max_adjacent_pair_frac: float = 0.12,
+) -> Dict[str, Any]:
+    """
+    Ensure cash/points are not dumped in 1–2 micro-tiers.
+
+    Keys rotate across tiers (points ~every 5), so late singles can be ~10% of season total
+    while any 2 consecutive tiers still cannot approach the full season budget.
+    """
+    key_list = list(keys or ("money", "points"))
+    per_key_by_tier: Dict[str, list] = {k: [] for k in key_list}
+    totals: Dict[str, int] = {k: 0 for k in key_list}
+    for t in range(1, MAX_MICRO_TIER + 1):
+        r = rewards_for_micro_tier(t, season_id=season_id)
+        for k in key_list:
+            v = int(r.get(k) or 0)
+            per_key_by_tier[k].append(v)
+            totals[k] += v
+    offenders: list = []
+    for k in key_list:
+        total = max(1, totals[k])
+        vals = per_key_by_tier[k]
+        for i, v in enumerate(vals):
+            frac = v / total
+            if frac > max_single_tier_frac:
+                offenders.append({"key": k, "kind": "single", "tier": i + 1, "amount": v, "frac": round(frac, 4)})
+            if i + 1 < len(vals):
+                pair = v + vals[i + 1]
+                pfrac = pair / total
+                if pfrac > max_adjacent_pair_frac:
+                    offenders.append(
+                        {
+                            "key": k,
+                            "kind": "adjacent",
+                            "tiers": [i + 1, i + 2],
+                            "amount": pair,
+                            "frac": round(pfrac, 4),
+                        }
+                    )
+    return {
+        "ok": len(offenders) == 0,
+        "season_id": season_id,
+        "profile": season_reward_profile_key(season_id),
+        "totals": totals,
+        "max_single_tier_frac": max_single_tier_frac,
+        "max_adjacent_pair_frac": max_adjacent_pair_frac,
+        "offenders": offenders[:40],
+        "offender_count": len(offenders),
+    }

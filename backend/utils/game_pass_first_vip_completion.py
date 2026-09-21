@@ -23,6 +23,17 @@ def eligible_vip_users_filter() -> Dict[str, Any]:
     }
 
 
+def eligible_incomplete_vip_users_filter(*, include_dead: bool = False) -> Dict[str, Any]:
+    """VIP-claimed non-NPC users. include_dead=True for season close-out (complete-remaining)."""
+    filt: Dict[str, Any] = {
+        "rank_xp_pass_rewards_granted": True,
+        "is_npc": {"$ne": True},
+    }
+    if not include_dead:
+        filt["is_dead"] = {"$ne": True}
+    return filt
+
+
 def first_vip_completion_user_projection() -> Dict[str, int]:
     return {
         "_id": 0,

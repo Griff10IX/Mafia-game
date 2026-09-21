@@ -6,6 +6,18 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-21[/color][/b] — [b]Game Pass Season 6[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Season 6[/b] is live through [b]1 Nov 2026[/b] (UK). Previous [b]£15 Game Pass[/b] and [b]£10 Prestige[/b] do [b]not[/b] carry over — buy again for this season.[/color]
+[*][color=#888888][b]VIP track:[/b] [b]$25B[/b] cash, [b]45,000[/b] points, [b]5,000[/b] loot pieces, [b]10[/b] Mission Skip, plus Store tokens / robot hires / perks as before. Rewards stay spread across the 100 tiers.[/color]
+[*][color=#888888][b]Themes:[/b] [b]24[/b] new dossier themes on the [b]£15[/b] pass ([b]5[/b] free-track + [b]19[/b] VIP), spaced through the board — not on Prestige.[/color]
+[*][color=#888888][b]While VIP is active:[/b] [b]+25% rank points[/b] from crimes, GTA, OC, Crew OC, jail busts, missions, objectives, and other RP sources.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-21[/color][/b] — [b]Family Fortnight Leaderboard[/b][/size]
 [quote]
 [list]
