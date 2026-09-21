@@ -51,8 +51,8 @@ LOOT_BOX_OPEN_COST_BY_TIER: Dict[str, int] = {
     "rare": 500,
     "ultra_rare": 1000,
 }
-LOOT_MAX_POINTS = 25_000
-LOOT_MAX_CASH = 10_000_000_000
+LOOT_MAX_POINTS = 10_000
+LOOT_MAX_CASH = 250_000_000
 # Secret jackpot on points prizes — do not expose chance in public reward info / UI.
 # Chance is by effective reward tier (not paid box tier).
 LOOT_POINTS_HIGH_ROLL_CHANCE_BY_TIER: Dict[str, float] = {
@@ -61,12 +61,7 @@ LOOT_POINTS_HIGH_ROLL_CHANCE_BY_TIER: Dict[str, float] = {
     "rare": 0.15,
     "ultra_rare": 0.20,
 }
-LOOT_POINTS_HIGH_FLOOR = 5_000
-LOOT_CASH_HIGH_FLOOR = 500_000_000
-LOOT_UR_GUARANTEED_CASH = 7_500_000
-LOOT_UR_GUARANTEED_POINTS = 2_500
-LOOT_UR_MISSION_SKIP_GRANT = 5
-LOOT_UR_ROBOT_BG_GRANT = 5
+LOOT_POINTS_HIGH_FLOOR = 3_000
 PAID_LOOT_TIERS = ("common", "uncommon", "rare", "ultra_rare")
 REWARD_TIER_RANK = {"common": 0, "uncommon": 1, "rare": 2, "ultra_rare": 3}
 # Per-prize effective tier weights when paid tier is common or uncommon (must sum ~1).
@@ -271,9 +266,9 @@ STANDARD_PRIZE_LABELS = {
 # Prize count range per rolled box tier (same as _roll_box_quality_from_config).
 BOX_TIER_PRIZE_COUNTS: Dict[str, Tuple[int, int]] = {
     "common": (1, 2),
-    "uncommon": (2, 3),
-    "rare": (3, 5),
-    "ultra_rare": (4, 6),
+    "uncommon": (1, 3),
+    "rare": (2, 5),
+    "ultra_rare": (3, 6),
 }
 # Standard prize types always included on paid tier opens (in addition to random slots).
 GUARANTEED_STANDARD_TYPES_BY_TIER: Dict[str, Tuple[str, ...]] = {
@@ -1054,10 +1049,6 @@ def _loot_token_amount_range(box_quality: str) -> Tuple[int, int]:
     q = _normalize_reward_tier(box_quality)
     if q == "common":
         return (1, 1)
-    if q == "uncommon":
-        return (2, 2)
-    if q == "rare":
-        return (4, 4)
     if q == "ultra_rare":
         return (2, 2)
     return (1, 2)
@@ -1073,7 +1064,6 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         PARDON_NAME,
         WEAPON_LOOT_BAR_NAME,
     )
-    from utils.profile_background_themes import ur_loot_theme_reward_info_rows
 
     standard_prizes = [{"id": k, "label": STANDARD_PRIZE_LABELS.get(k, k)} for k, _ in STANDARD_REWARD_WEIGHTS]
     exclusives = [
@@ -1101,7 +1091,6 @@ def _loot_public_reward_info() -> Dict[str, Any]:
             "cap_global": 1,
         },
     ]
-    exclusives.extend(ur_loot_theme_reward_info_rows())
     tiers: Dict[str, Any] = {}
     for q in PAID_LOOT_TIERS:
         t = _loot_tier_profile(q)
@@ -1120,7 +1109,7 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         tier_token_types = [
             {"id": tt, "label": _loot_token_type_label(tt)} for tt in _loot_token_pool_for_tier(q)
         ]
-        row: Dict[str, Any] = {
+        tiers[q] = {
             "prize_count": list(BOX_TIER_PRIZE_COUNTS[q]),
             "guaranteed_standard_types": guaranteed,
             "cash": [int(c0), int(c1)],
@@ -1131,14 +1120,6 @@ def _loot_public_reward_info() -> Dict[str, Any]:
             "tokens": {"amount": [t_lo, t_hi], "types": tier_token_types},
             "perks": perk_labels,
         }
-        if q == "ultra_rare":
-            row["guaranteed_cash"] = LOOT_UR_GUARANTEED_CASH
-            row["cash_high"] = [LOOT_CASH_HIGH_FLOOR, LOOT_MAX_CASH]
-            row["guaranteed_points"] = LOOT_UR_GUARANTEED_POINTS
-            row["points_high"] = [LOOT_POINTS_HIGH_FLOOR, LOOT_MAX_POINTS]
-            row["guaranteed_mission_skip"] = LOOT_UR_MISSION_SKIP_GRANT
-            row["guaranteed_robot_bodyguard"] = LOOT_UR_ROBOT_BG_GRANT
-        tiers[q] = row
     jackpot_tiers: Dict[str, Any] = {}
     for paid in ("common", "uncommon"):
         w = LOOT_REWARD_TIER_WEIGHTS.get(paid) or {}
@@ -1168,14 +1149,12 @@ def _loot_public_reward_info() -> Dict[str, Any]:
             "loot can grant you at most one — more only by killing holders), "
             "Duesenberg Model SJ 1 (Rare boxes 5% / Ultra Rare 10% only; 2s travel), "
             "Mercedes-Benz 540K Special Roadster 1 (Ultra Rare boxes only; 2s travel). "
-            "Ultra Rare dossier themes: 1 of each in the game (equipped bonus while worn; lost on death). "
             "If a type is full or you already own that exclusive, the roll tries another exclusive or becomes a standard prize. "
             "Weed exclusives, Model SJ, and 540K transfer on PvP kill once claimed. "
             f"{PARDON_NAME} transfers on kill (max 2) then returns to the vault pool."
         ),
         "standard_token_note": (
-            "Ultra Rare boxes always grant 5 Mission Skip and 5 Free Robot Bodyguard tokens, "
-            "and can also roll other store tokens from the token prize pool."
+            "Ultra Rare boxes can also roll Mission Skip and Free Robot Bodyguard from the token prize pool."
         ),
         "tiers": tiers,
     }
@@ -1186,51 +1165,51 @@ def _loot_tier_profile(box_quality: str) -> Dict[str, Any]:
     q = _normalize_box_quality(box_quality)
     tiers: Dict[str, Dict[str, Any]] = {
         "common": {
-            "cash": (5_000_000, 5_000_000),
-            "rank_points": (500, 2_500),
-            "bullets": (50, 1_000),
-            "loot_pieces": (1, 5),
+            "cash": (25_000, 5_000_000),
+            "rank_points": (20, 800),
+            "bullets": (50, 3_000),
+            "loot_pieces": (2, 30),
             "car_rarities": ("common",),
             "car_count": (1, 2),
             "points_min": 150,
-            "points_mix": (150, 500, 1_200),
-            "points_max": 2_500,
+            "points_mix": (150, 300, 500),
+            "points_max": 500,
             "perk_exclude": frozenset({"gta_rare_100"}),
         },
         "uncommon": {
-            "cash": (10_000_000, 10_000_000),
-            "rank_points": (1_000, 5_000),
-            "bullets": (100, 2_000),
-            "loot_pieces": (2, 10),
+            "cash": (250_000, 40_000_000),
+            "rank_points": (200, 2_500),
+            "bullets": (1_000, 20_000),
+            "loot_pieces": (8, 55),
             "car_rarities": ("common", "uncommon"),
             "car_count": (1, 3),
-            "points_min": 300,
-            "points_mix": (300, 1_500, 3_000),
-            "points_max": 5_000,
+            "points_min": 400,
+            "points_mix": (400, 900, 1_400),
+            "points_max": 1_500,
             "perk_exclude": frozenset(),
         },
         "rare": {
-            "cash": (20_000_000, 20_000_000),
-            "rank_points": (2_000, 10_000),
-            "bullets": (200, 4_000),
-            "loot_pieces": (4, 20),
+            "cash": (10_000_000, LOOT_MAX_CASH),
+            "rank_points": (800, 5_000),
+            "bullets": (7_500, 50_000),
+            "loot_pieces": (20, 95),
             "car_rarities": ("uncommon", "rare", "ultra_rare"),
             "car_count": (1, 1),
-            "points_min": 600,
-            "points_mix": (600, 3_000, 6_000),
-            "points_max": 10_000,
+            "points_min": 800,
+            "points_mix": (1_000, 1_800, 2_500),
+            "points_max": 2_999,
             "perk_exclude": frozenset(),
         },
         "ultra_rare": {
-            "cash": (LOOT_UR_GUARANTEED_CASH, LOOT_MAX_CASH),
-            "rank_points": (6_000, 30_000),
-            "bullets": (600, 12_000),
-            "loot_pieces": (12, 60),
+            "cash": (50_000_000, LOOT_MAX_CASH),
+            "rank_points": (2_000, 8_000),
+            "bullets": (15_000, 60_000),
+            "loot_pieces": (40, 120),
             "car_rarities": ("ultra_rare",),
             "car_count": (1, 1),
-            "points_min": LOOT_UR_GUARANTEED_POINTS,
-            "points_mix": (2_500, 3_500, 4_500),
-            "points_max": LOOT_MAX_POINTS,
+            "points_min": 1_200,
+            "points_mix": (1_500, 2_200, 2_800),
+            "points_max": 2_999,
             "perk_exclude": frozenset(),
         },
     }
@@ -1280,26 +1259,15 @@ def _loot_points_high_roll_chance(reward_tier: str) -> float:
 
 
 def _loot_roll_points(tier: Dict[str, Any], reward_tier: str) -> int:
-    """Standard band; Ultra Rare can high-roll 5k–25k. Other tiers use secret high-roll when configured."""
+    """Standard band stays under LOOT_POINTS_HIGH_FLOOR; tiered secret high-roll for 3000+."""
     mix = list(tier["points_mix"])
     lo = int(tier.get("points_min") or min(mix))
-    q = _normalize_reward_tier(reward_tier)
-    if q == "ultra_rare":
-        if _rng.random() < _loot_points_high_roll_chance(reward_tier):
-            return _clamp_loot_points(int(_rng.randint(LOOT_POINTS_HIGH_FLOOR, LOOT_MAX_POINTS)))
-        # Guaranteed floor band (no high roll).
-        standard_hi = min(int(tier["points_max"]), LOOT_POINTS_HIGH_FLOOR - 1)
-        if standard_hi < lo:
-            standard_hi = lo
-        if _rng.random() < 0.62:
-            return _clamp_loot_points(min(int(_rng.choice(mix)), standard_hi))
-        return _clamp_loot_points(int(_rng.randint(lo, standard_hi)))
-
     standard_hi = min(int(tier["points_max"]), LOOT_POINTS_HIGH_FLOOR - 1)
     if standard_hi < lo:
         standard_hi = lo
+
     if _rng.random() < _loot_points_high_roll_chance(reward_tier):
-        amount = int(_rng.randint(LOOT_POINTS_HIGH_FLOOR, min(LOOT_MAX_POINTS, max(LOOT_POINTS_HIGH_FLOOR, int(tier["points_max"])))))
+        amount = int(_rng.randint(LOOT_POINTS_HIGH_FLOOR, LOOT_MAX_POINTS))
     elif _rng.random() < 0.62:
         amount = min(int(_rng.choice(mix)), standard_hi)
     else:
@@ -1307,30 +1275,15 @@ def _loot_roll_points(tier: Dict[str, Any], reward_tier: str) -> int:
     return _clamp_loot_points(amount)
 
 
-def _loot_roll_cash(tier: Dict[str, Any], reward_tier: str) -> int:
-    """Flat cash for C/U/R; Ultra Rare guaranteed floor with secret high roll to $10B."""
-    c_lo, c_hi = tier["cash"]
-    q = _normalize_reward_tier(reward_tier)
-    if q == "ultra_rare":
-        if _rng.random() < _loot_points_high_roll_chance(reward_tier):
-            return _clamp_loot_cash(int(_rng.randint(LOOT_CASH_HIGH_FLOOR, LOOT_MAX_CASH)))
-        return _clamp_loot_cash(LOOT_UR_GUARANTEED_CASH)
-    if int(c_lo) == int(c_hi):
-        return _clamp_loot_cash(int(c_lo))
-    return _clamp_loot_cash(int(_rng.randint(int(c_lo), int(c_hi))))
-
-
 def _loot_token_amount(box_quality: str) -> int:
     q = _normalize_reward_tier(box_quality)
     if q == "common":
         return 1
     if q == "uncommon":
-        return 2
-    if q == "rare":
-        return 4
+        return 2 if _rng.random() < 0.38 else 1
     if q == "ultra_rare":
         return 2
-    return 1
+    return 2 if _rng.random() < 0.58 else 1
 
 
 async def open_loot_box(
@@ -1761,7 +1714,8 @@ async def open_loot_box(
                 merged_inc["rank_points"] = merged_inc.get("rank_points", 0) + amount
                 _append_standard({"type": "rank_points", "amount": amount})
             elif chosen == "cash":
-                amount = _loot_roll_cash(tier, reward_tier)
+                c_lo, c_hi = tier["cash"]
+                amount = _clamp_loot_cash(_rng.randint(int(c_lo), int(c_hi)))
                 merged_inc["money"] = merged_inc.get("money", 0) + amount
                 _append_standard({"type": "cash", "amount": amount})
             elif chosen == "bullets":
@@ -1812,80 +1766,6 @@ async def open_loot_box(
                     "type": "perk",
                     "name": PERK_LABELS.get(perk, perk),
                 })
-
-        # Ultra Rare: always grant Mission Skip + Robot Bodyguard tokens (in addition to prizes).
-        if paid_tier == "ultra_rare":
-            skip_field = LOOT_BOX_UR_ONLY_TOKEN_FIELDS.get("mission_skip") or "mission_skip_tokens"
-            robot_field = LOOT_BOX_UR_ONLY_TOKEN_FIELDS.get("robot_bodyguard_hire") or "robot_bodyguard_hire_tokens"
-            merged_inc[skip_field] = merged_inc.get(skip_field, 0) + LOOT_UR_MISSION_SKIP_GRANT
-            merged_inc[robot_field] = merged_inc.get(robot_field, 0) + LOOT_UR_ROBOT_BG_GRANT
-            rewards.append({
-                "type": "token",
-                "token_type": "mission_skip",
-                "name": LOOT_BOX_UR_ONLY_TOKEN_LABELS.get("mission_skip", "Mission Skip"),
-                "amount": LOOT_UR_MISSION_SKIP_GRANT,
-                "rarity": "ultra_rare",
-                "reward_tier": "ultra_rare",
-                "guaranteed": True,
-            })
-            rewards.append({
-                "type": "token",
-                "token_type": "robot_bodyguard_hire",
-                "name": LOOT_BOX_UR_ONLY_TOKEN_LABELS.get("robot_bodyguard_hire", "Free Robot Bodyguard"),
-                "amount": LOOT_UR_ROBOT_BG_GRANT,
-                "rarity": "ultra_rare",
-                "reward_tier": "ultra_rare",
-                "guaranteed": True,
-            })
-
-            # UR dossier themes (1/1 player pool; staff ownership ignored).
-            try:
-                from utils.profile_background_themes import (
-                    grant_ur_theme_to_user,
-                    list_available_ur_themes_for_loot,
-                    owned_theme_ids,
-                )
-                staff_ids = set(await _get_staff_user_ids())
-                available_themes = await list_available_ur_themes_for_loot(db, staff_user_ids=staff_ids)
-                already = set(owned_theme_ids(current_user))
-                available_themes = [t for t in available_themes if t not in already]
-                # Quiet roll among available (do not expose %). Prefer exclusive_chance style.
-                if available_themes and (_rng.random() < exclusive_chance or is_admin_test):
-                    pick = _rng.choice(available_themes)
-                    theme_reward = await grant_ur_theme_to_user(db, user_id, pick)
-                    if theme_reward:
-                        rewards.append(theme_reward)
-                        try:
-                            await send_notification(
-                                user_id,
-                                "Loot box",
-                                f"You claimed the Ultra Rare theme {theme_reward.get('name')} — equip it for its bonus!",
-                                "system",
-                            )
-                        except Exception:
-                            pass
-            except Exception:
-                logger.exception("UR theme loot grant failed user=%s", user_id)
-
-            # Unlisted card-back extras (no world cap, not in reward_info).
-            try:
-                from utils.blackjack_card_backs import grant_back, list_unowned_for_user
-                unowned_backs = await list_unowned_for_user(db, user_id)
-                if unowned_backs and _rng.random() < exclusive_chance:
-                    bid = _rng.choice(unowned_backs)
-                    if await grant_back(db, user_id, bid):
-                        from utils.blackjack_card_backs import catalog_back
-                        meta = catalog_back(bid) or {"id": bid, "name": bid}
-                        rewards.append({
-                            "type": "blackjack_card_back",
-                            "id": bid,
-                            "name": meta.get("name") or bid,
-                            "rarity": "loot_exclusive",
-                            "reward_tier": "loot_exclusive",
-                            "unlisted": True,
-                        })
-            except Exception:
-                logger.exception("BJ card back loot grant failed user=%s", user_id)
 
         if merged_inc or merged_set:
             update = {}

@@ -357,6 +357,20 @@ async def apply_modkill_wipe_after_kill(
         logger.exception("modkill wipe: exclusive weed release failed user=%s", uid)
 
     try:
+        from utils.profile_background_themes import release_ur_themes_on_death
+
+        extra["ur_themes"] = await release_ur_themes_on_death(db, uid)
+    except Exception:
+        logger.exception("modkill wipe: UR theme release failed user=%s", uid)
+
+    try:
+        from utils.blackjack_card_backs import clear_backs_on_death
+
+        extra["bj_card_backs"] = await clear_backs_on_death(db, uid)
+    except Exception:
+        logger.exception("modkill wipe: BJ card back clear failed user=%s", uid)
+
+    try:
         from routers.money.quicktrade import cancel_offers_on_death
 
         await cancel_offers_on_death(uid)

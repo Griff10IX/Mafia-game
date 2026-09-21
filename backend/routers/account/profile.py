@@ -77,6 +77,12 @@ from utils.profile_background_themes import (
     profile_background_public_fields,
     user_owns_theme,
 )
+from utils.blackjack_card_backs import (
+    EQUIPPED_FIELD as BJ_BACK_EQUIPPED_FIELD,
+    normalize_equip_back_id,
+    public_fields as blackjack_card_back_public_fields,
+    user_owns_back,
+)
 from utils.civilian_protection import (
     civilian_protection_status_payload,
     civilian_protection_public_fields,
@@ -1653,6 +1659,40 @@ def register(router):
         return {
             "message": "Profile background theme updated",
             **profile_background_public_fields(fresh or current_user, include_owned=True, is_admin=admin),
+        }
+
+    class BlackjackCardBackUpdateRequest(BaseModel):
+        back_id: Optional[str] = None
+
+    @router.patch("/profile/blackjack-card-back")
+    async def update_blackjack_card_back(
+        request: BlackjackCardBackUpdateRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Equip or clear an owned blackjack card back (empty = default navy)."""
+        try:
+            back_id = normalize_equip_back_id(request.back_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        if back_id and not user_owns_back(current_user, back_id):
+            raise HTTPException(status_code=403, detail="You do not own that blackjack card back")
+        if back_id:
+            await db.users.update_one(
+                {"id": current_user["id"]},
+                {"$set": {BJ_BACK_EQUIPPED_FIELD: back_id}},
+            )
+        else:
+            await db.users.update_one(
+                {"id": current_user["id"]},
+                {"$unset": {BJ_BACK_EQUIPPED_FIELD: ""}},
+            )
+        fresh = await db.users.find_one(
+            {"id": current_user["id"]},
+            {"_id": 0, "password_hash": 0},
+        )
+        return {
+            "message": "Blackjack card back updated",
+            **blackjack_card_back_public_fields(fresh or current_user, include_owned=True),
         }
 
     CUSTOM_THEME_RAW_MAX_BYTES = 80 * 1024 * 1024  # sanity only (decoded then resized to 1024×931)

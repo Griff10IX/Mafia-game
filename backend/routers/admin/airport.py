@@ -736,6 +736,9 @@ async def _start_travel_impl(
         airport_price = _effective_airport_points(
             listed, user, now_utc, bool(user_owns_any_airport), family_crew_pts
         )
+        from utils.profile_theme_bonuses import travel_cost_mult
+
+        airport_price = max(1, int(round(airport_price * travel_cost_mult(user))))
         owner_id = airport_doc.get("owner_id")
         travel_time = max(0, TRAVEL_TIMES["airport"] - fam_time_red)
         method_name = f"Airport #{slot}"

@@ -3082,6 +3082,9 @@ async def weed_sell(body: SellBody, http_request: Request, current_user: dict = 
         elif u in ("kg", "kilo", "kilos"):
             price_per_oz *= 1.05
         payout = int(math.floor(price_per_oz * oz))
+        from utils.profile_theme_bonuses import weed_payout_mult
+
+        payout = max(0, int(math.floor(payout * weed_payout_mult(current_user))))
         if payout <= 0:
             # Tiny dust sales still clear stash for at least $1 if anything is sold.
             if have > 0 and grams >= have - 1e-6:

@@ -495,6 +495,11 @@ from utils.rolling_event_stats import (
 )
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_CRIMES
 from utils.booze_intake_gate import booze_intake_blocked
+from utils.profile_theme_bonuses import (
+    apply_rank_points_bonus,
+    crime_cash_mult,
+    roll_heist_loot_piece,
+)
 
 
 async def _crimes_sustained_rl_user(current_user: dict = Depends(get_current_user)):
@@ -964,7 +969,9 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         reward = int(reward * pass_mult)
         rank_points = int(rank_points * pass_mult)
         reward = int(reward * CRIME_CASH_PAYOUT_MULT)
+        reward = int(reward * crime_cash_mult(current_user))
         rank_points = max(1, int(rank_points * rank_multiplier_for_actor(current_user.get("current_state"), _climate)))
+        rank_points = apply_rank_points_bonus(current_user, rank_points)
         # Instant cooldown skip: −50% cash (rank points unchanged).
         if used_crime_skip:
             reward = reward // 2
@@ -994,6 +1001,12 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                 prestige_bonus_earned = {"loot_box_pieces": LOOT_PIECE_AMOUNT}
             else:
                 prestige_bonus_earned["loot_box_pieces"] = prestige_bonus_earned.get("loot_box_pieces", 0) + LOOT_PIECE_AMOUNT
+        if roll_heist_loot_piece(current_user, crime.get("name") or crime.get("id")):
+            inc["loot_box_pieces"] = inc.get("loot_box_pieces", 0) + 1
+            if prestige_bonus_earned is None:
+                prestige_bonus_earned = {"loot_box_pieces": 1}
+            else:
+                prestige_bonus_earned["loot_box_pieces"] = prestige_bonus_earned.get("loot_box_pieces", 0) + 1
         # Random armoury token drop (1 in 250); 1–3 of one type
         if _rng.random() < TOKEN_GLOBAL_DROP_CHANCE:
             token_type = _rng.choice(TOKEN_TYPES_GLOBAL_RANDOM_DROP)

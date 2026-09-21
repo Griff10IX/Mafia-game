@@ -5,7 +5,7 @@ import { ArrowLeft, Spade, MessageSquare, XCircle, CheckCircle2, Swords, Skull }
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { FAVICON_PNG, APP_ICON_192_PNG } from '../../utils/publicAssets';
 import styles from '../../styles/noir.module.css';
-import { useBlackjackCardBackSrc } from '../../utils/blackjackCardBack';
+import { useBlackjackVaderBackSrc } from '../../utils/blackjackCardBack';
 
 const TURN_SECONDS = 60;
 const START_COUNTDOWN = 5; // must match backend MP_BJ_START_COUNTDOWN
@@ -81,7 +81,7 @@ function PlayingCard({ card, hidden, index = 0, total, large = false }) {
   const sizeClass = large
     ? 'w-[56px] h-[80px] sm:w-[64px] sm:h-[92px]'
     : 'w-[48px] h-[68px] sm:w-[56px] sm:h-[80px]';
-  const cardBackSrc = useBlackjackCardBackSrc();
+  const vaderBack = useBlackjackVaderBackSrc();
 
   if (hidden) {
     return (
@@ -89,10 +89,10 @@ function PlayingCard({ card, hidden, index = 0, total, large = false }) {
         className={`relative ${sizeClass} rounded-lg overflow-hidden animate-card-deal flex-shrink-0`}
         style={{ transform: `rotate(${fan}deg) translateX(${offsetX}px)`, animationDelay: `${index * 0.08}s`, boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}
       >
-        {cardBackSrc ? (
+        {vaderBack ? (
           <>
-            <img src={cardBackSrc} alt="" className="absolute inset-0 w-full h-full object-cover" draggable={false} />
-            <div className="absolute inset-0 rounded-lg pointer-events-none" style={{ boxShadow: 'inset 0 0 0 2px rgba(255,255,255,0.12)' }} />
+            <img src={vaderBack} alt="" className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+            <div className="absolute inset-0 rounded-lg pointer-events-none" style={{ boxShadow: 'inset 0 0 0 2px rgba(90,16,16,0.9), inset 0 0 0 3px rgba(212,175,55,0.22)' }} />
           </>
         ) : (
         <div className="absolute inset-0 rounded-lg" style={{ background: 'linear-gradient(135deg,#1a3a7a,#0d2255)', border: '2px solid #2a4a9a' }}>

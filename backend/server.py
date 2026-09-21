@@ -1024,6 +1024,10 @@ class UserResponse(BaseModel):
     profile_background_themes: List[dict] = []
     profile_background_theme_can_upload: bool = False
     profile_theme_scrim: bool = True  # darken dossier theme art for readability; off = true colour
+    blackjack_card_back_id: Optional[str] = None
+    blackjack_card_back: Optional[dict] = None
+    blackjack_card_backs_owned: List[str] = []
+    blackjack_card_backs: List[dict] = []
     crew_oc_auto_apply_tokens: int = 0
     crew_oc_auto_apply_until: Optional[str] = None
     crew_oc_auto_apply_max_fee: Optional[int] = None

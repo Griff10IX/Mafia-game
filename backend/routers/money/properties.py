@@ -1268,6 +1268,9 @@ async def collect_property_income_impl(property_id: str, current_user: dict, *, 
     if kill_pct > 0:
         income *= 1.0 + kill_pct / 100.0
     income *= founding_member_income_mult(current_user)
+    from utils.profile_theme_bonuses import property_income_mult
+
+    income *= property_income_mult(current_user)
     fraction = _clamp_float(income_fraction, 0.01, 1.0)
     last_collected_iso = now_iso
     if fraction < 1.0:

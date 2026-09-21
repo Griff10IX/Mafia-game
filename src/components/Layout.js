@@ -1349,6 +1349,9 @@ export default function Layout({ children }) {
       if (detail.pointsDelta != null) {
         setUser((prev) => (prev ? { ...prev, points: Number(prev.points || 0) + Number(detail.pointsDelta) } : null));
       }
+      if (detail.patch && typeof detail.patch === 'object') {
+        setUser((prev) => (prev ? { ...prev, ...detail.patch } : null));
+      }
       if (detail.current_state != null) {
         const state = String(detail.current_state || '').trim();
         if (state) {

@@ -4,7 +4,7 @@ from __future__ import annotations
 import io
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Set
+from typing import Any, Dict, List, Optional, Tuple
 
 # Canonical dossier banner bitmap — every theme JPEG must be exactly this size.
 # CSS: .prof-dossier-theme-bg uses width-fit (100% auto). See
@@ -21,8 +21,8 @@ CUSTOM_THEME_NAME = "Admin custom (test)"
 # Catalog: hard-to-get themes (loot later). Image paths are public static assets.
 # ?v= cache-bust when art is replaced.
 # fit: width = natural-aspect banner (default); stretch = fill whole dossier.
-_THEME_ASSET_V = "20260921d"
-PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, Any]] = {
+_THEME_ASSET_V = "20260921c"
+PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, str]] = {
     "godfather": {
         "id": "godfather",
         "name": "Godfather 1 — Legacy",
@@ -59,132 +59,7 @@ PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, Any]] = {
         "image": f"/images/profile-themes/orbit-overlook-v2.jpg?v={_THEME_ASSET_V}",
         "fit": "width",
     },
-    # Ultra Rare loot exclusives (1 live player copy each; staff/admin ownership ignored for scarcity).
-    "ur_samurai_fuji": {
-        "id": "ur_samurai_fuji",
-        "name": "Samurai Fuji",
-        "image": f"/images/profile-themes/ur-samurai-fuji.jpg?v={_THEME_ASSET_V}",
-        "fit": "width",
-        "loot_exclusive": True,
-        "ultra_rare_only": True,
-        "bonus_id": "rp_50",
-        "bonus_label": "+50% rank points from crimes, GTA, OC, and missions",
-    },
-    "ur_orbit_overlook": {
-        "id": "ur_orbit_overlook",
-        "name": "Deep Orbit",
-        "image": f"/images/profile-themes/ur-orbit-overlook.jpg?v={_THEME_ASSET_V}",
-        "fit": "width",
-        "loot_exclusive": True,
-        "ultra_rare_only": True,
-        "bonus_id": "gta_multi_rare",
-        "bonus_label": "GTA rare/legendary: 50% chance to receive 5 cars instead of 1",
-    },
-    "ur_noir_balcony": {
-        "id": "ur_noir_balcony",
-        "name": "Noir Balcony",
-        "image": f"/images/profile-themes/ur-noir-balcony.jpg?v={_THEME_ASSET_V}",
-        "fit": "width",
-        "loot_exclusive": True,
-        "ultra_rare_only": True,
-        "bonus_id": "hitlist_npc_x3",
-        "bonus_label": "Hitlist NPC kill: 50% chance for ×3 reward",
-    },
-    "ur_jungle_explorer": {
-        "id": "ur_jungle_explorer",
-        "name": "Lost City",
-        "image": f"/images/profile-themes/ur-jungle-explorer.jpg?v={_THEME_ASSET_V}",
-        "fit": "width",
-        "loot_exclusive": True,
-        "ultra_rare_only": True,
-        "bonus_id": "crime_cash_double",
-        "bonus_label": "Crimes success: 50% chance to double cash",
-    },
-    "ur_cyber_oni": {
-        "id": "ur_cyber_oni",
-        "name": "Cyber Oni",
-        "image": f"/images/profile-themes/ur-cyber-oni.jpg?v={_THEME_ASSET_V}",
-        "fit": "width",
-        "loot_exclusive": True,
-        "ultra_rare_only": True,
-        "bonus_id": "bullets_needed_15",
-        "bonus_label": "−15% bullets needed to kill",
-    },
-    "ur_blood_moon": {
-        "id": "ur_blood_moon",
-        "name": "Blood Moon Hunter",
-        "image": f"/images/profile-themes/ur-blood-moon.jpg?v={_THEME_ASSET_V}",
-        "fit": "width",
-        "loot_exclusive": True,
-        "ultra_rare_only": True,
-        "bonus_id": "hitlist_cash_50",
-        "bonus_label": "+50% hitlist NPC cash",
-    },
-    "ur_space_hangar": {
-        "id": "ur_space_hangar",
-        "name": "Space Hangar",
-        "image": f"/images/profile-themes/ur-space-hangar.jpg?v={_THEME_ASSET_V}",
-        "fit": "width",
-        "loot_exclusive": True,
-        "ultra_rare_only": True,
-        "bonus_id": "travel_cost_50",
-        "bonus_label": "−50% airport travel cost",
-    },
-    "ur_colony_ring": {
-        "id": "ur_colony_ring",
-        "name": "Colony Ring",
-        "image": f"/images/profile-themes/ur-colony-ring.jpg?v={_THEME_ASSET_V}",
-        "fit": "width",
-        "loot_exclusive": True,
-        "ultra_rare_only": True,
-        "bonus_id": "income_25",
-        "bonus_label": "+25% property and illegal business income",
-    },
-    "ur_mob_office_dog": {
-        "id": "ur_mob_office_dog",
-        "name": "Mob Office",
-        "image": f"/images/profile-themes/ur-mob-office-dog.jpg?v={_THEME_ASSET_V}",
-        "fit": "width",
-        "loot_exclusive": True,
-        "ultra_rare_only": True,
-        "bonus_id": "robot_free_daily",
-        "bonus_label": "+1 free Robot Bodyguard hire / day (stacks to 5)",
-    },
-    "ur_inner_circle": {
-        "id": "ur_inner_circle",
-        "name": "Inner Circle",
-        "image": f"/images/profile-themes/ur-inner-circle.jpg?v={_THEME_ASSET_V}",
-        "fit": "width",
-        "loot_exclusive": True,
-        "ultra_rare_only": True,
-        "bonus_id": "oc_payout_25",
-        "bonus_label": "+25% OC heist payout",
-    },
-    "ur_vittoria_club": {
-        "id": "ur_vittoria_club",
-        "name": "Vittoria Social Club",
-        "image": f"/images/profile-themes/ur-vittoria-club.jpg?v={_THEME_ASSET_V}",
-        "fit": "width",
-        "loot_exclusive": True,
-        "ultra_rare_only": True,
-        "bonus_id": "weed_payout_25",
-        "bonus_label": "+25% Weed Empire sell / payout",
-    },
-    "ur_empire_lounge": {
-        "id": "ur_empire_lounge",
-        "name": "Empire State Lounge",
-        "image": f"/images/profile-themes/ur-empire-lounge.jpg?v={_THEME_ASSET_V}",
-        "fit": "width",
-        "loot_exclusive": True,
-        "ultra_rare_only": True,
-        "bonus_id": "heist_loot_piece",
-        "bonus_label": "Jewelry / Bank / Casino Heist success: 0.25% chance for 1 loot piece",
-    },
 }
-
-UR_LOOT_THEME_IDS = tuple(
-    tid for tid, meta in PROFILE_BACKGROUND_THEMES.items() if meta.get("ultra_rare_only")
-)
 
 OWNED_FIELD = "profile_background_themes_owned"
 EQUIPPED_FIELD = "profile_background_theme_id"
@@ -205,96 +80,6 @@ def catalog_theme(theme_id: Optional[str]) -> Optional[Dict[str, Any]]:
     out: Dict[str, Any] = dict(t)
     out["width"] = THEME_IMAGE_WIDTH
     out["height"] = THEME_IMAGE_HEIGHT
-    return out
-
-
-def ur_loot_theme_reward_info_rows() -> List[Dict[str, Any]]:
-    """Public exclusives list rows for UR themes (no drop %)."""
-    rows: List[Dict[str, Any]] = []
-    for tid in UR_LOOT_THEME_IDS:
-        meta = PROFILE_BACKGROUND_THEMES.get(tid) or {}
-        rows.append({
-            "id": f"theme_{tid}",
-            "theme_id": tid,
-            "label": f"{meta.get('name') or tid} (Ultra Rare theme)",
-            "bonus_label": meta.get("bonus_label") or "",
-            "cap_global": 1,
-        })
-    return rows
-
-
-def is_ur_loot_theme(theme_id: Optional[str]) -> bool:
-    tid = str(theme_id or "").strip().lower()
-    return tid in UR_LOOT_THEME_IDS
-
-
-async def theme_player_claimed_live(db, theme_id: str, *, staff_user_ids: Optional[Set[str]] = None) -> int:
-    """1 if a non-staff player owns this UR theme. Staff/admin (e.g. GhostFace) do not block the loot pool."""
-    tid = str(theme_id or "").strip().lower()
-    if tid not in UR_LOOT_THEME_IDS:
-        return 0
-    q: Dict[str, Any] = {OWNED_FIELD: tid}
-    staff = set(staff_user_ids or ())
-    if staff:
-        from server import expand_user_ids_for_mongo_nin
-        q["id"] = {"$nin": expand_user_ids_for_mongo_nin(list(staff))}
-    n = int(await db.users.count_documents(q))
-    return 1 if n > 0 else 0
-
-
-async def list_available_ur_themes_for_loot(db, *, staff_user_ids: Optional[Set[str]] = None) -> List[str]:
-    out: List[str] = []
-    for tid in UR_LOOT_THEME_IDS:
-        if await theme_player_claimed_live(db, tid, staff_user_ids=staff_user_ids) < 1:
-            out.append(tid)
-    return out
-
-
-async def grant_ur_theme_to_user(db, user_id: str, theme_id: str, *, count_toward_pool: bool = True) -> Optional[Dict[str, Any]]:
-    """Grant theme ownership. Staff grants should pass count_toward_pool=False (still just $addToSet)."""
-    tid = str(theme_id or "").strip().lower()
-    meta = PROFILE_BACKGROUND_THEMES.get(tid)
-    if not meta:
-        return None
-    await db.users.update_one({"id": user_id}, {"$addToSet": {OWNED_FIELD: tid}})
-    return {
-        "type": "profile_theme",
-        "id": tid,
-        "name": meta.get("name") or tid,
-        "bonus_label": meta.get("bonus_label") or "",
-        "rarity": "loot_exclusive",
-        "reward_tier": "loot_exclusive",
-        "image": meta.get("image"),
-    }
-
-
-async def release_ur_themes_on_death(db, user_id: str) -> List[str]:
-    """Strip UR loot themes (and unequip if needed) so they return to the player pool."""
-    u = await db.users.find_one(
-        {"id": user_id},
-        {"_id": 0, OWNED_FIELD: 1, EQUIPPED_FIELD: 1},
-    ) or {}
-    owned = owned_theme_ids(u)
-    ur_owned = [t for t in owned if t in UR_LOOT_THEME_IDS]
-    if not ur_owned:
-        return []
-    remaining = [t for t in owned if t not in UR_LOOT_THEME_IDS]
-    equipped = str(u.get(EQUIPPED_FIELD) or "").strip().lower()
-    update: Dict[str, Any] = {"$set": {OWNED_FIELD: remaining}}
-    if equipped in ur_owned:
-        update["$unset"] = {EQUIPPED_FIELD: ""}
-    await db.users.update_one({"id": user_id}, update)
-    return ur_owned
-
-
-def catalog_theme_bonus_fields(theme: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    if not theme:
-        return {}
-    out: Dict[str, Any] = {}
-    if theme.get("bonus_label"):
-        out["bonus_label"] = theme.get("bonus_label")
-    if theme.get("bonus_id"):
-        out["bonus_id"] = theme.get("bonus_id")
     return out
 
 

@@ -68,6 +68,25 @@ BODYGUARD_SLOT_COSTS = [75, 150, 300, 450]
 ROBOT_BODYGUARD_MIN_RANK_ID = 5
 BODYGUARD_ARMOUR_UPGRADE_COSTS = {0: 50, 1: 100, 2: 200, 3: 400, 4: 800}
 
+_THEME_ROBOT_FREE_USER_FIELDS = {
+    "_id": 0,
+    "profile_background_theme_id": 1,
+    "theme_robot_free_hires": 1,
+    "theme_robot_free_credit_utc_date": 1,
+}
+
+
+async def _sync_theme_robot_free_daily(user_id: str, user: dict) -> dict:
+    from utils.profile_theme_bonuses import theme_robot_free_daily_credit_update
+
+    upd = theme_robot_free_daily_credit_update(user)
+    if not upd:
+        return user
+    await db.users.update_one({"id": user_id}, upd)
+    merged = dict(user)
+    merged.update(upd.get("$set") or {})
+    return merged
+
 # Human bodyguard one-time hire cost is 25% cheaper than robot (deducted from inviter when invite is accepted)
 BODYGUARD_HUMAN_HIRE_DISCOUNT = 0.75  # 75% of robot price
 # After someone else kills your robot NPC bodyguard, you cannot hire another for this many seconds (self-kill does not apply; see attack.py).
@@ -679,13 +698,20 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
 
         sub_doc = await db.users.find_one(
             {"id": uid},
-            {"_id": 0, "robot_bg_auto_search_until": 1, "robot_bodyguard_hire_tokens": 1},
+            {
+                "_id": 0,
+                "robot_bg_auto_search_until": 1,
+                "robot_bodyguard_hire_tokens": 1,
+                **_THEME_ROBOT_FREE_USER_FIELDS,
+            },
         )
+        sub_doc = await _sync_theme_robot_free_daily(uid, sub_doc or current_user)
         until = (sub_doc or {}).get("robot_bg_auto_search_until")
         payload["robot_bg_auto_search_until"] = until
         payload["robot_bg_auto_search_active"] = robot_bg_auto_search_active(sub_doc or {})
         payload["robot_bg_auto_search_cost"] = ROBOT_BG_AUTO_SEARCH_COST
         payload["robot_bodyguard_hire_tokens"] = int((sub_doc or {}).get("robot_bodyguard_hire_tokens") or 0)
+        payload["theme_robot_free_hires"] = int((sub_doc or {}).get("theme_robot_free_hires") or 0)
         # Cache slot payload without rvk; overlay fresh token on every response (incl. cache hits).
         _bodyguards_cache[uid] = (dict(payload), now + _BODYGUARDS_CACHE_TTL_SEC)
         try:
@@ -961,10 +987,13 @@ async def _do_hire_bodyguard_reserved(
             "bodyguard_slots": 1,
             "bodyguard_robot_loss_hire_allowed_after": 1,
             "robot_bodyguard_hire_tokens": 1,
+            **_THEME_ROBOT_FREE_USER_FIELDS,
         },
     )
+    fresh = await _sync_theme_robot_free_daily(current_user["id"], fresh or current_user)
     slots = int((fresh or {}).get("bodyguard_slots") or 0)
     hire_tokens = max(0, int((fresh or {}).get("robot_bodyguard_hire_tokens") or 0))
+    theme_robot_free_hires = max(0, int((fresh or {}).get("theme_robot_free_hires") or 0))
     until_iso = (fresh or {}).get("bodyguard_robot_loss_hire_allowed_after")
     until = _parse_iso_datetime(until_iso) if until_iso else None
     if until and datetime.now(timezone.utc) < until:
@@ -1018,7 +1047,8 @@ async def _do_hire_bodyguard_reserved(
     inflation_mult = 1.0 + _effective_bodyguard_inflation_percent(inflation_level, user_for_inflation)
     listed_cost = int(base_cost * event_cost_mult * inflation_mult)
     use_hire_token = bool(is_robot and hire_tokens >= 1)
-    total_cost = 0 if use_hire_token else listed_cost
+    use_theme_robot_free = bool(is_robot and not use_hire_token and theme_robot_free_hires >= 1)
+    total_cost = 0 if (use_hire_token or use_theme_robot_free) else listed_cost
     now = datetime.now(timezone.utc)
     window_end = now + timedelta(hours=BODYGUARD_INFLATION_HOURS)
     inc_doc: Dict[str, Any] = {
@@ -1026,6 +1056,8 @@ async def _do_hire_bodyguard_reserved(
     }
     if use_hire_token:
         inc_doc["robot_bodyguard_hire_tokens"] = -1
+    elif use_theme_robot_free:
+        inc_doc["theme_robot_free_hires"] = -1
     else:
         inc_doc["points"] = -total_cost
         inc_doc["bodyguard_lifetime_spent_hires"] = total_cost
@@ -1043,16 +1075,20 @@ async def _do_hire_bodyguard_reserved(
     hire_filter: Dict[str, Any] = {"id": current_user["id"], reserve_field: reservation_id}
     if use_hire_token:
         hire_filter["robot_bodyguard_hire_tokens"] = {"$gte": 1}
+    elif use_theme_robot_free:
+        hire_filter["theme_robot_free_hires"] = {"$gte": 1}
     else:
         hire_filter["points"] = {"$gte": total_cost}
     hire_result = await db.users.update_one(hire_filter, update_op)
     if hire_result.modified_count == 0:
         if use_hire_token:
             raise HTTPException(status_code=400, detail="Free robot hire token unavailable")
+        if use_theme_robot_free:
+            raise HTTPException(status_code=400, detail="Theme free robot hire unavailable")
         raise HTTPException(status_code=400, detail="Insufficient points")
     try:
         from utils.world_event_stats import bump_world_event_discount
-        if not use_hire_token:
+        if not use_hire_token and not use_theme_robot_free:
             no_event_cost = int(base_cost * inflation_mult)
             await bump_world_event_discount(
                 db, current_user["id"], base_cost=no_event_cost, paid_cost=total_cost, currency="points"
@@ -1065,12 +1101,13 @@ async def _do_hire_bodyguard_reserved(
         "cost": total_cost,
         "listed_cost": listed_cost,
         "used_hire_token": use_hire_token,
+        "used_theme_robot_free": use_theme_robot_free,
         "inflation_level_before": inflation_level,
         "inflation_mult": inflation_mult,
         "event_bodyguard_cost_mult": event_cost_mult,
         "base_slot_cost": base_cost,
     }
-    if not use_hire_token:
+    if not use_hire_token and not use_theme_robot_free:
         await log_points_event(
             db, user_id=current_user["id"], points=-total_cost, event_type="bodyguard_hire",
             event_ref=f"slot:{slot}", meta=hire_meta,
@@ -1092,7 +1129,7 @@ async def _do_hire_bodyguard_reserved(
         "armour_level": 0,
         "hired_at": datetime.now(timezone.utc).isoformat(),
         "hire_cost": total_cost,
-        "hired_with_token": use_hire_token,
+        "hired_with_token": use_hire_token or use_theme_robot_free,
     }
     await db.bodyguards.insert_one(bodyguard_doc)
     await db.users.update_one({"id": current_user["id"]}, {"$unset": {"bodyguard_robot_loss_hire_allowed_after": ""}})
@@ -1106,6 +1143,7 @@ async def _do_hire_bodyguard_reserved(
         "hire_cost": total_cost,
         "listed_cost": listed_cost,
         "used_hire_token": use_hire_token,
+        "used_theme_robot_free": use_theme_robot_free,
         "bodyguard_username": robot_name if is_robot else None,
         "bodyguard_slot_row_id": bodyguard_doc["id"],
         "inflation_level_before": inflation_level,
@@ -1121,6 +1159,8 @@ async def _do_hire_bodyguard_reserved(
     name_part = robot_name if is_robot else "a human bodyguard"
     if use_hire_token:
         msg = f"You hired {name_part} with a free hire token (slot {slot}/4). Past hires show here — max 4 at once."
+    elif use_theme_robot_free:
+        msg = f"You hired {name_part} with a theme free daily hire (slot {slot}/4). Past hires show here — max 4 at once."
     else:
         msg = f"You hired {name_part} for {total_cost} points (slot {slot}/4). Past hires show here — max 4 at once."
     asyncio.create_task(send_notification(
@@ -1155,8 +1195,11 @@ async def _do_hire_bodyguard_reserved(
             logger.exception("safehouse robot hire record failed")
     if use_hire_token:
         hire_msg = f"Robot bodyguard {robot_name} hired with a free token"
+    elif use_theme_robot_free:
+        hire_msg = f"Robot bodyguard {robot_name} hired with a theme free daily hire"
     else:
         hire_msg = f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {total_cost} points"
+    theme_free_left = max(0, theme_robot_free_hires - 1) if use_theme_robot_free else theme_robot_free_hires
     return {
         "message": hire_msg,
         "bodyguard_name": robot_name,
@@ -1164,7 +1207,9 @@ async def _do_hire_bodyguard_reserved(
         "cost": total_cost,
         "listed_cost": listed_cost,
         "used_hire_token": use_hire_token,
+        "used_theme_robot_free": use_theme_robot_free,
         "robot_bodyguard_hire_tokens": tokens_left,
+        "theme_robot_free_hires": theme_free_left,
         "base_slot_cost": base_cost,
         "hire_inflation_pct_applied": round(_effective_bodyguard_inflation_percent(inflation_level, user_for_inflation) * 100),
         **infl_after,

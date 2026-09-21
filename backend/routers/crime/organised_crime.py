@@ -28,6 +28,7 @@ from server import (
     founding_member_income_mult,
 )
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
+from utils.profile_theme_bonuses import apply_rank_points_bonus, oc_payout_mult
 
 # Equipment tiers for Organised Crime (reduced for beta)
 EQUIPMENT_TIERS = [
@@ -351,9 +352,9 @@ async def run_heist(
     
     if success:
         # Success - award money and rank points
-        money_reward = int(job.get("reward") or 0)
+        money_reward = int(int(job.get("reward") or 0) * oc_payout_mult(current_user))
         rp_before = int(current_user.get("rank_points") or 0)
-        rp_added = int(job.get("rank_points") or 0)
+        rp_added = apply_rank_points_bonus(current_user, int(job.get("rank_points") or 0))
         oc_inc = {
             "money": money_reward,
             "rank_points": rp_added,

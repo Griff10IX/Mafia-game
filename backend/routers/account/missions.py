@@ -40,6 +40,7 @@ from pymongo.errors import DuplicateKeyError
 import random
 
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
+from utils.profile_theme_bonuses import apply_rank_points_bonus
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_MISSIONS
 from utils.booze_intake_gate import booze_intake_blocked
 
@@ -879,7 +880,7 @@ def _build_mission_completion_reward_update(
 ) -> tuple[dict, dict]:
     reward_money = int((mission.get("reward_money") or 0) * mult)
     reward_cash_immediate = int((mission.get("reward_cash_immediate") or 0) * mult)
-    reward_points = int((mission.get("reward_points") or 0) * mult)
+    reward_points = apply_rank_points_bonus(current_user, int((mission.get("reward_points") or 0) * mult))
     reward_respect = int((mission.get("reward_respect") or 0) * mult)
     reward_tribute = int((mission.get("reward_tribute") or 0) * mult)
     try:
@@ -1492,6 +1493,7 @@ async def _maybe_mission_rp_backfill(current_user: dict) -> dict:
     )
     update: Dict[str, Any] = {"$set": {MISSION_RP_BACKFILL_FLAG: True}}
     if credit > 0:
+        credit = apply_rank_points_bonus(current_user, credit)
         update["$inc"] = {"rank_points": credit}
         update = apply_season_rp_mirror_to_update(update, user=current_user)
         credit = rank_points_in_update(update)

@@ -241,6 +241,7 @@ from routers.game.families import resolve_family_id
 from utils.staff_bot_client_alert import maybe_notify_staff_bot_attack_from_ua, maybe_notify_staff_attack_execute_token_fail
 from utils.sustained_page_ratelimit import PAGE_KEY_KILL, check_sustained_page_rl
 from utils.booze_intake_gate import booze_intake_blocked
+from utils.profile_theme_bonuses import bullets_needed_mult
 from utils.player_death import player_death_pull_fields, player_death_set_fields
 from utils.attack_turnstile_gate import (
     attack_turnstile_config as load_attack_turnstile_config,
@@ -2512,6 +2513,7 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     completed_it_discount = bool(current_user.get("completed_it_bullet_reduction"))
     if completed_it_discount:
         bullets_required = max(1, int(bullets_required * 0.35))
+    bullets_required = max(1, int(round(bullets_required * bullets_needed_mult(current_user))))
     bullets_required = _apply_bullet_caps(target, bullets_required)
     return {
         "calc_ok": True,
@@ -3001,6 +3003,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     # "Completed it" perk: 65% fewer bullets needed when attacking
     if current_user.get("completed_it_bullet_reduction"):
         bullets_required = max(1, int(bullets_required * 0.35))
+    bullets_required = max(1, int(round(bullets_required * bullets_needed_mult(current_user))))
     bullets_required = _apply_bullet_caps(target, bullets_required)
     if attacker_bullets <= 0:
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "You need bullets to attack.", req), label="log_no_bullets")
@@ -3088,17 +3091,20 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     hitlist_mult = (1 + bb.get("hitlist_npc", 0) * 0.001) * bb.get("prestige_badge_mult", 1) * founding_member_income_mult(current_user)
                 except Exception:
                     hitlist_mult = founding_member_income_mult(current_user)
-                rp_added = int((rewards.get("rank_points", 0) or 0) * hitlist_mult)
+                from utils.profile_theme_bonuses import hitlist_npc_reward_mult
+
+                _theme_npc_mult = hitlist_npc_reward_mult(current_user)
+                rp_added = int((rewards.get("rank_points", 0) or 0) * hitlist_mult * _theme_npc_mult)
                 # Hitlist practice NPCs never grant bullets (no template reward, no spend refund).
                 inc = {
-                    "money": int((rewards.get("cash", 0) or 0) * hitlist_mult),
+                    "money": int((rewards.get("cash", 0) or 0) * hitlist_mult * _theme_npc_mult),
                     "rank_points": rp_added,
                     "hitlist_npc_kills": 1,
                 }
                 if target.get("is_bodyguard"):
                     inc["robot_bodyguard_kills"] = 1
                     inc["total_kills"] = 1
-                reward_respect = int((rewards.get("respect_points", 0) or 0) * hitlist_mult)
+                reward_respect = int((rewards.get("respect_points", 0) or 0) * hitlist_mult * _theme_npc_mult)
                 respect_drop = maybe_respect_points_drop()
                 inc["respect_points"] = reward_respect + (respect_drop or 0)
                 booze = rewards.get("booze")
@@ -3106,7 +3112,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     booze_ids = [b["id"] for b in BOOZE_TYPES]
                     for bid, amt in booze.items():
                         if bid in booze_ids and amt and int(amt) > 0:
-                            inc[f"booze_carrying.{bid}"] = int(int(amt) * hitlist_mult)
+                            inc[f"booze_carrying.{bid}"] = int(int(amt) * hitlist_mult * _theme_npc_mult)
                             inc[f"booze_carrying_cost.{bid}"] = 0
                 tokens = rewards.get("tokens")
                 token_parts = []
@@ -3119,8 +3125,8 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                         field = hitlist_npc_token_count_field(str(tt))
                         if not field:
                             continue
-                        inc[field] = int(inc.get(field) or 0) + n
-                        token_parts.append(f"{n} {str(tt).replace('_', ' ')}")
+                        inc[field] = int(inc.get(field) or 0) + max(1, int(n * _theme_npc_mult))
+                        token_parts.append(f"{max(1, int(n * _theme_npc_mult))} {str(tt).replace('_', ' ')}")
                 # Prestige bonus: boost NPC hitlist kill cash rewards
                 from server import get_prestige_bonus as _get_prestige_bonus
                 _npc_mult = _get_prestige_bonus(current_user)["npc_mult"]
@@ -3939,6 +3945,19 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             await return_safehouse_to_pool(db, owner_id=victim_id)
         except Exception:
             logger.exception("safehouse return-to-pool failed victim=%s", victim_id)
+        # Ultra Rare dossier themes + BJ card backs: return to pool on death (not transferred)
+        try:
+            from utils.profile_background_themes import release_ur_themes_on_death
+
+            await release_ur_themes_on_death(db, victim_id)
+        except Exception:
+            logger.exception("UR theme release on death failed victim=%s", victim_id)
+        try:
+            from utils.blackjack_card_backs import clear_backs_on_death
+
+            await clear_backs_on_death(db, victim_id)
+        except Exception:
+            logger.exception("BJ card back clear on death failed victim=%s", victim_id)
         # Transfer loot-exclusive Weed Empire special strains (1 of each game-wide)
         try:
             from utils.weed_empire_exclusive_strains import transfer_exclusive_weed_strains_on_kill

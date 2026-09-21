@@ -11,7 +11,7 @@ import { removeCasinoBuyBack } from '../../utils/removeCasinoBuyBack';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
 import styles from '../../styles/noir.module.css';
-import { useBlackjackCardBackSrc } from '../../utils/blackjackCardBack';
+import { useBlackjackVaderBackSrc } from '../../utils/blackjackCardBack';
 
 const CG_STYLES = `
   .cg-fade-in { animation: cg-fade-in 0.4s ease-out both; }
@@ -94,7 +94,7 @@ const HISTORY_GRID = 'grid grid-cols-[4.25rem_minmax(5.5rem,1fr)_3.75rem_minmax(
 function PlayingCard({ card, hidden, index = 0, total }) {
   const fan = total > 1 ? (index - (total - 1) / 2) * 3 : 0;
   const offsetX = total > 1 ? (index - (total - 1) / 2) * 2 : 0;
-  const cardBackSrc = useBlackjackCardBackSrc();
+  const vaderBack = useBlackjackVaderBackSrc();
 
   if (hidden) {
     return (
@@ -106,10 +106,10 @@ function PlayingCard({ card, hidden, index = 0, total }) {
           boxShadow: '0 4px 16px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.2)',
         }}
       >
-        {cardBackSrc ? (
+        {vaderBack ? (
           <>
-            <img src={cardBackSrc} alt="" className="absolute inset-0 w-full h-full object-cover" draggable={false} />
-            <div className="absolute inset-0 rounded-lg pointer-events-none" style={{ boxShadow: 'inset 0 0 0 2px rgba(255,255,255,0.12)' }} />
+            <img src={vaderBack} alt="" className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+            <div className="absolute inset-0 rounded-lg pointer-events-none" style={{ boxShadow: 'inset 0 0 0 2px rgba(90,16,16,0.9), inset 0 0 0 3px rgba(212,175,55,0.22)' }} />
           </>
         ) : (
         <div

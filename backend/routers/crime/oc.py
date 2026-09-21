@@ -44,6 +44,7 @@ if _backend not in sys.path:
 from server import db, get_current_user, get_effective_event, log_activity, maybe_process_rank_up, send_notification, user_prestige_rank_mult
 from utils.game_pass_micro_rewards import apply_game_pass_wait_hours, apply_game_pass_wait_seconds
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
+from utils.profile_theme_bonuses import apply_rank_points_bonus, oc_payout_mult
 from utils.point_provenance import log_points_event
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_OC
 
@@ -674,7 +675,7 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     if user_ids:
         users_raw = await db.users.find(
             {"id": {"$in": user_ids}},
-            {"_id": 0, "id": 1, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1, "total_oc_heists": 1, "rank_xp_pass_rewards_granted": 1, "rank_xp_pass_token_expires_at": 1},
+            {"_id": 0, "id": 1, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1, "total_oc_heists": 1, "rank_xp_pass_rewards_granted": 1, "rank_xp_pass_token_expires_at": 1, "profile_background_theme_id": 1},
         ).to_list(10)
         user_map = {u["id"]: u for u in users_raw}
     cash_each = rp_each = 0
@@ -682,9 +683,15 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
         pct = pcts[i]
         cash_add = int(cash_pool * pct / 100)
         rp_add = int(rp_pool * pct / 100)
+        recipient_pre = user_map.get(user_id) or {}
+        oc_theme_cash = oc_payout_mult(recipient_pre if user_id else None)
+        if oc_theme_cash != 1.0:
+            cash_add = int(cash_add * oc_theme_cash)
         if user_id == uid:
             cash_add = int(cash_add * pass_mult)
             rp_add = int(rp_add * pass_mult)
+        if user_id:
+            rp_add = apply_rank_points_bonus(recipient_pre, rp_add)
         if user_id is None:
             cash_each += cash_add
             rp_each += rp_add

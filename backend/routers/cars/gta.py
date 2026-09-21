@@ -222,6 +222,7 @@ from routers.game.achievements import badge_bonuses_from_user
 from routers.game.families import resolve_family_id
 from utils.family_vault_log import log_family_vault_tx
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
+from utils.profile_theme_bonuses import apply_rank_points_bonus, gta_rare_car_copy_count
 from utils.location_climate import get_location_climate, rank_multiplier_for_actor, success_multiplier_for_actor
 from utils.rolling_event_stats import (
     fetch_rolling_event_stats,
@@ -966,18 +967,24 @@ async def _attempt_gta_impl(
         pass_mult = float(rank_xp_pass_multiplier(current_user))
         rank_points = int(rank_points * pass_mult)
         rank_points = max(1, int(rank_points * rank_multiplier_for_actor(current_user.get("current_state"), _climate)))
-        new_gta_uc_id = str(uuid.uuid4())
         car_acquired_at = datetime.now(timezone.utc).isoformat()
-        await db.user_cars.insert_one(
+        copy_count = gta_rare_car_copy_count(current_user, car.get("rarity"))
+        user_car_docs = [
             {
-                "id": new_gta_uc_id,
+                "id": str(uuid.uuid4()),
                 "user_id": current_user.get("id") or "",
                 "car_id": car["id"],
                 "car_name": car["name"],
                 "acquired_at": car_acquired_at,
                 "damage_percent": damage_percent,
             }
-        )
+            for _ in range(copy_count)
+        ]
+        new_gta_uc_id = user_car_docs[0]["id"]
+        if len(user_car_docs) == 1:
+            await db.user_cars.insert_one(user_car_docs[0])
+        else:
+            await db.user_cars.insert_many(user_car_docs)
         # If the Al Capone exclusive was just won, auto-disable pool release (must stay sync).
         if (car.get("id") or "") == GTA_EXCLUSIVE_CAR_ID:
             invalidate_car20_owned_count_cache()
@@ -992,8 +999,11 @@ async def _attempt_gta_impl(
             await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "exclusive_car")
         _invalidate_travel_info_cache(current_user.get("id") or "")
         rp_before = int(current_user.get("rank_points") or 0)
-        rp_granted = int(rank_points * _fm_gta)
-        gta_inc = {"money": int(car["value"] * _fm_gta * pass_mult), "rank_points": rp_granted}
+        rp_granted = apply_rank_points_bonus(current_user, int(rank_points * _fm_gta))
+        gta_inc = {
+            "money": int(car["value"] * _fm_gta * pass_mult) * copy_count,
+            "rank_points": rp_granted,
+        }
         if not caller_updates_total_gta:
             gta_inc["total_gta"] = 1
         if (car.get("rarity") or "").strip().lower() == "uncommon":

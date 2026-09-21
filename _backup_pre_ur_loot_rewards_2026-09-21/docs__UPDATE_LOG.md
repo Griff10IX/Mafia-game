@@ -6,22 +6,6 @@
 
 [hr]
 
-[size=1.5][b][color=#2ECC71]2026-09-21[/color][/b] — [b]Loot boxes retuned + Ultra Rare dossier themes[/b][/size]
-[quote]
-[list]
-[*][color=#888888][b]Loot boxes:[/b] Prize counts and reward bands retuned for [b]Common[/b] (50 pcs, 1–2 prizes), [b]Uncommon[/b] (100, 2–3), [b]Rare[/b] (500, 3–5), and [b]Ultra Rare[/b] (1,000, 4–6).[/color]
-[*][color=#888888][b]Common:[/b] Cash [b]$5,000,000[/b]; points [b]150–2,500[/b]; rank points [b]500–2,500[/b]; bullets [b]50–1,000[/b]; loot pieces [b]1–5[/b]; tokens [b]1[/b].[/color]
-[*][color=#888888][b]Uncommon:[/b] Cash [b]$10,000,000[/b]; points [b]300–5,000[/b]; rank points [b]1,000–5,000[/b]; bullets [b]100–2,000[/b]; loot pieces [b]2–10[/b]; tokens [b]2[/b].[/color]
-[*][color=#888888][b]Rare:[/b] Cash [b]$20,000,000[/b]; points [b]600–10,000[/b]; rank points [b]2,000–10,000[/b]; bullets [b]200–4,000[/b]; loot pieces [b]4–20[/b]; tokens [b]4[/b].[/color]
-[*][color=#888888][b]Ultra Rare:[/b] Always grants [b]$7,500,000[/b] cash and [b]2,500[/b] points, plus [b]5 Mission Skip[/b] and [b]5 Free Robot Bodyguard[/b] tokens. Cash can also high-roll [b]$500,000,000–$10,000,000,000[/b]; points can high-roll [b]5,000–25,000[/b]. Rank points [b]6,000–30,000[/b]; bullets [b]600–12,000[/b]; loot pieces [b]12–60[/b].[/color]
-[*][color=#888888][b]New:[/b] [b]Ultra Rare dossier themes[/b] — [b]1 of each[/b] in the game. Equip the theme on your profile to activate its bonus. If you die, the theme [b]returns to the loot pool[/b].[/color]
-[*][color=#888888][b]Theme bonuses (while equipped):[/b] Samurai Fuji — +50% rank points; Deep Orbit — rare/legendary GTA can grant 5 cars; Noir Balcony — hitlist NPC ×3 chance; Lost City — crime cash double chance; Cyber Oni — −15% bullets needed; Blood Moon Hunter — +50% hitlist NPC cash; Space Hangar — −50% airport travel cost; Colony Ring — +25% property / illegal business income; Mob Office — +1 free robot bodyguard hire / day (stacks to 5); Inner Circle — +25% OC payout; Vittoria Social Club — +25% Weed Empire payout; Empire State Lounge — Jewelry / Bank / Casino Heist success can grant 1 loot piece.[/color]
-[*][color=#888888][b]Settings:[/b] [b]Account → Settings → Blackjack Cards[/b] — equip owned custom card backs (previews shown). Custom backs may appear from Ultra Rare opens.[/color]
-[/list]
-[/quote]
-
-[hr]
-
 [size=1.5][b][color=#2ECC71]2026-09-20[/color][/b] — [b]Mini Games removed[/b][/size]
 [quote]
 [list]

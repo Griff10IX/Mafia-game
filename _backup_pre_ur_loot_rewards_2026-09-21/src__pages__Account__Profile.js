@@ -802,11 +802,6 @@ const ProfileInfoCard = ({
               <span className="text-[8px] md:text-[9px] font-heading font-bold text-primary uppercase tracking-[0.16em]">
                 {isSystemAi ? 'System file' : 'Dossier'}
               </span>
-              {bgTheme?.bonus_label ? (
-                <span className="text-[8px] md:text-[9px] font-heading text-primary/80 truncate max-w-[55%]" title={bgTheme.bonus_label}>
-                  {bgTheme.bonus_label}
-                </span>
-              ) : null}
               <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                 {profile.show_profile_view_count === true && profile.profile_view_count != null && (
                   <span
@@ -3252,11 +3247,6 @@ export default function Profile() {
                             <p className="text-[9px] text-mutedForeground font-heading">
                               {equipped ? 'Equipped' : (isCustom && !theme?.image ? 'Upload required' : 'Owned')}
                             </p>
-                            {theme?.bonus_label ? (
-                              <p className="text-[9px] text-primary/90 font-heading leading-snug mt-0.5">
-                                {theme.bonus_label}
-                              </p>
-                            ) : null}
                           </div>
                           <button
                             type="button"

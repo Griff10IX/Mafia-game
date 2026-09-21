@@ -2828,6 +2828,12 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
         await log_points_event(db, user_id=current_user["id"], points=points_earned, event_type="illegal_biz_collect", meta={"business_id": business["id"]})
     if respect_earned > 0:
         await log_respect_earned(current_user["id"], respect_earned, "illegal_business")
+    from utils.profile_theme_bonuses import property_income_mult
+
+    _prop_inc_mult = property_income_mult(current_user)
+    if _prop_inc_mult != 1.0:
+        income = round(float(income) * _prop_inc_mult, 2)
+        auto_sell_cash = int(auto_sell_cash * _prop_inc_mult)
     vault_income = int(income) + auto_sell_cash
     auto_maint_spent = int(business.get("_distillery_auto_maint_spent") or 0)
     vault_delta = vault_income - vault_penalty - auto_maint_spent

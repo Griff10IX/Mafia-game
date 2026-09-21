@@ -45,6 +45,7 @@ const Layout = lazy(() => import("./components/Layout"));
 const Dashboard = lazy(() => import("./pages/Account/Dashboard"));
 const AutoRank = lazy(() => import("./pages/Account/AutoRank"));
 const IPRules = lazy(() => import("./pages/Account/IPRules"));
+const AccountSettings = lazy(() => import("./pages/Account/AccountSettings"));
 const Missions = lazy(() => import("./pages/Account/Missions"));
 const MyInventory = lazy(() => import("./pages/Account/MyInventory"));
 const MyStats = lazy(() => import("./pages/Account/MyStats"));
@@ -1111,7 +1112,7 @@ function App() {
             <Route
               path="/account/settings"
               element={
-              <IPRules />
+              <AccountSettings />
               }
             />
             <Route
