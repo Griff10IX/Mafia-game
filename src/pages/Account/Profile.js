@@ -152,12 +152,11 @@ const PROFILE_STYLES = `
     left: 0;
     right: 0;
     bottom: 0;
-    height: 3px;
+    height: 2px;
     background: rgb(var(--prof-theme-seam-rgb));
     box-shadow:
-      0 0 16px rgba(var(--prof-theme-seam-rgb), 0.75),
-      0 0 6px rgba(var(--prof-theme-seam-rgb), 1),
-      0 -1px 0 rgba(var(--prof-theme-seam-rgb), 0.9);
+      0 0 10px rgba(var(--prof-theme-seam-rgb), 0.55),
+      0 0 3px rgba(var(--prof-theme-seam-rgb), 0.85);
   }
   @media (hover: hover) and (pointer: fine) {
     .prof-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
@@ -485,6 +484,8 @@ const ProfileInfoCard = ({
   const [killDebugLoading, setKillDebugLoading] = useState(false);
   const [killDebugError, setKillDebugError] = useState(null);
   const [staffPortalClientTick, setStaffPortalClientTick] = useState(0);
+  const dossierRef = useRef(null);
+  const [themeSeamFits, setThemeSeamFits] = useState(false);
 
   const staffViewerCaps = isAdmin || isModerator || hasAdminEmail;
   const staffShellGateOk = staffViewerCaps && staffLoginSession;
@@ -679,6 +680,35 @@ const ProfileInfoCard = ({
   const showThemeSeam = Boolean(bgThemeImage) && (bgThemeFit === 'width' || bgThemeFit === 'contain');
   const themeAspect = `${bgThemeW} / ${bgThemeH}`;
   const themeScrimOn = profile.profile_theme_scrim !== false;
+
+  useEffect(() => {
+    if (!showThemeSeam) {
+      setThemeSeamFits(false);
+      return undefined;
+    }
+    const el = dossierRef.current;
+    if (!el) return undefined;
+    const measure = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w < 8 || h < 8) {
+        setThemeSeamFits(false);
+        return;
+      }
+      const bannerH = w * (bgThemeH / bgThemeW);
+      // Skip when banner fills the card — seam would sit on the outer border and look doubled.
+      setThemeSeamFits(bannerH < h - 14);
+    };
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [showThemeSeam, bgThemeW, bgThemeH, bgThemeImage]);
+
   const dossierCardStyle = {
     ...(dossierBorderStyle || {}),
     // Always set seam colour (glow preset/custom sets it; otherwise match primary cyan)
@@ -689,7 +719,11 @@ const ProfileInfoCard = ({
   };
 
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden ${dossierBorderClass} shadow-2xl ${bgThemeImage ? '' : 'backdrop-blur-sm'} prof-card prof-dossier-enter mobile-panel`} style={dossierCardStyle}>
+    <div
+      ref={dossierRef}
+      className={`relative ${styles.panel} rounded-lg overflow-hidden ${dossierBorderClass} shadow-2xl ${bgThemeImage ? '' : 'backdrop-blur-sm'} prof-card prof-dossier-enter mobile-panel`}
+      style={dossierCardStyle}
+    >
       {bgThemeImage ? (
         <>
           <div
@@ -704,7 +738,7 @@ const ProfileInfoCard = ({
             />
             {themeScrimOn ? <div className="prof-dossier-theme-scrim" /> : null}
           </div>
-          {showThemeSeam ? (
+          {showThemeSeam && themeSeamFits ? (
             <div className="prof-dossier-theme-seam-anchor" style={{ aspectRatio: themeAspect }} aria-hidden="true">
               <div className="prof-dossier-theme-seam" />
             </div>
