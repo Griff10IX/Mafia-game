@@ -44,8 +44,8 @@ const STORE_STYLES = `
     position: sticky;
     top: 0;
     z-index: 25;
-    margin-left: -0.75rem;
-    margin-right: -0.75rem;
+    margin-left: -16px;
+    margin-right: -16px;
     padding: 0.45rem 0.75rem 0.6rem;
     background: linear-gradient(180deg, rgba(12,12,14,0.98) 0%, rgba(12,12,14,0.94) 72%, rgba(12,12,14,0.8) 100%);
     backdrop-filter: blur(10px);
@@ -194,6 +194,29 @@ const STORE_STYLES = `
     scrollbar-width: none;
   }
   .store-qty-row::-webkit-scrollbar { display: none; }
+  .store-pack-bubbles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .store-pack-bubble {
+    min-height: 44px;
+    padding: 0 0.8rem;
+    border-radius: 999px;
+    border: 1px solid rgba(234, 179, 8, 0.35);
+    background: rgba(0, 0, 0, 0.35);
+    color: #e4e4e7;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .store-pack-bubble[aria-pressed="true"] {
+    color: rgb(250, 204, 21);
+    border-color: rgba(234, 179, 8, 0.7);
+    background: rgba(234, 179, 8, 0.16);
+    box-shadow: 0 0 12px rgba(234, 179, 8, 0.28);
+  }
+  .store-pack-cards.store-pack-grid { display: none; }
   .store-pack-grid,
   .store-loot-grid,
   .store-upgrade-grid,
@@ -220,7 +243,28 @@ const STORE_STYLES = `
     .store-sale { flex-direction: column; align-items: stretch; }
     .store-sale-cta { width: 100%; }
   }
+  @media (max-width: 767px) {
+    [data-page="store"].mobile-page-root {
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+      width: 100%;
+      max-width: 100%;
+    }
+    [data-page="store"] .mobile-panel,
+    [data-page="store"] .store-sale {
+      margin-left: -16px;
+      margin-right: -16px;
+      border-radius: 0;
+    }
+    [data-page="store"] .store-hero {
+      border-radius: 0;
+      border-left: 0;
+      border-right: 0;
+    }
+  }
   @media (min-width: 768px) {
+    .store-pack-bubbles { display: none; }
+    .store-pack-cards.store-pack-grid { display: grid; }
     .store-hero {
       min-height: 10.5rem;
       padding: 1.15rem 1.25rem;
@@ -1638,7 +1682,7 @@ export default function Store() {
   };
 
   return (
-    <div className={`space-y-3 md:space-y-4 lg:space-y-6 ${styles.pageContent} mobile-page-root px-3 sm:px-4 pb-24 md:pb-6`} data-testid="store-page" data-page="store">
+    <div className={`space-y-3 md:space-y-4 lg:space-y-6 ${styles.pageContent} mobile-page-root pb-24 md:pb-6`} data-testid="store-page" data-page="store">
       <style>{STORE_STYLES}</style>
 
       <div className="store-chrome store-fade-in space-y-2">
@@ -1920,7 +1964,23 @@ export default function Store() {
               </div>
               {customPurchaseMode === 'points' ? (
                 <>
-                <div className="store-pack-grid">
+                <div className="store-pack-bubbles" role="group" aria-label="Point packs">
+                  {POINT_AMOUNT_PRESETS.map((amount) => {
+                    const selected = parseInt(String(customPointsInput).replace(/\D/g, ''), 10) === amount;
+                    return (
+                      <button
+                        key={amount}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => setCustomPointsInput(String(amount))}
+                        className="store-pack-bubble font-heading touch-manipulation"
+                      >
+                        {amount.toLocaleString()}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="store-pack-cards store-pack-grid">
                   {POINT_AMOUNT_PRESETS.map((amount) => {
                     const selected = parseInt(String(customPointsInput).replace(/\D/g, ''), 10) === amount;
                     const ready = selected && customQuote && customQuote.price_gbp != null;
