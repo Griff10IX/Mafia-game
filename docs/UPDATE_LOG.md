@@ -16,7 +16,7 @@
 [*][color=#888888][b]Ultra Rare:[/b] Always grants [b]$7,500,000[/b] cash and [b]2,500[/b] points, plus [b]5 Mission Skip[/b] and [b]5 Free Robot Bodyguard[/b] tokens. Cash can also high-roll [b]$500,000,000–$10,000,000,000[/b]; points can high-roll [b]5,000–25,000[/b]. Rank points [b]6,000–30,000[/b]; bullets [b]600–12,000[/b]; loot pieces [b]12–60[/b].[/color]
 [*][color=#888888][b]New:[/b] [b]Ultra Rare dossier themes[/b] — [b]1 of each[/b] in the game. Equip the theme on your profile to activate its bonus. If you die, the theme [b]returns to the loot pool[/b].[/color]
 [*][color=#888888][b]Theme bonuses (while equipped):[/b] Samurai Fuji — +50% rank points; Deep Orbit — rare/legendary GTA can grant 5 cars; Noir Balcony — hitlist NPC ×3 chance; Lost City — crime cash double chance; Cyber Oni — −15% bullets needed; Blood Moon Hunter — +50% hitlist NPC cash; Space Hangar — −50% airport travel cost; Colony Ring — +25% property / illegal business income; Mob Office — +1 free robot bodyguard hire / day (stacks to 5); Inner Circle — +25% OC payout; Vittoria Social Club — +25% Weed Empire payout; Empire State Lounge — Jewelry / Bank / Casino Heist success can grant 1 loot piece.[/color]
-[*][color=#888888][b]Settings:[/b] [b]Account → Settings → Blackjack Cards[/b] — equip owned custom card backs (previews shown). Custom backs may appear from Ultra Rare opens.[/color]
+[*][color=#888888][b]Settings:[/b] Equip owned blackjack card backs from [b]Edit Profile → Look[/b] (also under Account → Settings → Blackjack Cards). Custom backs may appear from Ultra Rare opens. Solo blackjack keeps the felt clear until you Deal — cards only appear once the hand starts.[/color]
 [/list]
 [/quote]
 

@@ -38,12 +38,7 @@ import { PROFILE_GLOW_BORDER_CSS, customGlowBorderStyle, PROFILE_GLOW_PRESETS } 
 import GlowPresetPicker from '../../components/GlowPresetPicker';
 import { isValidTelegramChatId } from '../../utils/telegramChatId';
 import ProfileMessagePopup from '../Social/ProfileMessagePopup';
-import {
-  BJ_VADER_CARD_BACK,
-  isGhostFaceAdminPreview,
-  isBlackjackVaderBackOn,
-  setBlackjackVaderBackOn,
-} from '../../utils/blackjackCardBack';
+import BlackjackCardsSettings from './BlackjackCardsSettings';
 
 function formatProfileViewCount(n) {
   const v = Math.max(0, Math.floor(Number(n) || 0));
@@ -1806,7 +1801,6 @@ export default function Profile() {
   const [showProfileViewCount, setShowProfileViewCount] = useState(false);
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [savingAutoplay, setSavingAutoplay] = useState(false);
-  const [bjVaderBack, setBjVaderBack] = useState(() => isBlackjackVaderBackOn());
   const [censorProfanity, setCensorProfanity] = useState(false);
   const [savingProfanity, setSavingProfanity] = useState(false);
   const [modOnlineColor, setModOnlineColor] = useState('#1e3a5f');
@@ -3289,6 +3283,8 @@ export default function Profile() {
               </div>
             )}
 
+            <BlackjackCardsSettings embedded />
+
             {me?.profile_cosmetic_permanent ? (
               <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
                 <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -3649,32 +3645,6 @@ export default function Profile() {
                   </div>
                   <button type="button" onClick={saveVideoAutoplay} disabled={savingAutoplay} className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingAutoplay ? 'Saving…' : 'Save'}</button>
                 </div>
-                {isGhostFaceAdminPreview(me) && (
-                <div>
-                  <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Blackjack card back (preview)</h3>
-                  <p className="text-xs text-mutedForeground mb-2">GhostFace only. Off restores the default navy back. Nobody else sees this.</p>
-                  <div className="flex items-center justify-between gap-3 py-1">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <img src={BJ_VADER_CARD_BACK} alt="" className="w-[28px] h-[40px] rounded object-cover flex-shrink-0" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.45)' }} />
-                      <span className="text-sm text-foreground">Vader card back</span>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={bjVaderBack}
-                      onClick={() => {
-                        const next = !bjVaderBack;
-                        setBjVaderBack(next);
-                        setBlackjackVaderBackOn(next);
-                        toast.success(next ? 'Vader card back on' : 'Default card back restored');
-                      }}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${bjVaderBack ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'}`}
-                    >
-                      <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${bjVaderBack ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                    </button>
-                  </div>
-                </div>
-                )}
                 <div>
                   <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Profanity filter</h3>
                   <p className="text-xs text-mutedForeground mb-2">Replace swear words with *** in chat, forum, and messages.</p>

@@ -210,6 +210,7 @@ export default function Blackjack() {
   const [ownership, setOwnership] = useState(null);
   const [bet, setBet] = useState('1000');
   const [game, setGame] = useState(null);
+  const [tableReady, setTableReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [dealerRevealed, setDealerRevealed] = useState(false);
   const [history, setHistory] = useState([]);
@@ -293,6 +294,8 @@ export default function Blackjack() {
       else setGame(null);
     }).catch(() => {
       setGame(null);
+    }).finally(() => {
+      setTableReady(true);
     });
   };
 
@@ -627,8 +630,12 @@ export default function Blackjack() {
           <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, var(--noir-primary-bright), #8b6914, var(--noir-primary-bright), #5a3e1b)' }} />
 
           <div className="p-4 sm:p-6">
-            {!game ? (
-              /* ── Betting UI ── */
+            {!tableReady ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-10 min-h-[200px]">
+                <p className="text-[10px] text-emerald-200/40 font-heading uppercase tracking-wider">Preparing table…</p>
+              </div>
+            ) : !game ? (
+              /* ── Betting UI — no cards until Deal returns a hand ── */
               <div className="flex flex-col items-center gap-5 py-6">
                 {/* Table text */}
                 <div className="text-center">
@@ -644,6 +651,13 @@ export default function Blackjack() {
                   <p className="text-[10px] text-emerald-200/40 font-heading mt-1 uppercase tracking-wider">Dealer stands on 17</p>
                 </div>
 
+                {loading ? (
+                  <div className="flex flex-col items-center gap-3 py-4 min-h-[120px] justify-center">
+                    <p className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Dealing…</p>
+                    <p className="text-[10px] text-emerald-200/40 font-heading">Cards appear when the hand starts</p>
+                  </div>
+                ) : (
+                  <>
                 {/* Bet input */}
                 <div className="flex items-center gap-2">
                   <span className="text-primary font-bold text-lg">$</span>
@@ -683,8 +697,10 @@ export default function Blackjack() {
                     boxShadow: '0 4px 16px rgba(212,175,55,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
                   }}
                 >
-                  {loading ? '...' : 'Deal'}
+                  Deal
                 </button>
+                  </>
+                )}
               </div>
             ) : (
               /* ── Active Game ── */
