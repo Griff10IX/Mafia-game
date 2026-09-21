@@ -56,6 +56,18 @@ THEME_BONUS: Dict[str, Dict[str, Any]] = {
         "id": "heist_loot_piece",
         "label": "Jewelry / Bank / Casino Heist success: 0.25% chance for 1 loot piece",
     },
+    "gr_grave_haul": {
+        "id": "gr_dig_15",
+        "label": "+15% Grave Robber dig rewards (own all 3 Grave themes → +90%)",
+    },
+    "gr_tommy_map": {
+        "id": "gr_dig_25",
+        "label": "+25% Grave Robber dig rewards (own all 3 Grave themes → +90%)",
+    },
+    "gr_lion_vault": {
+        "id": "gr_dig_50",
+        "label": "+50% Grave Robber dig rewards (own all 3 Grave themes → +90%)",
+    },
 }
 
 HEIST_CRIME_IDS: Set[str] = {

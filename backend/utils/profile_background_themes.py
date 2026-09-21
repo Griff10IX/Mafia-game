@@ -21,7 +21,7 @@ CUSTOM_THEME_NAME = "Admin custom (test)"
 # Catalog: hard-to-get themes (loot later). Image paths are public static assets.
 # ?v= cache-bust when art is replaced.
 # fit: width = natural-aspect banner (default); stretch = fill whole dossier.
-_THEME_ASSET_V = "20260921d"
+_THEME_ASSET_V = "20260921e"
 PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, Any]] = {
     "godfather": {
         "id": "godfather",
@@ -180,11 +180,51 @@ PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, Any]] = {
         "bonus_id": "heist_loot_piece",
         "bonus_label": "Jewelry / Bank / Casino Heist success: 0.25% chance for 1 loot piece",
     },
+    # Grave Robber exclusives (1 live player copy each; dig drop; return on death).
+    "gr_grave_haul": {
+        "id": "gr_grave_haul",
+        "name": "Grave Haul",
+        "image": f"/images/profile-themes/gr-grave-haul.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+        "grave_robber_exclusive": True,
+        "bonus_id": "gr_dig_15",
+        "bonus_label": "+15% Grave Robber dig rewards (equip; own all 3 Grave themes → +90%)",
+    },
+    "gr_tommy_map": {
+        "id": "gr_tommy_map",
+        "name": "Tommy's Map",
+        "image": f"/images/profile-themes/gr-tommy-map.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+        "grave_robber_exclusive": True,
+        "bonus_id": "gr_dig_25",
+        "bonus_label": "+25% Grave Robber dig rewards (equip; own all 3 Grave themes → +90%)",
+    },
+    "gr_lion_vault": {
+        "id": "gr_lion_vault",
+        "name": "Lion's Vault",
+        "image": f"/images/profile-themes/gr-lion-vault.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+        "grave_robber_exclusive": True,
+        "bonus_id": "gr_dig_50",
+        "bonus_label": "+50% Grave Robber dig rewards (equip; own all 3 Grave themes → +90%)",
+    },
 }
 
 UR_LOOT_THEME_IDS = tuple(
     tid for tid, meta in PROFILE_BACKGROUND_THEMES.items() if meta.get("ultra_rare_only")
 )
+GRAVE_ROBBER_THEME_IDS = tuple(
+    tid for tid, meta in PROFILE_BACKGROUND_THEMES.items() if meta.get("grave_robber_exclusive")
+)
+# 1/1 player-pool themes that return on death (loot UR + grave digger).
+SCARCE_THEME_IDS = tuple(dict.fromkeys(list(UR_LOOT_THEME_IDS) + list(GRAVE_ROBBER_THEME_IDS)))
+
+# Equipped dig bonus % (fraction). Owning all three stacks to 0.90.
+GRAVE_THEME_DIG_BONUS: Dict[str, float] = {
+    "gr_grave_haul": 0.15,
+    "gr_tommy_map": 0.25,
+    "gr_lion_vault": 0.50,
+}
 
 OWNED_FIELD = "profile_background_themes_owned"
 EQUIPPED_FIELD = "profile_background_theme_id"
@@ -249,9 +289,9 @@ async def _staff_ids_excluded_from_theme_pool(db, staff_user_ids: Optional[Set[s
 
 
 async def theme_player_claimed_live(db, theme_id: str, *, staff_user_ids: Optional[Set[str]] = None) -> int:
-    """1 if a non-staff player owns this UR theme. Staff/admin (e.g. GhostFace) do not block the loot pool."""
+    """1 if a non-staff player owns this scarce theme. Staff/admin (e.g. GhostFace) do not block the pool."""
     tid = str(theme_id or "").strip().lower()
-    if tid not in UR_LOOT_THEME_IDS:
+    if tid not in SCARCE_THEME_IDS:
         return 0
     q: Dict[str, Any] = {OWNED_FIELD: tid}
     excluded = await _staff_ids_excluded_from_theme_pool(db, staff_user_ids)
@@ -264,6 +304,14 @@ async def theme_player_claimed_live(db, theme_id: str, *, staff_user_ids: Option
 async def list_available_ur_themes_for_loot(db, *, staff_user_ids: Optional[Set[str]] = None) -> List[str]:
     out: List[str] = []
     for tid in UR_LOOT_THEME_IDS:
+        if await theme_player_claimed_live(db, tid, staff_user_ids=staff_user_ids) < 1:
+            out.append(tid)
+    return out
+
+
+async def list_available_grave_themes_for_dig(db, *, staff_user_ids: Optional[Set[str]] = None) -> List[str]:
+    out: List[str] = []
+    for tid in GRAVE_ROBBER_THEME_IDS:
         if await theme_player_claimed_live(db, tid, staff_user_ids=staff_user_ids) < 1:
             out.append(tid)
     return out
@@ -284,26 +332,42 @@ async def grant_ur_theme_to_user(db, user_id: str, theme_id: str, *, count_towar
         "rarity": "loot_exclusive",
         "reward_tier": "loot_exclusive",
         "image": meta.get("image"),
+        "grave_robber_exclusive": bool(meta.get("grave_robber_exclusive")),
     }
 
 
 async def release_ur_themes_on_death(db, user_id: str) -> List[str]:
-    """Strip UR loot themes (and unequip if needed) so they return to the player pool."""
+    """Strip scarce themes (UR loot + Grave Robber) so they return to the player pool."""
     u = await db.users.find_one(
         {"id": user_id},
         {"_id": 0, OWNED_FIELD: 1, EQUIPPED_FIELD: 1},
     ) or {}
     owned = owned_theme_ids(u)
-    ur_owned = [t for t in owned if t in UR_LOOT_THEME_IDS]
-    if not ur_owned:
+    scarce_owned = [t for t in owned if t in SCARCE_THEME_IDS]
+    if not scarce_owned:
         return []
-    remaining = [t for t in owned if t not in UR_LOOT_THEME_IDS]
+    remaining = [t for t in owned if t not in SCARCE_THEME_IDS]
     equipped = str(u.get(EQUIPPED_FIELD) or "").strip().lower()
     update: Dict[str, Any] = {"$set": {OWNED_FIELD: remaining}}
-    if equipped in ur_owned:
+    if equipped in scarce_owned:
         update["$unset"] = {EQUIPPED_FIELD: ""}
     await db.users.update_one({"id": user_id}, update)
-    return ur_owned
+    return scarce_owned
+
+
+def grave_robber_dig_reward_mult(user: Optional[dict]) -> float:
+    """1.0 + dig bonus. Equip one theme for its %; own all three → +90%."""
+    if not user:
+        return 1.0
+    owned = set(owned_theme_ids(user))
+    gr_owned = [tid for tid in GRAVE_ROBBER_THEME_IDS if tid in owned]
+    if len(gr_owned) >= 3:
+        return 1.90
+    eq = str(user.get(EQUIPPED_FIELD) or "").strip().lower()
+    pct = GRAVE_THEME_DIG_BONUS.get(eq)
+    if pct is None:
+        return 1.0
+    return 1.0 + float(pct)
 
 
 def catalog_theme_bonus_fields(theme: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -438,19 +502,58 @@ def custom_theme_upload_dir(root_dir: Path) -> Path:
     return Path(root_dir) / "uploads" / "profile_themes"
 
 
-def custom_theme_file_path(root_dir: Path, user_id: str) -> Path:
+def custom_theme_file_path(root_dir: Path, user_id: str, *, ext: str = "jpg") -> Path:
     uid = str(user_id or "").strip()
     if not _SAFE_USER_ID_RE.match(uid):
         raise ValueError("Invalid user id")
-    return custom_theme_upload_dir(root_dir) / f"{uid}.jpg"
+    e = str(ext or "jpg").strip().lower().lstrip(".")
+    if e not in ("jpg", "jpeg", "png", "webp", "gif"):
+        e = "jpg"
+    return custom_theme_upload_dir(root_dir) / f"{uid}.{e}"
+
+
+def find_custom_theme_file(root_dir: Path, user_id: str) -> Optional[Path]:
+    """Prefer animated gif, then static formats."""
+    for ext in ("gif", "jpg", "jpeg", "webp", "png"):
+        try:
+            p = custom_theme_file_path(root_dir, user_id, ext=ext)
+        except ValueError:
+            return None
+        if p.is_file():
+            return p
+    return None
+
+
+def _cover_crop_rgb(im: Any, tw: int, th: int) -> Any:
+    from PIL import Image
+
+    if im.mode not in ("RGB", "RGBA"):
+        im = im.convert("RGBA" if "A" in (im.mode or "") else "RGB")
+    sw, sh = im.size
+    if sw < 1 or sh < 1:
+        raise ValueError("Invalid image dimensions")
+    scale = max(tw / sw, th / sh)
+    nw = max(tw, int(round(sw * scale)))
+    nh = max(th, int(round(sh * scale)))
+    im = im.resize((nw, nh), Image.Resampling.LANCZOS)
+    left = max(0, (nw - tw) // 2)
+    top = max(0, (nh - th) // 2)
+    return im.crop((left, top, left + tw, top + th))
 
 
 def encode_theme_jpeg(raw: bytes) -> Tuple[bytes, str]:
-    """Validate upload bytes and encode a center cover-crop JPEG at THEME_IMAGE_SIZE.
+    """Back-compat: always return JPEG bytes (first frame if GIF). Prefer encode_theme_image."""
+    data, mime, _ext = encode_theme_image(raw, prefer_gif=False)
+    return data, mime
 
-    No small size cap — admin test uploads are resized down to 1024×931 anyway.
+
+def encode_theme_image(raw: bytes, *, prefer_gif: bool = True) -> Tuple[bytes, str, str]:
+    """Validate upload and encode a center cover-crop at THEME_IMAGE_SIZE.
+
+    Animated GIFs keep animation (resized per frame). Other formats become JPEG.
+    Returns (bytes, mime, file_ext).
     """
-    from PIL import Image
+    from PIL import Image, ImageSequence
 
     from utils.image_upload_security import sniff_image_mime, verify_image_magic_bytes
 
@@ -467,18 +570,44 @@ def encode_theme_jpeg(raw: bytes) -> Tuple[bytes, str]:
         im.load()
     except Exception as e:
         raise ValueError("Could not read image") from e
-    im = im.convert("RGB")
+
     tw, th = THEME_IMAGE_WIDTH, THEME_IMAGE_HEIGHT
-    sw, sh = im.size
-    if sw < 1 or sh < 1:
-        raise ValueError("Invalid image dimensions")
-    scale = max(tw / sw, th / sh)
-    nw = max(tw, int(round(sw * scale)))
-    nh = max(th, int(round(sh * scale)))
-    im = im.resize((nw, nh), Image.Resampling.LANCZOS)
-    left = max(0, (nw - tw) // 2)
-    top = max(0, (nh - th) // 2)
-    im = im.crop((left, top, left + tw, top + th))
+    is_gif = bool(prefer_gif and mime == "image/gif" and getattr(im, "is_animated", False) and int(getattr(im, "n_frames", 1) or 1) > 1)
+
+    if is_gif:
+        frames = []
+        durations = []
+        try:
+            for frame in ImageSequence.Iterator(im):
+                fr = _cover_crop_rgb(frame.copy(), tw, th)
+                # GIF palette path — quantize via adaptive
+                if fr.mode == "RGBA":
+                    bg = Image.new("RGBA", fr.size, (0, 0, 0, 255))
+                    bg.paste(fr, mask=fr.split()[3])
+                    fr = bg.convert("RGB")
+                else:
+                    fr = fr.convert("RGB")
+                frames.append(fr.convert("P", palette=Image.Palette.ADAPTIVE, colors=255))
+                durations.append(int(frame.info.get("duration") or 100))
+        except Exception as e:
+            raise ValueError("Could not process animated GIF") from e
+        if not frames:
+            raise ValueError("Could not process animated GIF")
+        buf = io.BytesIO()
+        frames[0].save(
+            buf,
+            format="GIF",
+            save_all=True,
+            append_images=frames[1:],
+            duration=durations,
+            loop=int(im.info.get("loop") or 0),
+            optimize=False,
+            disposal=2,
+        )
+        return buf.getvalue(), "image/gif", "gif"
+
+    # Static: JPEG (works for jpeg/png/webp/single-frame gif)
+    cropped = _cover_crop_rgb(im, tw, th).convert("RGB")
     buf = io.BytesIO()
-    im.save(buf, format="JPEG", quality=92, optimize=True)
-    return buf.getvalue(), "image/jpeg"
+    cropped.save(buf, format="JPEG", quality=92, optimize=True)
+    return buf.getvalue(), "image/jpeg", "jpg"

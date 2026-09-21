@@ -46,6 +46,8 @@ GR_JAIL_CHANCE = 0.04  # ~4% per dig (tune within ~2–6%)
 GR_JAIL_SECONDS = 60
 GR_RECENT_ATTEMPTS_LIMIT = 20
 GR_FAMILY_RETALIATION_CHANCE = 0.005  # 0.5% per dig (very rare)
+# Quiet additive drop for Grave Robber dossier themes (1/1 each).
+GR_THEME_DROP_CHANCE = 0.05
 
 # Rank-XP pass token is store-only, excluded from this reward pool.
 GR_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
@@ -57,6 +59,8 @@ GR_REWARD_WEIGHTS = (
     ("points", 0.02),  # hardest reward to hit
     ("tokens", 0.15),
 )
+# Scale cash / bullets / points / token counts (1.0 = original bands).
+GR_REWARD_AMOUNT_MULT = 1.75
 
 
 def _as_utc_dt(v) -> Optional[datetime]:
@@ -107,13 +111,15 @@ def _pick_reward_kind() -> str:
 
 def _reward_ranges_for_cost(attempt_cost: int) -> dict:
     c = max(1, int(attempt_cost or GR_BASE_ATTEMPT_COST))
-    cash_min = max(250_000, int(c * 0.55))
-    cash_max = max(cash_min, int(c * 1.50))
-    bullets_min = max(40, int(c / 14000))
-    bullets_max = max(bullets_min + 15, int(c / 5000))
-    points_min = max(5, int(c / 250_000))
-    points_max = max(points_min + 5, int(c / 90_000))
-    points_max = min(100, points_max)
+    m = float(GR_REWARD_AMOUNT_MULT)
+    cash_min = max(int(round(250_000 * m)), int(round(c * 0.55 * m)))
+    cash_max = max(cash_min, int(round(c * 1.50 * m)))
+    bullets_min = max(int(round(40 * m)), int(round((c / 14000) * m)))
+    bullets_max = max(bullets_min + int(round(15 * m)), int(round((c / 5000) * m)))
+    points_min = max(int(round(5 * m)), int(round((c / 250_000) * m)))
+    points_max = max(points_min + int(round(5 * m)), int(round((c / 90_000) * m)))
+    points_cap = int(round(100 * m))
+    points_max = min(points_cap, points_max)
     points_min = min(points_min, points_max)
     return {
         "cash": {"min": cash_min, "max": cash_max},
@@ -133,20 +139,21 @@ def _roll_reward(attempt_cost: int) -> dict:
     }
     if kind == "nothing":
         return reward
+    m = float(GR_REWARD_AMOUNT_MULT)
     if kind == "cash":
-        lo = max(250_000, int(attempt_cost * 0.55))
-        hi = max(lo, int(attempt_cost * 1.50))
+        lo = max(int(round(250_000 * m)), int(round(attempt_cost * 0.55 * m)))
+        hi = max(lo, int(round(attempt_cost * 1.50 * m)))
         reward["money"] = _rng.randint(lo, hi)
         return reward
     if kind == "bullets":
-        lo = max(40, int(attempt_cost / 14000))
-        hi = max(lo + 15, int(attempt_cost / 5000))
+        lo = max(int(round(40 * m)), int(round((attempt_cost / 14000) * m)))
+        hi = max(lo + int(round(15 * m)), int(round((attempt_cost / 5000) * m)))
         reward["bullets"] = _rng.randint(lo, hi)
         return reward
     if kind == "points":
-        lo = max(5, int(attempt_cost / 250_000))
-        hi = max(lo + 5, int(attempt_cost / 90_000))
-        hi = min(100, hi)
+        lo = max(int(round(5 * m)), int(round((attempt_cost / 250_000) * m)))
+        hi = max(lo + int(round(5 * m)), int(round((attempt_cost / 90_000) * m)))
+        hi = min(int(round(100 * m)), hi)
         lo = min(lo, hi)
         reward["points"] = _rng.randint(lo, hi)
         return reward
@@ -154,10 +161,57 @@ def _roll_reward(attempt_cost: int) -> dict:
         picks = 2 if _rng.random() < 0.35 else 1
         chosen = _rng.sample(list(GR_TOKEN_TYPES), k=min(picks, len(GR_TOKEN_TYPES)))
         for t in chosen:
-            reward["tokens"].append({"token_type": t, "amount": _rng.randint(1, 2)})
+            # Was 1–2; +75% → ~2–4
+            base = _rng.randint(1, 2)
+            reward["tokens"].append({"token_type": t, "amount": max(1, int(round(base * m)))})
         return reward
     # Cars no longer granted from Grave Robber — treat as nothing
     return reward
+
+
+def _apply_dig_mult(reward: dict, mult: float) -> dict:
+    """Scale cash / bullets / points / token counts by dig theme bonus mult."""
+    m = float(mult or 1.0)
+    if m <= 1.0 or abs(m - 1.0) < 1e-9:
+        return reward
+    if int(reward.get("money") or 0) > 0:
+        reward["money"] = max(1, int(round(int(reward["money"]) * m)))
+    if int(reward.get("bullets") or 0) > 0:
+        reward["bullets"] = max(1, int(round(int(reward["bullets"]) * m)))
+    if int(reward.get("points") or 0) > 0:
+        reward["points"] = max(1, int(round(int(reward["points"]) * m)))
+    toks = reward.get("tokens") or []
+    if toks:
+        scaled = []
+        for row in toks:
+            amt = max(0, int(row.get("amount") or 0))
+            if amt <= 0:
+                continue
+            scaled.append({
+                "token_type": row.get("token_type"),
+                "amount": max(1, int(round(amt * m))),
+            })
+        reward["tokens"] = scaled
+    reward["dig_bonus_mult"] = round(m, 4)
+    return reward
+
+
+def _scale_ranges(ranges: dict, mult: float) -> dict:
+    m = float(mult or 1.0)
+    if m <= 1.0 or abs(m - 1.0) < 1e-9:
+        return ranges
+    out = {}
+    for k, band in (ranges or {}).items():
+        if not isinstance(band, dict):
+            out[k] = band
+            continue
+        lo = int(band.get("min") or 0)
+        hi = int(band.get("max") or 0)
+        out[k] = {
+            "min": max(0, int(round(lo * m))),
+            "max": max(0, int(round(hi * m))),
+        }
+    return out
 
 
 def register(router):
@@ -181,7 +235,10 @@ def register(router):
             current_attempt_cost = int(fresh.get("grave_robber_current_attempt_cost") or _cost_for_attempts_used(attempts_used))
             next_attempt_cost = int(_cost_for_attempts_used(min(attempts_total - 1, attempts_used + 1)))
         tier = _tier_for_attempts_used(attempts_used if attempts_used < attempts_total else attempts_total - 1)
-        ranges = _reward_ranges_for_cost(current_attempt_cost)
+        from utils.profile_background_themes import grave_robber_dig_reward_mult
+
+        dig_mult = float(grave_robber_dig_reward_mult(fresh))
+        ranges = _scale_ranges(_reward_ranges_for_cost(current_attempt_cost), dig_mult)
         weights = dict(GR_REWARD_WEIGHTS)
         total_spent = int(fresh.get("grave_robber_total_spent") or 0)
         total_rewards_cash = int(fresh.get("grave_robber_total_rewards_cash") or 0)
@@ -230,6 +287,8 @@ def register(router):
             "global_net_cash": global_cash_won - global_spent,
             "jail_chance_per_dig": GR_JAIL_CHANCE,
             "jail_seconds_on_caught": apply_game_pass_wait_seconds(GR_JAIL_SECONDS, fresh),
+            "dig_reward_mult": dig_mult,
+            "dig_reward_bonus_pct": round(max(0.0, (dig_mult - 1.0) * 100), 1),
             "possible_wins": [
                 {
                     "kind": "nothing",
@@ -253,13 +312,23 @@ def register(router):
                     "kind": "points",
                     "label": "Points",
                     "chance_pct": round(weights.get("points", 0) * 100, 2),
-                    "details": {"min": ranges["points"]["min"], "max": ranges["points"]["max"], "max_cap": 100},
+                    "details": {
+                        "min": ranges["points"]["min"],
+                        "max": ranges["points"]["max"],
+                        "max_cap": int(round(100 * float(GR_REWARD_AMOUNT_MULT) * dig_mult)),
+                    },
                 },
                 {
                     "kind": "tokens",
                     "label": "Tokens",
                     "chance_pct": round(weights.get("tokens", 0) * 100, 2),
-                    "details": "1 token type (65%) or 2 types (35%); each type gives 1-2 tokens. No game pass token.",
+                    "details": "1 token type (65%) or 2 types (35%); each type gives 2–4 tokens. No game pass token.",
+                },
+                {
+                    "kind": "profile_theme",
+                    "label": "Grave dossier theme",
+                    "chance_pct": None,
+                    "details": "Rare dig bonus on top of the normal prize. 1 of each in the game; returns on death. Equip for dig bonuses; own all three for +90%.",
                 },
             ],
             "recent_attempts": recent,
@@ -372,6 +441,41 @@ def register(router):
             raise HTTPException(status_code=409, detail="Attempt state changed. Refresh and try again.")
 
         reward = _roll_reward(expected_cost)
+        from utils.profile_background_themes import (
+            grave_robber_dig_reward_mult,
+            grant_ur_theme_to_user,
+            list_available_grave_themes_for_dig,
+            owned_theme_ids,
+        )
+        from server import _get_staff_user_ids
+
+        dig_mult = float(grave_robber_dig_reward_mult(fresh))
+        reward = _apply_dig_mult(reward, dig_mult)
+
+        theme_grant = None
+        try:
+            if _rng.random() < GR_THEME_DROP_CHANCE:
+                staff_ids = set(await _get_staff_user_ids())
+                available = await list_available_grave_themes_for_dig(db, staff_user_ids=staff_ids)
+                already = set(owned_theme_ids(fresh))
+                available = [t for t in available if t not in already]
+                if available:
+                    pick = _rng.choice(available)
+                    theme_grant = await grant_ur_theme_to_user(db, uid, pick)
+                    if theme_grant:
+                        reward["theme"] = theme_grant
+                        try:
+                            await send_notification(
+                                uid,
+                                "Grave Robber",
+                                f"You unearthed the dossier theme {theme_grant.get('name')} — equip it for dig bonuses!",
+                                "system",
+                            )
+                        except Exception:
+                            pass
+        except Exception:
+            logger.exception("Grave Robber theme grant failed user=%s", uid)
+
         inc = {}
         if int(reward.get("money") or 0) > 0:
             inc["money"] = int(reward["money"])

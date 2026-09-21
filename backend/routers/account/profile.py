@@ -72,7 +72,9 @@ from utils.profile_background_themes import (
     EQUIPPED_FIELD as PROFILE_BG_EQUIPPED_FIELD,
     custom_theme_file_path,
     custom_theme_upload_dir,
+    encode_theme_image,
     encode_theme_jpeg,
+    find_custom_theme_file,
     normalize_equip_theme_id,
     profile_background_public_fields,
     user_owns_theme,
@@ -1711,12 +1713,20 @@ def register(router):
         if len(raw) > CUSTOM_THEME_RAW_MAX_BYTES:
             raise HTTPException(status_code=400, detail="Image file is absurdly large (over 80MB)")
         try:
-            jpeg_bytes, _mime = encode_theme_jpeg(raw)
-            path = custom_theme_file_path(ROOT_DIR, current_user["id"])
+            img_bytes, mime, ext = encode_theme_image(raw, prefer_gif=True)
+            # Clear any prior format so we don't leave stale jpg+gif pairs.
+            for old_ext in ("gif", "jpg", "jpeg", "webp", "png"):
+                try:
+                    old = custom_theme_file_path(ROOT_DIR, current_user["id"], ext=old_ext)
+                    if old.is_file():
+                        old.unlink()
+                except Exception:
+                    pass
+            path = custom_theme_file_path(ROOT_DIR, current_user["id"], ext=ext)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         custom_theme_upload_dir(ROOT_DIR).mkdir(parents=True, exist_ok=True)
-        path.write_bytes(jpeg_bytes)
+        path.write_bytes(img_bytes)
         bust = int(datetime.now(timezone.utc).timestamp())
         url = f"/api/profile/background-theme/custom-image/{current_user['id']}?v={bust}"
         await db.users.update_one(
@@ -1732,8 +1742,9 @@ def register(router):
             {"id": current_user["id"]},
             {"_id": 0, "password_hash": 0},
         )
+        kind = "animated GIF" if mime == "image/gif" else "1024×931"
         return {
-            "message": "Custom theme uploaded and equipped (1024×931)",
+            "message": f"Custom theme uploaded and equipped ({kind})",
             **profile_background_public_fields(fresh or current_user, include_owned=True, is_admin=True),
         }
 
@@ -1746,9 +1757,17 @@ def register(router):
             raise HTTPException(status_code=403, detail="Only admins can clear custom profile themes")
         uid = current_user["id"]
         try:
-            path = custom_theme_file_path(ROOT_DIR, uid)
-            if path.is_file():
+            path = find_custom_theme_file(ROOT_DIR, uid)
+            if path and path.is_file():
                 path.unlink()
+            # Also clear any leftovers from format switches
+            for old_ext in ("gif", "jpg", "jpeg", "webp", "png"):
+                try:
+                    p = custom_theme_file_path(ROOT_DIR, uid, ext=old_ext)
+                    if p.is_file():
+                        p.unlink()
+                except Exception:
+                    pass
         except Exception:
             pass
         unset_fields = {CUSTOM_URL_FIELD: ""}
@@ -1782,18 +1801,23 @@ def register(router):
 
     @router.get("/profile/background-theme/custom-image/{user_id}")
     async def serve_profile_background_theme_custom(user_id: str):
-        """Serve an admin custom theme JPEG (public if that user equipped/uploaded it)."""
+        """Serve an admin custom theme image (JPEG or animated GIF)."""
         from fastapi.responses import FileResponse
 
-        try:
-            path = custom_theme_file_path(ROOT_DIR, user_id)
-        except ValueError:
+        path = find_custom_theme_file(ROOT_DIR, user_id)
+        if not path or not path.is_file():
             raise HTTPException(status_code=404, detail="Not found")
-        if not path.is_file():
-            raise HTTPException(status_code=404, detail="Not found")
+        ext = path.suffix.lower().lstrip(".")
+        media = {
+            "gif": "image/gif",
+            "png": "image/png",
+            "webp": "image/webp",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+        }.get(ext, "image/jpeg")
         return FileResponse(
             path,
-            media_type="image/jpeg",
+            media_type=media,
             headers={"Cache-Control": "public, max-age=3600"},
         )
 

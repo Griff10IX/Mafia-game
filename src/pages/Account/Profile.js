@@ -3195,7 +3195,7 @@ export default function Profile() {
                   {(isAdmin || me?.profile_background_theme_can_upload) && (
                     <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 space-y-1.5">
                       <p className="text-[10px] font-heading text-amber-200/90">
-                        Admin test upload — JPEG/PNG/WebP/GIF (auto-cropped to 1024×931, no size cap). Others cannot upload.
+                        Admin test upload — JPEG/PNG/WebP/GIF (auto-cropped to 1024×931; animated GIFs stay animated).
                       </p>
                       <div className="flex flex-wrap items-center gap-2">
                         <label className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md border border-amber-500/40 bg-amber-500/15 text-amber-100 font-heading font-bold text-[10px] uppercase cursor-pointer hover:bg-amber-500/25 disabled:opacity-50">

@@ -6,6 +6,18 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-09-21[/color][/b] — [b]Grave Robber themes + bigger digs[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Grave Robber:[/b] Dig cash / bullets / points / token amounts increased.[/color]
+[*][color=#888888][b]New:[/b] Three [b]Grave dossier themes[/b] ([b]Grave Haul[/b], [b]Tommy's Map[/b], [b]Lion's Vault[/b]) — [b]1 of each[/b] in the game. They can drop from digs [b]on top of[/b] the normal dig prize. If you die, the theme [b]returns to the pool[/b].[/color]
+[*][color=#888888][b]Theme bonuses:[/b] Equip [b]Grave Haul[/b] for [b]+15%[/b] dig rewards, [b]Tommy's Map[/b] for [b]+25%[/b], or [b]Lion's Vault[/b] for [b]+50%[/b] (one equipped look at a time). Own [b]all three[/b] and dig rewards get [b]+90%[/b] stacked.[/color]
+[*][color=#888888][b]Profile:[/b] Admin custom dossier themes can now keep [b]animated GIFs[/b] (resized to 1024×931).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-21[/color][/b] — [b]Loot boxes retuned + Ultra Rare dossier themes[/b][/size]
 [quote]
 [list]
