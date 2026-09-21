@@ -26,7 +26,7 @@ const STORE_STYLES = `
   .store-fade-in { animation: store-fade-in 0.4s ease-out both; }
   @keyframes store-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .store-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
-  [data-page="store"] { overflow-x: clip; }
+  [data-page="store"] { overflow-x: visible; max-width: 100%; }
   [data-page="store"] input,
   [data-page="store"] textarea {
     max-width: 100%;
@@ -247,19 +247,28 @@ const STORE_STYLES = `
     [data-page="store"].mobile-page-root {
       padding-left: 0 !important;
       padding-right: 0 !important;
-      width: 100%;
-      max-width: 100%;
+      width: auto;
+      max-width: none;
+    }
+    .store-chrome {
+      padding-left: 0;
+      padding-right: 0;
     }
     [data-page="store"] .mobile-panel,
     [data-page="store"] .store-sale {
       margin-left: -16px;
       margin-right: -16px;
+      width: auto;
       border-radius: 0;
     }
     [data-page="store"] .store-hero {
       border-radius: 0;
       border-left: 0;
       border-right: 0;
+    }
+    .store-tab-scroll {
+      padding-left: 0.65rem;
+      padding-right: 0.65rem;
     }
   }
   @media (min-width: 768px) {
@@ -269,12 +278,10 @@ const STORE_STYLES = `
       display: flex;
       align-items: flex-end;
       justify-content: flex-end;
-      aspect-ratio: 1024 / 512;
+      aspect-ratio: 1024 / 332;
       min-height: 0;
-      padding: 0 1.15rem 1rem;
-      background:
-        linear-gradient(180deg, rgba(0,0,0,0.02) 55%, rgba(0,0,0,0.55) 100%),
-        url('/images/store/black-market-hero.jpg') center / cover no-repeat;
+      padding: 0 1.15rem 0.85rem;
+      background: url('/images/store/black-market-hero.jpg') center / cover no-repeat;
     }
     .store-hero::before { display: none; }
     .store-hero-copy {
