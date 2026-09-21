@@ -266,12 +266,31 @@ const STORE_STYLES = `
     .store-pack-bubbles { display: none; }
     .store-pack-cards.store-pack-grid { display: grid; }
     .store-hero {
-      min-height: 10.5rem;
-      padding: 1.15rem 1.25rem;
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+      aspect-ratio: 1024 / 512;
+      min-height: 0;
+      padding: 0 1.15rem 1rem;
       background:
-        radial-gradient(ellipse 42% 90% at 78% 40%, rgba(196, 140, 48, 0.32), transparent 58%),
-        radial-gradient(ellipse 28% 70% at 12% 80%, rgba(90, 42, 18, 0.4), transparent 55%),
-        linear-gradient(100deg, #1a140e 0%, #221a12 46%, #0c0c0e 100%);
+        linear-gradient(180deg, rgba(0,0,0,0.02) 55%, rgba(0,0,0,0.55) 100%),
+        url('/images/store/black-market-hero.jpg') center / cover no-repeat;
+    }
+    .store-hero::before { display: none; }
+    .store-hero-copy {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .store-balance-cell {
+      background: rgba(6, 6, 8, 0.84);
+      border-color: rgba(234, 179, 8, 0.45);
     }
     .store-rec-scroll {
       display: grid;
@@ -287,20 +306,13 @@ const STORE_STYLES = `
   }
   @media (min-width: 1024px) {
     .store-hero {
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 1.5rem;
-      min-height: 13.5rem;
-      padding: 1.6rem 1.5rem 1.35rem;
+      padding: 0 1.5rem 1.15rem;
     }
-    .store-hero-copy { text-align: left; flex: 1 1 auto; }
-    .store-title { font-size: 1.85rem; letter-spacing: 0.16em; }
-    .store-kicker { font-size: 0.75rem; }
     .store-balance-grid {
       flex: 0 1 34rem;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       margin-top: 0;
+      margin-left: auto;
       gap: 0.5rem;
     }
     .store-token-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -308,8 +320,7 @@ const STORE_STYLES = `
     .store-sale { padding: 1rem 1.25rem; }
   }
   @media (min-width: 1280px) {
-    .store-hero { min-height: 15.5rem; padding: 1.85rem 1.75rem 1.5rem; }
-    .store-title { font-size: 2.15rem; }
+    .store-hero { padding: 0 1.75rem 1.25rem; }
     .store-rec-scroll { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .store-pack-grid,
     .store-upgrade-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
