@@ -83,21 +83,6 @@ function onDigitsOnlyOptionalIntChange(setter) {
   };
 }
 
-// ── Animated steam wisps ──────────────────────────────────────────────────────
-function SteamWisps({ count = 3 }) {
-  return (
-    <div className="dist-steam-container" aria-hidden="true">
-      {Array.from({ length: count }).map((_, i) => (
-        <div
-          key={i}
-          className="dist-steam-wisp"
-          style={{ animationDelay: `${i * 0.8}s`, left: `${20 + i * 30}%` }}
-        />
-      ))}
-    </div>
-  );
-}
-
 // ── Segmented heat bar ────────────────────────────────────────────────────────
 function HeatBar({ heat }) {
   const segs = 40;
@@ -125,20 +110,6 @@ function HeatBar({ heat }) {
   );
 }
 
-// ── Equipment pip indicator ───────────────────────────────────────────────────
-function LevelPips({ level, max = 20 }) {
-  return (
-    <div className="dist-pip-row">
-      {Array.from({ length: max }).map((_, i) => (
-        <div
-          key={i}
-          className={`dist-pip ${i < level ? 'dist-pip-filled' : 'dist-pip-empty'}`}
-        />
-      ))}
-    </div>
-  );
-}
-
 // ── SVG Barrel ───────────────────────────────────────────────────────────────
 function Barrel({ ready, label }) {
   return (
@@ -157,17 +128,6 @@ function Barrel({ ready, label }) {
         )}
       </svg>
       <div className={`dist-barrel-label ${ready ? 'dist-barrel-ready' : ''}`}>{label}</div>
-    </div>
-  );
-}
-
-// ── Stat card ────────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, accent }) {
-  return (
-    <div className="dist-stat-card">
-      <div className="dist-stat-label">{label}</div>
-      <div className={`dist-stat-value ${accent ? 'dist-stat-accent' : ''}`}>{value}</div>
-      {sub && <div className="dist-stat-sub">{sub}</div>}
     </div>
   );
 }
@@ -219,10 +179,14 @@ function GhostBtn({ children, onClick, disabled, small, className = '', type = '
 }
 
 const DIST_SEGMENTS = [
-  { id: 'ops', label: 'Ops' },
-  { id: 'upgrades', label: 'Upgrades' },
+  { id: 'overview', label: 'Overview' },
+  { id: 'operations', label: 'Operations' },
+  { id: 'crew', label: 'Crew' },
+  { id: 'maintenance', label: 'Maintenance' },
+  { id: 'equipment', label: 'Equipment' },
+  { id: 'perks', label: 'Perks' },
   { id: 'cellar', label: 'Cellar' },
-  { id: 'auto', label: 'Auto' },
+  { id: 'automation', label: 'Automation' },
 ];
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -248,7 +212,8 @@ export default function Distillery() {
   });
   const [agingTier, setAgingTier] = useState('standard');
   const [agingQty, setAgingQty] = useState(10);
-  const [activeSegment, setActiveSegment] = useState('ops');
+  const [activeSegment, setActiveSegment] = useState('overview');
+  const [cellarPane, setCellarPane] = useState('aging');
   const [passiveBoozePaused, setPassiveBoozePaused] = useState(false);
 
   const applyPagePayload = useCallback((payload) => {
@@ -464,6 +429,7 @@ export default function Distillery() {
 
   const showFailuresBanner = recentFailures.length > 0 && failuresSig !== dismissedFailuresSig;
   const maintenanceWarn = maintenancePct < 35;
+  const visibleFailures = recentFailures.slice(-5).reverse();
 
   // ── Error / Empty ────────────────────────────────────────────────
   if (hasLoaded && loadError && !state && !business) {
@@ -529,7 +495,6 @@ export default function Distillery() {
 
   return (
     <>
-      {/* ── Injected styles ─────────────────────────────────────────────────── */}
       <style>{`
         .dist-root {
           --gold: var(--noir-primary);
@@ -568,10 +533,20 @@ export default function Distillery() {
           --barrel-ready-cap: rgba(74, 138, 58, 0.32);
           --barrel-ready-stroke: #6aaa3a;
           --barrel-ready-check: #8add6a;
+          background: var(--noir-content);
+          color: var(--noir-foreground);
+          font-family: inherit;
+          min-height: 100vh;
+          overflow-x: clip;
+          padding-bottom: max(7rem, calc(5.5rem + env(safe-area-inset-bottom, 0px)));
         }
-
-        .dist-root { background: var(--noir-content); color: var(--noir-foreground); font-family: inherit; min-height: 100vh; }
         .dist-root * { font-family: inherit; }
+        @media (min-width: 768px) {
+          .dist-root { padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px)); }
+        }
+        body[data-mobile-layout="pocket_deck"] .dist-root {
+          padding-bottom: calc(var(--pocket-dock-clearance, 8.5rem) + env(safe-area-inset-bottom, 0px));
+        }
         body[data-theme-variant="modern"] .dist-root {
           --bg: var(--modern-surface-2, #1f1f24);
           --bg2: rgba(45, 45, 50, 0.95);
@@ -582,122 +557,68 @@ export default function Distillery() {
           --text-faint: rgba(228, 228, 231, 0.62);
         }
 
-        /* Loading */
-        .dist-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; gap: 16px; }
-        .dist-loading-still { font-size: 48px; animation: dist-spin 3s linear infinite; }
-        @keyframes dist-spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
-        .dist-loading-text { font-size: 13px; letter-spacing: 4px; text-transform: uppercase; color: var(--gold-dim); }
-
-        /* Empty */
         .dist-empty-panel { background: var(--bg2); border: 1px solid var(--border); padding: 40px; text-align: center; margin: 20px; }
         .dist-empty-icon { font-size: 48px; margin-bottom: 16px; }
         .dist-empty-title { font-size: 20px; color: var(--gold); margin-bottom: 8px; }
         .dist-empty-sub { font-size: 14px; color: var(--text-dim); margin-bottom: 16px; }
-        /* Hero banner */
-        .dist-hero { background: var(--bg2); border-bottom: 2px solid var(--border); padding: 20px 20px 0; position: relative; overflow: hidden; }
-        .dist-hero-bg-text { position: absolute; right: -10px; top: -10px; font-size: 90px; font-weight: 900; color: rgba(var(--noir-primary-rgb), 0.07); pointer-events: none; user-select: none; line-height: 1; }
-        .dist-hero-eyebrow { font-size: 9px; letter-spacing: 5px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
-        .dist-hero-title { font-size: 32px; font-weight: 900; color: var(--gold); letter-spacing: 4px; margin: 0 0 4px; line-height: 1.1; }
-        .dist-hero-tagline { font-style: italic; font-size: 14px; color: var(--text-dim); margin-bottom: 16px; }
-        .dist-hero-top-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-        .dist-hero-status-strip { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1px; background: var(--border-dim); border-top: 1px solid var(--border); margin: 0 -20px; }
-        .dist-hero-status-cell { background: var(--bg2); padding: 10px 16px; }
-        .dist-hero-status-l { font-size: 8px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px; }
-        .dist-hero-status-v { font-size: 12px; color: var(--text); }
-        @media (max-width: 640px) {
-          .dist-hero { padding: 14px 14px 0; }
-          .dist-hero-title { font-size: 22px; letter-spacing: 2px; }
-          .dist-hero-tagline { font-size: 12px; margin-bottom: 10px; }
-          .dist-hero-status-strip { grid-template-columns: 1fr; margin: 0 -14px; }
-          .dist-hero-status-cell { padding: 8px 14px; }
-          .dist-hero-bg-text { font-size: 64px; }
+
+        .dist-head { padding: 12px 14px 8px; background: var(--bg2); border-bottom: 1px solid var(--border-dim); }
+        .dist-head-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+        .dist-kicker { font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-faint); }
+        .dist-title { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); line-height: 1.15; overflow-wrap: anywhere; }
+        .dist-head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .dist-racket-link {
+          display: inline-flex; align-items: center; justify-content: center; min-height: 44px;
+          padding: 0 12px; border-radius: 6px; border: 1px solid var(--border);
+          font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+          color: var(--text-dim); text-decoration: none;
+        }
+        .dist-refresh-note { margin-top: 6px; font-size: 8px; letter-spacing: 0.12em; color: var(--text-faint); }
+
+        .dist-kpi {
+          display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 1px; background: var(--border-dim); border-bottom: 1px solid var(--border);
+        }
+        @media (min-width: 1024px) {
+          .dist-kpi { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+        }
+        .dist-kpi-cell { background: var(--bg); padding: 8px 10px; min-width: 0; }
+        .dist-kpi-l { font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-faint); }
+        .dist-kpi-v { margin-top: 2px; font-size: 13px; font-weight: 700; color: var(--gold); line-height: 1.25; overflow-wrap: anywhere; }
+
+        .dist-alerts { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px 0; }
+        .dist-alert {
+          border: 1px solid rgba(196, 64, 32, 0.45); background: rgba(196, 64, 32, 0.08);
+          border-radius: 8px; padding: 10px 12px;
+        }
+        .dist-alert-top { display: flex; align-items: center; gap: 8px; }
+        .dist-alert-title { flex: 1; min-width: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--danger); }
+        .dist-alert-dismiss {
+          display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
+          border-radius: 6px; border: 1px solid rgba(255, 107, 107, 0.35); background: rgba(80, 16, 16, 0.35); color: #fecaca;
+        }
+        .dist-alert-note { margin: 4px 0 6px; font-size: 11px; font-style: italic; color: var(--danger); }
+        .dist-alert-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: 12px; color: var(--danger); border-bottom: 1px solid rgba(255, 107, 107, 0.2); }
+        .dist-alert-row:last-child { border-bottom: none; }
+        .dist-alert-meta { font-size: 10px; color: rgba(255, 107, 107, 0.75); }
+        .dist-paused-banner {
+          font-size: 11px; color: var(--amber); padding: 10px 12px; line-height: 1.45;
+          border: 1px solid rgba(var(--noir-primary-rgb), 0.35); background: rgba(var(--noir-primary-rgb), 0.08); border-radius: 8px;
         }
 
-        /* Steam wisps */
-        .dist-steam-container { position: absolute; bottom: 0; left: 0; right: 0; height: 60px; pointer-events: none; overflow: hidden; }
-        .dist-steam-wisp { position: absolute; bottom: 0; width: 3px; border-radius: 2px; background: rgba(200,160,60,0.12); animation: dist-steam 2.5s ease-in infinite; }
-        @keyframes dist-steam { 0%{height:0;opacity:.5;transform:translateX(0) scaleX(1)} 60%{opacity:.2} 100%{height:50px;opacity:0;transform:translateX(6px) scaleX(2)} }
-
-        /* Stat strip */
-        .dist-stat-strip { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
-        .dist-stat-card { background: var(--bg); padding: 14px 16px; }
-        .dist-stat-label { font-size: 8px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
-        .dist-stat-value { font-size: 20px; color: var(--text); font-weight: 700; }
-        .dist-stat-accent { color: var(--gold); }
-        .dist-stat-sub { font-size: 10px; color: var(--text-faint); margin-top: 2px; }
-
-        /* Main body */
-        .dist-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-
-        /* Panel */
-        .dist-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--app-surface-radius, 8px); box-shadow: var(--app-card-shadow, none); padding: 16px 18px; position: relative; overflow: hidden; }
-        .dist-panel::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(var(--noir-primary-rgb), 0.24), transparent); }
-        .dist-panel-danger { background: rgba(196,64,32,0.06); border-color: rgba(196,64,32,0.4); }
-
-        /* Heat */
-        .dist-heat-seg-wrap { display: flex; gap: 2px; height: 14px; align-items: center; position: relative; }
-        .dist-heat-seg { flex: 1; height: 100%; transition: background 0.5s; }
-        .dist-heat-seg-lit { }
-        .dist-heat-seg-dim { background: var(--bg4); }
-        .dist-heat-scanner { position: absolute; top: 0; bottom: 0; width: 3px; background: rgba(232,192,96,0.6); transform: translateX(-50%); animation: dist-scanner-pulse 1.2s ease-in-out infinite; transition: left 1s ease; }
-        @keyframes dist-scanner-pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
-        .dist-heat-readout { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
-        .dist-heat-temp { font-size: 28px; font-weight: 700; transition: color 0.5s; }
-        .heat-meltdown .dist-heat-temp, .heat-meltdown .dist-heat-badge { color: var(--heat-meltdown); border-color: var(--heat-meltdown-border); }
-        .heat-critical .dist-heat-temp, .heat-critical .dist-heat-badge { color: var(--heat-critical); border-color: var(--heat-critical-border); }
-        .heat-hot .dist-heat-temp, .heat-hot .dist-heat-badge { color: var(--heat-hot); border-color: var(--heat-hot-border); }
-        .heat-warm .dist-heat-temp, .heat-warm .dist-heat-badge { color: var(--heat-warm); border-color: var(--heat-warm-border); }
-        .heat-low .dist-heat-temp, .heat-low .dist-heat-badge { color: var(--heat-safe); border-color: var(--heat-safe-border); }
-        .dist-heat-badge { font-size: 10px; font-weight: 700; letter-spacing: 3px; padding: 4px 12px; border: 1px solid; color: var(--gold); }
-        .dist-heat-flavor { font-style: italic; font-size: 12px; color: var(--text-dim); margin-top: 6px; }
-        .dist-heat-shutdown { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--danger); margin-top: 8px; background: rgba(255, 107, 107, 0.1); border: 1px solid var(--danger-soft); padding: 6px 10px; }
-        .dist-heat-cooldown { font-size: 10px; color: var(--heat-warm); margin-top: 8px; }
-
-        .dist-btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-
-        /* Two cols */
-        .dist-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-        @media (max-width: 640px) { .dist-two-col { grid-template-columns: 1fr; } .dist-stat-strip { grid-template-columns: 1fr 1fr; } }
-
-        /* Sticky ops + segments */
-        .dist-sticky-chrome {
-          position: sticky;
-          top: 0;
-          z-index: 25;
-          background: color-mix(in srgb, var(--noir-content) 92%, transparent);
-          backdrop-filter: blur(8px);
-          border-bottom: 1px solid var(--border);
-        }
-        body[data-mobile-layout="pocket_deck"] .dist-sticky-chrome {
-          top: var(--pocket-hud-top, 2.75rem);
-        }
-        .dist-ops-bar {
-          display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
-          padding: 8px 14px; border-bottom: 1px solid var(--border-dim);
-        }
-        .dist-ops-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; flex: 1; min-width: 0; }
-        .dist-ops-meta-item { font-size: 10px; color: var(--text-dim); }
-        #dist-seg-ops, #dist-seg-upgrades, #dist-seg-cellar, #dist-seg-auto {
-          scroll-margin-top: 9.5rem;
-        }
-        body[data-mobile-layout="pocket_deck"] #dist-seg-ops,
-        body[data-mobile-layout="pocket_deck"] #dist-seg-upgrades,
-        body[data-mobile-layout="pocket_deck"] #dist-seg-cellar,
-        body[data-mobile-layout="pocket_deck"] #dist-seg-auto {
-          scroll-margin-top: 12rem;
-        }
-        .dist-ops-meta-item strong { color: var(--gold); font-weight: 700; }
-        .dist-ops-collect-hint { font-size: 8px; color: var(--text-faint); width: 100%; margin: -2px 0 0; }
         .dist-seg-nav {
-          display: flex; gap: 4px; overflow-x: auto; padding: 6px 10px;
+          position: sticky; top: 0; z-index: 25;
+          display: flex; gap: 4px; overflow-x: auto; padding: 8px 10px;
+          background: color-mix(in srgb, var(--noir-content) 92%, transparent);
+          backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
           -webkit-overflow-scrolling: touch; scrollbar-width: none;
         }
         .dist-seg-nav::-webkit-scrollbar { display: none; }
+        body[data-mobile-layout="pocket_deck"] .dist-seg-nav { top: var(--pocket-hud-top, 2.75rem); }
         .dist-seg-btn {
-          flex: 1 1 0; min-width: 4.5rem; min-height: 44px;
-          border: 1px solid transparent; border-radius: 6px;
-          background: transparent; color: var(--text-dim);
-          font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+          flex: 0 0 auto; min-height: 44px; padding: 0 12px; border-radius: 6px;
+          border: 1px solid transparent; background: transparent; color: var(--text-dim);
+          font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
           touch-action: manipulation;
         }
         .dist-seg-btn.is-active {
@@ -705,970 +626,1010 @@ export default function Distillery() {
           background: rgba(var(--noir-primary-rgb), 0.15);
           color: var(--gold);
         }
-        .dist-seg-panel { display: none; flex-direction: column; gap: 14px; }
-        .dist-seg-panel.is-active { display: flex; }
-        @media (min-width: 640px) {
-          .dist-seg-panel { display: flex !important; }
-          .dist-seg-btn { min-height: 36px; }
+        .dist-subnav { display: flex; gap: 4px; margin-bottom: 12px; }
+        .dist-subnav .dist-seg-btn { flex: 1 1 0; }
+
+        .dist-body { padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+        .dist-panel {
+          background: var(--bg2); border: 1px solid var(--border);
+          border-radius: var(--app-surface-radius, 8px);
+          box-shadow: var(--app-card-shadow, none);
+          padding: 14px; position: relative; overflow: hidden;
         }
-        .dist-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
-        .dist-chip {
-          min-height: 36px; padding: 6px 10px; border-radius: 6px;
-          border: 1px solid rgba(var(--noir-primary-rgb), 0.3);
-          background: rgba(var(--noir-primary-rgb), 0.08);
-          color: var(--gold); font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-          touch-action: manipulation;
+        .dist-panel::before {
+          content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(var(--noir-primary-rgb), 0.24), transparent);
         }
-        .dist-chip:hover { background: rgba(var(--noir-primary-rgb), 0.16); }
-        .dist-level-bar { display: block; height: 6px; background: var(--bg4); border: 1px solid var(--border-dim); margin-bottom: 6px; border-radius: 2px; overflow: hidden; }
-        .dist-level-bar-fill { height: 100%; background: var(--amber); transition: width 0.4s; }
-        @media (min-width: 640px) { .dist-level-bar { display: none; } }
-        .dist-heat-help summary {
-          cursor: pointer; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
-          color: var(--gold); padding: 8px 0; list-style: none; touch-action: manipulation;
-        }
-        .dist-heat-help summary::-webkit-details-marker { display: none; }
-        .dist-heat-help[open] summary { margin-bottom: 6px; }
+        .dist-two-col { display: grid; grid-template-columns: 1fr; gap: 12px; }
+        @media (min-width: 800px) { .dist-two-col { grid-template-columns: 1fr 1fr; } }
+        .dist-quick { display: flex; flex-wrap: wrap; gap: 8px; }
+        .dist-muted { font-size: 11px; color: var(--text-dim); line-height: 1.45; }
         .dist-status-line {
           font-size: 11px; color: var(--text-dim); padding: 8px 10px; margin-bottom: 10px;
           border: 1px solid var(--border-dim); background: var(--bg); border-radius: 6px;
         }
         .dist-status-line strong { color: var(--gold); }
-        .dist-paused-banner {
-          font-size: 11px; color: var(--amber); padding: 10px 12px; margin-bottom: 4px;
-          border: 1px solid rgba(var(--noir-primary-rgb), 0.35); background: rgba(var(--noir-primary-rgb), 0.08);
-          border-radius: 6px; line-height: 1.45;
-        }
 
-        /* Equipment */
-        .dist-equip-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
-        @media (max-width: 500px) { .dist-equip-grid { grid-template-columns: 1fr; } }
-        .dist-equip-card { background: var(--bg); padding: 12px; min-height: 44px; transition: border-color 0.2s, background 0.2s; position: relative; overflow: hidden; touch-action: manipulation; -webkit-tap-highlight-color: transparent; text-align: left; width: 100%; }
+        .dist-heat-seg-wrap { display: flex; gap: 2px; height: 14px; align-items: center; position: relative; }
+        .dist-heat-seg { flex: 1; height: 100%; }
+        .dist-heat-seg-dim { background: var(--bg4); }
+        .dist-heat-scanner { position: absolute; top: 0; bottom: 0; width: 3px; background: rgba(232,192,96,0.6); transform: translateX(-50%); animation: dist-scanner-pulse 1.2s ease-in-out infinite; transition: left 1s ease; }
+        @keyframes dist-scanner-pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+        .dist-heat-readout { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+        .dist-heat-temp { font-size: 28px; font-weight: 700; }
+        .heat-meltdown .dist-heat-temp, .heat-meltdown .dist-heat-badge { color: var(--heat-meltdown); border-color: var(--heat-meltdown-border); }
+        .heat-critical .dist-heat-temp, .heat-critical .dist-heat-badge { color: var(--heat-critical); border-color: var(--heat-critical-border); }
+        .heat-hot .dist-heat-temp, .heat-hot .dist-heat-badge { color: var(--heat-hot); border-color: var(--heat-hot-border); }
+        .heat-warm .dist-heat-temp, .heat-warm .dist-heat-badge { color: var(--heat-warm); border-color: var(--heat-warm-border); }
+        .heat-low .dist-heat-temp, .heat-low .dist-heat-badge { color: var(--heat-safe); border-color: var(--heat-safe-border); }
+        .dist-heat-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; padding: 4px 12px; border: 1px solid; color: var(--gold); }
+        .dist-heat-flavor { font-style: italic; font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+        .dist-heat-shutdown { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--danger); margin-top: 8px; background: rgba(255, 107, 107, 0.1); border: 1px solid var(--danger-soft); padding: 6px 10px; }
+        .dist-heat-cooldown { font-size: 10px; color: var(--heat-warm); margin-top: 8px; }
+        .dist-btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+        .dist-heat-help summary {
+          cursor: pointer; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+          color: var(--gold); padding: 8px 0; list-style: none; touch-action: manipulation; min-height: 44px; display: flex; align-items: center;
+        }
+        .dist-heat-help summary::-webkit-details-marker { display: none; }
+
+        .dist-roi-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border-dim); }
+        .dist-roi-row:last-child { border-bottom: none; }
+        .dist-roi-key { font-size: 9px; letter-spacing: 0.08em; color: var(--text-faint); text-transform: uppercase; }
+        .dist-roi-val { font-size: 13px; color: var(--gold); font-weight: 700; text-align: right; }
+
+        .dist-worker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+        .dist-worker-card { background: var(--bg); border: 1px solid var(--border-dim); padding: 10px; min-width: 0; }
+        .dist-worker-role { font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px; }
+        .dist-worker-num { font-size: 18px; color: var(--gold); margin-bottom: 4px; }
+        .dist-worker-bar { height: 3px; background: var(--bg4); }
+        .dist-worker-fill { height: 100%; background: var(--amber); }
+        .dist-worker-input, .dist-maint-input, .dist-aging-qty-input, .dist-input {
+          width: 100%; min-height: 44px; padding: 8px 10px; box-sizing: border-box;
+          background: var(--noir-content); border: 1px solid var(--border); color: var(--text); font-size: 16px;
+        }
+        .dist-worker-input { margin-top: 6px; }
+        .dist-worker-input:focus, .dist-maint-input:focus, .dist-aging-qty-input:focus, .dist-input:focus { outline: none; border-color: var(--amber-dim); }
+        .dist-worker-cap { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+        .dist-maint-label-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+        .dist-maint-key { color: var(--text-dim); font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; }
+        .dist-maint-val { font-weight: 700; font-size: 16px; }
+        .dist-maint-track, .dist-level-bar { height: 8px; background: var(--bg4); border: 1px solid var(--border-dim); border-radius: 2px; overflow: hidden; }
+        .dist-maint-fill, .dist-level-bar-fill { height: 100%; }
+        .dist-maint-warn { font-size: 11px; color: var(--danger); margin-top: 8px; font-style: italic; background: rgba(255, 107, 107, 0.1); padding: 6px 10px; border-left: 2px solid var(--danger); }
+        .dist-maint-input-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+        .dist-maint-input { width: 88px; }
+        .dist-level-bar { margin: 6px 0; }
+
+        .dist-equip-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+        @media (min-width: 640px) { .dist-equip-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (min-width: 1024px) { .dist-equip-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        .dist-equip-card {
+          background: var(--bg); padding: 10px 12px; text-align: left; width: 100%; min-width: 0;
+          border: 1px solid rgba(var(--noir-primary-rgb), 0.25); border-radius: 6px;
+        }
         .dist-equip-card.is-maxed { opacity: 0.72; }
         .dist-equip-card.is-unaffordable { opacity: 0.85; }
-        .dist-root { padding-bottom: max(7rem, calc(5.5rem + env(safe-area-inset-bottom, 0px))); }
-        @media (min-width: 768px) { .dist-root { padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px)); } }
-        body[data-mobile-layout="pocket_deck"] .dist-root {
-          padding-bottom: calc(var(--pocket-dock-clearance, 8.5rem) + env(safe-area-inset-bottom, 0px));
+        .dist-equip-icon { font-size: 16px; }
+        .dist-equip-name { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); font-weight: 700; margin-top: 2px; }
+        .dist-equip-desc { font-size: 10px; color: var(--cyan, #67e8f9); margin-top: 2px; }
+        .dist-equip-lv { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+        .dist-equip-maxed { font-size: 11px; color: var(--green); margin-top: 8px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+
+        .dist-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+        .dist-chip {
+          min-height: 44px; padding: 6px 10px; border-radius: 6px;
+          border: 1px solid rgba(var(--noir-primary-rgb), 0.3);
+          background: rgba(var(--noir-primary-rgb), 0.08);
+          color: var(--gold); font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
         }
-        .dist-equip-icon { font-size: 18px; margin-bottom: 6px; }
-        .dist-equip-name { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px; }
-        .dist-equip-desc { font-size: 8px; color: var(--cyan, #67e8f9); margin-bottom: 4px; letter-spacing: 0.3px; }
-        .dist-equip-cost { font-size: 10px; color: var(--amber); margin-top: 5px; }
-        .dist-equip-maxed { font-size: 10px; color: var(--green); margin-top: 5px; }
-
-        /* Pip row */
-        .dist-pip-row { display: none; gap: 2px; flex-wrap: wrap; margin-bottom: 3px; }
-        @media (min-width: 640px) { .dist-pip-row { display: flex; } }
-        .dist-pip { width: 5px; height: 5px; }
-        .dist-pip-filled { background: var(--amber); }
-        .dist-pip-empty { background: var(--bg4); }
-
-        /* Best upgrades */
-        .dist-best-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border-dim); }
-        .dist-best-row:last-child { border-bottom: none; }
-        .dist-best-name { font-size: 13px; color: var(--text); }
-        .dist-best-meta { font-size: 10px; color: var(--text-faint); margin-top: 2px; }
-
-        /* Workers */
-        .dist-worker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
-        .dist-worker-card { background: var(--bg); border: 1px solid var(--border-dim); padding: 12px; }
-        .dist-worker-role { font-size: 8px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
-        .dist-worker-num { font-size: 22px; color: var(--gold); margin-bottom: 6px; }
-        .dist-worker-bar { height: 3px; background: var(--bg4); }
-        .dist-worker-fill { height: 100%; background: var(--amber); transition: width 0.5s; }
-        .dist-worker-input { width: 100%; padding: 6px 8px; background: var(--noir-content); border: 1px solid var(--border); color: var(--text); font-size: 13px; margin-top: 4px; }
-        .dist-worker-input:focus { outline: none; border-color: var(--amber-dim); }
-        .dist-worker-cap { font-size: 10px; color: var(--text-faint); margin-bottom: 10px; }
-
-        /* Maintenance */
-        .dist-maint-bar-wrap { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-dim); }
-        .dist-maint-label-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px; }
-        .dist-maint-key { color: var(--text-dim); font-size: 9px; text-transform: uppercase; letter-spacing: 2px; }
-        .dist-maint-val { font-weight: 700; }
-        .dist-maint-track { height: 8px; background: var(--bg4); border: 1px solid var(--border-dim); }
-        .dist-maint-fill { height: 100%; transition: width 0.6s; }
-        .dist-maint-warn { font-size: 11px; color: var(--danger); margin-top: 8px; font-style: italic; background: rgba(255, 107, 107, 0.1); padding: 6px 10px; border-left: 2px solid var(--danger-soft); }
-        .dist-maint-input-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
-        .dist-maint-input { width: 70px; padding: 6px 8px; background: var(--noir-content); border: 1px solid var(--border); color: var(--text); font-size: 13px; }
-        .dist-maint-input:focus { outline: none; border-color: var(--amber-dim); }
-
-        /* ROI */
-        .dist-roi-row { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--border-dim); }
-        .dist-roi-row:last-child { border-bottom: none; }
-        .dist-roi-key { font-size: 9px; letter-spacing: 1px; color: var(--text-faint); text-transform: uppercase; }
-        .dist-roi-val { font-size: 14px; color: var(--gold); font-weight: 700; }
-
-        /* Tracks */
-        .dist-track-scroll { display: flex; gap: 0; overflow-x: auto; background: rgba(var(--noir-primary-rgb), 0.06); border-bottom: 1px solid rgba(var(--noir-primary-rgb), 0.18); margin: 0 -18px; padding: 0; }
-        .dist-track-scroll::-webkit-scrollbar { height: 2px; }
-        .dist-track-scroll::-webkit-scrollbar-thumb { background: var(--border); }
-        .dist-track-tab { min-height: 44px !important; padding-left: 14px !important; padding-right: 14px !important; font-size: 9px !important; }
-        @media (min-width: 640px) { .dist-track-tab { min-height: 36px !important; } }
-        .dist-track-flavor { font-style: italic; font-size: 13px; color: var(--text-dim); margin: 12px 0 14px; }
-        .dist-track-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-        .dist-track-nav-meta { font-size: 9px; color: var(--text-faint); }
+        .dist-track-scroll { display: flex; gap: 0; overflow-x: auto; margin: 0 -14px 8px; border-bottom: 1px solid rgba(var(--noir-primary-rgb), 0.18); scrollbar-width: none; }
+        .dist-track-scroll::-webkit-scrollbar { display: none; }
+        .dist-track-tab { min-height: 44px; padding: 0 14px; flex: 0 0 auto; }
+        .dist-track-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+        .dist-track-nav-meta { font-size: 10px; color: var(--text-faint); }
         .dist-track-nav-btns { display: flex; gap: 6px; }
-        .dist-upgrade-showcase { background: var(--bg); padding: 16px; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
-        .dist-upgrade-name { font-size: 16px; color: var(--gold-pale); margin-bottom: 4px; font-weight: 700; }
-        .dist-upgrade-tier { font-size: 9px; color: var(--text-faint); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
-        .dist-upgrade-price { font-size: 22px; color: var(--amber); font-weight: 700; }
-        .dist-upgrade-status-owned { font-size: 11px; color: var(--green); font-style: italic; margin-top: 4px; }
-        .dist-upgrade-status-avail { font-size: 11px; color: var(--text-dim); font-style: italic; margin-top: 4px; }
-        .dist-upgrade-status-locked { font-size: 11px; color: var(--text-faint); font-style: italic; margin-top: 4px; }
-        .dist-upgrade-effects { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 10px; }
-        .dist-upgrade-effects span { font-size: 9px; color: var(--cyan, #67e8f9); letter-spacing: 0.5px; }
+        .dist-upgrade-showcase { background: var(--bg); padding: 12px; display: flex; flex-direction: column; gap: 10px; border: 1px solid rgba(var(--noir-primary-rgb), 0.25); border-radius: 6px; }
+        @media (min-width: 640px) { .dist-upgrade-showcase { flex-direction: row; align-items: flex-start; justify-content: space-between; } }
+        .dist-upgrade-name { font-size: 15px; color: var(--gold-pale); font-weight: 700; }
+        .dist-upgrade-tier { font-size: 9px; color: var(--text-faint); letter-spacing: 0.12em; text-transform: uppercase; margin-top: 2px; }
+        .dist-upgrade-price { font-size: 16px; color: var(--amber); font-weight: 700; margin-top: 4px; }
+        .dist-upgrade-status-owned { font-size: 11px; color: var(--green); margin-top: 4px; }
+        .dist-upgrade-status-avail { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+        .dist-upgrade-status-locked { font-size: 11px; color: var(--text-faint); margin-top: 4px; }
+        .dist-upgrade-effects { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+        .dist-upgrade-effects span { font-size: 11px; color: var(--cyan, #67e8f9); }
         .dist-no-upgrade { font-size: 13px; color: var(--text-faint); font-style: italic; }
 
-        /* Aging */
-        .dist-barrel-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; align-items: flex-end; }
+        .dist-tier-row { display: flex; gap: 4px; margin-bottom: 10px; }
+        .dist-tier-btn {
+          flex: 1 1 0; min-height: 44px; border-radius: 6px; border: 1px solid rgba(113, 113, 122, 0.5);
+          background: rgba(var(--noir-primary-rgb), 0.05); color: var(--text-dim);
+          font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 2px;
+        }
+        .dist-tier-btn.is-active { border-color: rgba(var(--noir-primary-rgb), 0.5); background: rgba(var(--noir-primary-rgb), 0.15); color: var(--gold); }
+        .dist-barrel-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; align-items: flex-end; }
         .dist-barrel-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
         .dist-barrel-label { font-size: 8px; color: var(--text-faint); }
         .dist-barrel-ready { color: var(--green); font-weight: 600; }
         .dist-aging-start-row { display: flex; gap: 8px; align-items: center; }
-        .dist-aging-qty-input { width: 70px; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); color: var(--text); font-size: 13px; }
-        .dist-aging-qty-input:focus { outline: none; border-color: var(--amber-dim); }
+        .dist-aging-qty-input { width: 88px; }
         .dist-queue-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-dim); }
         .dist-queue-item { background: var(--bg); border: 1px solid var(--border-dim); padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
         .dist-queue-tier { font-size: 12px; color: var(--text); font-weight: 700; }
-        .dist-queue-time { font-size: 9px; color: var(--text-faint); margin-top: 2px; }
-
-        /* Auto-sell */
-        .dist-autosell-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        .dist-autosell-check { width: 16px; height: 16px; accent-color: var(--amber); }
+        .dist-queue-time { font-size: 10px; color: var(--text-faint); margin-top: 2px; }
+        .dist-autosell-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; min-height: 44px; }
+        .dist-autosell-check { width: 18px; height: 18px; accent-color: var(--amber); }
         .dist-autosell-label { font-size: 13px; color: var(--text-dim); }
-        .dist-autosell-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-        .dist-input { width: 100%; padding: 7px 10px; background: var(--noir-content); border: 1px solid var(--border); color: var(--text); font-size: 13px; box-sizing: border-box; }
-        .dist-input:focus { outline: none; border-color: var(--amber-dim); }
-        .dist-input-label { font-size: 8px; text-transform: uppercase; letter-spacing: 2px; color: var(--text-faint); margin-bottom: 4px; }
-
-        /* Failures */
-        .dist-failure-item { font-size: 12px; color: var(--danger); padding: 4px 0; border-bottom: 1px solid rgba(255, 107, 107, 0.25); }
-        .dist-failure-item:last-child { border-bottom: none; }
-        .dist-failure-desc { font-size: 9px; color: rgba(255, 107, 107, 0.72); margin-top: 2px; }
-
-        /* Gold ornament divider */
-        .dist-ornament { text-align: center; color: var(--border); letter-spacing: 8px; font-size: 10px; margin: 2px 0; }
-
-        /* AutoRefreshNote override area */
-        .dist-refresh-note { font-size: 8px; color: var(--text-faint); letter-spacing: 2px; padding: 6px 20px; background: var(--bg2); border-bottom: 1px solid var(--border-dim); }
+        .dist-autosell-inputs { display: grid; grid-template-columns: 1fr; gap: 8px; }
+        @media (min-width: 640px) { .dist-autosell-inputs { grid-template-columns: 1fr 1fr; } }
+        .dist-input-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-faint); margin-bottom: 4px; }
+        .dist-mode-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+        .dist-mode {
+          display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px;
+          border: 1px solid rgba(113, 113, 122, 0.5); border-radius: 6px; color: var(--text-dim); font-size: 12px;
+        }
+        .dist-mode:has(input:checked) { border-color: rgba(var(--noir-primary-rgb), 0.45); background: rgba(var(--noir-primary-rgb), 0.1); color: var(--text); }
+        .dist-life { margin-bottom: 10px; border: 1px solid var(--border-dim); background: rgba(var(--noir-primary-rgb), 0.06); border-radius: 6px; padding: 8px 10px; font-size: 11px; color: var(--text-dim); }
+        .dist-life-top, .dist-life-sub { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+        .dist-life-sub { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border-dim); font-size: 10px; }
       `}</style>
 
       <div className={`${styles.pageContent} mobile-page-root dist-root`}>
-        {/* Refresh note */}
-        <div className="dist-refresh-note">
-          <AutoRefreshNote seconds={30} />
-        </div>
-
-        {/* ── Hero ──────────────────────────────────────────────────────────── */}
-        <div className="dist-hero">
-          <div className="dist-hero-bg-text">DIST</div>
-          <SteamWisps count={4} />
-          <div className="dist-hero-top-row">
-            <div>
-              <div className="dist-hero-eyebrow">1920s Distillery · International Gangsters</div>
-              <h1 className="dist-hero-title">{business?.name || 'The Still'}</h1>
-              <p className="dist-hero-tagline">Long grind. Massive upside. Risk is real.</p>
+        <header className="dist-head">
+          <div className="dist-head-row">
+            <div style={{ minWidth: 0 }}>
+              <div className="dist-kicker">Distillery</div>
+              <h1 className="dist-title">{business?.name || 'The Still'}</h1>
             </div>
-            <Link
-              to="/money/racket"
-              className="inline-flex min-h-10 items-center rounded border border-zinc-700/50 px-3 py-1.5 text-[9px] font-heading text-mutedForeground transition-all hover:border-primary/30 hover:text-foreground touch-manipulation"
-            >
-              ← Racket
-            </Link>
-          </div>
-          <div className="dist-hero-status-strip">
-            <div className="dist-hero-status-cell">
-              <div className="dist-hero-status-l">House Status</div>
-              <div className="dist-hero-status-v">{heatInfo.label} heat · {progression.progress_pct || 0}% complete</div>
-            </div>
-            <div className="dist-hero-status-cell">
-              <div className="dist-hero-status-l">Weekly Run</div>
-              <div className="dist-hero-status-v">{money(projectedWeeklyCash)}</div>
-            </div>
-            <div className="dist-hero-status-cell">
-              <div className="dist-hero-status-l">Week Band</div>
-              <div className="dist-hero-status-v">{money(roi.target_weekly_low || 400000000)}–{money(roi.target_weekly_high || 1000000000)}</div>
-            </div>
-            <div className="dist-hero-status-cell">
-              <div className="dist-hero-status-l">Risk Tone</div>
-              <div className="dist-hero-status-v" style={{ fontStyle: 'italic' }}>{heatInfo.flavor}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Sticky ops + segment nav ─────────────────────────────────────── */}
-        <div className="dist-sticky-chrome">
-          <div className="dist-ops-bar">
-            <GoldBtn
-              small
-              disabled={saving}
-              onClick={() => run(async () => {
-                const res = await api.post('/illegal-business/distillery/collect');
-                toast.success(res.data?.message || 'Distillery collected.');
-              })}
-            >
-              Collect {pendingTake > 0 ? money(pendingTake) : 'now'}
-            </GoldBtn>
-            <div className="dist-ops-meta">
-              <span className="dist-ops-meta-item"><strong>{heatInfo.label}</strong> · {heat.toFixed(0)}°</span>
-              <span className="dist-ops-meta-item">Vault <strong>{money(vaultBalance)}</strong></span>
-              <span className="dist-ops-meta-item">Booze <strong>{boozeUnitsCarrying}</strong></span>
-              <span className="dist-ops-meta-item">Maint <strong style={{ color: maintenancePct < 35 ? 'var(--danger)' : undefined }}>{maintenancePct.toFixed(0)}%</strong></span>
-            </div>
-            <p className="dist-ops-collect-hint">Same as Racket Collect the Take — banks till to vault.</p>
-          </div>
-          <div className="dist-seg-nav" role="tablist" aria-label="Distillery sections">
-            {DIST_SEGMENTS.map((seg) => (
-              <button
-                key={seg.id}
-                type="button"
-                role="tab"
-                aria-selected={activeSegment === seg.id}
-                className={`dist-seg-btn ${activeSegment === seg.id ? 'is-active' : ''}`}
-                onClick={() => {
-                  setActiveSegment(seg.id);
-                  if (typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches) {
-                    document.getElementById(`dist-seg-${seg.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }
-                }}
+            <div className="dist-head-actions">
+              <GoldBtn
+                disabled={saving}
+                title="Same as Racket Collect the Take — banks till to vault."
+                onClick={() => run(async () => {
+                  const res = await api.post('/illegal-business/distillery/collect');
+                  toast.success(res.data?.message || 'Distillery collected.');
+                })}
               >
-                {seg.label}
-              </button>
-            ))}
+                Collect {pendingTake > 0 ? money(pendingTake) : 'now'}
+              </GoldBtn>
+              <Link to="/money/racket" className="dist-racket-link">Racket</Link>
+            </div>
+          </div>
+          <div className="dist-refresh-note">
+            <AutoRefreshNote seconds={30} />
+          </div>
+        </header>
+
+        <div className="dist-kpi">
+          <div className="dist-kpi-cell">
+            <div className="dist-kpi-l">Vault</div>
+            <div className="dist-kpi-v">{money(vaultBalance)}</div>
+          </div>
+          <div className="dist-kpi-cell">
+            <div className="dist-kpi-l">Weekly run</div>
+            <div className="dist-kpi-v">{money(projectedWeeklyCash)}</div>
+          </div>
+          <div className="dist-kpi-cell">
+            <div className="dist-kpi-l">Heat</div>
+            <div className="dist-kpi-v">{heat.toFixed(0)}°</div>
+          </div>
+          <div className="dist-kpi-cell">
+            <div className="dist-kpi-l">Maintenance</div>
+            <div className="dist-kpi-v" style={{ color: maintenancePct < 35 ? 'var(--danger)' : undefined }}>{maintenancePct.toFixed(1)}%</div>
+          </div>
+          <div className="dist-kpi-cell">
+            <div className="dist-kpi-l">Crew</div>
+            <div className="dist-kpi-v">{workerTotal} / {workerCap}</div>
+          </div>
+          <div className="dist-kpi-cell">
+            <div className="dist-kpi-l">Projected week</div>
+            <div className="dist-kpi-v">{money(projectedWeeklyCash)}</div>
           </div>
         </div>
 
-        {/* ── Stat strip ───────────────────────────────────────────────────── */}
-        <div className="dist-stat-strip hidden sm:grid">
-          <StatCard label="Vault" value={money(vaultBalance)} accent />
-          <StatCard label="Progress" value={`${progression.total_steps || 0}/${progression.max_steps || 0}`} sub={`${progression.progress_pct || 0}% unlocked`} />
-          <StatCard
-            label="Projected week"
-            value={money(projectedWeeklyCash)}
-            sub={`Band ${money(roi.target_weekly_low || 400000000)}–${money(roi.target_weekly_high || 1000000000)}`}
-          />
-          <StatCard
-            label="Band progress"
-            value={`${(Number(hardCapProgress || 0) * 100).toFixed(0)}%`}
-            sub={
-              Number(hardCapProgress || 0) >= 1
-                ? 'at/above $1B/week top'
-                : 'toward $1B/week top'
-            }
-          />
+        {(passiveBoozePaused || (!!autoSell.enabled && salesWorkersCount < 1) || showFailuresBanner) && (
+          <div className="dist-alerts">
+            {passiveBoozePaused && (
+              <div className="dist-paused-banner">
+                Booze intake is paused (Auto Rank). Distillery will not add booze to inventory until you unblock intake on Account → Auto Rank.
+              </div>
+            )}
+            {!!autoSell.enabled && salesWorkersCount < 1 && (
+              <div className="dist-paused-banner">
+                Auto-sell is on but you have <strong>0 sales workers</strong> — booze will stack instead of paying. Assign at least one sales worker under Crew.
+              </div>
+            )}
+            {showFailuresBanner && (
+              <div className="dist-alert">
+                <div className="dist-alert-top">
+                  <AlertTriangle size={16} color="var(--danger)" />
+                  <div className="dist-alert-title">
+                    {recentFailures.length} maintenance failure{recentFailures.length === 1 ? '' : 's'}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={dismissFailuresBanner}
+                    className="dist-alert-dismiss"
+                    aria-label="Dismiss maintenance failures"
+                    title="Dismiss"
+                  >
+                    <X size={16} strokeWidth={2.25} />
+                  </button>
+                </div>
+                <p className="dist-alert-note">Low maintenance can break upgrade tiers. Broken tiers must be repurchased.</p>
+                {visibleFailures.map((f, i) => (
+                  <div key={`${f.at || 'x'}-${i}`} className="dist-alert-row">
+                    <span>
+                      {f.type === 'equipment_degrade' ? 'Equipment degraded' : 'Special upgrade lost'}: {prettyKey(f.item)}
+                    </span>
+                    <span className="dist-alert-meta">{Number(f.maintenance || 0).toFixed(1)}%</span>
+                  </div>
+                ))}
+                {recentFailures.length > visibleFailures.length && (
+                  <div className="dist-alert-meta">Showing the latest {visibleFailures.length}.</div>
+                )}
+                <div style={{ marginTop: 8 }}>
+                  <GhostBtn onClick={() => setActiveSegment('maintenance')}>Review maintenance</GhostBtn>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="dist-seg-nav" role="tablist" aria-label="Distillery sections">
+          {DIST_SEGMENTS.map((seg) => (
+            <button
+              key={seg.id}
+              type="button"
+              role="tab"
+              aria-selected={activeSegment === seg.id}
+              className={`dist-seg-btn ${activeSegment === seg.id ? 'is-active' : ''}`}
+              onClick={() => setActiveSegment(seg.id)}
+            >
+              {seg.label}
+            </button>
+          ))}
         </div>
 
         <div className="dist-body">
-
-          {/* ══ OPS ═══════════════════════════════════════════════════════════ */}
-          <div id="dist-seg-ops" className={`dist-seg-panel ${activeSegment === 'ops' ? 'is-active' : ''}`}>
-
-          {passiveBoozePaused && (
-            <div className="dist-paused-banner">
-              Booze intake is paused (Auto Rank). Distillery will not add booze to inventory until you unblock intake on Account → Auto Rank.
-            </div>
-          )}
-
-          {!!autoSell.enabled && salesWorkersCount < 1 && (
-            <div className="dist-paused-banner" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.35)' }}>
-              Auto-sell is on but you have <strong>0 sales workers</strong> — booze will stack instead of paying. Assign at least one sales worker under Workers.
-            </div>
-          )}
-
-          {/* ── Failures banner ─────────────────────────────────────────────── */}
-          {showFailuresBanner && (
-            <div className="dist-panel dist-panel-danger">
-              <SectionHead icon={AlertTriangle} title="Maintenance Failures">
-                <button
-                  type="button"
-                  onClick={dismissFailuresBanner}
-                  className="flex h-7 w-7 items-center justify-center rounded border border-red-500/35 bg-red-900/25 text-red-300/90 transition-colors hover:bg-red-900/45 hover:text-red-100"
-                  aria-label="Dismiss maintenance failures"
-                  title="Dismiss"
-                >
-                  <X size={14} strokeWidth={2.25} />
-                </button>
-              </SectionHead>
-              <p style={{ fontSize: 12, color: 'var(--danger)', fontStyle: 'italic', marginBottom: 10 }}>
-                Low maintenance can break upgrade tiers. Broken tiers must be repurchased.
-              </p>
-              <div>
-                {recentFailures.slice(-5).reverse().map((f, i) => (
-                  <div key={`${f.at || 'x'}-${i}`} className="dist-failure-item">
-                    {f.type === 'equipment_degrade' ? 'Equipment degraded' : 'Special upgrade lost'}: {prettyKey(f.item)}
-                    <div className="dist-failure-desc">maintenance was {Number(f.maintenance || 0).toFixed(1)}%</div>
-                  </div>
-                ))}
+          {activeSegment === 'overview' && (
+            <div className="dist-two-col" role="tabpanel">
+              <div className="dist-panel">
+                <SectionHead icon={BarChart3} title="Now" />
+                <div className="dist-roi-row"><span className="dist-roi-key">Heat</span><span className="dist-roi-val">{heatInfo.label} · {heat.toFixed(1)}°</span></div>
+                <div className="dist-roi-row"><span className="dist-roi-key">Risk</span><span className="dist-roi-val" style={{ fontWeight: 500, fontSize: 12 }}>{heatInfo.flavor}</span></div>
+                <div className="dist-roi-row"><span className="dist-roi-key">Maintenance</span><span className="dist-roi-val" style={{ color: maintenancePct < 35 ? 'var(--danger)' : undefined }}>{maintenancePct.toFixed(1)}%</span></div>
+                <div className="dist-roi-row"><span className="dist-roi-key">Crew</span><span className="dist-roi-val">{workerTotal} / {workerCap}</span></div>
+                <div className="dist-roi-row"><span className="dist-roi-key">Booze on hand</span><span className="dist-roi-val">{boozeUnitsCarrying}</span></div>
+                <div className="dist-roi-row"><span className="dist-roi-key">Live cash/h</span><span className="dist-roi-val">{money(roi.cash_per_hour_estimate)}</span></div>
+                <div className="dist-roi-row"><span className="dist-roi-key">Booze/h</span><span className="dist-roi-val">{Number(roi.booze_per_hour_estimate || 0).toFixed(2)}</span></div>
+                <div className="dist-roi-row"><span className="dist-roi-key">Projected week</span><span className="dist-roi-val">{money(projectedWeeklyCash)}</span></div>
+                <details className="dist-heat-help">
+                  <summary>House details</summary>
+                  <div className="dist-roi-row"><span className="dist-roi-key">Progress</span><span className="dist-roi-val">{progression.total_steps || 0}/{progression.max_steps || 0} · {progression.progress_pct || 0}%</span></div>
+                  <div className="dist-roi-row"><span className="dist-roi-key">Week band</span><span className="dist-roi-val">{money(roi.target_weekly_low || 400000000)}–{money(roi.target_weekly_high || 1000000000)}</span></div>
+                  <div className="dist-roi-row"><span className="dist-roi-key">Band progress</span><span className="dist-roi-val">{(Number(hardCapProgress || 0) * 100).toFixed(0)}%{Number(hardCapProgress || 0) >= 1 ? ' · at/above $1B/week top' : ' · toward $1B/week top'}</span></div>
+                  <p className="dist-muted" style={{ marginTop: 8 }}>Collect banks the till to the vault, same as Racket Collect the Take.</p>
+                </details>
               </div>
-            </div>
-          )}
-
-          {/* ── Heat & ROI ──────────────────────────────────────────────────── */}
-          <div className="dist-two-col">
-            <div className={`dist-panel ${heatInfo.cls}`}>
-              <SectionHead icon={Flame} title="Heat & Enforcement" />
-              <HeatBar heat={heat} />
-              <div className="dist-heat-readout">
-                <div>
-                  <div className="dist-heat-temp">{heat.toFixed(1)}°</div>
-                  <div className="dist-heat-badge">{heatInfo.label}</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 9, color: 'var(--text-faint)', marginBottom: 4 }}>HEAT INDEX</div>
-                  <div style={{ fontSize: 13, color: 'var(--text-dim)', fontWeight: 700 }}>{heat.toFixed(1)} / 100</div>
-                </div>
-              </div>
-              <div className="dist-heat-flavor">{heatInfo.flavor}</div>
-              {dist?.shutdown_until && (
-                <div className="dist-heat-shutdown">
-                  <ShieldAlert size={13} />
-                  Shutdown until {new Date(dist.shutdown_until).toLocaleString()}
-                </div>
-              )}
-              {riskCooldownActive && (
-                <div className="dist-heat-cooldown">
-                  Cooldown: {riskCooldownMinutes >= 120
-                    ? `${Math.ceil(riskCooldownMinutes / 60)}h`
-                    : `${riskCooldownMinutes} min`}{' '}
-                  left — Cool Off / Bribe locked for {riskCooldownHoursLabel}h after a risk action.
-                </div>
-              )}
-              {!allowVaultForHeat && (
-                <div className="dist-heat-cooldown" style={{ color: 'var(--text-dim)', borderColor: 'var(--border-dim)' }}>
-                  Vault heat spend is <strong style={{ color: 'var(--amber)' }}>off</strong>: no vault seizure on collect; Cool Off / Bribe disabled.
-                </div>
-              )}
-              <div className="dist-btn-row">
-                <GoldBtn
-                  disabled={saving || riskCooldownActive || !allowVaultForHeat}
-                  onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/risk-action', { action: 'cool_off' }); toast.success(res.data?.message || 'Heat cooled.'); })}
-                >
-                  Cool Off {riskActionCosts.cool_off ? `(${money(riskActionCosts.cool_off)})` : ''}
-                </GoldBtn>
-                <GhostBtn
-                  disabled={saving || riskCooldownActive || !allowVaultForHeat}
-                  onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/risk-action', { action: 'bribe_crackdown' }); toast.success(res.data?.message || 'Crackdown eased.'); })}
-                >
-                  Bribe {riskActionCosts.bribe_crackdown ? `(${money(riskActionCosts.bribe_crackdown)})` : ''}
-                </GhostBtn>
-              </div>
-              <p style={{ fontSize: 9, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.4 }}>
-                Cool Off ({money(riskActionCosts.cool_off || 900000)}) clears heat cheaper. Bribe ({money(riskActionCosts.bribe_crackdown || 3500000)}) also clears heat and lifts shutdown — same cooldown.
-              </p>
-              <div style={{ marginTop: 10 }}>
-                <GhostBtn
-                  disabled={saving}
-                  onClick={() => run(async () => {
-                    const next = !allowVaultForHeat;
-                    const res = await api.post('/illegal-business/distillery/set-heat-vault-spend', { allow_vault_for_heat: next });
-                    toast.success(res.data?.message || (next ? 'Vault heat spend on.' : 'Vault heat spend off.'));
-                  })}
-                >
-                  {allowVaultForHeat ? 'Turn off vault paying for heat' : 'Turn vault paying for heat back on'}
-                </GhostBtn>
-              </div>
-              <details className="dist-heat-help" style={{ marginTop: 10, borderTop: '1px solid var(--border-dim)', paddingTop: 4 }}>
-                <summary>How heat works</summary>
-                <p style={{ fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.5 }}>
-                  <strong style={{ color: 'var(--text-muted)' }}>Passive heat:</strong> drops slowly with real time (page refreshes about every {REFRESH_MS / 1000}s). Baseline cooling is only ~1–2° per hour (faster with security, stealth specials, and during shutdown), so HOT can sit for a while — that is normal.
-                </p>
-                <p style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 8, lineHeight: 1.5 }}>
-                  <strong style={{ color: 'var(--text-muted)' }}>Collect risk:</strong> at critical heat and above, a collect can trigger enforcement: short shutdown plus a vault seizure (about 5–22% of vault + that collect). Heat rises each collect from production and auto-sell.
-                </p>
-                <p style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.5 }}>
-                  When vault heat spend is off, enforcement can still shut the still down but will not remove vault money. Cool Off / Bribe stay disabled until you re-enable.
-                </p>
-              </details>
-            </div>
-
-            <div className="dist-panel">
-              <SectionHead icon={BarChart3} title="ROI Forecast" />
-              <div className="dist-roi-row"><span className="dist-roi-key">Live cash/h</span><span className="dist-roi-val">{money(roi.cash_per_hour_estimate)}</span></div>
-              <div className="dist-roi-row"><span className="dist-roi-key">Till /h</span><span className="dist-roi-val">{money(roi.till_cash_per_hour_estimate)}</span></div>
-              <div className="dist-roi-row"><span className="dist-roi-key">Booze sell /h</span><span className="dist-roi-val">{money(roi.booze_cash_per_hour_estimate)}</span></div>
-              {!autoSellActive && Number(roi.booze_cash_per_hour_potential || 0) > 0 && (
-                <div className="dist-roi-row"><span className="dist-roi-key">Booze potential /h</span><span className="dist-roi-val" style={{ color: 'var(--amber)' }}>{money(roi.booze_cash_per_hour_potential)}</span></div>
-              )}
-              <div className="dist-roi-row"><span className="dist-roi-key">Risk-adjusted</span><span className="dist-roi-val">{money(roi.risk_adjusted_cash_per_hour_estimate)}</span></div>
-              <div className="dist-roi-row"><span className="dist-roi-key">Projected 24h</span><span className="dist-roi-val">{money(projected24hCash)}</span></div>
-              <div className="dist-roi-row"><span className="dist-roi-key">Projected week</span><span className="dist-roi-val">{money(projectedWeeklyCash)}</span></div>
-              <div className="dist-roi-row"><span className="dist-roi-key">Downside</span><span className="dist-roi-val">{pct(roi.downside_exposure)}</span></div>
-              <div className="dist-roi-row"><span className="dist-roi-key">Loss events 24h</span><span className="dist-roi-val">{projectedLossEvents24h.toFixed(2)}</span></div>
-              <div className="dist-roi-row"><span className="dist-roi-key">Rebuy exposure</span><span className="dist-roi-val">{money(projectedRebuyCost24h)}</span></div>
-              <div className="dist-roi-row"><span className="dist-roi-key">Booze/h</span><span className="dist-roi-val">{Number(roi.booze_per_hour_estimate || 0).toFixed(2)}</span></div>
-              <div className="dist-roi-row"><span className="dist-roi-key">Next payback</span><span className="dist-roi-val">{roi.next_upgrade_payback_hours ?? 'n/a'}h</span></div>
-              {(roi.racket_token_active || roi.booze_token_active) && (
-                <div className="dist-roi-row">
-                  <span className="dist-roi-key">Token boost</span>
-                  <span className="dist-roi-val" style={{ fontSize: 11 }}>
-                    {[
-                      roi.racket_token_active && `Racket +${Math.round((Number(roi.racket_token_income_mult || 1) - 1) * 100)}%`,
-                      roi.booze_token_active && `Booze +${Math.round((Number(roi.booze_token_distillery_mult || 1) - 1) * 100)}%`,
-                    ].filter(Boolean).join(' · ')}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Crew + Maintenance (Ops) */}
-          <div className="dist-panel">
-            <SectionHead icon={Users} title="Crew Roster" />
-            <div className="dist-worker-cap">{workerTotal} / {workerCap} workers assigned</div>
-            <div className="text-[10px] text-mutedForeground font-heading mb-2">
-              Increase worker cap by upgrading <strong className="text-foreground">Bribe Office</strong> (+2 capacity per level).
-            </div>
-            <div className="dist-worker-grid">
-              {['production', 'quality', 'security', 'sales'].map((role) => {
-                const current = Number(workers[role] || 0);
-                const cap = workerCap > 0 ? current / workerCap : 0;
-                return (
-                  <div key={role} className="dist-worker-card">
-                    <div className="dist-worker-role">{prettyKey(role)}</div>
-                    <div className="dist-worker-num">{workerDraft[role] === '' ? '—' : workerDraft[role]}</div>
-                    <div className="dist-worker-bar">
-                      <div className="dist-worker-fill" style={{ width: `${Math.min(100, cap * 100)}%` }} />
-                    </div>
-                    <input
-                      type="number"
-                      min="0"
-                      inputMode="numeric"
-                      value={workerDraft[role] === '' ? '' : workerDraft[role]}
-                      onChange={onDigitsOnlyOptionalIntChange((v) => setWorkerDraft((p) => ({ ...p, [role]: v })))}
-                      onBlur={() => setWorkerDraft((p) => ({ ...p, [role]: Math.max(0, intOr(p[role] === '' ? NaN : p[role], 0)) }))}
-                      className="dist-worker-input"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-            <GoldBtn
-              disabled={saving}
-              onClick={() => run(async () => {
-                const payload = {
-                  production: Math.max(0, intOr(workerDraft.production, 0)),
-                  quality: Math.max(0, intOr(workerDraft.quality, 0)),
-                  security: Math.max(0, intOr(workerDraft.security, 0)),
-                  sales: Math.max(0, intOr(workerDraft.sales, 0)),
-                };
-                const res = await api.post('/illegal-business/distillery/assign-workers', payload);
-                toast.success(res.data?.message || 'Workers assigned.');
-              })}
-            >
-              Save Worker Plan
-            </GoldBtn>
-            <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text-faint)' }}>
-              {hiresNeeded > 0 ? `Hiring ${hiresNeeded} new · ${money(workerPlanCost)}` : 'No hire cost — reassign only.'}
-            </div>
-            {workerMaxHiresPerAction > 0 && (
-              <div style={{ marginTop: 4, fontSize: 10, color: 'var(--text-faint)' }}>
-                Max new hires per action: {workerMaxHiresPerAction}
-              </div>
-            )}
-
-            <div className="dist-maint-bar-wrap">
-              <SectionHead icon={Wrench} title="Maintenance" />
-              <div className="dist-maint-label-row">
-                <span className="dist-maint-key">Current upkeep</span>
-                <span className="dist-maint-val" style={{ color: maintenancePct < 35 ? 'var(--danger)' : maintenancePct < 60 ? 'var(--amber)' : 'var(--green)' }}>
-                  {maintenancePct.toFixed(1)}%
-                </span>
-              </div>
-              <div className="dist-maint-track">
-                <div
-                  className="dist-maint-fill"
-                  style={{
-                    width: `${maintenancePct}%`,
-                    background: maintenancePct < 35 ? 'var(--red)' : maintenancePct < 60 ? 'var(--amber)' : 'var(--green)',
-                  }}
-                />
-              </div>
-              {maintenanceWarn && (
-                <div className="dist-maint-warn">
-                  Critical — upgrades may degrade and need repurchasing.
-                </div>
-              )}
-              <div className="dist-maint-input-row">
-                <input
-                  type="number"
-                  min="1"
-                  inputMode="numeric"
-                  value={maintenancePoints === '' ? '' : maintenancePoints}
-                  onChange={onDigitsOnlyOptionalIntChange(setMaintenancePoints)}
-                  onBlur={() =>
-                    setMaintenancePoints((q) => Math.max(1, intOr(q === '' ? NaN : q, 1)))
-                  }
-                  className="dist-maint-input"
-                />
-                <GhostBtn
-                  disabled={saving}
-                  onClick={() => run(async () => {
-                    const recover_points = Math.max(1, intOr(maintenancePoints, 1));
-                    const res = await api.post('/illegal-business/distillery/maintenance', { recover_points });
-                    toast.success(res.data?.message || 'Maintenance done.');
-                  })}
-                >
-                  Repair
-                </GhostBtn>
-                <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{money(maintenanceCost)}</span>
-              </div>
-            </div>
-          </div>
-          </div>{/* end ops segment */}
-
-          {/* ══ UPGRADES ══════════════════════════════════════════════════════ */}
-          <div id="dist-seg-upgrades" className={`dist-seg-panel ${activeSegment === 'upgrades' ? 'is-active' : ''}`}>
-          <div className="dist-panel">
-            <SectionHead icon={Zap} title="Equipment · 9 lanes × 20" />
-            <div className="dist-equip-grid">
-              {EQUIPMENT_ORDER.map((lane) => {
-                const lv = Number(equipment[lane] || 0);
-                const cost = equipmentCosts[lane];
-                const maxed = cost == null;
-                const canAfford = maxed || vaultBalance >= Number(cost || 0);
-                return (
-                  <div
-                    key={lane}
-                    className={`dist-equip-card rounded-md border border-primary/25 ${maxed ? 'is-maxed' : ''} ${!maxed && !canAfford ? 'is-unaffordable' : ''}`}
+              <div className="dist-panel">
+                <SectionHead icon={Zap} title="Do now" />
+                <div className="dist-quick">
+                  <GoldBtn
+                    disabled={saving || riskCooldownActive || !allowVaultForHeat}
+                    onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/risk-action', { action: 'cool_off' }); toast.success(res.data?.message || 'Heat cooled.'); })}
                   >
-                    <div className="dist-equip-icon">{EQUIPMENT_ICONS[lane] || '⚙'}</div>
-                    <div className="dist-equip-name">{prettyKey(lane)}</div>
-                    {EQUIPMENT_DESC[lane] && <div className="dist-equip-desc">{EQUIPMENT_DESC[lane]}</div>}
-                    <div className="dist-level-bar sm:hidden" aria-hidden>
-                      <div className="dist-level-bar-fill" style={{ width: `${Math.min(100, (lv / 20) * 100)}%` }} />
-                    </div>
-                    <LevelPips level={lv} max={20} />
-                    <div style={{ fontSize: 8, color: 'var(--text-faint)', marginBottom: 6 }}>Lv {lv} / 20</div>
-                    {maxed ? (
-                      <div className="dist-equip-maxed">Maxed</div>
-                    ) : (
-                      <GoldBtn
-                        small
-                        className="w-full"
-                        disabled={saving || !canAfford}
-                        onClick={() => run(async () => {
-                          const res = await api.post('/illegal-business/distillery/upgrade-equipment', { lane });
-                          toast.success(res.data?.message || 'Upgraded.');
-                        })}
-                      >
-                        Upgrade {money(cost)}
-                      </GoldBtn>
-                    )}
+                    Cool Off {riskActionCosts.cool_off ? `(${money(riskActionCosts.cool_off)})` : ''}
+                  </GoldBtn>
+                  <GhostBtn onClick={() => setActiveSegment('maintenance')}>Repair</GhostBtn>
+                  <GhostBtn onClick={() => setActiveSegment('crew')}>Crew</GhostBtn>
+                  <GhostBtn onClick={() => setActiveSegment('maintenance')}>Maintenance</GhostBtn>
+                  <GhostBtn onClick={() => setActiveSegment('operations')}>Operations</GhostBtn>
+                </div>
+                {riskCooldownActive && (
+                  <p className="dist-muted" style={{ marginTop: 8 }}>
+                    Cool Off locked for {riskCooldownMinutes >= 120 ? `${Math.ceil(riskCooldownMinutes / 60)}h` : `${riskCooldownMinutes} min`}.
+                  </p>
+                )}
+                {maintenanceWarn && (
+                  <div className="dist-maint-warn">Critical — upgrades may degrade and need repurchasing.</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeSegment === 'operations' && (
+            <div className="dist-two-col" role="tabpanel">
+              <div className={`dist-panel ${heatInfo.cls}`}>
+                <SectionHead icon={Flame} title="Heat & Enforcement" />
+                <HeatBar heat={heat} />
+                <div className="dist-heat-readout">
+                  <div>
+                    <div className="dist-heat-temp">{heat.toFixed(1)}°</div>
+                    <div className="dist-heat-badge">{heatInfo.label}</div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="dist-panel" id="dist-tracks">
-            <SectionHead icon={Layers} title="Special Tracks · 180 Perks" />
-            {bestNextUpgrades.length > 0 && (
-              <div style={{ marginBottom: 12 }}>
-                <div className="dist-input-label" style={{ marginBottom: 6 }}>Recommended next</div>
-                <div className="dist-chip-row">
-                  {bestNextUpgrades.map((u) => (
-                    <button
-                      key={u.id}
-                      type="button"
-                      className="dist-chip"
-                      onClick={() => {
-                        setActiveTrack(u.track);
-                        setActiveSegment('upgrades');
-                        if (typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches) {
-                          document.getElementById('dist-tracks')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        }
-                      }}
-                    >
-                      {prettyKey(u.track)} · T{u.tier} · {money(u.cost)}
-                    </button>
-                  ))}
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 9, color: 'var(--text-faint)', marginBottom: 4 }}>HEAT INDEX</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-dim)', fontWeight: 700 }}>{heat.toFixed(1)} / 100</div>
+                  </div>
                 </div>
-              </div>
-            )}
-            <div className="dist-track-scroll">
-              {TRACKS.map((track) => (
-                <button
-                  key={track}
-                  type="button"
-                  onClick={() => setActiveTrack(track)}
-                  className={`dist-track-tab shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 font-heading text-[8px] font-bold uppercase tracking-wider transition-all touch-manipulation ${
-                    activeTrack === track
-                      ? 'border-primary bg-primary/15 text-primary'
-                      : 'border-transparent bg-transparent text-mutedForeground hover:border-primary/30 hover:bg-primary/5 hover:text-foreground'
-                  }`}
-                >
-                  {prettyKey(track)}
-                </button>
-              ))}
-            </div>
-            <div className="dist-track-flavor">{TRACK_FLAVOR[activeTrack]}</div>
-            <div className="dist-track-nav">
-              <div className="dist-track-nav-meta">
-                {activeSpecial ? `${clampedSpecialCursor + 1} / ${Math.max(1, visibleTrackRows.length)}` : '0/0'} · Purchased {purchasedInTrack}/{trackRows.length}
-              </div>
-              <div className="dist-track-nav-btns">
-                <GhostBtn small disabled={clampedSpecialCursor <= 0} onClick={() => setSpecialCursor((v) => Math.max(0, v - 1))}>
-                  <ChevronLeft size={12} />
-                </GhostBtn>
-                <GhostBtn small disabled={clampedSpecialCursor >= maxSpecialIndex} onClick={() => setSpecialCursor((v) => Math.min(maxSpecialIndex, v + 1))}>
-                  <ChevronRight size={12} />
-                </GhostBtn>
-              </div>
-            </div>
-            {activeSpecial ? (
-              <div className="dist-upgrade-showcase rounded-md border border-primary/25">
-                <div>
-                  <div className="dist-upgrade-name">{activeSpecial.name}</div>
-                  <div className="dist-upgrade-tier">Tier {activeSpecial.tier} · {prettyKey(activeSpecial.track)}</div>
-                  <div className="dist-upgrade-price">{money(activeSpecial.cost)}</div>
-                  {TRACK_EFFECTS[activeSpecial.track] && (
-                    <div className="dist-upgrade-effects">
-                      {TRACK_EFFECTS[activeSpecial.track].map((e) => <span key={e}>{e}</span>)}
-                    </div>
-                  )}
-                  {activeSpecial.purchased
-                    ? <div className="dist-upgrade-status-owned">Owned</div>
-                    : activeSpecial.available
-                      ? <div className="dist-upgrade-status-avail">Available to purchase</div>
-                      : <div className="dist-upgrade-status-locked">Locked — complete earlier tiers first</div>
-                  }
+                <div className="dist-heat-flavor">{heatInfo.flavor}</div>
+                {dist?.shutdown_until && (
+                  <div className="dist-heat-shutdown">
+                    <ShieldAlert size={13} />
+                    Shutdown until {new Date(dist.shutdown_until).toLocaleString()}
+                  </div>
+                )}
+                {riskCooldownActive && (
+                  <div className="dist-heat-cooldown">
+                    Cooldown: {riskCooldownMinutes >= 120
+                      ? `${Math.ceil(riskCooldownMinutes / 60)}h`
+                      : `${riskCooldownMinutes} min`}{' '}
+                    left — Cool Off / Bribe locked for {riskCooldownHoursLabel}h after a risk action.
+                  </div>
+                )}
+                {!allowVaultForHeat && (
+                  <div className="dist-heat-cooldown" style={{ color: 'var(--text-dim)', borderColor: 'var(--border-dim)' }}>
+                    Vault heat spend is <strong style={{ color: 'var(--amber)' }}>off</strong>: no vault seizure on collect; Cool Off / Bribe disabled.
+                  </div>
+                )}
+                <div className="dist-btn-row">
+                  <GoldBtn
+                    disabled={saving || riskCooldownActive || !allowVaultForHeat}
+                    onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/risk-action', { action: 'cool_off' }); toast.success(res.data?.message || 'Heat cooled.'); })}
+                  >
+                    Cool Off {riskActionCosts.cool_off ? `(${money(riskActionCosts.cool_off)})` : ''}
+                  </GoldBtn>
+                  <GhostBtn
+                    disabled={saving || riskCooldownActive || !allowVaultForHeat}
+                    onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/risk-action', { action: 'bribe_crackdown' }); toast.success(res.data?.message || 'Crackdown eased.'); })}
+                  >
+                    Bribe {riskActionCosts.bribe_crackdown ? `(${money(riskActionCosts.bribe_crackdown)})` : ''}
+                  </GhostBtn>
                 </div>
-                <GoldBtn
-                  disabled={
-                    saving
-                    || !activeSpecial.available
-                    || activeSpecial.purchased
-                    || vaultBalance < Number(activeSpecial.cost || 0)
-                  }
-                  onClick={() => run(async () => {
-                    const res = await api.post('/illegal-business/distillery/buy-special-upgrade', { upgrade_id: activeSpecial.id });
-                    toast.success(res.data?.message || 'Upgrade bought.');
-                  })}
-                >
-                  {activeSpecial.purchased ? 'Owned' : `Buy ${money(activeSpecial.cost)}`}
-                </GoldBtn>
+                <p style={{ fontSize: 9, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.4 }}>
+                  Cool Off ({money(riskActionCosts.cool_off || 900000)}) clears heat cheaper. Bribe ({money(riskActionCosts.bribe_crackdown || 3500000)}) also clears heat and lifts shutdown — same cooldown.
+                </p>
+                <div style={{ marginTop: 10 }}>
+                  <GhostBtn
+                    disabled={saving}
+                    onClick={() => run(async () => {
+                      const next = !allowVaultForHeat;
+                      const res = await api.post('/illegal-business/distillery/set-heat-vault-spend', { allow_vault_for_heat: next });
+                      toast.success(res.data?.message || (next ? 'Vault heat spend on.' : 'Vault heat spend off.'));
+                    })}
+                  >
+                    {allowVaultForHeat ? 'Turn off vault paying for heat' : 'Turn vault paying for heat back on'}
+                  </GhostBtn>
+                </div>
+                <details className="dist-heat-help" style={{ marginTop: 10, borderTop: '1px solid var(--border-dim)', paddingTop: 4 }}>
+                  <summary>How heat works</summary>
+                  <p style={{ fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                    <strong style={{ color: 'var(--text-muted)' }}>Passive heat:</strong> drops slowly with real time (page refreshes about every {REFRESH_MS / 1000}s). Baseline cooling is only ~1–2° per hour (faster with security, stealth specials, and during shutdown), so HOT can sit for a while — that is normal.
+                  </p>
+                  <p style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 8, lineHeight: 1.5 }}>
+                    <strong style={{ color: 'var(--text-muted)' }}>Collect risk:</strong> at critical heat and above, a collect can trigger enforcement: short shutdown plus a vault seizure (about 5–22% of vault + that collect). Heat rises each collect from production and auto-sell.
+                  </p>
+                  <p style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.5 }}>
+                    When vault heat spend is off, enforcement can still shut the still down but will not remove vault money. Cool Off / Bribe stay disabled until you re-enable.
+                  </p>
+                </details>
               </div>
-            ) : (
-              <div className="dist-no-upgrade">No upgrades visible in this track yet.</div>
-            )}
-          </div>
-          </div>{/* end upgrades */}
 
-          {/* ══ CELLAR ════════════════════════════════════════════════════════ */}
-          <div id="dist-seg-cellar" className={`dist-seg-panel ${activeSegment === 'cellar' ? 'is-active' : ''}`}>
-          <div className="dist-panel">
-            <SectionHead icon={Clock3} title="Aging Cellar" />
-            <p className="mb-2 text-[10px] leading-snug text-mutedForeground">
-              Start and claim batches here. Hands-off rules live under <strong className="text-foreground/90">Auto</strong>.
-            </p>
-            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 text-[11px] font-heading text-mutedForeground">
-              <span>
-                On hand:{' '}
-                <span className="font-bold tabular-nums text-primary">{boozeUnitsCarrying}</span>
-                {' '}booze
-              </span>
-              {boozeUnitsCarrying > 0 && (
-                <button
-                  type="button"
-                  className="shrink-0 min-h-9 rounded border border-primary/30 bg-primary/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-primary transition-all hover:bg-primary/20 disabled:opacity-40 touch-manipulation"
-                  disabled={saving}
-                  onClick={() => setAgingQty(Math.max(1, boozeUnitsCarrying))}
-                >
-                  Set qty to max
-                </button>
-              )}
+              <div className="dist-panel">
+                <SectionHead icon={BarChart3} title="ROI Forecast" />
+                <div className="dist-roi-row"><span className="dist-roi-key">Live cash/h</span><span className="dist-roi-val">{money(roi.cash_per_hour_estimate)}</span></div>
+                <div className="dist-roi-row"><span className="dist-roi-key">Till /h</span><span className="dist-roi-val">{money(roi.till_cash_per_hour_estimate)}</span></div>
+                <div className="dist-roi-row"><span className="dist-roi-key">Booze sell /h</span><span className="dist-roi-val">{money(roi.booze_cash_per_hour_estimate)}</span></div>
+                {!autoSellActive && Number(roi.booze_cash_per_hour_potential || 0) > 0 && (
+                  <div className="dist-roi-row"><span className="dist-roi-key">Booze potential /h</span><span className="dist-roi-val" style={{ color: 'var(--amber)' }}>{money(roi.booze_cash_per_hour_potential)}</span></div>
+                )}
+                <div className="dist-roi-row"><span className="dist-roi-key">Risk-adjusted</span><span className="dist-roi-val">{money(roi.risk_adjusted_cash_per_hour_estimate)}</span></div>
+                <div className="dist-roi-row"><span className="dist-roi-key">Projected 24h</span><span className="dist-roi-val">{money(projected24hCash)}</span></div>
+                <div className="dist-roi-row"><span className="dist-roi-key">Projected week</span><span className="dist-roi-val">{money(projectedWeeklyCash)}</span></div>
+                {(roi.racket_token_active || roi.booze_token_active) && (
+                  <div className="dist-roi-row">
+                    <span className="dist-roi-key">Token boost</span>
+                    <span className="dist-roi-val" style={{ fontSize: 11 }}>
+                      {[
+                        roi.racket_token_active && `Racket +${Math.round((Number(roi.racket_token_income_mult || 1) - 1) * 100)}%`,
+                        roi.booze_token_active && `Booze +${Math.round((Number(roi.booze_token_distillery_mult || 1) - 1) * 100)}%`,
+                      ].filter(Boolean).join(' · ')}
+                    </span>
+                  </div>
+                )}
+                <details className="dist-heat-help">
+                  <summary>Forecast details</summary>
+                  <div className="dist-roi-row"><span className="dist-roi-key">Downside</span><span className="dist-roi-val">{pct(roi.downside_exposure)}</span></div>
+                  <div className="dist-roi-row"><span className="dist-roi-key">Loss events 24h</span><span className="dist-roi-val">{projectedLossEvents24h.toFixed(2)}</span></div>
+                  <div className="dist-roi-row"><span className="dist-roi-key">Rebuy exposure</span><span className="dist-roi-val">{money(projectedRebuyCost24h)}</span></div>
+                  <div className="dist-roi-row"><span className="dist-roi-key">Booze/h</span><span className="dist-roi-val">{Number(roi.booze_per_hour_estimate || 0).toFixed(2)}</span></div>
+                  <div className="dist-roi-row"><span className="dist-roi-key">Next payback</span><span className="dist-roi-val">{roi.next_upgrade_payback_hours ?? 'n/a'}h</span></div>
+                </details>
+              </div>
             </div>
-            <div className="mb-3.5 flex gap-1">
-              {['quick', 'standard', 'reserve', 'premium'].map((tier) => (
-                <button
-                  key={tier}
-                  type="button"
-                  onClick={() => setAgingTier(tier)}
-                  className={`flex-1 min-h-10 rounded border py-2 px-1 text-center font-heading text-[9px] font-bold uppercase tracking-wider transition-all touch-manipulation ${
-                    agingTier === tier
-                      ? 'border-primary/50 bg-primary/15 text-primary'
-                      : 'border-zinc-700/50 bg-primary/5 text-mutedForeground hover:border-primary/30 hover:text-foreground'
-                  }`}
-                >
-                  {tier}
-                </button>
-              ))}
-            </div>
+          )}
 
-            <div className="dist-barrel-row">
-              {queue.length === 0 && (
-                <div style={{ fontStyle: 'italic', fontSize: 12, color: 'var(--text-faint)' }}>No active batches.</div>
-              )}
-              {queue.slice(0, 8).map((b) => {
-                const ready = new Date(b.ready_at) <= new Date();
-                const hoursLeft = Math.max(0, (new Date(b.ready_at) - new Date()) / 3600000);
-                return (
-                  <Barrel
-                    key={b.id}
-                    ready={ready}
-                    label={ready ? 'READY' : `${hoursLeft.toFixed(0)}h`}
-                  />
-                );
-              })}
-            </div>
-
-            <div className="dist-aging-start-row">
-              <input
-                type="number"
-                min="1"
-                inputMode="numeric"
-                value={agingQty === '' ? '' : agingQty}
-                onChange={onDigitsOnlyOptionalIntChange(setAgingQty)}
-                onBlur={() => setAgingQty((q) => Math.max(1, intOr(q === '' ? NaN : q, 1)))}
-                className="dist-aging-qty-input"
-              />
-              <GoldBtn
-                disabled={saving}
-                onClick={() => run(async () => {
-                  const quantity = Math.max(1, intOr(agingQty === '' ? NaN : agingQty, 1));
-                  const res = await api.post('/illegal-business/distillery/start-aging-batch', { tier: agingTier, quantity });
-                  toast.success(res.data?.message || 'Batch started.');
-                })}
-              >
-                Start Batch
-              </GoldBtn>
-            </div>
-
-            {queue.length > 0 && (
-              <div className="dist-queue-list">
-                {queue.map((b) => {
-                  const ready = new Date(b.ready_at) <= new Date();
+          {activeSegment === 'crew' && (
+            <div className="dist-panel" role="tabpanel">
+              <SectionHead icon={Users} title="Crew Roster" />
+              <div className="dist-worker-cap">{workerTotal} / {workerCap} workers assigned</div>
+              <div className="dist-muted" style={{ marginBottom: 8 }}>
+                Increase worker cap by upgrading <strong style={{ color: 'var(--text)' }}>Bribe Office</strong> (+2 capacity per level).
+              </div>
+              <div className="dist-worker-grid">
+                {['production', 'quality', 'security', 'sales'].map((role) => {
+                  const current = Number(workers[role] || 0);
+                  const cap = workerCap > 0 ? current / workerCap : 0;
                   return (
-                    <div key={b.id} className="dist-queue-item">
-                      <div>
-                        <div className="dist-queue-tier">{prettyKey(b.tier)} · {b.quantity} units</div>
-                        <div className="dist-queue-time">Ready {new Date(b.ready_at).toLocaleString()}</div>
+                    <div key={role} className="dist-worker-card">
+                      <div className="dist-worker-role">{prettyKey(role)}</div>
+                      <div className="dist-worker-num">{workerDraft[role] === '' ? '—' : workerDraft[role]}</div>
+                      <div className="dist-worker-bar">
+                        <div className="dist-worker-fill" style={{ width: `${Math.min(100, cap * 100)}%` }} />
                       </div>
-                      <GhostBtn
-                        small
-                        disabled={saving || !ready}
-                        onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/claim-aged-batch', { batch_id: b.id }); toast.success(res.data?.message || 'Batch claimed.'); })}
-                      >
-                        Claim
-                      </GhostBtn>
+                      <input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        value={workerDraft[role] === '' ? '' : workerDraft[role]}
+                        onChange={onDigitsOnlyOptionalIntChange((v) => setWorkerDraft((p) => ({ ...p, [role]: v })))}
+                        onBlur={() => setWorkerDraft((p) => ({ ...p, [role]: Math.max(0, intOr(p[role] === '' ? NaN : p[role], 0)) }))}
+                        className="dist-worker-input"
+                      />
                     </div>
                   );
                 })}
               </div>
-            )}
-          </div>
-          </div>{/* end cellar */}
-
-          {/* ══ AUTO ══════════════════════════════════════════════════════════ */}
-          <div id="dist-seg-auto" className={`dist-seg-panel ${activeSegment === 'auto' ? 'is-active' : ''}`}>
-          {passiveBoozePaused && (
-            <div className="dist-paused-banner">
-              Booze intake is paused — auto-aging cannot stock new booze until Auto Rank unblocks intake.
+              <GoldBtn
+                disabled={saving}
+                onClick={() => run(async () => {
+                  const payload = {
+                    production: Math.max(0, intOr(workerDraft.production, 0)),
+                    quality: Math.max(0, intOr(workerDraft.quality, 0)),
+                    security: Math.max(0, intOr(workerDraft.security, 0)),
+                    sales: Math.max(0, intOr(workerDraft.sales, 0)),
+                  };
+                  const res = await api.post('/illegal-business/distillery/assign-workers', payload);
+                  toast.success(res.data?.message || 'Workers assigned.');
+                })}
+              >
+                Save Worker Plan
+              </GoldBtn>
+              <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text-faint)' }}>
+                {hiresNeeded > 0 ? `Hiring ${hiresNeeded} new · ${money(workerPlanCost)}` : 'No hire cost — reassign only.'}
+              </div>
+              {workerMaxHiresPerAction > 0 && (
+                <div style={{ marginTop: 4, fontSize: 10, color: 'var(--text-faint)' }}>
+                  Max new hires per action: {workerMaxHiresPerAction}
+                </div>
+              )}
             </div>
           )}
-          <div className="dist-panel">
-            <SectionHead icon={Zap} title="Auto-Aging" />
-            <div className="dist-status-line">
-              <strong>{autoAging.enabled ? 'ON' : 'OFF'}</strong>
-              {' · '}{autoAging.tier}
-              {' · '}reserve {intOr(autoAging.reserve_units, 0)}
-              {' · '}{autoAging.auto_collect_booze ? 'auto-collect on' : 'auto-collect off'}
-            </div>
-            <details className="dist-heat-help" style={{ marginBottom: 10 }}>
-              <summary>How auto-aging works</summary>
-              <p className="mb-2 text-[10px] leading-snug text-mutedForeground">
-                Claims ready batches, starts new ones when spare booze stays above your reserve (≥25 spare), and can run throttled racket Collect. Turn off for full manual cellar control.
-              </p>
-              <p className="text-[9px] leading-snug text-mutedForeground">
-                To block <strong className="text-foreground/85">all</strong> booze intake, use Account → Auto Rank → Block all booze intake.
-              </p>
-            </details>
-            <div className="dist-autosell-row">
-              <input
-                type="checkbox"
-                checked={!!autoAging.enabled}
-                onChange={(e) => setAutoAging((p) => ({ ...p, enabled: e.target.checked }))}
-                className="dist-autosell-check"
-                id="autoaging-toggle"
-              />
-              <label htmlFor="autoaging-toggle" className="dist-autosell-label">Enable auto-aging</label>
-            </div>
-            <div className="mb-2 text-[9px] font-heading uppercase tracking-wide text-mutedForeground">Auto tier</div>
-            <div className="mb-3 flex gap-1">
-              {['quick', 'standard', 'reserve', 'premium'].map((tier) => (
-                <button
-                  key={`auto-${tier}`}
-                  type="button"
-                  onClick={() => setAutoAging((p) => ({ ...p, tier }))}
-                  className={`flex-1 min-h-10 rounded border py-1.5 px-0.5 text-center font-heading text-[8px] font-bold uppercase tracking-wider transition-all touch-manipulation ${
-                    autoAging.tier === tier
-                      ? 'border-primary/50 bg-primary/15 text-primary'
-                      : 'border-zinc-700/50 bg-primary/5 text-mutedForeground hover:border-primary/30 hover:text-foreground'
-                  }`}
-                >
-                  {tier}
-                </button>
-              ))}
-            </div>
-            <div className="dist-autosell-inputs">
-              <div>
-                <div className="dist-input-label">Reserve (min on hand)</div>
-                <input
-                  type="number"
-                  min="0"
-                  inputMode="numeric"
-                  value={autoAging.reserve_units === '' ? '' : autoAging.reserve_units}
-                  onChange={onDigitsOnlyOptionalIntChange((v) => setAutoAging((p) => ({ ...p, reserve_units: v })))}
-                  onBlur={() => setAutoAging((p) => ({ ...p, reserve_units: Math.max(0, intOr(p.reserve_units === '' ? NaN : p.reserve_units, 0)) }))}
-                  className="dist-input"
-                />
+
+          {activeSegment === 'maintenance' && (
+            <div className="dist-two-col" role="tabpanel">
+              <div className="dist-panel">
+                <SectionHead icon={Wrench} title="Maintenance" />
+                <div className="dist-maint-label-row">
+                  <span className="dist-maint-key">Current upkeep</span>
+                  <span className="dist-maint-val" style={{ color: maintenancePct < 35 ? 'var(--danger)' : maintenancePct < 60 ? 'var(--amber)' : 'var(--green)' }}>
+                    {maintenancePct.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="dist-maint-track">
+                  <div
+                    className="dist-maint-fill"
+                    style={{
+                      width: `${Math.min(100, Math.max(0, maintenancePct))}%`,
+                      background: maintenancePct < 35 ? 'var(--red)' : maintenancePct < 60 ? 'var(--amber)' : 'var(--green)',
+                    }}
+                  />
+                </div>
+                {maintenanceWarn && (
+                  <div className="dist-maint-warn">Critical — upgrades may degrade and need repurchasing.</div>
+                )}
+                <div className="dist-maint-input-row">
+                  <input
+                    type="number"
+                    min="1"
+                    inputMode="numeric"
+                    aria-label="Repair amount"
+                    value={maintenancePoints === '' ? '' : maintenancePoints}
+                    onChange={onDigitsOnlyOptionalIntChange(setMaintenancePoints)}
+                    onBlur={() => setMaintenancePoints((q) => Math.max(1, intOr(q === '' ? NaN : q, 1)))}
+                    className="dist-maint-input"
+                  />
+                  <GhostBtn
+                    disabled={saving}
+                    onClick={() => run(async () => {
+                      const recover_points = Math.max(1, intOr(maintenancePoints, 1));
+                      const res = await api.post('/illegal-business/distillery/maintenance', { recover_points });
+                      toast.success(res.data?.message || 'Maintenance done.');
+                    })}
+                  >
+                    Repair
+                  </GhostBtn>
+                  <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>{money(maintenanceCost)}</span>
+                </div>
+              </div>
+              <div className="dist-panel">
+                <SectionHead icon={AlertTriangle} title="Failures" />
+                {visibleFailures.length === 0 ? (
+                  <p className="dist-muted">No recent maintenance failures.</p>
+                ) : (
+                  visibleFailures.map((f, i) => (
+                    <div key={`${f.at || 'm'}-${i}`} className="dist-alert-row">
+                      <span>
+                        {f.type === 'equipment_degrade' ? 'Equipment degraded' : 'Special upgrade lost'}: {prettyKey(f.item)}
+                      </span>
+                      <span className="dist-alert-meta">{Number(f.maintenance || 0).toFixed(1)}%</span>
+                    </div>
+                  ))
+                )}
+                <p className="dist-muted" style={{ marginTop: 8 }}>Low maintenance can break upgrade tiers. Broken tiers must be repurchased.</p>
               </div>
             </div>
-            <div className="dist-autosell-row mt-2">
-              <input
-                type="checkbox"
-                checked={!!autoAging.auto_collect_booze}
-                onChange={(e) => setAutoAging((p) => ({ ...p, auto_collect_booze: e.target.checked }))}
-                className="dist-autosell-check"
-                id="autoaging-collect"
-              />
-              <label htmlFor="autoaging-collect" className="dist-autosell-label">Auto-collect racket (throttled)</label>
-            </div>
-            <GhostBtn
-              className="mt-3 w-full sm:w-auto"
-              disabled={saving}
-              onClick={() => run(async () => {
-                const res = await api.post('/illegal-business/distillery/set-auto-aging-rules', {
-                  enabled: !!autoAging.enabled,
-                  tier: autoAging.tier,
-                  reserve_units: Math.max(0, intOr(autoAging.reserve_units, 0)),
-                  auto_collect_booze: !!autoAging.auto_collect_booze,
-                });
-                toast.success(res.data?.message || 'Auto-aging saved.');
-              })}
-            >
-              Save Auto-Aging
-            </GhostBtn>
-          </div>
+          )}
 
-          <div className="dist-panel">
-            <SectionHead icon={TrendingUp} title="Auto-Sell Rules">
-              <TooltipProvider>
-                <Tooltip delayDuration={200}>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="inline-flex min-h-9 min-w-9 items-center justify-center rounded border border-primary/30 p-1 text-primary/75 transition-colors hover:border-primary/50 hover:bg-primary/10 hover:text-primary touch-manipulation"
-                      aria-label="How auto-sell works"
+          {activeSegment === 'equipment' && (
+            <div className="dist-panel" role="tabpanel">
+              <SectionHead icon={Zap} title="Equipment · 9 lanes × 20" />
+              <div className="dist-equip-grid">
+                {EQUIPMENT_ORDER.map((lane) => {
+                  const lv = Number(equipment[lane] || 0);
+                  const cost = equipmentCosts[lane];
+                  const maxed = cost == null;
+                  const canAfford = maxed || vaultBalance >= Number(cost || 0);
+                  return (
+                    <div
+                      key={lane}
+                      className={`dist-equip-card ${maxed ? 'is-maxed' : ''} ${!maxed && !canAfford ? 'is-unaffordable' : ''}`}
                     >
-                      <CircleHelp size={14} aria-hidden />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="left" className="max-w-[min(320px,calc(100vw-2rem))] space-y-2 p-3 text-left text-[11px] leading-snug text-primary-foreground">
-                    <p className="font-heading text-[10px] font-bold uppercase tracking-wide text-primary-foreground">How auto-sell works</p>
-                    <ul className="list-disc space-y-1.5 pl-3.5 normal-case">
-                      <li>Runs when you <strong className="font-semibold">Collect</strong> (or auto-collect).</li>
-                      <li>Needs <strong className="font-semibold">Sales</strong> workers.</li>
-                      <li><strong className="font-semibold">Min inventory</strong> is kept; <strong className="font-semibold">Batch size</strong> caps per worker per collect.</li>
-                      <li><strong className="font-semibold">Crew</strong> = vault margin. <strong className="font-semibold">Booze run</strong> = street prices + jail risk.</li>
-                    </ul>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </SectionHead>
-            <div className="dist-status-line">
-              <strong>{autoSell.enabled ? 'ON' : 'OFF'}</strong>
-              {' · '}{autoSell.mode === 'booze_run' ? 'booze run' : 'crew'}
-              {' · '}min {intOr(autoSell.min_inventory, 0)}
-              {' · '}batch {intOr(autoSell.batch_size, 1)}
-            </div>
-            <div className="mb-3 rounded border border-zinc-700/45 bg-primary/[0.06] px-3 py-2.5 text-[10px] leading-snug text-mutedForeground">
-              <div className="mb-1.5 font-heading text-[9px] font-bold uppercase tracking-wide text-primary/85">Lifetime totals</div>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 tabular-nums">
-                <span>Vault <span className="font-bold text-foreground">{money(autoSellVaultCombined)}</span></span>
-                <span>Units <span className="font-bold text-foreground">{autoSellUnitsLifetime.toLocaleString()}</span></span>
-              </div>
-              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 border-t border-border-dim/60 pt-1.5 text-[9px] tabular-nums">
-                <span>Crew <span className="font-semibold text-foreground/90">{money(autoSellCrewVaultLifetime)}</span></span>
-                <span>Booze run <span className="font-semibold text-foreground/90">{money(autoSellBoozeRunVaultLifetime)}</span></span>
+                      <div className="dist-equip-icon">{EQUIPMENT_ICONS[lane] || '⚙'}</div>
+                      <div className="dist-equip-name">{prettyKey(lane)}</div>
+                      <div className="dist-equip-lv">Lv {lv} / 20</div>
+                      {EQUIPMENT_DESC[lane] && <div className="dist-equip-desc">{EQUIPMENT_DESC[lane]}</div>}
+                      <div className="dist-level-bar" aria-hidden>
+                        <div className="dist-level-bar-fill" style={{ width: `${Math.min(100, (lv / 20) * 100)}%`, background: 'var(--amber)' }} />
+                      </div>
+                      {maxed ? (
+                        <div className="dist-equip-maxed">Maxed</div>
+                      ) : (
+                        <GoldBtn
+                          className="w-full"
+                          disabled={saving || !canAfford}
+                          onClick={() => run(async () => {
+                            const res = await api.post('/illegal-business/distillery/upgrade-equipment', { lane });
+                            toast.success(res.data?.message || 'Upgraded.');
+                          })}
+                        >
+                          Upgrade {money(cost)}
+                        </GoldBtn>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
-            <div className="dist-autosell-row">
-              <input
-                type="checkbox"
-                checked={!!autoSell.enabled}
-                onChange={(e) => setAutoSell((p) => ({ ...p, enabled: e.target.checked }))}
-                className="dist-autosell-check"
-                id="autosell-toggle"
-              />
-              <label htmlFor="autosell-toggle" className="dist-autosell-label">Enable auto-sell</label>
-            </div>
-            <div className="mb-2 flex flex-wrap gap-2 text-[10px] font-heading text-mutedForeground">
-              <label className="flex min-h-10 cursor-pointer items-center gap-1.5 rounded border border-zinc-700/50 px-2.5 py-1 has-[:checked]:border-primary/40 has-[:checked]:bg-primary/10 touch-manipulation">
-                <input
-                  type="radio"
-                  name="autosell-mode"
-                  checked={autoSell.mode !== 'booze_run'}
-                  onChange={() => setAutoSell((p) => ({ ...p, mode: 'crew' }))}
-                />
-                Crew (vault)
-              </label>
-              <label className="flex min-h-10 cursor-pointer items-center gap-1.5 rounded border border-zinc-700/50 px-2.5 py-1 has-[:checked]:border-primary/40 has-[:checked]:bg-primary/10 touch-manipulation">
-                <input
-                  type="radio"
-                  name="autosell-mode"
-                  checked={autoSell.mode === 'booze_run'}
-                  onChange={() => setAutoSell((p) => ({ ...p, mode: 'booze_run' }))}
-                />
-                Booze run
-              </label>
-            </div>
-            <div className="dist-autosell-inputs">
-              <div>
-                <div className="dist-input-label">Min inventory</div>
-                <input
-                  type="number"
-                  min="0"
-                  inputMode="numeric"
-                  value={autoSell.min_inventory === '' ? '' : autoSell.min_inventory}
-                  onChange={onDigitsOnlyOptionalIntChange((v) => setAutoSell((p) => ({ ...p, min_inventory: v })))}
-                  onBlur={() => setAutoSell((p) => ({ ...p, min_inventory: Math.max(0, intOr(p.min_inventory === '' ? NaN : p.min_inventory, 0)) }))}
-                  className="dist-input"
-                />
-              </div>
-              <div>
-                <div className="dist-input-label">Batch size</div>
-                <input
-                  type="number"
-                  min="1"
-                  inputMode="numeric"
-                  value={autoSell.batch_size === '' ? '' : autoSell.batch_size}
-                  onChange={onDigitsOnlyOptionalIntChange((v) => setAutoSell((p) => ({ ...p, batch_size: v })))}
-                  onBlur={() => setAutoSell((p) => ({ ...p, batch_size: Math.max(1, intOr(p.batch_size === '' ? NaN : p.batch_size, 1)) }))}
-                  className="dist-input"
-                />
-              </div>
-            </div>
-            <GhostBtn
-              className="mt-3 w-full sm:w-auto"
-              disabled={saving}
-              onClick={() => run(async () => {
-                const payload = {
-                  enabled: !!autoSell.enabled,
-                  mode: autoSell.mode === 'booze_run' ? 'booze_run' : 'crew',
-                  min_inventory: Math.max(0, intOr(autoSell.min_inventory, 0)),
-                  batch_size: Math.max(1, intOr(autoSell.batch_size, 1)),
-                };
-                const res = await api.post('/illegal-business/distillery/set-auto-sell-rules', payload);
-                toast.success(res.data?.message || 'Auto-sell rules saved.');
-              })}
-            >
-              Save Auto-Sell
-            </GhostBtn>
-          </div>
-          </div>{/* end auto */}
+          )}
 
+          {activeSegment === 'perks' && (
+            <div className="dist-panel" id="dist-tracks" role="tabpanel">
+              <SectionHead icon={Layers} title="Special Tracks · 180 Perks" />
+              {bestNextUpgrades.length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  <div className="dist-input-label" style={{ marginBottom: 6 }}>Recommended next</div>
+                  <div className="dist-chip-row">
+                    {bestNextUpgrades.map((u) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        className="dist-chip"
+                        onClick={() => {
+                          setActiveTrack(u.track);
+                          setActiveSegment('perks');
+                        }}
+                      >
+                        {prettyKey(u.track)} · T{u.tier} · {money(u.cost)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="dist-track-scroll">
+                {TRACKS.map((track) => (
+                  <button
+                    key={track}
+                    type="button"
+                    onClick={() => setActiveTrack(track)}
+                    className={`dist-track-tab shrink-0 whitespace-nowrap border-b-2 font-heading text-[9px] font-bold uppercase tracking-wider transition-all touch-manipulation ${
+                      activeTrack === track
+                        ? 'border-primary bg-primary/15 text-primary'
+                        : 'border-transparent bg-transparent text-mutedForeground hover:border-primary/30 hover:bg-primary/5 hover:text-foreground'
+                    }`}
+                  >
+                    {prettyKey(track)}
+                  </button>
+                ))}
+              </div>
+              <div className="dist-track-nav">
+                <div className="dist-track-nav-meta">
+                  {activeSpecial ? `${clampedSpecialCursor + 1} / ${Math.max(1, visibleTrackRows.length)}` : '0/0'} · Purchased {purchasedInTrack}/{trackRows.length}
+                </div>
+                <div className="dist-track-nav-btns">
+                  <GhostBtn className="!min-w-[44px] !px-0" disabled={clampedSpecialCursor <= 0} onClick={() => setSpecialCursor((v) => Math.max(0, v - 1))}>
+                    <ChevronLeft size={14} />
+                  </GhostBtn>
+                  <GhostBtn className="!min-w-[44px] !px-0" disabled={clampedSpecialCursor >= maxSpecialIndex} onClick={() => setSpecialCursor((v) => Math.min(maxSpecialIndex, v + 1))}>
+                    <ChevronRight size={14} />
+                  </GhostBtn>
+                </div>
+              </div>
+              {activeSpecial ? (
+                <div className="dist-upgrade-showcase">
+                  <div>
+                    <div className="dist-upgrade-name">{activeSpecial.name}</div>
+                    <div className="dist-upgrade-tier">Tier {activeSpecial.tier} · {prettyKey(activeSpecial.track)}</div>
+                    <div className="dist-upgrade-price">{money(activeSpecial.cost)}</div>
+                    {activeSpecial.purchased
+                      ? <div className="dist-upgrade-status-owned">Owned</div>
+                      : activeSpecial.available
+                        ? <div className="dist-upgrade-status-avail">Available to purchase</div>
+                        : <div className="dist-upgrade-status-locked">Locked — complete earlier tiers first</div>
+                    }
+                    <details className="dist-heat-help">
+                      <summary>Perk details</summary>
+                      <p className="dist-muted">{TRACK_FLAVOR[activeSpecial.track] || TRACK_FLAVOR[activeTrack]}</p>
+                      {TRACK_EFFECTS[activeSpecial.track] && (
+                        <div className="dist-upgrade-effects">
+                          {TRACK_EFFECTS[activeSpecial.track].map((e) => <span key={e}>{e}</span>)}
+                        </div>
+                      )}
+                    </details>
+                  </div>
+                  <GoldBtn
+                    className="w-full sm:w-auto"
+                    disabled={
+                      saving
+                      || !activeSpecial.available
+                      || activeSpecial.purchased
+                      || vaultBalance < Number(activeSpecial.cost || 0)
+                    }
+                    onClick={() => run(async () => {
+                      const res = await api.post('/illegal-business/distillery/buy-special-upgrade', { upgrade_id: activeSpecial.id });
+                      toast.success(res.data?.message || 'Upgrade bought.');
+                    })}
+                  >
+                    {activeSpecial.purchased ? 'Owned' : `Buy ${money(activeSpecial.cost)}`}
+                  </GoldBtn>
+                </div>
+              ) : (
+                <div className="dist-no-upgrade">No upgrades visible in this track yet.</div>
+              )}
+            </div>
+          )}
+
+          {activeSegment === 'cellar' && (
+            <div className="dist-panel" role="tabpanel">
+              <SectionHead icon={Clock3} title="Cellar" />
+              <div className="dist-subnav" role="tablist" aria-label="Cellar">
+                <button type="button" role="tab" aria-selected={cellarPane === 'aging'} className={`dist-seg-btn ${cellarPane === 'aging' ? 'is-active' : ''}`} onClick={() => setCellarPane('aging')}>Aging</button>
+                <button type="button" role="tab" aria-selected={cellarPane === 'auto'} className={`dist-seg-btn ${cellarPane === 'auto' ? 'is-active' : ''}`} onClick={() => setCellarPane('auto')}>Auto-Aging</button>
+              </div>
+
+              {cellarPane === 'aging' && (
+                <div>
+                  <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 text-[11px] font-heading text-mutedForeground">
+                    <span>
+                      On hand:{' '}
+                      <span className="font-bold tabular-nums text-primary">{boozeUnitsCarrying}</span>
+                      {' '}booze
+                    </span>
+                    {boozeUnitsCarrying > 0 && (
+                      <button
+                        type="button"
+                        className="shrink-0 min-h-[44px] rounded border border-primary/30 bg-primary/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-primary transition-all hover:bg-primary/20 disabled:opacity-40 touch-manipulation"
+                        disabled={saving}
+                        onClick={() => setAgingQty(Math.max(1, boozeUnitsCarrying))}
+                      >
+                        Set qty to max
+                      </button>
+                    )}
+                  </div>
+                  <div className="dist-tier-row">
+                    {['quick', 'standard', 'reserve', 'premium'].map((tier) => (
+                      <button
+                        key={tier}
+                        type="button"
+                        onClick={() => setAgingTier(tier)}
+                        className={`dist-tier-btn ${agingTier === tier ? 'is-active' : ''}`}
+                      >
+                        {tier}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="dist-barrel-row">
+                    {queue.length === 0 && (
+                      <div style={{ fontStyle: 'italic', fontSize: 12, color: 'var(--text-faint)' }}>No active batches.</div>
+                    )}
+                    {queue.slice(0, 8).map((b) => {
+                      const ready = new Date(b.ready_at) <= new Date();
+                      const hoursLeft = Math.max(0, (new Date(b.ready_at) - new Date()) / 3600000);
+                      return (
+                        <Barrel
+                          key={b.id}
+                          ready={ready}
+                          label={ready ? 'READY' : `${hoursLeft.toFixed(0)}h`}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="dist-aging-start-row">
+                    <input
+                      type="number"
+                      min="1"
+                      inputMode="numeric"
+                      aria-label="Batch quantity"
+                      value={agingQty === '' ? '' : agingQty}
+                      onChange={onDigitsOnlyOptionalIntChange(setAgingQty)}
+                      onBlur={() => setAgingQty((q) => Math.max(1, intOr(q === '' ? NaN : q, 1)))}
+                      className="dist-aging-qty-input"
+                    />
+                    <GoldBtn
+                      disabled={saving}
+                      onClick={() => run(async () => {
+                        const quantity = Math.max(1, intOr(agingQty === '' ? NaN : agingQty, 1));
+                        const res = await api.post('/illegal-business/distillery/start-aging-batch', { tier: agingTier, quantity });
+                        toast.success(res.data?.message || 'Batch started.');
+                      })}
+                    >
+                      Start Batch
+                    </GoldBtn>
+                  </div>
+                  {queue.length > 0 && (
+                    <div className="dist-queue-list">
+                      {queue.map((b) => {
+                        const ready = new Date(b.ready_at) <= new Date();
+                        return (
+                          <div key={b.id} className="dist-queue-item">
+                            <div>
+                              <div className="dist-queue-tier">{prettyKey(b.tier)} · {b.quantity} units</div>
+                              <div className="dist-queue-time">Ready {new Date(b.ready_at).toLocaleString()}</div>
+                            </div>
+                            <GhostBtn
+                              disabled={saving || !ready}
+                              onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/claim-aged-batch', { batch_id: b.id }); toast.success(res.data?.message || 'Batch claimed.'); })}
+                            >
+                              Claim
+                            </GhostBtn>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {cellarPane === 'auto' && (
+                <div>
+                  {passiveBoozePaused && (
+                    <div className="dist-paused-banner" style={{ marginBottom: 10 }}>
+                      Booze intake is paused — auto-aging cannot stock new booze until Auto Rank unblocks intake.
+                    </div>
+                  )}
+                  <div className="dist-status-line">
+                    <strong>{autoAging.enabled ? 'ON' : 'OFF'}</strong>
+                    {' · '}{autoAging.tier}
+                    {' · '}reserve {intOr(autoAging.reserve_units, 0)}
+                    {' · '}{autoAging.auto_collect_booze ? 'auto-collect on' : 'auto-collect off'}
+                  </div>
+                  <details className="dist-heat-help" style={{ marginBottom: 10 }}>
+                    <summary>How auto-aging works</summary>
+                    <p className="mb-2 text-[10px] leading-snug text-mutedForeground">
+                      Claims ready batches, starts new ones when spare booze stays above your reserve (≥25 spare), and can run throttled racket Collect. Turn off for full manual cellar control.
+                    </p>
+                    <p className="text-[9px] leading-snug text-mutedForeground">
+                      To block <strong className="text-foreground/85">all</strong> booze intake, use Account → Auto Rank → Block all booze intake.
+                    </p>
+                  </details>
+                  <div className="dist-autosell-row">
+                    <input
+                      type="checkbox"
+                      checked={!!autoAging.enabled}
+                      onChange={(e) => setAutoAging((p) => ({ ...p, enabled: e.target.checked }))}
+                      className="dist-autosell-check"
+                      id="autoaging-toggle"
+                    />
+                    <label htmlFor="autoaging-toggle" className="dist-autosell-label">Enable auto-aging</label>
+                  </div>
+                  <div className="dist-input-label">Auto tier</div>
+                  <div className="dist-tier-row">
+                    {['quick', 'standard', 'reserve', 'premium'].map((tier) => (
+                      <button
+                        key={`auto-${tier}`}
+                        type="button"
+                        onClick={() => setAutoAging((p) => ({ ...p, tier }))}
+                        className={`dist-tier-btn ${autoAging.tier === tier ? 'is-active' : ''}`}
+                      >
+                        {tier}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="dist-autosell-inputs">
+                    <div>
+                      <div className="dist-input-label">Reserve (min on hand)</div>
+                      <input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        value={autoAging.reserve_units === '' ? '' : autoAging.reserve_units}
+                        onChange={onDigitsOnlyOptionalIntChange((v) => setAutoAging((p) => ({ ...p, reserve_units: v })))}
+                        onBlur={() => setAutoAging((p) => ({ ...p, reserve_units: Math.max(0, intOr(p.reserve_units === '' ? NaN : p.reserve_units, 0)) }))}
+                        className="dist-input"
+                      />
+                    </div>
+                  </div>
+                  <div className="dist-autosell-row mt-2">
+                    <input
+                      type="checkbox"
+                      checked={!!autoAging.auto_collect_booze}
+                      onChange={(e) => setAutoAging((p) => ({ ...p, auto_collect_booze: e.target.checked }))}
+                      className="dist-autosell-check"
+                      id="autoaging-collect"
+                    />
+                    <label htmlFor="autoaging-collect" className="dist-autosell-label">Auto-collect racket (throttled)</label>
+                  </div>
+                  <GhostBtn
+                    className="mt-3 w-full sm:w-auto"
+                    disabled={saving}
+                    onClick={() => run(async () => {
+                      const res = await api.post('/illegal-business/distillery/set-auto-aging-rules', {
+                        enabled: !!autoAging.enabled,
+                        tier: autoAging.tier,
+                        reserve_units: Math.max(0, intOr(autoAging.reserve_units, 0)),
+                        auto_collect_booze: !!autoAging.auto_collect_booze,
+                      });
+                      toast.success(res.data?.message || 'Auto-aging saved.');
+                    })}
+                  >
+                    Save Auto-Aging
+                  </GhostBtn>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeSegment === 'automation' && (
+            <div className="dist-two-col" role="tabpanel">
+              <div className="dist-panel">
+                <SectionHead icon={TrendingUp} title="Auto-Sell Rules">
+                  <TooltipProvider>
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded border border-primary/30 p-1 text-primary/75 transition-colors hover:border-primary/50 hover:bg-primary/10 hover:text-primary touch-manipulation"
+                          aria-label="How auto-sell works"
+                        >
+                          <CircleHelp size={14} aria-hidden />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[min(320px,calc(100vw-2rem))] space-y-2 p-3 text-left text-[11px] leading-snug text-primary-foreground">
+                        <p className="font-heading text-[10px] font-bold uppercase tracking-wide text-primary-foreground">How auto-sell works</p>
+                        <ul className="list-disc space-y-1.5 pl-3.5 normal-case">
+                          <li>Runs when you <strong className="font-semibold">Collect</strong> (or auto-collect).</li>
+                          <li>Needs <strong className="font-semibold">Sales</strong> workers.</li>
+                          <li><strong className="font-semibold">Min inventory</strong> is kept; <strong className="font-semibold">Batch size</strong> caps per worker per collect.</li>
+                          <li><strong className="font-semibold">Crew</strong> = vault margin. <strong className="font-semibold">Booze run</strong> = street prices + jail risk.</li>
+                        </ul>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </SectionHead>
+                <div className="dist-status-line">
+                  <strong>{autoSell.enabled ? 'ON' : 'OFF'}</strong>
+                  {' · '}{autoSell.mode === 'booze_run' ? 'booze run' : 'crew'}
+                  {' · '}min {intOr(autoSell.min_inventory, 0)}
+                  {' · '}batch {intOr(autoSell.batch_size, 1)}
+                </div>
+                <div className="dist-life">
+                  <div className="dist-input-label">Lifetime totals</div>
+                  <div className="dist-life-top">
+                    <span>Vault <strong style={{ color: 'var(--text)' }}>{money(autoSellVaultCombined)}</strong></span>
+                    <span>Units <strong style={{ color: 'var(--text)' }}>{autoSellUnitsLifetime.toLocaleString()}</strong></span>
+                  </div>
+                  <div className="dist-life-sub">
+                    <span>Crew <strong style={{ color: 'var(--text)' }}>{money(autoSellCrewVaultLifetime)}</strong></span>
+                    <span>Booze run <strong style={{ color: 'var(--text)' }}>{money(autoSellBoozeRunVaultLifetime)}</strong></span>
+                  </div>
+                </div>
+                <div className="dist-autosell-row">
+                  <input
+                    type="checkbox"
+                    checked={!!autoSell.enabled}
+                    onChange={(e) => setAutoSell((p) => ({ ...p, enabled: e.target.checked }))}
+                    className="dist-autosell-check"
+                    id="autosell-toggle"
+                  />
+                  <label htmlFor="autosell-toggle" className="dist-autosell-label">Enable auto-sell</label>
+                </div>
+                <div className="dist-mode-row">
+                  <label className="dist-mode">
+                    <input
+                      type="radio"
+                      name="autosell-mode"
+                      checked={autoSell.mode !== 'booze_run'}
+                      onChange={() => setAutoSell((p) => ({ ...p, mode: 'crew' }))}
+                    />
+                    Crew (vault)
+                  </label>
+                  <label className="dist-mode">
+                    <input
+                      type="radio"
+                      name="autosell-mode"
+                      checked={autoSell.mode === 'booze_run'}
+                      onChange={() => setAutoSell((p) => ({ ...p, mode: 'booze_run' }))}
+                    />
+                    Booze run
+                  </label>
+                </div>
+                <div className="dist-autosell-inputs">
+                  <div>
+                    <div className="dist-input-label">Min inventory</div>
+                    <input
+                      type="number"
+                      min="0"
+                      inputMode="numeric"
+                      value={autoSell.min_inventory === '' ? '' : autoSell.min_inventory}
+                      onChange={onDigitsOnlyOptionalIntChange((v) => setAutoSell((p) => ({ ...p, min_inventory: v })))}
+                      onBlur={() => setAutoSell((p) => ({ ...p, min_inventory: Math.max(0, intOr(p.min_inventory === '' ? NaN : p.min_inventory, 0)) }))}
+                      className="dist-input"
+                    />
+                  </div>
+                  <div>
+                    <div className="dist-input-label">Batch size</div>
+                    <input
+                      type="number"
+                      min="1"
+                      inputMode="numeric"
+                      value={autoSell.batch_size === '' ? '' : autoSell.batch_size}
+                      onChange={onDigitsOnlyOptionalIntChange((v) => setAutoSell((p) => ({ ...p, batch_size: v })))}
+                      onBlur={() => setAutoSell((p) => ({ ...p, batch_size: Math.max(1, intOr(p.batch_size === '' ? NaN : p.batch_size, 1)) }))}
+                      className="dist-input"
+                    />
+                  </div>
+                </div>
+                <GhostBtn
+                  className="mt-3 w-full sm:w-auto"
+                  disabled={saving}
+                  onClick={() => run(async () => {
+                    const payload = {
+                      enabled: !!autoSell.enabled,
+                      mode: autoSell.mode === 'booze_run' ? 'booze_run' : 'crew',
+                      min_inventory: Math.max(0, intOr(autoSell.min_inventory, 0)),
+                      batch_size: Math.max(1, intOr(autoSell.batch_size, 1)),
+                    };
+                    const res = await api.post('/illegal-business/distillery/set-auto-sell-rules', payload);
+                    toast.success(res.data?.message || 'Auto-sell rules saved.');
+                  })}
+                >
+                  Save Auto-Sell
+                </GhostBtn>
+              </div>
+              <div className="dist-panel">
+                <SectionHead icon={Zap} title="Auto-Aging" />
+                <div className="dist-status-line">
+                  <strong>{autoAging.enabled ? 'ON' : 'OFF'}</strong>
+                  {' · '}{autoAging.tier}
+                </div>
+                <GhostBtn onClick={() => { setCellarPane('auto'); setActiveSegment('cellar'); }}>
+                  Configure in Cellar
+                </GhostBtn>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
