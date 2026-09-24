@@ -537,8 +537,27 @@ export default function Distillery() {
           color: var(--noir-foreground);
           font-family: inherit;
           min-height: 100vh;
-          overflow-x: clip;
+          overflow-x: visible;
           padding-bottom: max(7rem, calc(5.5rem + env(safe-area-inset-bottom, 0px)));
+        }
+        @media (max-width: 767px) {
+          .dist-root.mobile-page-root {
+            margin-left: -16px;
+            margin-right: -16px;
+            width: auto;
+            max-width: none;
+          }
+          .dist-alerts { padding-left: 0; padding-right: 0; }
+          .dist-body { padding-left: 0; padding-right: 0; }
+          .dist-panel { border-radius: 0; }
+        }
+        @media (min-width: 768px) and (max-width: 1024px) {
+          .dist-root.mobile-page-root {
+            margin-left: -24px;
+            margin-right: -24px;
+            width: auto;
+            max-width: none;
+          }
         }
         .dist-root * { font-family: inherit; }
         @media (min-width: 768px) {
