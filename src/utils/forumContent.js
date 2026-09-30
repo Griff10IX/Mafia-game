@@ -1,7 +1,8 @@
 /**
  * Parse forum topic/comment content: [b], [i], [u], [s], [center], [color]/[colour],
- * [size], [spoiler], [quote], [url], [img], [gif], [ytube], [list], [*], [hr], [code]/[noparse], and smileys.
+ * [size], [spoiler], [quote], [url], [img], [gif], [thumb], [ytube], [list], [*], [hr], [code]/[noparse], and smileys.
  * Output is safe HTML (we only emit our own tags). URLs restricted to http/https.
+ * [thumb]URL[/thumb] → small clickable preview (update log grids).
  */
 
 const ALLOWED_URL_PREFIX = /^https?:\/\//i;
@@ -675,6 +676,7 @@ const SMILEYS = [
  *   [url=X]…[/url]        hyperlink with label
  *   [img]URL[/img]        image (centres itself inside [center])
  *   [gif]URL[/gif]        gif image
+ *   [thumb]URL[/thumb]    small tap-to-enlarge preview (update log / grids)
  *   [ytube]…[/ytube]      YouTube embed
  *   [list]…[/list]        unordered (bullet) list
  *   [list=1]…[/list]      ordered (numbered) list
@@ -711,6 +713,16 @@ export function normalizeCommonBbcodeTypos(s) {
   return t;
 }
 
+function thumbImgHtml(url) {
+  const safe = safeUrl(String(url || '').trim());
+  if (!safe) return '';
+  return `<img src="${escapeAttr(safe)}" alt="" class="forum-content-media forum-content-thumb" style="display:inline-block;width:56px;height:56px;max-width:18vw;max-height:18vw;object-fit:cover;border-radius:6px;margin:3px;vertical-align:middle;cursor:pointer;border:1px solid rgba(234,179,8,0.25);" loading="lazy" title="Tap to enlarge">`;
+}
+
+/**
+ * Parse BBCode and always expand [thumb] previews.
+ * Protects thumbs before parsing so they survive even if an older parse path ignored them.
+ */
 export function parseForumContent(content, options = {}) {
   if (content == null || typeof content !== 'string') return '';
   let s = content;
@@ -722,6 +734,14 @@ export function parseForumContent(content, options = {}) {
   }
 
   s = normalizeCommonBbcodeTypos(s);
+
+  // Pull [thumb] out before escape/parse so previews never render as raw BBCode.
+  const earlyThumbs = [];
+  s = s.replace(/\[thumb\]([\s\S]*?)\[\/thumb\]/gi, (_, url) => {
+    const idx = earlyThumbs.length;
+    earlyThumbs.push(url.trim());
+    return `\u0001THUMB${idx}\u0001`;
+  });
 
   // 1) Escape HTML so raw < > & are safe
   s = escapeHtml(s);
@@ -760,18 +780,6 @@ export function parseForumContent(content, options = {}) {
     imgPlaceholders.push(
       safe
         ? `<img src="${escapeAttr(safe)}" alt="" class="forum-content-media forum-content-img" style="display:block;max-width:500px;max-height:400px;width:auto;height:auto;border-radius:6px;margin:0.25em auto;object-fit:contain;cursor:pointer;" loading="lazy" title="Tap to enlarge">`
-        : ''
-    );
-    return `\u0001I${idx}\u0001`;
-  });
-
-  // Small clickable preview (update log / grids) — enlarge on click via bindForumImageLightbox
-  s = s.replace(/\[thumb\]([\s\S]*?)\[\/thumb\]/gi, (_, url) => {
-    const idx = imgPlaceholders.length;
-    const safe = safeUrl(url.trim());
-    imgPlaceholders.push(
-      safe
-        ? `<img src="${escapeAttr(safe)}" alt="" class="forum-content-media forum-content-thumb" style="display:inline-block;width:56px;height:56px;max-width:18vw;max-height:18vw;object-fit:cover;border-radius:6px;margin:3px;vertical-align:middle;cursor:pointer;border:1px solid rgba(234,179,8,0.25);" loading="lazy" title="Tap to enlarge">`
         : ''
     );
     return `\u0001I${idx}\u0001`;
@@ -923,6 +931,13 @@ export function parseForumContent(content, options = {}) {
   gifPlaceholders.forEach((html, i)   => { s = s.split(`\u0001G${i}\u0001`).join(html); });
   imgPlaceholders.forEach((html, i)   => { s = s.split(`\u0001I${i}\u0001`).join(html); });
   ytubePlaceholders.forEach((html, i) => { s = s.split(`\u0001Y${i}\u0001`).join(html); });
+  earlyThumbs.forEach((url, i) => {
+    s = s.split(`\u0001THUMB${i}\u0001`).join(thumbImgHtml(url));
+  });
+  // Safety: expand any leftover [thumb] BBCode (e.g. entity quirks)
+  if (s.includes('[thumb]') || s.includes('[THUMB]')) {
+    s = s.replace(/\[thumb\]([\s\S]*?)\[\/thumb\]/gi, (_, url) => thumbImgHtml(url));
+  }
 
   // 8) Newlines → <br>
   s = s.replace(/\n/g, '<br />');
