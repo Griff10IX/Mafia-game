@@ -1,7 +1,9 @@
 """Secret Crimes/GTA cosmetic drops (profile themes + blackjack backs).
 
 Drop chance is server-side only — never expose as a named rate in API payloads.
-Duplicates are allowed via stackable inventory fields used by Quick Trade.
+Sellable via Quick Trade (points only). Each item has a live player stock of
+COSMETIC_MAX_LIVE_COPIES (staff/GhostFace ownership does not consume stock).
+Not available from loot boxes.
 """
 from __future__ import annotations
 
@@ -12,6 +14,9 @@ from pymongo import ReturnDocument
 
 # Quiet roll — do not surface this constant in public API fields.
 _CRIME_GTA_COSMETIC_CHANCE = 0.0001  # 0.01%
+
+# Max copies in the live player economy per theme/cover (sellable scarcity).
+COSMETIC_MAX_LIVE_COPIES = 2
 
 THEME_INVENTORY_FIELD = "profile_theme_inventory"
 BACK_INVENTORY_FIELD = "blackjack_back_inventory"
@@ -79,8 +84,97 @@ def public_inventory_fields(user: Optional[dict]) -> Dict[str, Any]:
     }
 
 
-async def grant_cosmetic_copy(db, user_id: str, kind: str, item_id: str) -> Optional[Dict[str, Any]]:
-    """Grant one sellable copy: add to owned set + increment inventory. Duplicates OK."""
+async def _staff_excluded_ids(db) -> List[Any]:
+    """Staff + GhostFace — do not consume the live player stock of 2."""
+    from utils.profile_background_themes import _staff_ids_excluded_from_theme_pool
+
+    return await _staff_ids_excluded_from_theme_pool(db)
+
+
+async def live_cosmetic_copy_totals(db) -> Dict[Tuple[str, str], int]:
+    """Sum inventory copies across non-staff players for every crime/GTA cosmetic."""
+    theme_set = frozenset(_theme_pool())
+    back_set = frozenset(_back_pool())
+    totals: Dict[Tuple[str, str], int] = {}
+    excluded = await _staff_excluded_ids(db)
+    q: Dict[str, Any] = {
+        "$or": [
+            {THEME_INVENTORY_FIELD: {"$exists": True, "$ne": {}}},
+            {BACK_INVENTORY_FIELD: {"$exists": True, "$ne": {}}},
+        ]
+    }
+    if excluded:
+        q["id"] = {"$nin": excluded}
+    cursor = db.users.find(
+        q,
+        {"_id": 0, THEME_INVENTORY_FIELD: 1, BACK_INVENTORY_FIELD: 1},
+    )
+    async for doc in cursor:
+        inv_t = doc.get(THEME_INVENTORY_FIELD)
+        if isinstance(inv_t, dict):
+            for tid, raw in inv_t.items():
+                key = str(tid or "").strip().lower()
+                if key not in theme_set:
+                    continue
+                try:
+                    n = max(0, int(raw or 0))
+                except (TypeError, ValueError):
+                    n = 0
+                if n:
+                    totals[("theme", key)] = totals.get(("theme", key), 0) + n
+        inv_b = doc.get(BACK_INVENTORY_FIELD)
+        if isinstance(inv_b, dict):
+            for bid, raw in inv_b.items():
+                key = str(bid or "").strip().lower()
+                if key not in back_set:
+                    continue
+                try:
+                    n = max(0, int(raw or 0))
+                except (TypeError, ValueError):
+                    n = 0
+                if n:
+                    totals[("back", key)] = totals.get(("back", key), 0) + n
+    return totals
+
+
+async def live_cosmetic_copy_count(db, kind: str, item_id: str) -> int:
+    kind = str(kind or "").strip().lower()
+    item_id = str(item_id or "").strip().lower()
+    field = THEME_INVENTORY_FIELD if kind == "theme" else BACK_INVENTORY_FIELD
+    path = f"{field}.{item_id}"
+    excluded = await _staff_excluded_ids(db)
+    q: Dict[str, Any] = {path: {"$gt": 0}}
+    if excluded:
+        q["id"] = {"$nin": excluded}
+    total = 0
+    cursor = db.users.find(q, {"_id": 0, field: 1})
+    async for doc in cursor:
+        total += inventory_count(doc, field, item_id)
+    return total
+
+
+async def available_crime_gta_cosmetic_pool(db) -> List[Tuple[str, str]]:
+    """Pool items still under the live stock cap (for drops only)."""
+    totals = await live_cosmetic_copy_totals(db)
+    out: List[Tuple[str, str]] = []
+    for kind, item_id in crime_gta_cosmetic_pool():
+        if totals.get((kind, item_id), 0) < COSMETIC_MAX_LIVE_COPIES:
+            out.append((kind, item_id))
+    return out
+
+
+async def grant_cosmetic_copy(
+    db,
+    user_id: str,
+    kind: str,
+    item_id: str,
+    *,
+    bypass_stock: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """Grant one sellable copy: add to owned set + increment inventory. Duplicates OK.
+
+    Player grants respect COSMETIC_MAX_LIVE_COPIES unless bypass_stock (staff/testing).
+    """
     kind = str(kind or "").strip().lower()
     item_id = str(item_id or "").strip().lower()
     if kind == "theme":
@@ -92,6 +186,9 @@ async def grant_cosmetic_copy(db, user_id: str, kind: str, item_id: str) -> Opti
 
         if item_id not in CRIME_GTA_COSMETIC_THEME_IDS:
             return None
+        if not bypass_stock:
+            if await live_cosmetic_copy_count(db, "theme", item_id) >= COSMETIC_MAX_LIVE_COPIES:
+                return None
         meta = catalog_theme(item_id) or {"id": item_id, "name": item_id}
         await db.users.update_one(
             {"id": user_id},
@@ -116,6 +213,9 @@ async def grant_cosmetic_copy(db, user_id: str, kind: str, item_id: str) -> Opti
 
         if item_id not in CRIME_GTA_COSMETIC_BACK_IDS:
             return None
+        if not bypass_stock:
+            if await live_cosmetic_copy_count(db, "back", item_id) >= COSMETIC_MAX_LIVE_COPIES:
+                return None
         meta = catalog_back(item_id) or {"id": item_id, "name": item_id}
         await db.users.update_one(
             {"id": user_id},
@@ -202,12 +302,12 @@ async def consume_cosmetic_copies(
 
 
 async def restore_cosmetic_copies(db, user_id: str, kind: str, item_id: str, quantity: int = 1) -> None:
-    """Return escrowed copies (cancel / death)."""
+    """Return escrowed copies (cancel / death). Bypasses stock — already counted before escrow."""
     qty = int(quantity or 0)
     if qty < 1:
         return
     for _ in range(qty):
-        await grant_cosmetic_copy(db, user_id, kind, item_id)
+        await grant_cosmetic_copy(db, user_id, kind, item_id, bypass_stock=True)
 
 
 async def maybe_roll_crime_gta_cosmetic(
@@ -215,32 +315,32 @@ async def maybe_roll_crime_gta_cosmetic(
     user_id: str,
     rng: Optional[random.Random] = None,
 ) -> Optional[Dict[str, Any]]:
-    """On successful crime/GTA: quiet chance to grant one random new cosmetic."""
+    """On successful crime/GTA: quiet chance to grant one random in-stock cosmetic."""
     r = rng if rng is not None else random
     if r.random() >= _CRIME_GTA_COSMETIC_CHANCE:
         return None
-    pool = crime_gta_cosmetic_pool()
+    pool = await available_crime_gta_cosmetic_pool(db)
     if not pool:
         return None
     kind, item_id = r.choice(pool)
     try:
-        return await grant_cosmetic_copy(db, user_id, kind, item_id)
+        return await grant_cosmetic_copy(db, user_id, kind, item_id, bypass_stock=False)
     except Exception:
         return None
 
 
 async def grant_all_crime_gta_cosmetics_to_user(db, user_id: str, *, copies: int = 1) -> Dict[str, int]:
-    """Staff/testing: grant N copies of every crime/GTA cosmetic."""
+    """Staff/testing: grant N copies of every crime/GTA cosmetic (does not burn player stock)."""
     n = max(1, int(copies or 1))
     themes = 0
     backs = 0
     for tid in _theme_pool():
         for _ in range(n):
-            if await grant_cosmetic_copy(db, user_id, "theme", tid):
+            if await grant_cosmetic_copy(db, user_id, "theme", tid, bypass_stock=True):
                 themes += 1
     for bid in _back_pool():
         for _ in range(n):
-            if await grant_cosmetic_copy(db, user_id, "back", bid):
+            if await grant_cosmetic_copy(db, user_id, "back", bid, bypass_stock=True):
                 backs += 1
     return {"themes_granted": themes, "backs_granted": backs}
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-_BJ_ASSET_V = "20260930weedpulse"
+_BJ_ASSET_V = "20260930bj50"
 
 BLACKJACK_CARD_BACKS: Dict[str, Dict[str, str]] = {
     "spade_black_gold": {
@@ -231,6 +231,257 @@ BLACKJACK_CARD_BACKS: Dict[str, Dict[str, str]] = {
         "name": "Leaf Pulse",
         "image": f"/images/blackjack/card-backs/weed-leaf-pulse.gif?v={_BJ_ASSET_V}",
     },
+    # Crime/GTA exclusive set (not loot)
+    "leatherface_mask": {
+        "id": "leatherface_mask",
+        "name": "Leatherface Mask",
+        "image": f"/images/blackjack/card-backs/leatherface-mask.jpg?v={_BJ_ASSET_V}",
+    },
+    "kabuto_crest": {
+        "id": "kabuto_crest",
+        "name": "Kabuto Crest",
+        "image": f"/images/blackjack/card-backs/kabuto-crest.jpg?v={_BJ_ASSET_V}",
+    },
+    "shuriken_seal": {
+        "id": "shuriken_seal",
+        "name": "Shuriken Seal",
+        "image": f"/images/blackjack/card-backs/shuriken-seal.jpg?v={_BJ_ASSET_V}",
+    },
+    "viking_axe": {
+        "id": "viking_axe",
+        "name": "Viking Axe",
+        "image": f"/images/blackjack/card-backs/viking-axe.jpg?v={_BJ_ASSET_V}",
+    },
+    "ankh_scarab": {
+        "id": "ankh_scarab",
+        "name": "Ankh Scarab",
+        "image": f"/images/blackjack/card-backs/ankh-scarab.jpg?v={_BJ_ASSET_V}",
+    },
+    "pirate_cutlass": {
+        "id": "pirate_cutlass",
+        "name": "Pirate Cutlass",
+        "image": f"/images/blackjack/card-backs/pirate-cutlass.jpg?v={_BJ_ASSET_V}",
+    },
+    "trex_fossil": {
+        "id": "trex_fossil",
+        "name": "T-Rex Fossil",
+        "image": f"/images/blackjack/card-backs/trex-fossil.jpg?v={_BJ_ASSET_V}",
+    },
+    "cyber_chip": {
+        "id": "cyber_chip",
+        "name": "Cyber Chip",
+        "image": f"/images/blackjack/card-backs/cyber-chip.jpg?v={_BJ_ASSET_V}",
+    },
+    "revolver_crest": {
+        "id": "revolver_crest",
+        "name": "Revolver Crest",
+        "image": f"/images/blackjack/card-backs/revolver-crest.jpg?v={_BJ_ASSET_V}",
+    },
+    "castle_keep": {
+        "id": "castle_keep",
+        "name": "Castle Keep",
+        "image": f"/images/blackjack/card-backs/castle-keep.jpg?v={_BJ_ASSET_V}",
+    },
+    "aztec_sun": {
+        "id": "aztec_sun",
+        "name": "Aztec Sun",
+        "image": f"/images/blackjack/card-backs/aztec-sun.jpg?v={_BJ_ASSET_V}",
+    },
+    "haunted_crest": {
+        "id": "haunted_crest",
+        "name": "Haunted Crest",
+        "image": f"/images/blackjack/card-backs/haunted-crest.jpg?v={_BJ_ASSET_V}",
+    },
+    "checkered_flag": {
+        "id": "checkered_flag",
+        "name": "Checkered Flag",
+        "image": f"/images/blackjack/card-backs/checkered-flag.jpg?v={_BJ_ASSET_V}",
+    },
+    "koi_circle": {
+        "id": "koi_circle",
+        "name": "Koi Circle",
+        "image": f"/images/blackjack/card-backs/koi-circle.jpg?v={_BJ_ASSET_V}",
+    },
+    "sakura_crest": {
+        "id": "sakura_crest",
+        "name": "Sakura Crest",
+        "image": f"/images/blackjack/card-backs/sakura-crest.jpg?v={_BJ_ASSET_V}",
+    },
+    "fuji_moon": {
+        "id": "fuji_moon",
+        "name": "Fuji Moon",
+        "image": f"/images/blackjack/card-backs/fuji-moon.jpg?v={_BJ_ASSET_V}",
+    },
+    "onsen_lantern": {
+        "id": "onsen_lantern",
+        "name": "Onsen Lantern",
+        "image": f"/images/blackjack/card-backs/onsen-lantern.jpg?v={_BJ_ASSET_V}",
+    },
+    "boxing_glove": {
+        "id": "boxing_glove",
+        "name": "Boxing Glove",
+        "image": f"/images/blackjack/card-backs/boxing-glove.jpg?v={_BJ_ASSET_V}",
+    },
+    "mardi_mask": {
+        "id": "mardi_mask",
+        "name": "Mardi Mask",
+        "image": f"/images/blackjack/card-backs/mardi-mask.jpg?v={_BJ_ASSET_V}",
+    },
+    "polar_aurora": {
+        "id": "polar_aurora",
+        "name": "Polar Aurora",
+        "image": f"/images/blackjack/card-backs/polar-aurora.jpg?v={_BJ_ASSET_V}",
+    },
+    "kabuki_mask": {
+        "id": "kabuki_mask",
+        "name": "Kabuki Mask",
+        "image": f"/images/blackjack/card-backs/kabuki-mask.jpg?v={_BJ_ASSET_V}",
+    },
+    "atom_tower": {
+        "id": "atom_tower",
+        "name": "Atom Tower",
+        "image": f"/images/blackjack/card-backs/atom-tower.jpg?v={_BJ_ASSET_V}",
+    },
+    "sumo_crest": {
+        "id": "sumo_crest",
+        "name": "Sumo Crest",
+        "image": f"/images/blackjack/card-backs/sumo-crest.jpg?v={_BJ_ASSET_V}",
+    },
+    "canyon_layers": {
+        "id": "canyon_layers",
+        "name": "Canyon Layers",
+        "image": f"/images/blackjack/card-backs/canyon-layers.jpg?v={_BJ_ASSET_V}",
+    },
+    "spellbook": {
+        "id": "spellbook",
+        "name": "Spellbook",
+        "image": f"/images/blackjack/card-backs/spellbook.jpg?v={_BJ_ASSET_V}",
+    },
+    "junk_sail": {
+        "id": "junk_sail",
+        "name": "Junk Sail",
+        "image": f"/images/blackjack/card-backs/junk-sail.jpg?v={_BJ_ASSET_V}",
+    },
+    "diner_neon": {
+        "id": "diner_neon",
+        "name": "Diner Neon",
+        "image": f"/images/blackjack/card-backs/diner-neon.jpg?v={_BJ_ASSET_V}",
+    },
+    "shogun_mon": {
+        "id": "shogun_mon",
+        "name": "Shogun Mon",
+        "image": f"/images/blackjack/card-backs/shogun-mon.jpg?v={_BJ_ASSET_V}",
+    },
+    "mine_lantern": {
+        "id": "mine_lantern",
+        "name": "Mine Lantern",
+        "image": f"/images/blackjack/card-backs/mine-lantern.jpg?v={_BJ_ASSET_V}",
+    },
+    "carnival_feather": {
+        "id": "carnival_feather",
+        "name": "Carnival Feather",
+        "image": f"/images/blackjack/card-backs/carnival-feather.jpg?v={_BJ_ASSET_V}",
+    },
+    "bamboo_crest": {
+        "id": "bamboo_crest",
+        "name": "Bamboo Crest",
+        "image": f"/images/blackjack/card-backs/bamboo-crest.jpg?v={_BJ_ASSET_V}",
+    },
+    "poker_chips": {
+        "id": "poker_chips",
+        "name": "Poker Chips",
+        "image": f"/images/blackjack/card-backs/poker-chips.jpg?v={_BJ_ASSET_V}",
+    },
+    "lion_savanna": {
+        "id": "lion_savanna",
+        "name": "Lion Savanna",
+        "image": f"/images/blackjack/card-backs/lion-savanna.jpg?v={_BJ_ASSET_V}",
+    },
+    "colosseum_arch": {
+        "id": "colosseum_arch",
+        "name": "Colosseum Arch",
+        "image": f"/images/blackjack/card-backs/colosseum-arch.jpg?v={_BJ_ASSET_V}",
+    },
+    "loco_front": {
+        "id": "loco_front",
+        "name": "Loco Front",
+        "image": f"/images/blackjack/card-backs/loco-front.jpg?v={_BJ_ASSET_V}",
+    },
+    "alien_eye": {
+        "id": "alien_eye",
+        "name": "Alien Eye",
+        "image": f"/images/blackjack/card-backs/alien-eye.jpg?v={_BJ_ASSET_V}",
+    },
+    "sax_crest": {
+        "id": "sax_crest",
+        "name": "Sax Crest",
+        "image": f"/images/blackjack/card-backs/sax-crest.jpg?v={_BJ_ASSET_V}",
+    },
+    "phoenix_fire": {
+        "id": "phoenix_fire",
+        "name": "Phoenix Fire",
+        "image": f"/images/blackjack/card-backs/phoenix-fire.jpg?v={_BJ_ASSET_V}",
+    },
+    "wolf_moon": {
+        "id": "wolf_moon",
+        "name": "Wolf Moon",
+        "image": f"/images/blackjack/card-backs/wolf-moon.jpg?v={_BJ_ASSET_V}",
+    },
+    "owl_crest": {
+        "id": "owl_crest",
+        "name": "Owl Crest",
+        "image": f"/images/blackjack/card-backs/owl-crest.jpg?v={_BJ_ASSET_V}",
+    },
+    "cobra_coil": {
+        "id": "cobra_coil",
+        "name": "Cobra Coil",
+        "image": f"/images/blackjack/card-backs/cobra-coil.jpg?v={_BJ_ASSET_V}",
+    },
+    "widow_web": {
+        "id": "widow_web",
+        "name": "Widow Web",
+        "image": f"/images/blackjack/card-backs/widow-web.jpg?v={_BJ_ASSET_V}",
+    },
+    "raven_wings": {
+        "id": "raven_wings",
+        "name": "Raven Wings",
+        "image": f"/images/blackjack/card-backs/raven-wings.jpg?v={_BJ_ASSET_V}",
+    },
+    "tiger_face": {
+        "id": "tiger_face",
+        "name": "Tiger Face",
+        "image": f"/images/blackjack/card-backs/tiger-face.jpg?v={_BJ_ASSET_V}",
+    },
+    "panther_head": {
+        "id": "panther_head",
+        "name": "Panther Head",
+        "image": f"/images/blackjack/card-backs/panther-head.jpg?v={_BJ_ASSET_V}",
+    },
+    "scorpion": {
+        "id": "scorpion",
+        "name": "Scorpion",
+        "image": f"/images/blackjack/card-backs/scorpion.jpg?v={_BJ_ASSET_V}",
+    },
+    "octopus": {
+        "id": "octopus",
+        "name": "Octopus",
+        "image": f"/images/blackjack/card-backs/octopus.jpg?v={_BJ_ASSET_V}",
+    },
+    "butterfly_knife": {
+        "id": "butterfly_knife",
+        "name": "Butterfly Knife",
+        "image": f"/images/blackjack/card-backs/butterfly-knife.jpg?v={_BJ_ASSET_V}",
+    },
+    "snake_eyes": {
+        "id": "snake_eyes",
+        "name": "Snake Eyes",
+        "image": f"/images/blackjack/card-backs/snake-eyes.jpg?v={_BJ_ASSET_V}",
+    },
+    "torii_sun": {
+        "id": "torii_sun",
+        "name": "Torii Sun",
+        "image": f"/images/blackjack/card-backs/torii-sun.jpg?v={_BJ_ASSET_V}",
+    },
 }
 
 OWNED_FIELD = "blackjack_card_backs_owned"
@@ -275,6 +526,56 @@ CRIME_GTA_COSMETIC_BACK_IDS = (
     "weed_reef_leaf",
     "weed_cabin_leaf",
     "weed_leaf_pulse",
+    "leatherface_mask",
+    "kabuto_crest",
+    "shuriken_seal",
+    "viking_axe",
+    "ankh_scarab",
+    "pirate_cutlass",
+    "trex_fossil",
+    "cyber_chip",
+    "revolver_crest",
+    "castle_keep",
+    "aztec_sun",
+    "haunted_crest",
+    "checkered_flag",
+    "koi_circle",
+    "sakura_crest",
+    "fuji_moon",
+    "onsen_lantern",
+    "boxing_glove",
+    "mardi_mask",
+    "polar_aurora",
+    "kabuki_mask",
+    "atom_tower",
+    "sumo_crest",
+    "canyon_layers",
+    "spellbook",
+    "junk_sail",
+    "diner_neon",
+    "shogun_mon",
+    "mine_lantern",
+    "carnival_feather",
+    "bamboo_crest",
+    "poker_chips",
+    "lion_savanna",
+    "colosseum_arch",
+    "loco_front",
+    "alien_eye",
+    "sax_crest",
+    "phoenix_fire",
+    "wolf_moon",
+    "owl_crest",
+    "cobra_coil",
+    "widow_web",
+    "raven_wings",
+    "tiger_face",
+    "panther_head",
+    "scorpion",
+    "octopus",
+    "butterfly_knife",
+    "snake_eyes",
+    "torii_sun",
 )
 _CRIME_GTA_BACK_SET = frozenset(CRIME_GTA_COSMETIC_BACK_IDS)
 # Legacy / UR loot pool only (never includes crime/GTA cosmetics).

@@ -713,10 +713,20 @@ export function normalizeCommonBbcodeTypos(s) {
   return t;
 }
 
+/** Prefer tiny .forum-thumb.jpg for grid display; keep full URL for enlarge. */
+function forumThumbDisplaySrc(fullUrl) {
+  const u = String(fullUrl || '');
+  if (!u || u.includes('.forum-thumb.')) return u;
+  const m = u.match(/^(.*\/)([^/?#]+?)(\.(?:jpe?g|png|webp|gif))(\?[^#]*)?(#.*)?$/i);
+  if (!m) return u;
+  return `${m[1]}${m[2]}.forum-thumb.jpg${m[4] || ''}${m[5] || ''}`;
+}
+
 function thumbImgHtml(url) {
   const safe = safeUrl(String(url || '').trim());
   if (!safe) return '';
-  return `<img src="${escapeAttr(safe)}" alt="" class="forum-content-media forum-content-thumb" style="display:inline-block;width:56px;height:56px;max-width:18vw;max-height:18vw;object-fit:cover;border-radius:6px;margin:3px;vertical-align:middle;cursor:pointer;border:1px solid rgba(234,179,8,0.25);" loading="lazy" title="Tap to enlarge">`;
+  const display = forumThumbDisplaySrc(safe);
+  return `<img src="${escapeAttr(display)}" data-full-src="${escapeAttr(safe)}" alt="" class="forum-content-media forum-content-thumb" style="display:inline-block;width:56px;height:56px;max-width:18vw;max-height:18vw;object-fit:cover;border-radius:6px;margin:3px;vertical-align:middle;cursor:pointer;border:1px solid rgba(234,179,8,0.25);" loading="lazy" decoding="async" width="56" height="56" title="Tap to enlarge">`;
 }
 
 /**

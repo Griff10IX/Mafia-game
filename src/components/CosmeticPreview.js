@@ -139,8 +139,10 @@ export function bindForumImageLightbox(rootEl) {
   rootEl.dataset.imgLightboxBound = '1';
   rootEl.addEventListener('click', (e) => {
     const img = e.target?.closest?.('img.forum-content-thumb, img.forum-content-img');
-    if (!img || !img.src) return;
+    if (!img) return;
+    const full = img.getAttribute('data-full-src') || img.currentSrc || img.src;
+    if (!full) return;
     e.preventDefault();
-    openImageLightbox(img.src, img.getAttribute('alt') || 'Preview');
+    openImageLightbox(full, img.getAttribute('alt') || 'Preview');
   });
 }
