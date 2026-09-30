@@ -3229,7 +3229,7 @@ export default function Profile() {
                 </div>
                 <div className="p-3 space-y-2">
                   <p className="text-[11px] text-mutedForeground font-heading">
-                    Own all 8 pieces of a set for its bonus. Selling your last copy of a piece turns that set off.
+                    Own all 8 pieces of a set for its bonus. Selling your last copy turns that set off. Dying also drops Crimes/GTA themes in these sets.
                   </p>
                   <CosmeticSetBonusStrip bonuses={me?.cosmetic_set_bonuses} />
                   <CosmeticSetList sets={me?.cosmetic_theme_sets} />

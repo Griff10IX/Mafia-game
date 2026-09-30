@@ -11,7 +11,7 @@
 [list]
 [*][color=#888888][b]New:[/b] Crimes/GTA [b]profile themes[/b] and [b]blackjack covers[/b] are grouped into [b]sets of 8[/b]. Own every piece in a set to complete it. New art fills the sets that were short.[/color]
 [*][color=#888888][b]Bonus:[/b] A completed set grants [b]+25%[/b] of one type: crime cash, melt bullets, respect, rank points, legendary GTA chance, or crime loot-token chance. The same bonus [b]does not stack[/b] if you finish more than one set of that type.[/color]
-[*][color=#888888][b]Where:[/b] Progress is on [b]Edit Profile → Look[/b]. Dying still removes blackjack covers, so a cover-set bonus drops until you own all 8 again. Theme sets stay.[/color]
+[*][color=#888888][b]Where:[/b] Progress is on [b]Edit Profile → Look[/b]. Dying removes [b]Crimes/GTA themes[/b] and [b]blackjack covers[/b], so a completed set bonus drops until you own all 8 again.[/color]
 [/list]
 [/quote]
 

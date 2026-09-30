@@ -3951,13 +3951,20 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             await return_safehouse_to_pool(db, owner_id=victim_id)
         except Exception:
             logger.exception("safehouse return-to-pool failed victim=%s", victim_id)
-        # Ultra Rare dossier themes + BJ card backs: return to pool on death (not transferred)
+        # Ultra Rare dossier themes return to the loot pool. Crimes/GTA set themes
+        # drop after Quick Trade has restored any listed copies.
         try:
             from utils.profile_background_themes import release_ur_themes_on_death
 
             await release_ur_themes_on_death(db, victim_id)
         except Exception:
             logger.exception("UR theme release on death failed victim=%s", victim_id)
+        try:
+            from utils.profile_background_themes import release_crime_set_themes_on_death
+
+            await release_crime_set_themes_on_death(db, victim_id)
+        except Exception:
+            logger.exception("crime set theme release on death failed victim=%s", victim_id)
         try:
             from utils.blackjack_card_backs import clear_backs_on_death
 

@@ -377,6 +377,13 @@ async def apply_modkill_wipe_after_kill(
     except Exception:
         logger.exception("modkill wipe: cancel quicktrade failed user=%s", uid)
 
+    try:
+        from utils.profile_background_themes import release_crime_set_themes_on_death
+
+        extra["crime_set_themes"] = await release_crime_set_themes_on_death(db, uid)
+    except Exception:
+        logger.exception("modkill wipe: crime set theme release failed user=%s", uid)
+
     wipe_summary = await wipe_user_for_account_ban(db, uid, preserve_dead=True)
     try:
         from utils.admin_kill_asset_transfer import _invalidate_casino_caches_for

@@ -1379,6 +1379,45 @@ async def release_ur_themes_on_death(db, user_id: str) -> List[str]:
     return scarce_owned
 
 
+async def release_crime_set_themes_on_death(db, user_id: str) -> List[str]:
+    """Strip Crimes/GTA set themes and their sellable copies. Other dossier themes stay."""
+    from utils.crime_gta_cosmetics import THEME_INVENTORY_FIELD
+
+    crime_ids = set(CRIME_GTA_COSMETIC_THEME_IDS)
+    u = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, OWNED_FIELD: 1, EQUIPPED_FIELD: 1, THEME_INVENTORY_FIELD: 1},
+    ) or {}
+    owned = owned_theme_ids(u)
+    inv = u.get(THEME_INVENTORY_FIELD) if isinstance(u.get(THEME_INVENTORY_FIELD), dict) else {}
+    inv_lost = [
+        str(k).strip().lower()
+        for k, v in inv.items()
+        if str(k).strip().lower() in crime_ids and int(v or 0) > 0
+    ]
+    lost = [t for t in owned if t in crime_ids]
+    equipped = str(u.get(EQUIPPED_FIELD) or "").strip().lower()
+    if not lost and not inv_lost and equipped not in crime_ids:
+        return []
+    remaining = [t for t in owned if t not in crime_ids]
+    update: Dict[str, Any] = {"$set": {OWNED_FIELD: remaining}}
+    unset: Dict[str, str] = {}
+    if equipped in crime_ids:
+        unset[EQUIPPED_FIELD] = ""
+    for tid in set(lost + inv_lost):
+        unset[f"{THEME_INVENTORY_FIELD}.{tid}"] = ""
+    if unset:
+        update["$unset"] = unset
+    await db.users.update_one({"id": user_id}, update)
+    seen = set()
+    out: List[str] = []
+    for tid in lost + inv_lost:
+        if tid not in seen:
+            seen.add(tid)
+            out.append(tid)
+    return out
+
+
 def grave_robber_dig_reward_mult(user: Optional[dict]) -> float:
     """1.0 + dig bonus. Equip one theme for its %; own all three → +90%."""
     if not user:
