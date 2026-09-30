@@ -33,6 +33,18 @@ STAFF_EXCLUDE_IDS = frozenset(
 )
 
 
+async def contest_excluded_user_ids(db) -> set:
+    """Admins, moderators, and hardcoded staff accounts. They do not score or place."""
+    ids = {str(x) for x in STAFF_EXCLUDE_IDS}
+    try:
+        from server import _get_staff_user_ids
+
+        ids.update(str(x) for x in (await _get_staff_user_ids(db)) if x)
+    except Exception:
+        logger.exception("contest staff id lookup failed")
+    return ids
+
+
 def _prize(*parts: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [p for p in parts if p]
 
@@ -438,13 +450,7 @@ async def settle_contest_if_needed(db, event: dict) -> dict:
     )
     rankings: List[dict] = []
     place = 0
-    staff: set = set()
-    try:
-        from server import _get_staff_user_ids
-
-        staff = set(str(x) for x in (await _get_staff_user_ids(db)) if x)
-    except Exception:
-        pass
+    staff = await contest_excluded_user_ids(db)
     async for row in cursor:
         uid = str(row.get("user_id") or "")
         if not uid or uid in STAFF_EXCLUDE_IDS or uid in staff:
@@ -588,7 +594,7 @@ async def record_contest_progress(
     if not user_id or int(amount or 0) <= 0:
         return
     uid = str(user_id)
-    if uid in STAFF_EXCLUDE_IDS:
+    if uid in await contest_excluded_user_ids(db):
         return
     try:
         event = await ensure_active_contest(db)
@@ -679,15 +685,16 @@ async def serialize_active(db, user_id: Optional[str] = None) -> Dict[str, Any]:
     event = await ensure_active_contest(db)
     type_id = str(event.get("type_id") or "")
     meta = CONTEST_TYPES.get(type_id) or {}
+    excluded = await contest_excluded_user_ids(db)
     board: List[Dict[str, Any]] = []
-    cursor = db[COL_SCORES].find({"event_id": event["id"]}).sort(
-        [("score", -1), ("updated_at", 1), ("user_id", 1)]
-    ).limit(25)
+    cursor = db[COL_SCORES].find(
+        {"event_id": event["id"], "user_id": {"$nin": list(excluded)}}
+    ).sort([("score", -1), ("updated_at", 1), ("user_id", 1)]).limit(10)
     uids: List[str] = []
     rows: List[dict] = []
     async for row in cursor:
         uid = str(row.get("user_id") or "")
-        if not uid or uid in STAFF_EXCLUDE_IDS:
+        if not uid:
             continue
         uids.append(uid)
         rows.append(row)
@@ -711,10 +718,11 @@ async def serialize_active(db, user_id: Optional[str] = None) -> Dict[str, Any]:
         mine = await db[COL_SCORES].find_one({"event_id": event["id"], "user_id": user_id})
         score = int((mine or {}).get("score") or 0)
         rank = None
-        if score > 0:
+        if score > 0 and str(user_id) not in excluded:
             better = await db[COL_SCORES].count_documents(
                 {
                     "event_id": event["id"],
+                    "user_id": {"$nin": list(excluded)},
                     "$or": [
                         {"score": {"$gt": score}},
                         {
@@ -725,7 +733,7 @@ async def serialize_active(db, user_id: Optional[str] = None) -> Dict[str, Any]:
                 }
             )
             rank = int(better) + 1
-        my = {"score": score, "rank": rank}
+        my = {"score": 0 if str(user_id) in excluded else score, "rank": rank}
 
     return {
         "id": event.get("id"),

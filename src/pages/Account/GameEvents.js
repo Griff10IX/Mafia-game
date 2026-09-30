@@ -370,22 +370,26 @@ export default function GameEvents() {
 
                 <div>
                   <div className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider px-0.5 mb-1">Leaderboard</div>
-                  {!contest.leaderboard?.length ? (
-                    <p className="text-[10px] text-mutedForeground font-heading px-0.5">No scores yet — get in early.</p>
-                  ) : (
-                    <ul className="list-none m-0 space-y-0.5">
-                      {contest.leaderboard.map((row) => (
+                  <ul className="list-none m-0 space-y-0.5">
+                    {Array.from({ length: 10 }, (_, i) => {
+                      const row = contest.leaderboard?.[i];
+                      const empty = !row;
+                      return (
                         <li
-                          key={`${row.user_id}-${row.rank}`}
+                          key={row ? `${row.user_id}-${row.rank}` : `open-${i + 1}`}
                           className="flex items-center gap-2 text-[10px] font-heading rounded border border-zinc-700/30 bg-zinc-950/30 px-2 py-1.5"
                         >
-                          <span className="text-amber-300 font-bold w-6 shrink-0">#{row.rank}</span>
-                          <span className="min-w-0 flex-1 truncate text-foreground">{row.username}</span>
-                          <span className="text-mutedForeground shrink-0">{Number(row.score || 0).toLocaleString()}</span>
+                          <span className="text-amber-300 font-bold w-6 shrink-0">#{i + 1}</span>
+                          <span className={`min-w-0 flex-1 truncate ${empty ? 'text-mutedForeground' : 'text-foreground'}`}>
+                            {empty ? 'Open' : row.username}
+                          </span>
+                          <span className="text-mutedForeground shrink-0">
+                            {empty ? '—' : Number(row.score || 0).toLocaleString()}
+                          </span>
                         </li>
-                      ))}
-                    </ul>
-                  )}
+                      );
+                    })}
+                  </ul>
                 </div>
 
                 <PrizeTable rows={contest.prize_table} />
