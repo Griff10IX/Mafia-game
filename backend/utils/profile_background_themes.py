@@ -21,7 +21,7 @@ CUSTOM_THEME_NAME = "Admin custom (test)"
 # Catalog: hard-to-get themes (loot later). Image paths are public static assets.
 # ?v= cache-bust when art is replaced.
 # fit: width = natural-aspect banner (default); stretch = fill whole dossier.
-_THEME_ASSET_V = "20260930batch45"
+_THEME_ASSET_V = "20260930sets"
 PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, Any]] = {
     "godfather": {
         "id": "godfather",
@@ -993,6 +993,121 @@ PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, Any]] = {
         "image": f"/images/profile-themes/rand-koi-garden.jpg?v={_THEME_ASSET_V}",
         "fit": "width",
     },
+    # Set fillers — Crimes/GTA pool, same 2-copy scarcity as the rest of the batch.
+    "space_derelict_station": {
+        "id": "space_derelict_station",
+        "name": "Derelict Station",
+        "image": f"/images/profile-themes/space-derelict-station.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "space_binary_sunset": {
+        "id": "space_binary_sunset",
+        "name": "Binary Sunset",
+        "image": f"/images/profile-themes/space-binary-sunset.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "sicily_vineyard_dusk": {
+        "id": "sicily_vineyard_dusk",
+        "name": "Vineyard Dusk",
+        "image": f"/images/profile-themes/sicily-vineyard-dusk.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "sicily_chapel_bells": {
+        "id": "sicily_chapel_bells",
+        "name": "Chapel Bells",
+        "image": f"/images/profile-themes/sicily-chapel-bells.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "scenic_glacier_bay": {
+        "id": "scenic_glacier_bay",
+        "name": "Glacier Bay",
+        "image": f"/images/profile-themes/scenic-glacier-bay.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "scenic_volcano_coast": {
+        "id": "scenic_volcano_coast",
+        "name": "Volcano Coast",
+        "image": f"/images/profile-themes/scenic-volcano-coast.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "kill_ivory_revolver": {
+        "id": "kill_ivory_revolver",
+        "name": "Ivory Revolver",
+        "image": f"/images/profile-themes/kill-ivory-revolver.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_night_airstrip": {
+        "id": "weed_night_airstrip",
+        "name": "Night Airstrip",
+        "image": f"/images/profile-themes/weed-night-airstrip.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_dock_crates": {
+        "id": "weed_dock_crates",
+        "name": "Dock Crates",
+        "image": f"/images/profile-themes/weed-dock-crates.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_gold_safe": {
+        "id": "weed_gold_safe",
+        "name": "Gold Safe",
+        "image": f"/images/profile-themes/weed-gold-safe.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_clone_room": {
+        "id": "weed_clone_room",
+        "name": "Clone Room",
+        "image": f"/images/profile-themes/weed-clone-room.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_drying_racks": {
+        "id": "weed_drying_racks",
+        "name": "Drying Racks",
+        "image": f"/images/profile-themes/weed-drying-racks.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_trim_table": {
+        "id": "weed_trim_table",
+        "name": "Trim Table",
+        "image": f"/images/profile-themes/weed-trim-table.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_lava_lamp": {
+        "id": "weed_lava_lamp",
+        "name": "Lava Lamp",
+        "image": f"/images/profile-themes/weed-lava-lamp.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_van_mural": {
+        "id": "weed_van_mural",
+        "name": "Van Mural",
+        "image": f"/images/profile-themes/weed-van-mural.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_rooftop_garden": {
+        "id": "weed_rooftop_garden",
+        "name": "Rooftop Garden",
+        "image": f"/images/profile-themes/weed-rooftop-garden.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "leatherface_barn": {
+        "id": "leatherface_barn",
+        "name": "Barn at Dusk",
+        "image": f"/images/profile-themes/tcm-leatherface-barn.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "leatherface_cellar": {
+        "id": "leatherface_cellar",
+        "name": "Cellar Hooks",
+        "image": f"/images/profile-themes/tcm-leatherface-cellar.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "leatherface_highway": {
+        "id": "leatherface_highway",
+        "name": "Highway Night",
+        "image": f"/images/profile-themes/tcm-leatherface-highway.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
 }
 
 UR_LOOT_THEME_IDS = tuple(
@@ -1107,6 +1222,25 @@ CRIME_GTA_COSMETIC_THEME_IDS = (
     "casino_vault",
     "savanna_sunset",
     "koi_garden",
+    "space_derelict_station",
+    "space_binary_sunset",
+    "sicily_vineyard_dusk",
+    "sicily_chapel_bells",
+    "scenic_glacier_bay",
+    "scenic_volcano_coast",
+    "kill_ivory_revolver",
+    "weed_night_airstrip",
+    "weed_dock_crates",
+    "weed_gold_safe",
+    "weed_clone_room",
+    "weed_drying_racks",
+    "weed_trim_table",
+    "weed_lava_lamp",
+    "weed_van_mural",
+    "weed_rooftop_garden",
+    "leatherface_barn",
+    "leatherface_cellar",
+    "leatherface_highway",
 )
 
 # Equipped dig bonus % (fraction). Owning all three stacks to 0.90.
@@ -1371,6 +1505,10 @@ def profile_background_public_fields(
         out["profile_background_themes_owned"] = owned
         out["profile_background_themes"] = themes
         out["profile_background_theme_can_upload"] = bool(is_admin)
+        from utils.cosmetic_sets import active_set_bonuses, set_progress_rows
+
+        out["cosmetic_theme_sets"] = set_progress_rows(user, "theme", catalog_theme)
+        out["cosmetic_set_bonuses"] = active_set_bonuses(user)
     return out
 
 

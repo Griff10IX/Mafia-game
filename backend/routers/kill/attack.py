@@ -3156,6 +3156,12 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     await update_objectives_progress(killer_id, "hitlist_npc_kills", 1)
                 except Exception:
                     pass
+                try:
+                    from utils.daily_contests import record_contest_progress
+
+                    await record_contest_progress(db, killer_id, "hitlist", 1)
+                except Exception:
+                    pass
                 now_iso = datetime.now(timezone.utc).isoformat()
                 await db.users.update_one(
                     {"id": victim_id},

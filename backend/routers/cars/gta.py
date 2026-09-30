@@ -473,6 +473,17 @@ async def _award_gta_milestones(user_id: str, new_total_gta: int, claimed: list,
         return
     total_reward = sum(GTA_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
     total_reward = int(total_reward * RESPECT_FROM_GTA_MULT * max(0.0, float(bonus_mult or 1.0)))
+    if total_reward > 0:
+        try:
+            owner = await db.users.find_one(
+                {"id": user_id},
+                {"_id": 0, "profile_background_themes_owned": 1, "blackjack_card_backs_owned": 1},
+            )
+            from utils.cosmetic_sets import apply_respect_set_bonus
+
+            total_reward = apply_respect_set_bonus(owner, total_reward)
+        except Exception:
+            pass
     if total_reward <= 0:
         await db.users.update_one({"id": user_id}, {"$addToSet": {"respect_points_gta_milestones_claimed": {"$each": new_claimed}}})
         return
@@ -797,6 +808,19 @@ async def _attempt_gta_impl(
         climate_mult=success_multiplier_for_actor(current_user.get("current_state"), _climate),
     )
     success = _rng.random() < gta_rate
+    try:
+        from utils.daily_contests import (
+            consume_gta_always_success_charge,
+            user_has_crime_gta_always,
+        )
+
+        if user_has_crime_gta_always(current_user):
+            success = True
+        elif not success:
+            if await consume_gta_always_success_charge(db, current_user.get("id") or ""):
+                success = True
+    except Exception:
+        logging.exception("contest GTA always-succeed check failed")
     
     if success:
         gain = _rng.randint(GTA_PROGRESS_GAIN_MIN, GTA_PROGRESS_GAIN_MAX)
@@ -913,7 +937,37 @@ async def _attempt_gta_impl(
             _rare_boost = max(_rare_boost, 1.0)
         legendary_cars = [c for c in pool_cars if (c.get("rarity") or "") == "legendary"]
         non_legendary_cars = [c for c in pool_cars if (c.get("rarity") or "") != "legendary"]
-        if legendary_cars and _rng.random() < GTA_LEGENDARY_STEAL_CHANCE:
+        from utils.cosmetic_sets import set_bonus_mult
+
+        _legendary_chance = GTA_LEGENDARY_STEAL_CHANCE * set_bonus_mult(current_user, "gta_legendary")
+        _contest_forced_rarity = None
+        try:
+            from utils.daily_contests import consume_gta_ur_leg_charge
+
+            _contest_forced_rarity = await consume_gta_ur_leg_charge(db, current_user.get("id") or "")
+        except Exception:
+            logging.exception("contest GTA UR/Leg charge failed")
+        if _contest_forced_rarity:
+            forced_pool = [c for c in pool_cars if (c.get("rarity") or "") == _contest_forced_rarity]
+            if not forced_pool and _contest_forced_rarity == "ultra_rare":
+                forced_pool = [c for c in pool_cars if (c.get("rarity") or "") in ("ultra_rare", "legendary")]
+            if forced_pool:
+                car = _rng.choice(forced_pool)
+            elif legendary_cars and _rng.random() < _legendary_chance:
+                car = _rng.choice(legendary_cars)
+            else:
+                base_pool = non_legendary_cars if non_legendary_cars else pool_cars
+                pool_weights = [
+                    _gta_non_legendary_roll_weight(c.get("rarity"), _rare_boost, pool_weight_override)
+                    for c in base_pool
+                ]
+                weight_sum = float(sum(pool_weights))
+                if exclusive_in_roll and weight_sum > 0:
+                    ex_w = exclusive_drop_weight * weight_sum
+                    car = _rng.choices(base_pool + [exclusive_car], weights=pool_weights + [ex_w], k=1)[0]
+                else:
+                    car = _rng.choices(base_pool, weights=pool_weights, k=1)[0]
+        elif legendary_cars and _rng.random() < _legendary_chance:
             car = _rng.choice(legendary_cars)
         else:
             base_pool = non_legendary_cars if non_legendary_cars else pool_cars
@@ -968,6 +1022,13 @@ async def _attempt_gta_impl(
         pass_mult = float(rank_xp_pass_multiplier(current_user))
         rank_points = int(rank_points * pass_mult)
         rank_points = max(1, int(rank_points * rank_multiplier_for_actor(current_user.get("current_state"), _climate)))
+        try:
+            from utils.daily_contests import user_has_crime_gta_double_rp
+
+            if user_has_crime_gta_double_rp(current_user):
+                rank_points = int(rank_points) * 2
+        except Exception:
+            pass
         car_acquired_at = datetime.now(timezone.utc).isoformat()
         copy_count = gta_rare_car_copy_count(current_user, car.get("rarity"))
         user_car_docs = [
@@ -1015,6 +1076,9 @@ async def _attempt_gta_impl(
         respect_from_drop = 0
         if respect_drop:
             respect_from_drop = max(0, int(respect_drop * RESPECT_FROM_GTA_MULT * _fm_gta * pass_mult))
+            from utils.cosmetic_sets import apply_respect_set_bonus
+
+            respect_from_drop = apply_respect_set_bonus(current_user, respect_from_drop)
             gta_inc["respect_points"] = respect_from_drop
         gta_update = apply_season_rp_mirror_to_update({"$inc": gta_inc}, user=current_user)
         await db.users.update_one(
@@ -1315,6 +1379,12 @@ async def attempt_gta(
                     )
                 except Exception:
                     logging.exception("Family daily GTA progress failed user_id=%s", uid)
+                try:
+                    from utils.daily_contests import record_contest_progress
+
+                    await record_contest_progress(db, uid, "gta", 1, now=now)
+                except Exception:
+                    logging.exception("Contest GTA progress failed user_id=%s", uid)
             await log_activity(
                 uid,
                 current_user.get("username", "?"),
@@ -1815,6 +1885,11 @@ async def _melt_cars_impl(
     if deleted_count > 0:
         if action == "bullets":
             total_bullets = (int(total_bullets or 0) * MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM) // MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN
+            from utils.cosmetic_sets import set_bonus_mult
+
+            _melt_set_mult = set_bonus_mult(user, "melt_bullets")
+            if _melt_set_mult != 1.0:
+                total_bullets = int(round(int(total_bullets or 0) * _melt_set_mult))
         try:
             from utils.family_daily_tasks import record_family_daily_activity
 
@@ -1829,6 +1904,15 @@ async def _melt_cars_impl(
             )
         except Exception:
             logging.exception("Family daily car melt progress failed user_id=%s", user.get("id"))
+        if action == "bullets" and int(total_bullets or 0) > 0:
+            try:
+                from utils.daily_contests import record_contest_progress
+
+                await record_contest_progress(
+                    db, user.get("id") or "", "melt", int(total_bullets or 0), now=now
+                )
+            except Exception:
+                logging.exception("Contest melt progress failed user_id=%s", user.get("id"))
         if action == "bullets":
             base_cooldown = int(MELT_BULLETS_COOLDOWN_SECONDS * 0.5) if melt_token_active else MELT_BULLETS_COOLDOWN_SECONDS
             cooldown_seconds = base_cooldown * deleted_count

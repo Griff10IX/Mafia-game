@@ -12,6 +12,7 @@ import {
   setBlackjackVaderBackOn,
 } from '../../utils/blackjackCardBack';
 import { publicAsset } from '../../utils/publicAssets';
+import { CosmeticSetList } from '../../components/CosmeticSetProgress';
 
 function patchAuthUser(patch) {
   if (typeof window === 'undefined') return;
@@ -24,6 +25,7 @@ export default function BlackjackCardsSettings({ embedded = false } = {}) {
   const [saving, setSaving] = useState(false);
   const [vaderOn, setVaderOn] = useState(() => isBlackjackVaderBackOn());
   const owned = Array.isArray(user?.blackjack_card_backs) ? user.blackjack_card_backs : [];
+  const coverSets = Array.isArray(user?.cosmetic_back_sets) ? user.cosmetic_back_sets : [];
   const equippedId = user?.blackjack_card_back_id || null;
   const showVader = isGhostFaceAdminPreview(user);
 
@@ -51,7 +53,9 @@ export default function BlackjackCardsSettings({ embedded = false } = {}) {
     <div className="p-3 space-y-2">
       <p className="text-[10px] text-mutedForeground font-heading leading-snug">
         Equip a face-down card design for solo and multiplayer blackjack. Ultra Rare opens can grant custom backs.
+        Own all 8 covers in a set for its bonus. Dying takes covers, and that set bonus, until you own them again.
       </p>
+      {coverSets.length ? <CosmeticSetList sets={coverSets} /> : null}
       <div className="flex flex-wrap gap-3 pt-1">
         <button
           type="button"

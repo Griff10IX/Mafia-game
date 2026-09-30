@@ -1080,6 +1080,12 @@ async def complete_mission(
         meta,
         rp_awarded=rank_points_in_update(mission_update),
     )
+    try:
+        from utils.daily_contests import record_contest_progress
+
+        await record_contest_progress(db, user_id, "mission", 1)
+    except Exception:
+        pass
 
     reward_car_names = [_car_display_name(cid) for cid in meta["granted_car_ids"]]
 

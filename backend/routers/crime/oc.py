@@ -675,7 +675,7 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     if user_ids:
         users_raw = await db.users.find(
             {"id": {"$in": user_ids}},
-            {"_id": 0, "id": 1, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1, "total_oc_heists": 1, "rank_xp_pass_rewards_granted": 1, "rank_xp_pass_token_expires_at": 1, "profile_background_theme_id": 1},
+            {"_id": 0, "id": 1, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1, "total_oc_heists": 1, "rank_xp_pass_rewards_granted": 1, "rank_xp_pass_token_expires_at": 1, "profile_background_theme_id": 1, "profile_background_themes_owned": 1, "blackjack_card_backs_owned": 1},
         ).to_list(10)
         user_map = {u["id"]: u for u in users_raw}
     cash_each = rp_each = 0
@@ -771,6 +771,13 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
             )
     except Exception:
         logger.exception("Family daily crew OC progress failed runner_id=%s", uid)
+    try:
+        from utils.daily_contests import record_contest_progress
+
+        for participant_id in user_ids:
+            await record_contest_progress(db, participant_id, "oc", 1, now=now)
+    except Exception:
+        logger.exception("Contest crew OC progress failed runner_id=%s", uid)
     msg = _rng.choice(OC_TEAM_HEIST_SUCCESS_MESSAGES).format(job_name=job["name"])
     return {
         "success": True,

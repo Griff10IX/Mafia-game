@@ -1013,6 +1013,14 @@ async def _booze_sell_impl(
         except Exception:
             logger.exception("Family daily booze progress failed user_id=%s", uid_sell)
         try:
+            from utils.daily_contests import record_contest_progress
+
+            await record_contest_progress(
+                db, uid_sell, "booze", max(1, int(amount or 1)), now=booze_event_at
+            )
+        except Exception:
+            logger.exception("Contest booze progress failed user_id=%s", uid_sell)
+        try:
             from routers.account.objectives import update_objectives_progress
             await update_objectives_progress(uid_sell, "booze_runs", 1)
         except Exception:

@@ -452,6 +452,19 @@ def register(router):
         dig_mult = float(grave_robber_dig_reward_mult(fresh))
         reward = _apply_dig_mult(reward, dig_mult)
 
+        try:
+            from utils.daily_contests import consume_grave_profit_charge
+
+            if await consume_grave_profit_charge(db, uid):
+                # Floor at break-even cash so the dig cannot be a loss.
+                floor = max(1, int(expected_cost))
+                if int(reward.get("money") or 0) < floor:
+                    reward["money"] = floor
+                    reward["kind"] = "cash"
+                    reward["contest_profit_guaranteed"] = True
+        except Exception:
+            logger.exception("contest grave profit charge user=%s", uid)
+
         theme_grant = None
         try:
             if _rng.random() < GR_THEME_DROP_CHANCE:
@@ -581,6 +594,12 @@ def register(router):
                     "is_last_attempt": is_last_attempt,
                 },
             )
+            try:
+                from utils.daily_contests import record_contest_progress
+
+                await record_contest_progress(db, uid, "grave", 1, now=now)
+            except Exception:
+                pass
             if points_reward > 0:
                 await log_points_event(
                     db,

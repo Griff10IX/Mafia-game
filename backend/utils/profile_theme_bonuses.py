@@ -4,6 +4,7 @@ from __future__ import annotations
 import random
 from typing import Any, Dict, Optional, Set
 
+from utils.cosmetic_sets import set_bonus_mult
 from utils.profile_background_themes import equipped_theme_id
 
 # theme_id -> bonus metadata (keep labels player-facing)
@@ -99,7 +100,8 @@ def has_bonus(user: Optional[dict], bonus_id: str) -> bool:
 
 
 def rank_points_mult(user: Optional[dict]) -> float:
-    return 1.5 if has_bonus(user, "rp_50") else 1.0
+    mult = 1.5 if has_bonus(user, "rp_50") else 1.0
+    return mult * set_bonus_mult(user, "rank_points")
 
 
 def apply_rank_points_bonus(user: Optional[dict], amount: int) -> int:
@@ -131,9 +133,8 @@ def hitlist_npc_reward_mult(user: Optional[dict]) -> float:
 
 
 def crime_cash_mult(user: Optional[dict]) -> float:
-    if has_bonus(user, "crime_cash_double") and random.random() < 0.5:
-        return 2.0
-    return 1.0
+    mult = 2.0 if has_bonus(user, "crime_cash_double") and random.random() < 0.5 else 1.0
+    return mult * set_bonus_mult(user, "crime_cash")
 
 
 def bullets_needed_mult(user: Optional[dict]) -> float:

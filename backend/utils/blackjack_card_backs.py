@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-_BJ_ASSET_V = "20260930bj50"
+_BJ_ASSET_V = "20260930sets"
 
 BLACKJACK_CARD_BACKS: Dict[str, Dict[str, str]] = {
     "spade_black_gold": {
@@ -482,6 +482,97 @@ BLACKJACK_CARD_BACKS: Dict[str, Dict[str, str]] = {
         "name": "Torii Sun",
         "image": f"/images/blackjack/card-backs/torii-sun.jpg?v={_BJ_ASSET_V}",
     },
+    # Set fillers — Crimes/GTA pool, same 2-copy scarcity.
+    "space_saturn_crest": {
+        "id": "space_saturn_crest",
+        "name": "Saturn Crest",
+        "image": f"/images/blackjack/card-backs/space-saturn-crest.jpg?v={_BJ_ASSET_V}",
+    },
+    "space_pulsar_seal": {
+        "id": "space_pulsar_seal",
+        "name": "Pulsar Seal",
+        "image": f"/images/blackjack/card-backs/space-pulsar-seal.jpg?v={_BJ_ASSET_V}",
+    },
+    "sicily_vespa_crest": {
+        "id": "sicily_vespa_crest",
+        "name": "Vespa Crest",
+        "image": f"/images/blackjack/card-backs/sicily-vespa-crest.jpg?v={_BJ_ASSET_V}",
+    },
+    "sicily_opera_mask": {
+        "id": "sicily_opera_mask",
+        "name": "Opera Mask",
+        "image": f"/images/blackjack/card-backs/sicily-opera-mask.jpg?v={_BJ_ASSET_V}",
+    },
+    "sicily_coral_seal": {
+        "id": "sicily_coral_seal",
+        "name": "Coral Seal",
+        "image": f"/images/blackjack/card-backs/sicily-coral-seal.jpg?v={_BJ_ASSET_V}",
+    },
+    "scenic_glacier_seal": {
+        "id": "scenic_glacier_seal",
+        "name": "Glacier Seal",
+        "image": f"/images/blackjack/card-backs/scenic-glacier-seal.jpg?v={_BJ_ASSET_V}",
+    },
+    "scenic_volcano_crest": {
+        "id": "scenic_volcano_crest",
+        "name": "Volcano Crest",
+        "image": f"/images/blackjack/card-backs/scenic-volcano-crest.jpg?v={_BJ_ASSET_V}",
+    },
+    "scenic_reef_seal": {
+        "id": "scenic_reef_seal",
+        "name": "Reef Seal",
+        "image": f"/images/blackjack/card-backs/scenic-reef-seal.jpg?v={_BJ_ASSET_V}",
+    },
+    "weed_airstrip_leaf": {
+        "id": "weed_airstrip_leaf",
+        "name": "Airstrip Leaf",
+        "image": f"/images/blackjack/card-backs/weed-airstrip-leaf.jpg?v={_BJ_ASSET_V}",
+    },
+    "weed_safe_leaf": {
+        "id": "weed_safe_leaf",
+        "name": "Safe Leaf",
+        "image": f"/images/blackjack/card-backs/weed-safe-leaf.jpg?v={_BJ_ASSET_V}",
+    },
+    "weed_clone_leaf": {
+        "id": "weed_clone_leaf",
+        "name": "Clone Leaf",
+        "image": f"/images/blackjack/card-backs/weed-clone-leaf.jpg?v={_BJ_ASSET_V}",
+    },
+    "weed_drying_leaf": {
+        "id": "weed_drying_leaf",
+        "name": "Drying Leaf",
+        "image": f"/images/blackjack/card-backs/weed-drying-leaf.jpg?v={_BJ_ASSET_V}",
+    },
+    "weed_rooftop_leaf": {
+        "id": "weed_rooftop_leaf",
+        "name": "Rooftop Leaf",
+        "image": f"/images/blackjack/card-backs/weed-rooftop-leaf.jpg?v={_BJ_ASSET_V}",
+    },
+    "iron_gear_crest": {
+        "id": "iron_gear_crest",
+        "name": "Gear Crest",
+        "image": f"/images/blackjack/card-backs/iron-gear-crest.jpg?v={_BJ_ASSET_V}",
+    },
+    "iron_piston_seal": {
+        "id": "iron_piston_seal",
+        "name": "Piston Seal",
+        "image": f"/images/blackjack/card-backs/iron-piston-seal.jpg?v={_BJ_ASSET_V}",
+    },
+    "iron_anvil_crest": {
+        "id": "iron_anvil_crest",
+        "name": "Anvil Crest",
+        "image": f"/images/blackjack/card-backs/iron-anvil-crest.jpg?v={_BJ_ASSET_V}",
+    },
+    "iron_rivet_seal": {
+        "id": "iron_rivet_seal",
+        "name": "Rivet Seal",
+        "image": f"/images/blackjack/card-backs/iron-rivet-seal.jpg?v={_BJ_ASSET_V}",
+    },
+    "iron_smokestack": {
+        "id": "iron_smokestack",
+        "name": "Smokestack",
+        "image": f"/images/blackjack/card-backs/iron-smokestack.jpg?v={_BJ_ASSET_V}",
+    },
 }
 
 OWNED_FIELD = "blackjack_card_backs_owned"
@@ -576,6 +667,24 @@ CRIME_GTA_COSMETIC_BACK_IDS = (
     "butterfly_knife",
     "snake_eyes",
     "torii_sun",
+    "space_saturn_crest",
+    "space_pulsar_seal",
+    "sicily_vespa_crest",
+    "sicily_opera_mask",
+    "sicily_coral_seal",
+    "scenic_glacier_seal",
+    "scenic_volcano_crest",
+    "scenic_reef_seal",
+    "weed_airstrip_leaf",
+    "weed_safe_leaf",
+    "weed_clone_leaf",
+    "weed_drying_leaf",
+    "weed_rooftop_leaf",
+    "iron_gear_crest",
+    "iron_piston_seal",
+    "iron_anvil_crest",
+    "iron_rivet_seal",
+    "iron_smokestack",
 )
 _CRIME_GTA_BACK_SET = frozenset(CRIME_GTA_COSMETIC_BACK_IDS)
 # Legacy / UR loot pool only (never includes crime/GTA cosmetics).
@@ -637,6 +746,9 @@ def public_fields(user: Optional[dict], *, include_owned: bool = False) -> Dict[
         owned = owned_back_ids(user)
         out["blackjack_card_backs_owned"] = owned
         out["blackjack_card_backs"] = [catalog_back(b) for b in owned if catalog_back(b)]
+        from utils.cosmetic_sets import set_progress_rows
+
+        out["cosmetic_back_sets"] = set_progress_rows(user, "back", catalog_back)
     return out
 
 

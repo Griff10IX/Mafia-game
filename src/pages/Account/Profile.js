@@ -39,6 +39,7 @@ import GlowPresetPicker from '../../components/GlowPresetPicker';
 import { isValidTelegramChatId } from '../../utils/telegramChatId';
 import ProfileMessagePopup from '../Social/ProfileMessagePopup';
 import BlackjackCardsSettings from './BlackjackCardsSettings';
+import { CosmeticSetBonusStrip, CosmeticSetList } from '../../components/CosmeticSetProgress';
 
 function formatProfileViewCount(n) {
   const v = Math.max(0, Math.floor(Number(n) || 0));
@@ -3211,6 +3212,27 @@ export default function Profile() {
                       </button>
                     </div>
                   </div>
+                </div>
+                <div className="prof-art-line text-primary mx-3" />
+              </div>
+            )}
+
+            {((Array.isArray(me?.cosmetic_theme_sets) && me.cosmetic_theme_sets.length > 0)
+              || (Array.isArray(me?.cosmetic_set_bonuses) && me.cosmetic_set_bonuses.length > 0)) && (
+              <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
+                <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1.5">
+                  <Image size={10} className="text-primary" />
+                  <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] text-center">
+                    Dossier sets
+                  </h2>
+                </div>
+                <div className="p-3 space-y-2">
+                  <p className="text-[11px] text-mutedForeground font-heading">
+                    Own all 8 pieces of a set for its bonus. Selling your last copy of a piece turns that set off.
+                  </p>
+                  <CosmeticSetBonusStrip bonuses={me?.cosmetic_set_bonuses} />
+                  <CosmeticSetList sets={me?.cosmetic_theme_sets} />
                 </div>
                 <div className="prof-art-line text-primary mx-3" />
               </div>

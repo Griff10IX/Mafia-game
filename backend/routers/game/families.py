@@ -5271,6 +5271,12 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     except Exception:
         logger.exception("Family daily racket progress failed user_id=%s", current_user.get("id"))
     try:
+        from utils.daily_contests import record_contest_progress
+
+        await record_contest_progress(db, current_user["id"], "racket", 1, now=now)
+    except Exception:
+        logger.exception("Contest racket progress failed user_id=%s", current_user.get("id"))
+    try:
         from utils.family_fortnight import on_racket_collect
 
         await on_racket_collect(db, current_user["id"], current_user.get("username") or "?")

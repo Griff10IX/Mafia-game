@@ -857,6 +857,13 @@ async def ensure_all_indexes(db):
         await db.designer_competition_votes.create_index("entry_id")
         await db.designer_competition_votes.create_index([("competition_id", 1), ("entry_id", 1)])
 
+        # --- Competitive contest events (6h / mission 48h) ---
+        await db.contest_events.create_index("id", unique=True)
+        await db.contest_events.create_index([("status", 1), ("ends_at", 1)])
+        await db.contest_events.create_index([("status", 1), ("ends_at", -1)])
+        await db.contest_scores.create_index([("event_id", 1), ("user_id", 1)], unique=True)
+        await db.contest_scores.create_index([("event_id", 1), ("score", -1), ("updated_at", 1)])
+        await db.game_config.create_index("id", unique=True)
         # --- Designer forum auctions ---
         await db.forum_designer_auctions.create_index("id", unique=True)
         await db.forum_designer_auctions.create_index([("topic_id", 1)], unique=True)

@@ -702,6 +702,12 @@ async def _record_bust_event(user_id: str, success: bool, profit: int, target_us
                 source_id=f"jail-bust:{result.inserted_id}",
                 now=now,
             )
+            try:
+                from utils.daily_contests import record_contest_progress
+
+                await record_contest_progress(db, user_id, "jailbust", 1, now=now)
+            except Exception:
+                logger.exception("Contest jailbust progress failed user_id=%s", user_id)
     except Exception as e:
         logger.exception("Record bust event: %s", e)
 

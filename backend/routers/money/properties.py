@@ -1375,6 +1375,14 @@ async def collect_property_income_impl(property_id: str, current_user: dict, *, 
             0.0,
             (now_utc - (_parse_iso_datetime(last_collected_iso) or now_utc)).total_seconds() / 3600,
         )
+    # Manual full collects score Landlord; fractional auto-collect does not.
+    if float(income_fraction or 0) >= 0.999 and income_rounded > 0:
+        try:
+            from utils.daily_contests import record_contest_progress
+
+            await record_contest_progress(db, user_id, "property", 1)
+        except Exception:
+            pass
     return {
         "message": message,
         "amount": income_rounded,

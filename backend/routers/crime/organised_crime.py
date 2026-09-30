@@ -363,7 +363,9 @@ async def run_heist(
         }
         respect_drop = maybe_respect_points_drop()
         if respect_drop:
-            oc_inc["respect_points"] = respect_drop
+            from utils.cosmetic_sets import apply_respect_set_bonus
+
+            oc_inc["respect_points"] = apply_respect_set_bonus(current_user, respect_drop)
         oc_update = apply_season_rp_mirror_to_update({"$inc": oc_inc}, user=current_user)
         await db.users.update_one(
             {"id": current_user["id"]},
@@ -403,6 +405,12 @@ async def run_heist(
             )
         except Exception:
             logger.exception("Family daily OC progress failed user_id=%s", current_user["id"])
+        try:
+            from utils.daily_contests import record_contest_progress
+
+            await record_contest_progress(db, current_user["id"], "oc", 1, now=now)
+        except Exception:
+            logger.exception("Contest OC progress failed user_id=%s", current_user["id"])
         
         if rp_added:
             msg = _rng.choice(OC_HEIST_SUCCESS_MESSAGES).format(

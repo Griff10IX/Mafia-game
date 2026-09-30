@@ -115,6 +115,17 @@ async def _award_crime_milestones(user_id: str, new_total_crimes: int, claimed: 
         return
     total_reward = sum(CRIME_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
     total_reward = int(total_reward * RESPECT_FROM_CRIMES_MULT)
+    if total_reward > 0:
+        try:
+            owner = await db.users.find_one(
+                {"id": user_id},
+                {"_id": 0, "profile_background_themes_owned": 1, "blackjack_card_backs_owned": 1},
+            )
+            from utils.cosmetic_sets import apply_respect_set_bonus
+
+            total_reward = apply_respect_set_bonus(owner, total_reward)
+        except Exception:
+            pass
     if total_reward <= 0:
         await db.users.update_one({"id": user_id}, {"$addToSet": {"respect_points_crime_milestones_claimed": {"$each": new_claimed}}})
         return
@@ -878,7 +889,15 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
     success_rate = (progress / 100.0) * CRIME_DIFFICULTY_MULT * success_multiplier_for_actor(
         current_user.get("current_state"), _climate
     )
-    success = _rng.random() < min(1.0, success_rate)
+    try:
+        from utils.daily_contests import user_has_crime_gta_always
+
+        if user_has_crime_gta_always(current_user):
+            success = True
+        else:
+            success = _rng.random() < min(1.0, success_rate)
+    except Exception:
+        success = _rng.random() < min(1.0, success_rate)
     rank_points_earned_out = 0
     xp_crimes_bonus_rp = 0
     _we_bonus_rp = 0
@@ -979,6 +998,13 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         reward = int(reward * crime_cash_mult(current_user))
         rank_points = max(1, int(rank_points * rank_multiplier_for_actor(current_user.get("current_state"), _climate)))
         rank_points = apply_rank_points_bonus(current_user, rank_points)
+        try:
+            from utils.daily_contests import user_has_crime_gta_double_rp
+
+            if user_has_crime_gta_double_rp(current_user):
+                rank_points = int(rank_points) * 2
+        except Exception:
+            pass
         # Instant cooldown skip: −50% cash (rank points unchanged).
         if used_crime_skip:
             reward = reward // 2
@@ -994,6 +1020,9 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         respect_from_drop = 0
         if respect_drop:
             respect_from_drop = max(0, int(respect_drop * RESPECT_FROM_CRIMES_MULT * _fm_cr * pass_mult))
+            from utils.cosmetic_sets import apply_respect_set_bonus
+
+            respect_from_drop = apply_respect_set_bonus(current_user, respect_from_drop)
             inc["respect_points"] = respect_from_drop
         # Global ultra-rare molotov drop from any successful crime
         prestige_bonus_earned: Optional[dict] = None
@@ -1002,6 +1031,10 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             prestige_bonus_earned = {"molotovs": MOLOTOV_GLOBAL_DROP_AMOUNT}
         # Global ultra-rare loot box piece drop with slightly higher chance on prestige crimes
         loot_piece_chance = LOOT_PIECE_CHANCE_PRESTIGE if crime.get("crime_type") == "prestige" else LOOT_PIECE_CHANCE_NORMAL
+        from utils.cosmetic_sets import set_bonus_mult
+
+        _loot_token_mult = set_bonus_mult(current_user, "loot_token")
+        loot_piece_chance *= _loot_token_mult
         if _rng.random() < loot_piece_chance:
             inc["loot_box_pieces"] = inc.get("loot_box_pieces", 0) + LOOT_PIECE_AMOUNT
             if prestige_bonus_earned is None:
@@ -1015,7 +1048,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             else:
                 prestige_bonus_earned["loot_box_pieces"] = prestige_bonus_earned.get("loot_box_pieces", 0) + 1
         # Random armoury token drop (1 in 250); 1–3 of one type
-        if _rng.random() < TOKEN_GLOBAL_DROP_CHANCE:
+        if _rng.random() < TOKEN_GLOBAL_DROP_CHANCE * _loot_token_mult:
             token_type = _rng.choice(TOKEN_TYPES_GLOBAL_RANDOM_DROP)
             token_field = TOKEN_CONFIG[token_type]["count_field"]
             token_amt = _rng.randint(TOKEN_GLOBAL_DROP_AMOUNT_MIN, TOKEN_GLOBAL_DROP_AMOUNT_MAX)
@@ -1047,6 +1080,9 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                 if "respect_points" in prestige_bonus_from_prestige:
                     prestige_bonus_respect = int(prestige_bonus_from_prestige["respect_points"] or 0)
                     if prestige_bonus_respect:
+                        from utils.cosmetic_sets import apply_respect_set_bonus
+
+                        prestige_bonus_respect = apply_respect_set_bonus(current_user, prestige_bonus_respect)
                         inc["respect_points"] = int(inc.get("respect_points", 0) or 0) + prestige_bonus_respect
                 if "bullets" in prestige_bonus_from_prestige:
                     inc["bullets"] = int(inc.get("bullets", 0) or 0) + int(prestige_bonus_from_prestige["bullets"])
@@ -1289,6 +1325,12 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                 )
             except Exception:
                 logger.exception("Family daily crime progress failed user_id=%s", current_user["id"])
+            try:
+                from utils.daily_contests import record_contest_progress
+
+                await record_contest_progress(db, current_user["id"], "crime", 1, now=now)
+            except Exception:
+                logger.exception("Contest crime progress failed user_id=%s", current_user["id"])
         crime_details = {"crime_id": crime_id, "crime_name": crime.get("name"), "success": success, "reward": reward}
         if via_auto_rank:
             crime_details["via_auto_rank"] = True

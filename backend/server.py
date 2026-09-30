@@ -1030,6 +1030,9 @@ class UserResponse(BaseModel):
     blackjack_card_backs: List[dict] = []
     profile_theme_inventory: Dict[str, int] = {}
     blackjack_back_inventory: Dict[str, int] = {}
+    cosmetic_theme_sets: List[dict] = []
+    cosmetic_back_sets: List[dict] = []
+    cosmetic_set_bonuses: List[dict] = []
     crew_oc_auto_apply_tokens: int = 0
     crew_oc_auto_apply_until: Optional[str] = None
     crew_oc_auto_apply_max_fee: Optional[int] = None
@@ -3794,7 +3797,7 @@ from routers.admin import admin, security_admin, airport, investigate
 from routers.cars import gta
 from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, horseracing, slots, keno, coin_flip, video_poker, mdg, sports_betting, wheel_of_fortune
 from routers.crime import crimes, jail, organised_crime, oc
-from routers.game import families, leaderboard, states, stats, store, dead_alive, events, notifications, meta, entertainer, entertainer_staff, achievements
+from routers.game import families, leaderboard, states, stats, store, dead_alive, events, notifications, meta, entertainer, entertainer_staff, achievements, daily_contests
 from routers.kill import attack, armoury, bodyguards, hitlist, witness_statements
 from routers.money import bank, stock_market, properties, quicktrade, crack_safe, illegal_business, booze_run, racket, payments, lottery, grave_robber, weed_empire
 from routers.social import forum, game_chat, giphy, image_host, designer_auctions
@@ -3872,6 +3875,7 @@ meta.register(api_router)
 user_progress.register(api_router)
 states.register(api_router)
 events.register(api_router)
+daily_contests.register(api_router)
 security_admin.register(api_router)
 investigate.register(api_router)
 sports_betting.register(api_router)
