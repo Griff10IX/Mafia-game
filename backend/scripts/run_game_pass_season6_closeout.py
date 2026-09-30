@@ -226,7 +226,7 @@ async def main() -> None:
 
     if args.dry_run or args.apply:
         if args.apply:
-            await persist_season_closeout_snapshot(db, note="pre_season6_closeout")
+            await persist_season_closeout_snapshot(db, set_by="pre_season6_closeout")
         result = await _complete_remaining(dry_run=bool(args.dry_run and not args.apply))
         print("complete_remaining:", result)
         if args.apply and not args.skip_roll:

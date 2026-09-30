@@ -9,6 +9,7 @@ import AutoRefreshNote from '../../components/AutoRefreshNote';
 import GifPicker from '../../components/GifPicker';
 import { toast } from 'sonner';
 import { parseForumContent, insertAtCursor, FORUM_INLINE_SMILEY_PX } from '../../utils/forumContent';
+import { bindForumImageLightbox } from '../../components/CosmeticPreview';
 import { ForumSystemAiAuthor, isSystemAiAuthor } from '../../components/SystemAiInboxMessage';
 import TopicOfShameBody from '../../components/TopicOfShameBody';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -486,6 +487,10 @@ export default function ForumTopic() {
   useEffect(() => {
     forumHashScrollDoneRef.current = '';
   }, [topicId]);
+
+  useEffect(() => {
+    bindForumImageLightbox(document.body);
+  }, []);
 
   // Deep link: /forum/topic/:id#forum-comment-… or #forum-topic-…
   useEffect(() => {

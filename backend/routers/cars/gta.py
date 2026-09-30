@@ -176,6 +176,7 @@ class GTAAttemptResponse(BaseModel):
     progress_after: Optional[int] = None
     respect_points: int = 0
     cooldown_until: Optional[str] = None
+    cosmetic_drop: Optional[Dict] = None
 
 
 # ---------------------------------------------------------------------------
@@ -1020,6 +1021,16 @@ async def _attempt_gta_impl(
             {"id": current_user.get("id") or ""},
             gta_update,
         )
+        cosmetic_drop = None
+        try:
+            from utils.crime_gta_cosmetics import maybe_roll_crime_gta_cosmetic
+
+            cosmetic_drop = await maybe_roll_crime_gta_cosmetic(
+                db, current_user.get("id") or "", _rng
+            )
+        except Exception:
+            logger.exception("gta cosmetic drop failed user=%s", current_user.get("id"))
+            cosmetic_drop = None
         new_total_gta = (current_user.get("total_gta") or 0) + 1
         claimed = current_user.get("respect_points_gta_milestones_claimed") or []
         new_claimed = [m for m in GTA_MILESTONES if m <= new_total_gta and m not in claimed]
@@ -1111,6 +1122,7 @@ async def _attempt_gta_impl(
                 rank_points_earned=rp_granted,
                 progress_after=progress_after,
                 respect_points=respect_earned,
+                cosmetic_drop=cosmetic_drop,
             )
         )
     # Failure: sometimes caught (jail), sometimes get away (no car, no jail)

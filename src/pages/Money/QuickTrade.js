@@ -4,6 +4,7 @@ import { Coins, ArrowLeftRight, Users, Building2, TrendingUp, TrendingDown, Help
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
+import { CosmeticThumb } from '../../components/CosmeticPreview';
 import styles from '../../styles/noir.module.css';
 import {
   QUICKTRADE_SESSION_CACHE_KEY,
@@ -172,9 +173,11 @@ export default function QuickTrade() {
   const [buyOffers, setBuyOffers] = useState(() => qtBoot?.buyOffers ?? []);
   const [tokenOffers, setTokenOffers] = useState(() => qtBoot?.tokenOffers ?? []);
   const [lootPieceOffers, setLootPieceOffers] = useState(() => qtBoot?.lootPieceOffers ?? []);
+  const [cosmeticOffers, setCosmeticOffers] = useState(() => qtBoot?.cosmeticOffers ?? []);
   const [properties, setProperties] = useState(() => qtBoot?.properties ?? []);
   const [tokenBalances, setTokenBalances] = useState(() => qtBoot?.tokenBalances ?? {});
   const [lootPieceBalance, setLootPieceBalance] = useState(() => qtBoot?.lootPieceBalance ?? { total: 0, sellable: 0 });
+  const [cosmeticBalances, setCosmeticBalances] = useState(() => qtBoot?.cosmeticBalances ?? { items: [], min_points_per: 50 });
 
   const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'auto_rank_2h', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus', 'mission_skip'];
   const TOKEN_TYPE_LABELS = {
@@ -203,6 +206,10 @@ export default function QuickTrade() {
   const [lootPiecePrice, setLootPiecePrice] = useState('');
   const [lootPiecePriceCurrency, setLootPiecePriceCurrency] = useState('points');
   const [creatingLootPiece, setCreatingLootPiece] = useState(false);
+  const [cosmeticKey, setCosmeticKey] = useState('');
+  const [cosmeticQuantity, setCosmeticQuantity] = useState('1');
+  const [cosmeticPrice, setCosmeticPrice] = useState('');
+  const [creatingCosmetic, setCreatingCosmetic] = useState(false);
 
   const TOKEN_MIN_CASH_PER_TOKEN = 250_000;
   /** Store tokens that can only be listed for points (server-enforced). */
@@ -246,6 +253,8 @@ export default function QuickTrade() {
         apiRequestWith429Retry(() => api.get('/trade/properties')),
         apiRequestWith429Retry(() => api.get('/trade/my-token-balances')),
         apiRequestWith429Retry(() => api.get('/trade/my-loot-piece-balance')),
+        apiRequestWith429Retry(() => api.get('/trade/cosmetic-offers')),
+        apiRequestWith429Retry(() => api.get('/trade/my-cosmetic-balances')),
       ]);
       const val = (i, fallback) => {
         const r = settled[i];
@@ -258,6 +267,8 @@ export default function QuickTrade() {
       const nextProp = val(4, []);
       const nextBal = val(5, {});
       const nextLootBal = val(6, { total: 0, sellable: 0 });
+      const nextCosmeticOffers = val(7, []);
+      const nextCosmeticBal = val(8, { items: [], min_points_per: 50 });
       const failed = settled.filter((r) => r.status === 'rejected').length;
       if (failed === settled.length) {
         if (!silent) {
@@ -273,6 +284,12 @@ export default function QuickTrade() {
       setProperties(Array.isArray(nextProp) ? nextProp : []);
       setTokenBalances(nextBal && typeof nextBal === 'object' ? nextBal : {});
       setLootPieceBalance(nextLootBal && typeof nextLootBal === 'object' ? nextLootBal : { total: 0, sellable: 0 });
+      setCosmeticOffers(Array.isArray(nextCosmeticOffers) ? nextCosmeticOffers : []);
+      setCosmeticBalances(
+        nextCosmeticBal && typeof nextCosmeticBal === 'object'
+          ? nextCosmeticBal
+          : { items: [], min_points_per: 50 },
+      );
       const boot = {
         sellOffers: Array.isArray(nextSell) ? nextSell : [],
         buyOffers: Array.isArray(nextBuy) ? nextBuy : [],
@@ -281,6 +298,11 @@ export default function QuickTrade() {
         properties: Array.isArray(nextProp) ? nextProp : [],
         tokenBalances: nextBal && typeof nextBal === 'object' ? nextBal : {},
         lootPieceBalance: nextLootBal && typeof nextLootBal === 'object' ? nextLootBal : { total: 0, sellable: 0 },
+        cosmeticOffers: Array.isArray(nextCosmeticOffers) ? nextCosmeticOffers : [],
+        cosmeticBalances:
+          nextCosmeticBal && typeof nextCosmeticBal === 'object'
+            ? nextCosmeticBal
+            : { items: [], min_points_per: 50 },
       };
       _memQtBoot = boot;
       writeSessionJsonWithSavedAt(QUICKTRADE_SESSION_CACHE_KEY, boot);
@@ -609,6 +631,73 @@ export default function QuickTrade() {
     try {
       await api.post(`/trade/loot-piece-offer/${offerId}/cancel`);
       toast.success('Loot piece offer cancelled.');
+      fetchTrades();
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to cancel');
+    }
+  };
+
+  const cosmeticItems = Array.isArray(cosmeticBalances?.items) ? cosmeticBalances.items : [];
+  const selectedCosmetic =
+    cosmeticItems.find((it) => `${it.kind}:${it.item_id}` === cosmeticKey) || cosmeticItems[0] || null;
+  const cosmeticMinPtsPer = Number(selectedCosmetic?.min_points_per || cosmeticBalances?.min_points_per || 50);
+
+  const handleCreateCosmeticOffer = async () => {
+    if (!selectedCosmetic) {
+      toast.error('No sellable cosmetics');
+      return;
+    }
+    let qty = Math.max(1, parseInt(String(cosmeticQuantity).replace(/,/g, ''), 10) || 1);
+    const sellable = Number(selectedCosmetic.sellable || 0);
+    if (qty > sellable) qty = Math.max(0, sellable);
+    if (qty < 1) {
+      toast.error('No sellable copies');
+      return;
+    }
+    const price = Math.max(1, parseInt(String(cosmeticPrice).replace(/,/g, ''), 10) || 0);
+    const minPts = cosmeticMinPtsPer * qty;
+    if (price < minPts) {
+      toast.error(`Minimum points for ${qty} is ${formatNumber(minPts)} (${formatNumber(cosmeticMinPtsPer)} each)`);
+      return;
+    }
+    setCreatingCosmetic(true);
+    try {
+      await api.post('/trade/cosmetic-offer', {
+        kind: selectedCosmetic.kind,
+        item_id: selectedCosmetic.item_id,
+        quantity: qty,
+        price_points: price,
+      });
+      toast.success('Cosmetic listing created');
+      setCosmeticQuantity('1');
+      setCosmeticPrice('');
+      fetchTrades();
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to create listing');
+    } finally {
+      setCreatingCosmetic(false);
+    }
+  };
+
+  const handleAcceptCosmeticOffer = async (offerId) => {
+    if (!window.confirm('Buy this cosmetic with points?')) return;
+    try {
+      await api.post(`/trade/cosmetic-offer/${offerId}/accept`);
+      toast.success('Cosmetic trade completed');
+      fetchTrades();
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Trade failed');
+    }
+  };
+
+  const handleCancelCosmeticOffer = async (offerId) => {
+    if (!window.confirm('Cancel this cosmetic listing? Items will be returned.')) return;
+    try {
+      await api.post(`/trade/cosmetic-offer/${offerId}/cancel`);
+      toast.success('Cosmetic listing cancelled');
       fetchTrades();
       refreshUser();
     } catch (e) {
@@ -1405,6 +1494,149 @@ export default function QuickTrade() {
                         className={`px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
                       >
                         Accept
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="qt-art-line text-primary mx-3" />
+        </section>
+      </div>
+
+      {/* Cosmetics (profile themes / BJ covers) — points only */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+              Sell cosmetics (points only)
+            </h2>
+          </div>
+          <div className="p-3 space-y-2.5">
+            <p className="text-[9px] text-mutedForeground font-heading">
+              Profile themes and blackjack covers from Crimes / GTA. List for points only.
+            </p>
+            {cosmeticItems.length === 0 ? (
+              <p className="text-[10px] text-mutedForeground">No sellable cosmetics yet.</p>
+            ) : (
+              <>
+                <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
+                  Item
+                </label>
+                <select
+                  value={cosmeticKey || `${selectedCosmetic?.kind}:${selectedCosmetic?.item_id}` || ''}
+                  onChange={(e) => setCosmeticKey(e.target.value)}
+                  className="w-full min-h-[36px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 text-xs text-foreground font-heading"
+                >
+                  {cosmeticItems.map((it) => (
+                    <option key={`${it.kind}:${it.item_id}`} value={`${it.kind}:${it.item_id}`}>
+                      {(it.kind === 'back' ? 'BJ · ' : 'Theme · ') + it.name} (×{it.sellable})
+                    </option>
+                  ))}
+                </select>
+                {selectedCosmetic?.image ? (
+                  <div className="flex items-center gap-2">
+                    <CosmeticThumb
+                      src={selectedCosmetic.image}
+                      alt={selectedCosmetic.name}
+                      size={40}
+                      title={selectedCosmetic.name}
+                    />
+                    <span className="text-[10px] text-mutedForeground">Tap preview to enlarge</span>
+                  </div>
+                ) : null}
+                <label htmlFor="cosmeticQuantity" className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
+                  Quantity (max {selectedCosmetic?.sellable ?? 0})
+                </label>
+                <FormattedNumberInput
+                  id="cosmeticQuantity"
+                  value={cosmeticQuantity}
+                  onChange={setCosmeticQuantity}
+                  className="w-full min-h-[36px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 text-sm text-foreground font-heading"
+                />
+                <label htmlFor="cosmeticPrice" className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
+                  Price (points)
+                </label>
+                <FormattedNumberInput
+                  id="cosmeticPrice"
+                  value={cosmeticPrice}
+                  onChange={setCosmeticPrice}
+                  className="w-full min-h-[36px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 text-sm text-foreground font-heading"
+                />
+                <p className="text-[9px] text-mutedForeground font-heading">
+                  Min {formatNumber(cosmeticMinPtsPer)} pts each
+                  {cosmeticQuantity
+                    ? ` · ${cosmeticQuantity} → min ${formatNumber(
+                        cosmeticMinPtsPer * Math.max(1, parseInt(String(cosmeticQuantity).replace(/,/g, ''), 10) || 1),
+                      )} pts`
+                    : ''}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCreateCosmeticOffer}
+                  disabled={!cosmeticPrice || creatingCosmetic || !selectedCosmetic}
+                  className="w-full px-4 py-2 rounded bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                >
+                  {creatingCosmetic ? 'Creating…' : 'List cosmetic for points'}
+                </button>
+              </>
+            )}
+          </div>
+          <div className="qt-art-line text-primary mx-3" />
+        </section>
+        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+            <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+              Cosmetic offers
+            </h3>
+          </div>
+          <div className="divide-y divide-zinc-700/30 max-h-96 overflow-y-auto">
+            {cosmeticOffers.length === 0 ? (
+              <div className="p-6 text-center">
+                <p className="text-xs text-mutedForeground font-heading">No cosmetic offers</p>
+              </div>
+            ) : (
+              cosmeticOffers.map((offer) => (
+                <div
+                  key={offer.id}
+                  className={`px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-zinc-800/30 ${
+                    offer.is_own ? 'bg-primary/5' : ''
+                  }`}
+                >
+                  <div className="min-w-0 flex-1 flex items-center gap-2">
+                    {offer.image ? (
+                      <CosmeticThumb src={offer.image} alt={offer.name || ''} size={36} title={offer.name} />
+                    ) : null}
+                    <div className="min-w-0">
+                      <div className="text-xs font-heading font-bold text-foreground truncate">
+                        {renderQtTraderLabel(offer, offer.is_own)}
+                      </div>
+                      <div className="text-[10px] text-mutedForeground mt-0.5 truncate">
+                        <span className="text-primary font-bold">{offer.quantity}</span>×{' '}
+                        {offer.kind === 'back' ? 'BJ' : 'Theme'} · {offer.name} ·{' '}
+                        <span className="text-foreground font-bold">{formatNumber(offer.price_points)}</span> pts
+                      </div>
+                    </div>
+                  </div>
+                  <div className="shrink-0">
+                    {offer.is_own ? (
+                      <button
+                        type="button"
+                        onClick={() => handleCancelCosmeticOffer(offer.id)}
+                        className={`px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
+                      >
+                        Cancel
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleAcceptCosmeticOffer(offer.id)}
+                        className={`px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
+                      >
+                        Buy
                       </button>
                     )}
                   </div>

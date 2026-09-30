@@ -17,6 +17,11 @@ function safeUrl(url) {
   if (!raw) return '';
   if (ALLOWED_URL_PREFIX.test(raw)) return raw;
 
+  // Same-origin static assets (update log theme/cover previews, etc.)
+  if (raw.startsWith('/') && !raw.startsWith('//') && /^\/[a-zA-Z0-9._~/-]+$/.test(raw) && !raw.includes('..')) {
+    return raw;
+  }
+
   // Protocol-relative: //cdn.example.com/foo → https
   if (raw.startsWith('//') && /^\/\/[a-zA-Z0-9._-]/.test(raw)) {
     try {
@@ -754,7 +759,19 @@ export function parseForumContent(content, options = {}) {
     // display:block + margin:auto → centres correctly inside [center] wrappers
     imgPlaceholders.push(
       safe
-        ? `<img src="${escapeAttr(safe)}" alt="" class="forum-content-media forum-content-img" style="display:block;max-width:500px;max-height:400px;width:auto;height:auto;border-radius:6px;margin:0.25em auto;object-fit:contain;" loading="lazy">`
+        ? `<img src="${escapeAttr(safe)}" alt="" class="forum-content-media forum-content-img" style="display:block;max-width:500px;max-height:400px;width:auto;height:auto;border-radius:6px;margin:0.25em auto;object-fit:contain;cursor:pointer;" loading="lazy" title="Tap to enlarge">`
+        : ''
+    );
+    return `\u0001I${idx}\u0001`;
+  });
+
+  // Small clickable preview (update log / grids) — enlarge on click via bindForumImageLightbox
+  s = s.replace(/\[thumb\]([\s\S]*?)\[\/thumb\]/gi, (_, url) => {
+    const idx = imgPlaceholders.length;
+    const safe = safeUrl(url.trim());
+    imgPlaceholders.push(
+      safe
+        ? `<img src="${escapeAttr(safe)}" alt="" class="forum-content-media forum-content-thumb" style="display:inline-block;width:56px;height:56px;max-width:18vw;max-height:18vw;object-fit:cover;border-radius:6px;margin:3px;vertical-align:middle;cursor:pointer;border:1px solid rgba(234,179,8,0.25);" loading="lazy" title="Tap to enlarge">`
         : ''
     );
     return `\u0001I${idx}\u0001`;

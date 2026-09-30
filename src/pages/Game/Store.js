@@ -183,6 +183,14 @@ const STORE_STYLES = `
       radial-gradient(circle at 50% 42%, rgba(234, 179, 8, 0.2), transparent 62%),
       rgba(0, 0, 0, 0.28);
     border: 1px solid rgba(234, 179, 8, 0.14);
+    overflow: hidden;
+  }
+  .store-product-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
   }
   .store-qty-row {
     display: flex;
@@ -518,6 +526,69 @@ function buildStoreRecommendations(user, { pointsTabLocked } = {}) {
 const CUSTOM_POINTS_PACKAGE = 'custom';
 /** Base point knots from backend POINT_PACKAGES (points-crediting packs only). Prices come from the live quote. */
 const POINT_AMOUNT_PRESETS = [2740, 6590, 13190, 24190, 58290, 110000, 209000, 302500, 385000];
+const POINT_PACK_ART = Object.fromEntries(
+  POINT_AMOUNT_PRESETS.map((amount) => [amount, `/images/store/points-pack-${amount}.jpg`])
+);
+const LOOT_PACK_ART = Object.fromEntries(
+  [1000, 2000, 3000, 4000, 5000].map((n) => [n, `/images/store/loot-pack-${n}.jpg`])
+);
+const BULLET_PACK_ART = Object.fromEntries(
+  [5000, 10000, 50000, 100000].map((n) => [n, `/images/store/bullets-pack-${n}.jpg`])
+);
+const TOKEN_ART = {
+  xp_crimes: '/images/store/token-xp_crimes.jpg',
+  xp_gta: '/images/store/token-xp_gta.jpg',
+  melt: '/images/store/token-melt.jpg',
+  oc_reduced: '/images/store/token-oc_reduced.jpg',
+  booze: '/images/store/token-booze.jpg',
+  racket: '/images/store/token-racket.jpg',
+  properties: '/images/store/token-properties.jpg',
+  travel: '/images/store/token-travel.jpg',
+  jailbust_bonus: '/images/store/token-jailbust_bonus.jpg',
+  auto_rank_2h: '/images/store/token-auto_rank_2h.jpg',
+  crew_oc_auto_3h: '/images/store/token-crew_oc_auto_3h.jpg',
+  auto_collect_12h: '/images/store/token-auto_collect_12h.jpg',
+  auto_collect_24h: '/images/store/token-auto_collect_24h.jpg',
+  jail_bailout: '/images/store/token-jail_bailout.jpg',
+  cooldown_skip_crime: '/images/store/token-cooldown_skip_crime.jpg',
+  cooldown_skip_gta: '/images/store/token-cooldown_skip_gta.jpg',
+  cooldown_skip_booze: '/images/store/token-cooldown_skip_booze.jpg',
+  cooldown_skip_properties: '/images/store/token-cooldown_skip_properties.jpg',
+};
+const TOKEN_BUNDLE_ART = {
+  grinder: '/images/store/token-bundle-grinder.jpg',
+  racket_runner: '/images/store/token-bundle-racket_runner.jpg',
+  builder: '/images/store/token-bundle-builder.jpg',
+};
+const UPGRADE_ART = {
+  health: '/images/store/upgrade-health.jpg',
+  'rank-bar': '/images/store/upgrade-rank-bar.jpg',
+  'founding-member': '/images/store/upgrade-founding-member.jpg',
+  'custom-profile-badge': '/images/store/upgrade-custom-profile-badge.jpg',
+  'profile-glow-7d': '/images/store/upgrade-profile-glow-7d.jpg',
+  'profile-glow-permanent': '/images/store/upgrade-profile-glow-permanent.jpg',
+  'family-safe-deposit-tier': '/images/store/upgrade-family-safe-deposit-tier.jpg',
+  'weed-daily-cap': '/images/store/upgrade-weed-daily-cap.jpg',
+  'weed-safety-deposit': '/images/store/upgrade-weed-safety-deposit.jpg',
+  'family-event-token': '/images/store/upgrade-family-event-token.jpg',
+  'auto-rank': '/images/store/upgrade-auto-rank.jpg',
+  'robot-bg-auto-search': '/images/store/upgrade-robot-bg-auto-search.jpg',
+  'bodyguard-find-time': '/images/store/upgrade-bodyguard-find-time.jpg',
+  'slow-kill-inflation': '/images/store/upgrade-slow-kill-inflation.jpg',
+  'slow-bodyguard-hire-inflation': '/images/store/upgrade-slow-bodyguard-hire-inflation.jpg',
+  'raid-capacity': '/images/store/upgrade-raid-capacity.jpg',
+  'raid-reset': '/images/store/upgrade-raid-reset.jpg',
+  'armour-tier-6': '/images/store/upgrade-armour-tier-6.jpg',
+  weapon11: '/images/store/upgrade-weapon11.jpg',
+  silencer: '/images/store/upgrade-silencer.jpg',
+  'anti-snitch': '/images/store/upgrade-anti-snitch.jpg',
+  'oc-timer': '/images/store/upgrade-oc-timer.jpg',
+  'crew-oc-timer': '/images/store/upgrade-crew-oc-timer.jpg',
+  garage: '/images/store/upgrade-garage.jpg',
+  booze: '/images/store/upgrade-booze.jpg',
+  'interest-limit': '/images/store/upgrade-interest-limit.jpg',
+  'hitlist-npc-cap': '/images/store/upgrade-hitlist-npc-cap.jpg',
+};
 
 function formatStoreBalance(n) {
   const v = Number(n) || 0;
@@ -883,7 +954,7 @@ function StoreFilterChips({ options, value, onChange, ariaLabel }) {
   );
 }
 
-const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, onBuy, loading, disabled, comingSoon, staffPreview, user, payWith = 'auto', cashPrice, children, needsConfirm = false }) => {
+const StoreCard = ({ title, Icon, artSrc, desc, price, respectPrice, owned, ownedLabel, onBuy, loading, disabled, comingSoon, staffPreview, user, payWith = 'auto', cashPrice, children, needsConfirm = false }) => {
   const [confirming, setConfirming] = useState(false);
   useEffect(() => {
     if (loading || disabled || owned) setConfirming(false);
@@ -936,7 +1007,11 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, 
         </div>
       </div>
       <div className="store-product-art" aria-hidden>
-        {Icon ? <Icon size={32} /> : null}
+        {artSrc ? (
+          <img src={artSrc} alt="" width={320} height={320} loading="lazy" decoding="async" />
+        ) : Icon ? (
+          <Icon size={32} />
+        ) : null}
       </div>
       {desc ? <p className="text-[13px] text-zinc-300 font-heading leading-snug">{desc}</p> : null}
       {children}
@@ -2005,7 +2080,16 @@ export default function Store() {
                     return (
                       <div key={amount} className={`rounded-lg border p-3 ${selected ? 'border-primary/50 bg-primary/10' : 'border-primary/20 bg-zinc-950/40'}`}>
                         <h3 className="text-[14px] font-heading font-bold text-foreground uppercase tracking-wide">{amount.toLocaleString()} points</h3>
-                        <div className="store-product-art" aria-hidden><Coins size={32} /></div>
+                        <div className="store-product-art" aria-hidden>
+                          <img
+                            src={POINT_PACK_ART[amount]}
+                            alt=""
+                            width={320}
+                            height={320}
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        </div>
                         <p className="text-[13px] font-heading text-zinc-300 min-h-[1.25rem]">
                           {ready ? (
                             <>
@@ -2383,6 +2467,11 @@ export default function Store() {
                     <u.Icon className="text-primary shrink-0" size={14} />
                   </div>
                   <div className="p-2.5">
+                    {UPGRADE_ART[u.id] ? (
+                      <div className="store-product-art" aria-hidden>
+                        <img src={UPGRADE_ART[u.id]} alt="" width={320} height={320} loading="lazy" decoding="async" />
+                      </div>
+                    ) : null}
                     <p className="text-[10px] text-mutedForeground font-heading mb-1.5">{u.desc}</p>
                     {hasAccountOnlyAutoRank ? (
                       <p className="text-[9px] text-emerald-300/90 font-heading mb-2 leading-snug">
@@ -2440,6 +2529,7 @@ export default function Store() {
               <StoreCard
                 title={u.title}
                 Icon={u.Icon}
+                artSrc={UPGRADE_ART[u.id]}
                 desc={u.desc}
                 price={priceVal}
                 respectPrice={u.pointsOnly ? null : storeRespectForPoints(priceVal)}
@@ -2634,7 +2724,14 @@ export default function Store() {
                       {pack.pieces.toLocaleString()} pieces
                     </h3>
                     <div className="store-product-art" aria-hidden>
-                      <Gift size={34} />
+                      <img
+                        src={LOOT_PACK_ART[pack.pieces]}
+                        alt=""
+                        width={320}
+                        height={320}
+                        loading="lazy"
+                        decoding="async"
+                      />
                     </div>
                     <p className="text-[13px] text-zinc-300 font-heading">
                       {pack.wheelSpins} wheel free spin{pack.wheelSpins === 1 ? '' : 's'}
@@ -2747,6 +2844,7 @@ export default function Store() {
                     key={t.tokenType}
                     title={t.title}
                     Icon={Package}
+                    artSrc={TOKEN_ART[t.tokenType]}
                     desc={t.desc}
                     price={totalPts}
                     respectPrice={totalRespect}
@@ -2866,6 +2964,11 @@ export default function Store() {
                       <Package className="text-primary shrink-0" size={14} />
                     </div>
                     <div className="p-2.5">
+                      {TOKEN_ART[t.tokenType] ? (
+                        <div className="store-product-art" aria-hidden>
+                          <img src={TOKEN_ART[t.tokenType]} alt="" width={320} height={320} loading="lazy" decoding="async" />
+                        </div>
+                      ) : null}
                       <p className="text-[9px] text-mutedForeground font-heading mb-1.5">{t.desc}</p>
                       <p className="text-[10px] text-mutedForeground mb-1.5">
                         Held: {held.toLocaleString()} · {t.price} pts each
@@ -3001,6 +3104,7 @@ export default function Store() {
                     key={b.id}
                     title={b.title}
                     Icon={Package}
+                    artSrc={TOKEN_BUNDLE_ART[b.id]}
                     desc={b.desc}
                     price={b.price}
                     respectPrice={storeRespectForPoints(b.price)}
@@ -3048,7 +3152,14 @@ export default function Store() {
                       {pack.bullets.toLocaleString()} bullets
                     </h3>
                     <div className="store-product-art" aria-hidden>
-                      <Crosshair size={34} />
+                      <img
+                        src={BULLET_PACK_ART[pack.bullets]}
+                        alt=""
+                        width={320}
+                        height={320}
+                        loading="lazy"
+                        decoding="async"
+                      />
                     </div>
                     <p className="text-[15px] font-heading font-bold text-primary tabular-nums">
                       {storePayWith === 'points' ? `${pack.cost.toLocaleString()} pts` : `${respectCost.toLocaleString()} resp`}

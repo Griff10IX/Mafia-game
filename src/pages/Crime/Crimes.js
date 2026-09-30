@@ -5,6 +5,7 @@ import { useAuthUser } from '../../context/AuthContext';
 import { SAME_ROUTE_NAV_CLICK } from '../../constants/navigationEvents';
 import { getCrimesPrefetch, clearCrimesPrefetch } from '../../utils/prefetchCache';
 import { toast } from 'sonner';
+import { CosmeticDropToastPreview } from '../../components/CosmeticPreview';
 import styles from '../../styles/noir.module.css';
 const CRIMES_STYLES = `
   @keyframes cr-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -633,7 +634,18 @@ export default function Crimes() {
           if (bonus.points) parts.push(`${bonus.points} pts`);
           if (parts.length > 0) msg += ` ★ Bonus: ${parts.join(', ')}`;
         }
-        toast.success(msg);
+        const drop = data.cosmetic_drop;
+        if (drop?.id) {
+          const label =
+            drop.label ||
+            (drop.kind === 'back'
+              ? `Blackjack cover: ${drop.name || drop.id}`
+              : `Profile theme: ${drop.name || drop.id}`);
+          msg += `${msg.trim().endsWith('.') ? '' : '.'} Found ${label}`;
+        }
+        toast.success(msg, {
+          description: drop?.id ? <CosmeticDropToastPreview drop={drop} /> : undefined,
+        });
         const profit = Number(data.reward) || 0;
         setCrimeStats((prev) => ({
           ...prev,
@@ -743,7 +755,16 @@ export default function Crimes() {
           if (totalRespect > 0) rewards.push(`${totalRespect.toLocaleString()} respect`);
           parts.push(`earned ${rewards.join(' + ')}`);
         }
-        toast.success(parts.join(' · '));
+        toast.success(parts.join(' · '), {
+          description:
+            Array.isArray(res.data?.cosmetic_drops) && res.data.cosmetic_drops.length > 0 ? (
+              <div className="space-y-1">
+                {res.data.cosmetic_drops.slice(0, 3).map((d, i) => (
+                  <CosmeticDropToastPreview key={`${d.kind}-${d.id}-${i}`} drop={d} />
+                ))}
+              </div>
+            ) : undefined,
+        });
       }
       errors.slice(0, 3).forEach((msg) => toast.error(String(msg)));
     } catch (e) {

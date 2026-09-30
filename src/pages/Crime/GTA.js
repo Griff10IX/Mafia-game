@@ -33,6 +33,7 @@ import {
   isCivilianProtectionConfirmCancelled,
 } from '../../utils/civilianProtectionConfirm';
 import { toast } from 'sonner';
+import { CosmeticDropToastPreview } from '../../components/CosmeticPreview';
 import styles from '../../styles/noir.module.css';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import { GTA_SESSION_CACHE_KEY, DEFAULT_GTA_STATS } from '../../utils/gtaPageWarm';
@@ -691,30 +692,35 @@ export default function GTA() {
         const glowHex = RARITY_GLOW_HEX[rarityKey] || RARITY_GLOW_HEX.common;
         const rarityLabel = rarityKey.replace(/_/g, ' ');
         toast.success(data.message, {
-          description: car ? (
-            <div className="flex items-center gap-3">
-              {img ? (
-                <div
-                  className="w-12 h-12 rounded-sm overflow-hidden bg-secondary shrink-0"
-                  style={{
-                    border: `2px solid ${glowHex}`,
-                    boxShadow: `0 0 10px ${glowHex}99, inset 0 0 6px ${glowHex}33`,
-                  }}
-                >
-                  <img src={img} alt={car?.name || 'car'} className="w-full h-full object-cover" loading="lazy" />
+          description: (
+            <div className="space-y-1.5">
+              {car ? (
+                <div className="flex items-center gap-3">
+                  {img ? (
+                    <div
+                      className="w-12 h-12 rounded-sm overflow-hidden bg-secondary shrink-0"
+                      style={{
+                        border: `2px solid ${glowHex}`,
+                        boxShadow: `0 0 10px ${glowHex}99, inset 0 0 6px ${glowHex}33`,
+                      }}
+                    >
+                      <img src={img} alt={car?.name || 'car'} className="w-full h-full object-cover" loading="lazy" />
+                    </div>
+                  ) : null}
+                  <div className="text-xs text-mutedForeground">
+                    <div className="text-foreground font-semibold">{car?.name || 'Car'}</div>
+                    <div className={`mt-0.5 text-[10px] font-bold uppercase tracking-wider ${getRarityColor(rarityKey)}`}>
+                      {rarityLabel}
+                    </div>
+                    {typeof data.respect_points === 'number' && data.respect_points > 0 ? (
+                      <div className="mt-0.5">Respect: +{data.respect_points}</div>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
-              <div className="text-xs text-mutedForeground">
-                <div className="text-foreground font-semibold">{car?.name || 'Car'}</div>
-                <div className={`mt-0.5 text-[10px] font-bold uppercase tracking-wider ${getRarityColor(rarityKey)}`}>
-                  {rarityLabel}
-                </div>
-                {typeof data.respect_points === 'number' && data.respect_points > 0 ? (
-                  <div className="mt-0.5">Respect: +{data.respect_points}</div>
-                ) : null}
-              </div>
+              {data.cosmetic_drop?.id ? <CosmeticDropToastPreview drop={data.cosmetic_drop} /> : null}
             </div>
-          ) : undefined,
+          ),
         });
         const profit = Number(car?.value) || 0;
         setGtaStats((prev) => ({

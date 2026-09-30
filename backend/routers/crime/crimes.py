@@ -264,6 +264,7 @@ class CommitCrimeResponse(BaseModel):
     respect_points: int = 0
     prestige_bonus_earned: Optional[dict] = None
     rank_points_earned: int = 0  # RP granted this commit (prestige crimes = 20 base before perks); 0 on fail
+    cosmetic_drop: Optional[dict] = None  # theme/back grant payload (no drop chance fields)
 
 
 class CommitAllCrimesResponse(BaseModel):
@@ -659,6 +660,7 @@ async def commit_all_crimes(current_user: dict = Depends(get_current_user_verifi
     total_cash = 0
     total_respect = 0
     errors: list[str] = []
+    cosmetic_drops: list = []
 
     # Ready first (no tokens), then on-cooldown with one skip each.
     queue: list[tuple[str, bool]] = [(cid, False) for cid in ready_ids] + [(cid, True) for cid in cooldown_ids]
@@ -687,6 +689,9 @@ async def commit_all_crimes(current_user: dict = Depends(get_current_user_verifi
                 rp_add = int(getattr(res, "rank_points_earned", 0) or 0)
                 if rp_add:
                     current_user["rank_points"] = int(current_user.get("rank_points") or 0) + rp_add
+                drop = getattr(res, "cosmetic_drop", None)
+                if isinstance(drop, dict) and drop.get("id"):
+                    cosmetic_drops.append(drop)
             else:
                 failed += 1
                 msg = getattr(res, "message", "Failed") or "Failed"
@@ -716,6 +721,7 @@ async def commit_all_crimes(current_user: dict = Depends(get_current_user_verifi
         "total_cash": int(total_cash),
         "total_respect": int(total_respect),
         "errors": errors[:25],
+        "cosmetic_drops": cosmetic_drops[:10],
     }
 
 
@@ -877,6 +883,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
     xp_crimes_bonus_rp = 0
     _we_bonus_rp = 0
     _we_bonus_cash = 0
+    cosmetic_drop = None
     # Non-response-affecting DB work queued here runs in a background task after we respond.
     deferred_ops: list = []
 
@@ -1018,6 +1025,15 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             else:
                 prestige_bonus_earned["token"] = token_type
                 prestige_bonus_earned["token_amount"] = token_amt
+
+        cosmetic_drop = None
+        try:
+            from utils.crime_gta_cosmetics import maybe_roll_crime_gta_cosmetic
+
+            cosmetic_drop = await maybe_roll_crime_gta_cosmetic(db, current_user["id"], _rng)
+        except Exception:
+            logging.exception("crime cosmetic drop failed user=%s", current_user.get("id"))
+            cosmetic_drop = None
 
         # Prestige crime extras — merge into the same $inc (one users.update_one).
         prestige_bonus_respect = 0
@@ -1306,6 +1322,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         respect_points=respect_earned if success else 0,
         prestige_bonus_earned=prestige_bonus_earned if success else None,
         rank_points_earned=rank_points_earned_out,
+        cosmetic_drop=cosmetic_drop if success else None,
     )
 
 

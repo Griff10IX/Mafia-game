@@ -53,6 +53,8 @@ _token_offers_cache: Optional[tuple] = None
 _token_offers_ts: float = 0
 _loot_piece_offers_cache: Optional[tuple] = None
 _loot_piece_offers_ts: float = 0
+_cosmetic_offers_cache: Optional[tuple] = None
+_cosmetic_offers_ts: float = 0
 _properties_cache: Optional[tuple] = None
 _properties_ts: float = 0
 _LIST_TTL_SEC = 5
@@ -131,6 +133,7 @@ def _qt_list_username(offer: dict, viewer: dict) -> str:
 def _invalidate_trade_caches():
     global _sell_offers_cache, _sell_offers_ts, _buy_offers_cache, _buy_offers_ts
     global _token_offers_cache, _token_offers_ts, _loot_piece_offers_cache, _loot_piece_offers_ts
+    global _cosmetic_offers_cache, _cosmetic_offers_ts
     global _properties_cache, _properties_ts
     _sell_offers_cache = None
     _sell_offers_ts = 0
@@ -140,6 +143,8 @@ def _invalidate_trade_caches():
     _token_offers_ts = 0
     _loot_piece_offers_cache = None
     _loot_piece_offers_ts = 0
+    _cosmetic_offers_cache = None
+    _cosmetic_offers_ts = 0
     _properties_cache = None
     _properties_ts = 0
 
@@ -376,6 +381,22 @@ async def cancel_offers_on_death(user_id: str):
         {"user_id": user_id, "status": "active"},
         {"$set": {"status": "cancelled", "cancelled_at": now}},
     )
+    cosmetic_offers = await db.trade_cosmetic_offers.find({"user_id": user_id, "status": "active"}).to_list(100)
+    for offer in cosmetic_offers:
+        kind = offer.get("kind")
+        item_id = offer.get("item_id")
+        qty = int(offer.get("quantity") or 0)
+        if kind and item_id and qty > 0:
+            try:
+                from utils.crime_gta_cosmetics import restore_cosmetic_copies
+
+                await restore_cosmetic_copies(db, user_id, kind, item_id, qty)
+            except Exception:
+                logger.exception("cosmetic restore on death failed user=%s", user_id)
+    await db.trade_cosmetic_offers.update_many(
+        {"user_id": user_id, "status": "active"},
+        {"$set": {"status": "cancelled", "cancelled_at": now}},
+    )
     _invalidate_trade_caches()
 
 
@@ -406,6 +427,14 @@ class CreateLootPieceOffer(BaseModel):
     price_currency: str = "points"
     price_points: int = 0
     price_money: int = 0
+
+
+class CreateCosmeticOffer(BaseModel):
+    """Crime/GTA cosmetics — points only."""
+    kind: str  # "theme" | "back"
+    item_id: str
+    quantity: int = 1
+    price_points: int = 0
 
 
 # ----- Sell offers -----
@@ -1435,6 +1464,253 @@ async def cancel_loot_piece_offer(offer_id: str, current_user: dict = Depends(ge
     await db.users.update_one({"id": user_id}, {"$inc": {LOOT_BOX_PIECES_FIELD: offer["quantity"]}})
     _invalidate_trade_caches()
     return {"message": f"Offer cancelled. {offer['quantity']} loot box piece(s) returned."}
+
+
+# ----- Crime/GTA cosmetic offers (points only) -----
+async def get_cosmetic_offers(current_user: dict = Depends(get_current_user)):
+    global _cosmetic_offers_cache, _cosmetic_offers_ts
+    now = time.monotonic()
+    if _cosmetic_offers_cache is not None and now <= _cosmetic_offers_ts + _LIST_TTL_SEC:
+        raw_list = _cosmetic_offers_cache
+    else:
+        try:
+            raw_list = await db.trade_cosmetic_offers.find({"status": "active"}).sort("created_at", -1).to_list(length=100)
+            _cosmetic_offers_cache = raw_list
+            _cosmetic_offers_ts = now
+        except Exception as e:
+            print(f"Error fetching cosmetic offers: {e}")
+            return []
+    from utils.crime_gta_cosmetics import catalog_meta_for_kind
+
+    result = []
+    for offer in raw_list:
+        kind = offer.get("kind") or ""
+        item_id = offer.get("item_id") or ""
+        meta = catalog_meta_for_kind(kind, item_id) or {}
+        result.append({
+            "id": str(offer["_id"]),
+            "username": offer.get("username", "Anonymous"),
+            "kind": kind,
+            "item_id": item_id,
+            "name": meta.get("name") or offer.get("name") or item_id,
+            "image": meta.get("image") or offer.get("image"),
+            "quantity": int(offer.get("quantity") or 1),
+            "price_points": int(offer.get("price_points") or 0),
+            "price_currency": "points",
+            "created_at": offer.get("created_at"),
+            "is_own": _same_user_id(offer.get("user_id"), current_user.get("id")),
+        })
+    return result
+
+
+async def get_my_cosmetic_balances(current_user: dict = Depends(get_current_user)):
+    """Sellable crime/GTA cosmetics with previews (inventory stacks)."""
+    from utils.crime_gta_cosmetics import (
+        BACK_INVENTORY_FIELD,
+        COSMETIC_MIN_POINTS_PER,
+        THEME_INVENTORY_FIELD,
+        catalog_meta_for_kind,
+        public_inventory_fields,
+    )
+    from utils.profile_background_themes import CRIME_GTA_COSMETIC_THEME_IDS
+    from utils.blackjack_card_backs import CRIME_GTA_COSMETIC_BACK_IDS
+
+    user = await db.users.find_one(
+        {"id": current_user["id"]},
+        {"_id": 0, THEME_INVENTORY_FIELD: 1, BACK_INVENTORY_FIELD: 1},
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    inv = public_inventory_fields(user)
+    themes_inv = inv.get(THEME_INVENTORY_FIELD) or {}
+    backs_inv = inv.get(BACK_INVENTORY_FIELD) or {}
+    items = []
+    for tid in CRIME_GTA_COSMETIC_THEME_IDS:
+        qty = int(themes_inv.get(tid) or 0)
+        if qty < 1:
+            continue
+        meta = catalog_meta_for_kind("theme", tid) or {}
+        items.append({
+            "kind": "theme",
+            "item_id": tid,
+            "name": meta.get("name") or tid,
+            "image": meta.get("image"),
+            "sellable": qty,
+            "min_points_per": COSMETIC_MIN_POINTS_PER,
+            "points_only": True,
+        })
+    for bid in CRIME_GTA_COSMETIC_BACK_IDS:
+        qty = int(backs_inv.get(bid) or 0)
+        if qty < 1:
+            continue
+        meta = catalog_meta_for_kind("back", bid) or {}
+        items.append({
+            "kind": "back",
+            "item_id": bid,
+            "name": meta.get("name") or bid,
+            "image": meta.get("image"),
+            "sellable": qty,
+            "min_points_per": COSMETIC_MIN_POINTS_PER,
+            "points_only": True,
+        })
+    return {"items": items, "min_points_per": COSMETIC_MIN_POINTS_PER}
+
+
+async def create_cosmetic_offer(offer: CreateCosmeticOffer, current_user: dict = Depends(get_current_user)):
+    from utils.crime_gta_cosmetics import (
+        COSMETIC_MIN_POINTS_PER,
+        catalog_meta_for_kind,
+        consume_cosmetic_copies,
+    )
+    from utils.profile_background_themes import CRIME_GTA_COSMETIC_THEME_IDS
+    from utils.blackjack_card_backs import CRIME_GTA_COSMETIC_BACK_IDS
+
+    user_id = current_user["id"]
+    username = current_user.get("username", "Unknown")
+    kind = (offer.kind or "").strip().lower()
+    item_id = (offer.item_id or "").strip().lower()
+    qty = int(offer.quantity or 0)
+    price_points = int(offer.price_points or 0)
+    if kind not in ("theme", "back"):
+        raise HTTPException(status_code=400, detail="kind must be 'theme' or 'back'")
+    if kind == "theme" and item_id not in CRIME_GTA_COSMETIC_THEME_IDS:
+        raise HTTPException(status_code=400, detail="Unknown or non-tradable theme")
+    if kind == "back" and item_id not in CRIME_GTA_COSMETIC_BACK_IDS:
+        raise HTTPException(status_code=400, detail="Unknown or non-tradable card back")
+    if qty < 1:
+        raise HTTPException(status_code=400, detail="Quantity must be at least 1")
+    min_pts = COSMETIC_MIN_POINTS_PER * qty
+    if price_points < min_pts:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Minimum points for {qty} is {min_pts} ({COSMETIC_MIN_POINTS_PER} per copy)",
+        )
+    ok = await consume_cosmetic_copies(db, user_id, kind, item_id, qty)
+    if not ok:
+        raise HTTPException(status_code=400, detail="Insufficient sellable copies")
+    meta = catalog_meta_for_kind(kind, item_id) or {}
+    doc = {
+        "user_id": user_id,
+        "username": username,
+        "kind": kind,
+        "item_id": item_id,
+        "name": meta.get("name") or item_id,
+        "image": meta.get("image"),
+        "quantity": qty,
+        "price_points": price_points,
+        "price_currency": "points",
+        "status": "active",
+        "created_at": datetime.now(timezone.utc),
+    }
+    ins = await db.trade_cosmetic_offers.insert_one(doc)
+    _invalidate_trade_caches()
+    return {
+        "message": "Cosmetic listing created",
+        "id": str(ins.inserted_id),
+        "kind": kind,
+        "item_id": item_id,
+        "quantity": qty,
+        "price_points": price_points,
+    }
+
+
+async def accept_cosmetic_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
+    from utils.crime_gta_cosmetics import grant_cosmetic_copy
+
+    buyer_id = current_user["id"]
+    buyer_username = current_user.get("username", "Unknown")
+    offer = await db.trade_cosmetic_offers.find_one_and_update(
+        {"_id": ObjectId(offer_id), "status": "active"},
+        {"$set": {"status": "accepted", "accepted_at": datetime.now(timezone.utc), "buyer_id": buyer_id}},
+    )
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or already taken")
+    if _same_user_id(offer.get("user_id"), buyer_id):
+        await db.trade_cosmetic_offers.update_one(
+            {"_id": ObjectId(offer_id)},
+            {"$set": {"status": "active"}, "$unset": {"accepted_at": "", "buyer_id": ""}},
+        )
+        raise HTTPException(status_code=400, detail="Cannot buy your own listing")
+    kind = offer.get("kind")
+    item_id = offer.get("item_id")
+    qty = int(offer.get("quantity") or 1)
+    price_points = int(offer.get("price_points") or 0)
+    seller_id = offer["user_id"]
+    buyer = await db.users.find_one({"id": buyer_id}, {"_id": 0, "points": 1})
+    if int((buyer or {}).get("points") or 0) < price_points:
+        await db.trade_cosmetic_offers.update_one(
+            {"_id": ObjectId(offer_id)},
+            {"$set": {"status": "active"}, "$unset": {"accepted_at": "", "buyer_id": ""}},
+        )
+        raise HTTPException(status_code=400, detail="Not enough points")
+    # Charge buyer, pay seller, grant copies to buyer
+    charged = await db.users.find_one_and_update(
+        {"id": buyer_id, "points": {"$gte": price_points}},
+        {"$inc": {"points": -price_points}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not charged:
+        await db.trade_cosmetic_offers.update_one(
+            {"_id": ObjectId(offer_id)},
+            {"$set": {"status": "active"}, "$unset": {"accepted_at": "", "buyer_id": ""}},
+        )
+        raise HTTPException(status_code=400, detail="Not enough points")
+    await db.users.update_one({"id": seller_id}, {"$inc": {"points": price_points}})
+    for _ in range(qty):
+        await grant_cosmetic_copy(db, buyer_id, kind, item_id)
+    try:
+        await log_points_event(
+            db,
+            user_id=buyer_id,
+            points=-price_points,
+            event_type="quicktrade_cosmetic_buy",
+            meta={"offer_id": offer_id, "kind": kind, "item_id": item_id, "quantity": qty},
+        )
+        await log_points_event(
+            db,
+            user_id=seller_id,
+            points=price_points,
+            event_type="quicktrade_cosmetic_sell",
+            meta={"offer_id": offer_id, "kind": kind, "item_id": item_id, "quantity": qty},
+        )
+    except Exception:
+        pass
+    await _notify_quicktrade_inbox(
+        seller_id,
+        "Quick Trade: cosmetic sold",
+        f"{buyer_username} bought your {offer.get('name') or item_id} ({qty}×) for {price_points:,} points.",
+    )
+    await maybe_revoke_civilian_protection(
+        db,
+        buyer_id,
+        context={"offer_id": offer_id, "item_type": "cosmetic", "kind": kind, "item_id": item_id, "quantity": qty},
+    )
+    _invalidate_trade_caches()
+    return {
+        "message": "Trade completed",
+        "kind": kind,
+        "item_id": item_id,
+        "quantity": qty,
+        "points_paid": price_points,
+        "price_currency": "points",
+    }
+
+
+async def cancel_cosmetic_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
+    from utils.crime_gta_cosmetics import restore_cosmetic_copies
+
+    user_id = current_user["id"]
+    offer = await db.trade_cosmetic_offers.find_one_and_update(
+        {"_id": ObjectId(offer_id), "user_id": user_id, "status": "active"},
+        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}},
+    )
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or already cancelled")
+    await restore_cosmetic_copies(
+        db, user_id, offer.get("kind"), offer.get("item_id"), int(offer.get("quantity") or 1)
+    )
+    _invalidate_trade_caches()
+    return {"message": "Cosmetic listing cancelled. Items returned."}
 
 
 # ----- Buy offers -----
@@ -2690,3 +2966,8 @@ def register(router):
     router.add_api_route("/trade/loot-piece-offer", create_loot_piece_offer, methods=["POST"])
     router.add_api_route("/trade/loot-piece-offer/{offer_id}/accept", accept_loot_piece_offer, methods=["POST"])
     router.add_api_route("/trade/loot-piece-offer/{offer_id}/cancel", cancel_loot_piece_offer, methods=["POST"])
+    router.add_api_route("/trade/cosmetic-offers", get_cosmetic_offers, methods=["GET"], dependencies=_quicktrade_rl_u)
+    router.add_api_route("/trade/my-cosmetic-balances", get_my_cosmetic_balances, methods=["GET"], dependencies=_quicktrade_rl_u)
+    router.add_api_route("/trade/cosmetic-offer", create_cosmetic_offer, methods=["POST"])
+    router.add_api_route("/trade/cosmetic-offer/{offer_id}/accept", accept_cosmetic_offer, methods=["POST"])
+    router.add_api_route("/trade/cosmetic-offer/{offer_id}/cancel", cancel_cosmetic_offer, methods=["POST"])

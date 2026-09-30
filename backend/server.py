@@ -1028,6 +1028,8 @@ class UserResponse(BaseModel):
     blackjack_card_back: Optional[dict] = None
     blackjack_card_backs_owned: List[str] = []
     blackjack_card_backs: List[dict] = []
+    profile_theme_inventory: Dict[str, int] = {}
+    blackjack_back_inventory: Dict[str, int] = {}
     crew_oc_auto_apply_tokens: int = 0
     crew_oc_auto_apply_until: Optional[str] = None
     crew_oc_auto_apply_max_fee: Optional[int] = None

@@ -21,7 +21,7 @@ CUSTOM_THEME_NAME = "Admin custom (test)"
 # Catalog: hard-to-get themes (loot later). Image paths are public static assets.
 # ?v= cache-bust when art is replaced.
 # fit: width = natural-aspect banner (default); stretch = fill whole dossier.
-_THEME_ASSET_V = "20260921gp6smooth"
+_THEME_ASSET_V = "20260930knife2"
 PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, Any]] = {
     "godfather": {
         "id": "godfather",
@@ -377,6 +377,350 @@ PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, Any]] = {
         "fit": "width",
         "game_pass_season6": True,
     },
+    # New dossier backgrounds (catalog; grant separately — not live yet)
+    "vegas_rain": {
+        "id": "vegas_rain",
+        "name": "Vegas Rain",
+        "image": f"/images/profile-themes/vegas-rain.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "chicago_alley": {
+        "id": "chicago_alley",
+        "name": "Chicago Alley",
+        "image": f"/images/profile-themes/chicago-alley.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "sicilian_villa": {
+        "id": "sicilian_villa",
+        "name": "Sicilian Villa",
+        "image": f"/images/profile-themes/sicilian-villa.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "subway_heist": {
+        "id": "subway_heist",
+        "name": "Subway Heist",
+        "image": f"/images/profile-themes/subway-heist.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "speakeasy_bar": {
+        "id": "speakeasy_bar",
+        "name": "Speakeasy Bar",
+        "image": f"/images/profile-themes/speakeasy-bar.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "dockyard_fog": {
+        "id": "dockyard_fog",
+        "name": "Dockyard Fog",
+        "image": f"/images/profile-themes/dockyard-fog.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "desert_airstrip": {
+        "id": "desert_airstrip",
+        "name": "Desert Airstrip",
+        "image": f"/images/profile-themes/desert-airstrip.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "venice_canal": {
+        "id": "venice_canal",
+        "name": "Venice Canal",
+        "image": f"/images/profile-themes/venice-canal.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "penthouse_rain": {
+        "id": "penthouse_rain",
+        "name": "Penthouse Rain",
+        "image": f"/images/profile-themes/penthouse-rain.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "train_trestle": {
+        "id": "train_trestle",
+        "name": "Train Trestle",
+        "image": f"/images/profile-themes/train-trestle.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "star_wars_station": {
+        "id": "star_wars_station",
+        "name": "Star Wars Station",
+        "image": f"/images/profile-themes/star-wars-station.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    # Space set
+    "space_nebula_rift": {
+        "id": "space_nebula_rift",
+        "name": "Nebula Rift",
+        "image": f"/images/profile-themes/space-nebula-rift.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "space_ringworld": {
+        "id": "space_ringworld",
+        "name": "Ringworld",
+        "image": f"/images/profile-themes/space-ringworld.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "space_ice_moon": {
+        "id": "space_ice_moon",
+        "name": "Ice Moon",
+        "image": f"/images/profile-themes/space-ice-moon.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "space_red_giant": {
+        "id": "space_red_giant",
+        "name": "Red Giant",
+        "image": f"/images/profile-themes/space-red-giant.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "space_asteroid_field": {
+        "id": "space_asteroid_field",
+        "name": "Asteroid Field",
+        "image": f"/images/profile-themes/space-asteroid-field.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    # Sicily 1920s set
+    "sicily_palermo_street": {
+        "id": "sicily_palermo_street",
+        "name": "Palermo Street",
+        "image": f"/images/profile-themes/sicily-palermo-street.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "sicily_dock_crates": {
+        "id": "sicily_dock_crates",
+        "name": "Sicily Docks",
+        "image": f"/images/profile-themes/sicily-dock-crates.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "sicily_villa_night": {
+        "id": "sicily_villa_night",
+        "name": "Sicily Villa Night",
+        "image": f"/images/profile-themes/sicily-villa-night.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "sicily_market_square": {
+        "id": "sicily_market_square",
+        "name": "Sicily Square",
+        "image": f"/images/profile-themes/sicily-market-square.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "sicily_train_station": {
+        "id": "sicily_train_station",
+        "name": "Sicily Station",
+        "image": f"/images/profile-themes/sicily-train-station.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    # Scenic set
+    "scenic_aurora_fjord": {
+        "id": "scenic_aurora_fjord",
+        "name": "Aurora Fjord",
+        "image": f"/images/profile-themes/scenic-aurora-fjord.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "scenic_sahara_dunes": {
+        "id": "scenic_sahara_dunes",
+        "name": "Sahara Dunes",
+        "image": f"/images/profile-themes/scenic-sahara-dunes.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "scenic_cherry_temple": {
+        "id": "scenic_cherry_temple",
+        "name": "Cherry Temple",
+        "image": f"/images/profile-themes/scenic-cherry-temple.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "scenic_cliff_lighthouse": {
+        "id": "scenic_cliff_lighthouse",
+        "name": "Cliff Lighthouse",
+        "image": f"/images/profile-themes/scenic-cliff-lighthouse.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "scenic_misty_bamboo": {
+        "id": "scenic_misty_bamboo",
+        "name": "Misty Bamboo",
+        "image": f"/images/profile-themes/scenic-misty-bamboo.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    # Kill / dark mafia set
+    "kill_blood_altar": {
+        "id": "kill_blood_altar",
+        "name": "Blood Altar",
+        "image": f"/images/profile-themes/kill-blood-altar.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "kill_knife_alley": {
+        "id": "kill_knife_alley",
+        "name": "Knife Alley",
+        "image": f"/images/profile-themes/kill-knife-alley.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "kill_execution_chair": {
+        "id": "kill_execution_chair",
+        "name": "Execution Chair",
+        "image": f"/images/profile-themes/kill-execution-chair.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "kill_black_hood": {
+        "id": "kill_black_hood",
+        "name": "Black Hood",
+        "image": f"/images/profile-themes/kill-black-hood.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "kill_handprint_wall": {
+        "id": "kill_handprint_wall",
+        "name": "Handprint Wall",
+        "image": f"/images/profile-themes/kill-handprint-wall.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "kill_coffin_crypt": {
+        "id": "kill_coffin_crypt",
+        "name": "Coffin Crypt",
+        "image": f"/images/profile-themes/kill-coffin-crypt.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "kill_sniper_rooftop": {
+        "id": "kill_sniper_rooftop",
+        "name": "Sniper Rooftop",
+        "image": f"/images/profile-themes/kill-sniper-rooftop.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "kill_dungeon_chains": {
+        "id": "kill_dungeon_chains",
+        "name": "Dungeon Chains",
+        "image": f"/images/profile-themes/kill-dungeon-chains.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "kill_red_candle_ritual": {
+        "id": "kill_red_candle_ritual",
+        "name": "Red Candle Ritual",
+        "image": f"/images/profile-themes/kill-red-candle-ritual.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "kill_abandoned_asylum": {
+        "id": "kill_abandoned_asylum",
+        "name": "Abandoned Asylum",
+        "image": f"/images/profile-themes/kill-abandoned-asylum.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "kill_hitman_briefcase": {
+        "id": "kill_hitman_briefcase",
+        "name": "Hitman Briefcase",
+        "image": f"/images/profile-themes/kill-hitman-briefcase.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "kill_graveyard_fog": {
+        "id": "kill_graveyard_fog",
+        "name": "Graveyard Fog",
+        "image": f"/images/profile-themes/kill-graveyard-fog.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "kill_meat_hooks": {
+        "id": "kill_meat_hooks",
+        "name": "Meat Hooks",
+        "image": f"/images/profile-themes/kill-meat-hooks.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "kill_dark_cathedral": {
+        "id": "kill_dark_cathedral",
+        "name": "Dark Cathedral",
+        "image": f"/images/profile-themes/kill-dark-cathedral.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "kill_bullet_casings": {
+        "id": "kill_bullet_casings",
+        "name": "Bullet Casings",
+        "image": f"/images/profile-themes/kill-bullet-casings.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    # Weed cartel set
+    "weed_cartel_compound": {
+        "id": "weed_cartel_compound",
+        "name": "Cartel Compound",
+        "image": f"/images/profile-themes/weed-cartel-compound.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_border_tunnel": {
+        "id": "weed_border_tunnel",
+        "name": "Border Tunnel",
+        "image": f"/images/profile-themes/weed-border-tunnel.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_armored_convoy": {
+        "id": "weed_armored_convoy",
+        "name": "Armored Convoy",
+        "image": f"/images/profile-themes/weed-armored-convoy.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_cartel_villa": {
+        "id": "weed_cartel_villa",
+        "name": "Cartel Villa",
+        "image": f"/images/profile-themes/weed-cartel-villa.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_jungle_lab": {
+        "id": "weed_jungle_lab",
+        "name": "Jungle Lab",
+        "image": f"/images/profile-themes/weed-jungle-lab.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    # Weed grow / stash set
+    "weed_grow_purple": {
+        "id": "weed_grow_purple",
+        "name": "Purple Grow",
+        "image": f"/images/profile-themes/weed-grow-purple.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_jar_vault": {
+        "id": "weed_jar_vault",
+        "name": "Jar Vault",
+        "image": f"/images/profile-themes/weed-jar-vault.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_neon_dispensary": {
+        "id": "weed_neon_dispensary",
+        "name": "Neon Dispensary",
+        "image": f"/images/profile-themes/weed-neon-dispensary.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_hydro_lab": {
+        "id": "weed_hydro_lab",
+        "name": "Hydro Lab",
+        "image": f"/images/profile-themes/weed-hydro-lab.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_field_sunset": {
+        "id": "weed_field_sunset",
+        "name": "Field Sunset",
+        "image": f"/images/profile-themes/weed-field-sunset.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    # Weed random set
+    "weed_stoned_cosmos": {
+        "id": "weed_stoned_cosmos",
+        "name": "Stoned Cosmos",
+        "image": f"/images/profile-themes/weed-stoned-cosmos.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_tiki_lounge": {
+        "id": "weed_tiki_lounge",
+        "name": "Tiki Lounge",
+        "image": f"/images/profile-themes/weed-tiki-lounge.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_retro_cassette": {
+        "id": "weed_retro_cassette",
+        "name": "Retro Cassette",
+        "image": f"/images/profile-themes/weed-retro-cassette.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_mountain_cabin": {
+        "id": "weed_mountain_cabin",
+        "name": "Mountain Cabin",
+        "image": f"/images/profile-themes/weed-mountain-cabin.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
+    "weed_underwater_reef": {
+        "id": "weed_underwater_reef",
+        "name": "Underwater Reef",
+        "image": f"/images/profile-themes/weed-underwater-reef.jpg?v={_THEME_ASSET_V}",
+        "fit": "width",
+    },
 }
 
 UR_LOOT_THEME_IDS = tuple(
@@ -387,6 +731,66 @@ GRAVE_ROBBER_THEME_IDS = tuple(
 )
 # 1/1 player-pool themes that return on death (loot UR + grave digger).
 SCARCE_THEME_IDS = tuple(dict.fromkeys(list(UR_LOOT_THEME_IDS) + list(GRAVE_ROBBER_THEME_IDS)))
+
+# New free-pool dossier themes: Crimes/GTA secret drops + Quick Trade (NOT loot-box exclusives).
+CRIME_GTA_COSMETIC_THEME_IDS = (
+    "vegas_rain",
+    "chicago_alley",
+    "sicilian_villa",
+    "subway_heist",
+    "speakeasy_bar",
+    "dockyard_fog",
+    "desert_airstrip",
+    "venice_canal",
+    "penthouse_rain",
+    "train_trestle",
+    "star_wars_station",
+    "space_nebula_rift",
+    "space_ringworld",
+    "space_ice_moon",
+    "space_red_giant",
+    "space_asteroid_field",
+    "sicily_palermo_street",
+    "sicily_dock_crates",
+    "sicily_villa_night",
+    "sicily_market_square",
+    "sicily_train_station",
+    "scenic_aurora_fjord",
+    "scenic_sahara_dunes",
+    "scenic_cherry_temple",
+    "scenic_cliff_lighthouse",
+    "scenic_misty_bamboo",
+    "kill_blood_altar",
+    "kill_knife_alley",
+    "kill_execution_chair",
+    "kill_black_hood",
+    "kill_handprint_wall",
+    "kill_coffin_crypt",
+    "kill_sniper_rooftop",
+    "kill_dungeon_chains",
+    "kill_red_candle_ritual",
+    "kill_abandoned_asylum",
+    "kill_hitman_briefcase",
+    "kill_graveyard_fog",
+    "kill_meat_hooks",
+    "kill_dark_cathedral",
+    "kill_bullet_casings",
+    "weed_cartel_compound",
+    "weed_border_tunnel",
+    "weed_armored_convoy",
+    "weed_cartel_villa",
+    "weed_jungle_lab",
+    "weed_grow_purple",
+    "weed_jar_vault",
+    "weed_neon_dispensary",
+    "weed_hydro_lab",
+    "weed_field_sunset",
+    "weed_stoned_cosmos",
+    "weed_tiki_lounge",
+    "weed_retro_cassette",
+    "weed_mountain_cabin",
+    "weed_underwater_reef",
+)
 
 # Equipped dig bonus % (fraction). Owning all three stacks to 0.90.
 GRAVE_THEME_DIG_BONUS: Dict[str, float] = {

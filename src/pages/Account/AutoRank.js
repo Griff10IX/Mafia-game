@@ -495,177 +495,18 @@ const hasAnyUsableArSkip = (skipTokens, statsFlag) => {
   return fromTokens;
 };
 
-const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref, skipTokens, hasUsableArSkips }) => {
-  const p = prefs || {};
-  const masterDisabled = savingPrefs || (!p.auto_rank_enabled && !canEnable);
-  const inventoryKnown = typeof hasUsableArSkips === 'boolean' || skipTokens != null;
-  const canUseSkips = inventoryKnown
-    ? hasAnyUsableArSkip(skipTokens, hasUsableArSkips)
-    : true;
-  const skipToggleDisabled = savingPrefs || (!p.auto_rank_use_skip_tokens && !canUseSkips);
-  return (
-  <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`} style={{ animationDelay: '0.1s' }}>
-    <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
-      <h2 className={`text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider ${styles.gmTitle}`}>
-        Your Settings
-      </h2>
-    </div>
-    
-    <div className="p-2.5 sm:p-3 space-y-0.5">
-      <ToggleRow
-        icon={Bot}
-        label="Enable Auto Rank"
-        description="Master switch for automation. Turning off clears all task toggles below."
-        checked={p.auto_rank_enabled}
-        disabled={masterDisabled}
-        onToggle={() => onUpdatePref('auto_rank_enabled', !p.auto_rank_enabled)}
-      />
+const SETTINGS_SUB_TABS = [
+  { id: 'general', label: 'General', Icon: Settings2 },
+  { id: 'crimes', label: 'Crimes', Icon: Crosshair, pref: 'auto_rank_crimes' },
+  { id: 'gta', label: 'GTA', Icon: Car, pref: 'auto_rank_gta' },
+  { id: 'jail', label: 'Jailbust', Icon: Lock, pref: 'auto_rank_bust_every_5_sec' },
+  { id: 'oc', label: 'OC', Icon: Briefcase, pref: 'auto_rank_oc' },
+  { id: 'melt', label: 'Melt', Icon: Flame, prefAny: ['auto_rank_melt', 'auto_rank_scrap'] },
+  { id: 'booze', label: 'Booze', Icon: Wine, pref: 'auto_rank_booze' },
+];
 
-      <ToggleRow
-        icon={PauseCircle}
-        label="Block all booze intake"
-        description={
-          p.passive_booze_paused
-            ? 'Nothing can add booze to your inventory (distillery, crimes, missions, booze runs, hitlist)'
-            : !p.auto_rank_enabled
-              ? 'Booze can still enter from distillery and other sources — turn on to block all intake'
-              : 'Turn on to stop every source adding booze; auto-enabled when you turn off Auto Rank'
-        }
-        checked={!!p.passive_booze_paused}
-        disabled={savingPrefs}
-        onToggle={() => onUpdatePref('passive_booze_paused', !p.passive_booze_paused)}
-      />
-
-      <ToggleRow
-        icon={MessageSquare}
-        label="Telegram notifications"
-        description="Success summaries, busts, OC, booze/jail alerts. Requires chat ID in Profile. /autorank and other bot replies still work when off"
-        checked={p.auto_rank_telegram_notify !== false}
-        disabled={savingPrefs}
-        onToggle={() => onUpdatePref('auto_rank_telegram_notify', !(p.auto_rank_telegram_notify !== false))}
-      />
-
-      <ToggleRow
-        icon={Zap}
-        label="Use cooldown skip tokens"
-        description={
-          !canUseSkips
-            ? 'No usable Crime / GTA / Booze skip tokens (all must be empty). Buy some in the Points Store to enable this.'
-            : 'When on, Auto Rank burns up to 5 Crime / GTA / Booze Travel Skip tokens per cycle (daily caps still apply), uses jail bailout tokens if you get locked up, and skipped crimes pay −50% cash. Turn off to only act when cooldowns are naturally ready.'
-        }
-        checked={!!p.auto_rank_use_skip_tokens && canUseSkips}
-        disabled={skipToggleDisabled}
-        onToggle={() => {
-          if (!p.auto_rank_use_skip_tokens && !canUseSkips) return;
-          onUpdatePref('auto_rank_use_skip_tokens', !p.auto_rank_use_skip_tokens);
-        }}
-      />
-      
-      <div className="py-1.5 px-0">
-        <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">
-          <strong className="text-zinc-300">Cycle:</strong> busts → crimes → GTA → melt. OC runs on its own timer.
-        </p>
-      </div>
-      
-      <ToggleRow
-        icon={Crosshair}
-        label="Run crimes"
-        description="Auto-commit crimes per cycle"
-        checked={p.auto_rank_enabled ? p.auto_rank_crimes : false}
-        disabled={savingPrefs || !p.auto_rank_enabled}
-        onToggle={() => onUpdatePref('auto_rank_crimes', !p.auto_rank_crimes)}
-      />
-      
-      <ToggleRow
-        icon={Car}
-        label="Run GTA"
-        description="One theft per cycle when cooldown ready"
-        checked={p.auto_rank_enabled ? p.auto_rank_gta : false}
-        disabled={savingPrefs || !p.auto_rank_enabled}
-        onToggle={() => onUpdatePref('auto_rank_gta', !p.auto_rank_gta)}
-      />
-      
-      <ToggleRow
-        icon={Lock}
-        label="Jail bust every 5 sec"
-        description="Bust attempts every 5s (cron-bust). Runs alongside crimes/GTA when those are enabled"
-        checked={p.auto_rank_enabled ? p.auto_rank_bust_every_5_sec : false}
-        disabled={savingPrefs || !p.auto_rank_enabled}
-        onToggle={() => onUpdatePref('auto_rank_bust_every_5_sec', !p.auto_rank_bust_every_5_sec)}
-      />
-      
-      <ToggleRow
-        icon={Briefcase}
-        label="Run Organised Crime (NPC)"
-        description="Heist with you + 3 NPCs when OC cooldown ready"
-        checked={p.auto_rank_enabled ? p.auto_rank_oc : false}
-        disabled={savingPrefs || !p.auto_rank_enabled}
-        onToggle={() => onUpdatePref('auto_rank_oc', !p.auto_rank_oc)}
-      />
-      
-      <ToggleRow
-        icon={Flame}
-        label="Run melt"
-        description="Melt cars for bullets or cash per main cycle"
-        checked={p.auto_rank_enabled ? p.auto_rank_melt : false}
-        disabled={savingPrefs || !p.auto_rank_enabled}
-        onToggle={() => onUpdatePref('auto_rank_melt', !p.auto_rank_melt)}
-      />
-
-      <ToggleRow
-        icon={Flame}
-        label="Run scrap"
-        description="Scrap cars for cash every 2 minutes (separate from melt)"
-        checked={p.auto_rank_enabled ? p.auto_rank_scrap : false}
-        disabled={savingPrefs || !p.auto_rank_enabled}
-        onToggle={() => onUpdatePref('auto_rank_scrap', !p.auto_rank_scrap)}
-      />
-
-      <ToggleRow
-        icon={Wine}
-        label="Run booze running"
-        description={
-          p.passive_booze_paused
-            ? 'Blocked while all booze intake is on — turn that off above first'
-            : !p.auto_rank_enabled && p.auto_rank_booze
-            ? 'Still on in your account — turn off to allow manual travel (Auto Rank is off)'
-            : 'Buy, travel, sell on round-trip route (city arbitrage only)'
-        }
-        checked={!!p.auto_rank_booze}
-        disabled={savingPrefs || p.passive_booze_paused || (!p.auto_rank_enabled && !p.auto_rank_booze)}
-        onToggle={() => onUpdatePref('auto_rank_booze', !p.auto_rank_booze)}
-      />
-
-      <ToggleRow
-        icon={Search}
-        label="Robot bodyguard auto-search"
-        description={
-          !p.robot_bg_auto_search_subscription_active
-            ? (
-              <>
-                Requires Robot Auto-Search from the{' '}
-                <Link to="/game/store?tab=upgrades" className="text-primary hover:underline">Points Store</Link>
-                {' '}(30-day pass). Renews Attack searches for your hired robots when ≤3h left.
-              </>
-            )
-            : p.robot_bg_auto_search_enabled
-              ? 'Maintains Attack searches for your robot bodyguards (independent of the Auto Rank master switch).'
-              : 'Paused — your store pass is still active; turn on to resume auto-searches.'
-        }
-        checked={!!p.robot_bg_auto_search_subscription_active && p.robot_bg_auto_search_enabled !== false}
-        disabled={savingPrefs || !p.robot_bg_auto_search_subscription_active}
-        onToggle={() => onUpdatePref('robot_bg_auto_search_enabled', p.robot_bg_auto_search_enabled === false)}
-      />
-    </div>
-  </div>
-  );
-};
-
-/* ═══════════════════════════════════════════════════════
-   Crimes & GTA options Settings Card
-   ═══════════════════════════════════════════════════════ */
 const OptionCheckbox = ({ id, label, sub, checked, disabled, onChange }) => (
-  <label className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-zinc-800/50 cursor-pointer group">
+  <label className={`flex items-center gap-2 py-1.5 px-2 rounded cursor-pointer group transition-colors ${disabled ? 'opacity-50' : 'hover:bg-zinc-800/60'}`}>
     <input
       type="checkbox"
       checked={checked}
@@ -674,11 +515,80 @@ const OptionCheckbox = ({ id, label, sub, checked, disabled, onChange }) => (
       className="rounded border-zinc-600 text-primary focus:ring-primary/50"
     />
     <span className="text-[10px] sm:text-xs font-heading text-foreground flex-1">{label}</span>
-    {sub != null && sub !== '' && <span className="text-[9px] text-zinc-500 font-heading">{sub}</span>}
+    {sub != null && sub !== '' && <span className="text-[9px] text-zinc-500 font-heading shrink-0">{sub}</span>}
   </label>
 );
 
-const CrimesGtaSettingsCard = ({
+const SettingsSelectList = ({
+  title,
+  Icon,
+  items,
+  selectedIds,
+  onToggle,
+  onSelectAll,
+  onDeselectAll,
+  disabled,
+  maxH = 'max-h-56',
+  hint,
+  idKey = 'id',
+  nameKey = 'name',
+  subFn,
+}) => (
+  <div className="rounded-md border border-zinc-700/40 bg-zinc-900/30 p-2 sm:p-2.5">
+    <div className="flex items-center justify-between gap-2 mb-1.5">
+      <span className="text-[10px] sm:text-xs font-heading font-bold text-zinc-200 flex items-center gap-1.5">
+        {Icon ? <Icon size={12} className="text-primary" /> : null}
+        {title}
+        {Array.isArray(selectedIds) && Array.isArray(items) && items.length > 0 && (
+          <span className="text-[9px] font-heading font-medium text-zinc-500 normal-case tracking-normal">
+            ({selectedIds.length}/{items.length})
+          </span>
+        )}
+      </span>
+      <div className="flex gap-1">
+        <button type="button" onClick={onSelectAll} disabled={disabled} className="text-[9px] font-heading font-bold text-primary hover:underline disabled:opacity-50">All</button>
+        <span className="text-zinc-600">|</span>
+        <button type="button" onClick={onDeselectAll} disabled={disabled} className="text-[9px] font-heading font-bold text-zinc-400 hover:underline disabled:opacity-50">None</button>
+      </div>
+    </div>
+    {hint ? <p className="text-[9px] text-zinc-500 font-heading mb-1.5 leading-snug">{hint}</p> : null}
+    <div className={`${maxH} overflow-y-auto rounded border border-zinc-700/30 bg-zinc-800/30 divide-y divide-zinc-700/25`}>
+      {(items || []).map((item) => {
+        const id = item[idKey];
+        return (
+          <OptionCheckbox
+            key={id}
+            id={id}
+            label={item[nameKey]}
+            sub={subFn ? subFn(item) : undefined}
+            checked={selectedIds.includes(id)}
+            disabled={disabled}
+            onChange={onToggle}
+          />
+        );
+      })}
+    </div>
+  </div>
+);
+
+const SettingsSaveBar = ({ onSave, saving }) => (
+  <button
+    type="button"
+    onClick={onSave}
+    disabled={saving}
+    className="w-full py-2.5 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-[10px] sm:text-xs hover:bg-primary/30 disabled:opacity-50 transition-all active:scale-[0.99]"
+  >
+    {saving ? 'Saving…' : 'Save options'}
+  </button>
+);
+
+const SettingsCard = ({
+  prefs,
+  canEnable,
+  savingPrefs,
+  onUpdatePref,
+  skipTokens,
+  hasUsableArSkips,
   crimes,
   gtaOptions,
   meltOptions,
@@ -704,175 +614,401 @@ const CrimesGtaSettingsCard = ({
   onDeselectAllScrapRarities,
   onSaveSettings,
   savingSettings,
-  crimesDisabled,
-  gtaDisabled,
-  meltDisabled,
-  scrapDisabled,
-}) => (
-  <div
-    className={`relative rounded-lg ar-fade-in ${styles.panel} mobile-panel`}
-    style={{ animationDelay: '0.2s', overflow: 'visible' }}
-  >
-    <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
-      <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
-        <Settings2 size={14} className="sm:w-4 sm:h-4" />
-        Crimes, GTA & Melt options
-      </h2>
+  ocEquipment,
+  selectedOcEquipmentId,
+  savingOcEquipment,
+  onSelectOcEquipment,
+}) => {
+  const [subTab, setSubTab] = useState('general');
+  const p = prefs || {};
+  const masterDisabled = savingPrefs || (!p.auto_rank_enabled && !canEnable);
+  const inventoryKnown = typeof hasUsableArSkips === 'boolean' || skipTokens != null;
+  const canUseSkips = inventoryKnown
+    ? hasAnyUsableArSkip(skipTokens, hasUsableArSkips)
+    : true;
+  const skipToggleDisabled = savingPrefs || (!p.auto_rank_use_skip_tokens && !canUseSkips);
+  const taskDisabled = savingPrefs || !p.auto_rank_enabled;
+  const showSave = subTab === 'crimes' || subTab === 'gta' || subTab === 'melt';
+  const activeTabMeta = SETTINGS_SUB_TABS.find((t) => t.id === subTab);
+  const ocList = Array.isArray(ocEquipment) ? ocEquipment : [];
+  const tabIsOn = (tab) => {
+    if (!p.auto_rank_enabled) return false;
+    if (tab.pref) return !!p[tab.pref];
+    if (tab.prefAny) return tab.prefAny.some((k) => !!p[k]);
+    return false;
+  };
+
+  return (
+    <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`} style={{ animationDelay: '0.1s' }}>
+      <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader} flex items-center justify-between gap-2`}>
+        <h2 className={`text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider ${styles.gmTitle}`}>
+          Your Settings
+        </h2>
+        {activeTabMeta && (
+          <span className="text-[9px] font-heading text-zinc-500 uppercase tracking-wider hidden sm:inline">
+            {activeTabMeta.label}
+          </span>
+        )}
+      </div>
+
+      <div className="px-2 sm:px-2.5 pt-2 pb-2 border-b border-zinc-800/80">
+        <div className="flex gap-1 overflow-x-auto pb-0.5 -mx-0.5 px-0.5 scrollbar-thin">
+          {SETTINGS_SUB_TABS.map((tab) => {
+            const { id, label, Icon } = tab;
+            const active = subTab === id;
+            const on = tabIsOn(tab);
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSubTab(id)}
+                className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[9px] sm:text-[10px] font-heading font-bold uppercase tracking-wider transition-all border shrink-0 ${
+                  active
+                    ? 'bg-primary/20 text-primary border-primary/45 shadow-[0_0_0_1px_rgba(56,189,248,0.12)]'
+                    : `${styles.surface} text-zinc-400 border-primary/10 hover:text-foreground hover:border-primary/25`
+                }`}
+              >
+                <Icon size={11} className="shrink-0" />
+                {label}
+                {on && (
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? 'bg-emerald-400' : 'bg-emerald-500/70'}`}
+                    title="Enabled"
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="p-2.5 sm:p-3 space-y-3 min-h-[14rem]">
+        {subTab === 'general' && (
+          <div className="space-y-0.5 rounded-md border border-zinc-700/35 bg-zinc-900/25 px-2 sm:px-2.5">
+            <ToggleRow
+              icon={Bot}
+              label="Enable Auto Rank"
+              description="Master switch for automation. Turning off clears all task toggles."
+              checked={p.auto_rank_enabled}
+              disabled={masterDisabled}
+              onToggle={() => onUpdatePref('auto_rank_enabled', !p.auto_rank_enabled)}
+            />
+            <ToggleRow
+              icon={PauseCircle}
+              label="Block all booze intake"
+              description={
+                p.passive_booze_paused
+                  ? 'Nothing can add booze to your inventory (distillery, crimes, missions, booze runs, hitlist)'
+                  : !p.auto_rank_enabled
+                    ? 'Booze can still enter from distillery and other sources — turn on to block all intake'
+                    : 'Turn on to stop every source adding booze; auto-enabled when you turn off Auto Rank'
+              }
+              checked={!!p.passive_booze_paused}
+              disabled={savingPrefs}
+              onToggle={() => onUpdatePref('passive_booze_paused', !p.passive_booze_paused)}
+            />
+            <ToggleRow
+              icon={MessageSquare}
+              label="Telegram notifications"
+              description="Success summaries, busts, OC, booze/jail alerts. Requires chat ID in Profile. /autorank and other bot replies still work when off"
+              checked={p.auto_rank_telegram_notify !== false}
+              disabled={savingPrefs}
+              onToggle={() => onUpdatePref('auto_rank_telegram_notify', !(p.auto_rank_telegram_notify !== false))}
+            />
+            <ToggleRow
+              icon={Zap}
+              label="Use cooldown skip tokens"
+              description={
+                !canUseSkips
+                  ? 'No usable Crime / GTA / Booze skip tokens. Buy some in the Points Store to enable this.'
+                  : 'Burns up to 5 Crime / GTA / Booze Travel Skip tokens per cycle (daily caps still apply), uses jail bailout if locked up; skipped crimes pay −50% cash.'
+              }
+              checked={!!p.auto_rank_use_skip_tokens && canUseSkips}
+              disabled={skipToggleDisabled}
+              onToggle={() => {
+                if (!p.auto_rank_use_skip_tokens && !canUseSkips) return;
+                onUpdatePref('auto_rank_use_skip_tokens', !p.auto_rank_use_skip_tokens);
+              }}
+            />
+            <ToggleRow
+              icon={Search}
+              label="Robot bodyguard auto-search"
+              description={
+                !p.robot_bg_auto_search_subscription_active
+                  ? (
+                    <>
+                      Requires Robot Auto-Search from the{' '}
+                      <Link to="/game/store?tab=upgrades" className="text-primary hover:underline">Points Store</Link>
+                      {' '}(30-day pass).
+                    </>
+                  )
+                  : p.robot_bg_auto_search_enabled
+                    ? 'Maintains Attack searches for your robot bodyguards (independent of Auto Rank master).'
+                    : 'Paused — store pass still active; turn on to resume.'
+              }
+              checked={!!p.robot_bg_auto_search_subscription_active && p.robot_bg_auto_search_enabled !== false}
+              disabled={savingPrefs || !p.robot_bg_auto_search_subscription_active}
+              onToggle={() => onUpdatePref('robot_bg_auto_search_enabled', p.robot_bg_auto_search_enabled === false)}
+            />
+            <p className="text-[9px] sm:text-[10px] text-zinc-500 font-heading py-2 leading-snug">
+              <strong className="text-zinc-400">Cycle:</strong> busts → crimes → GTA → melt. OC runs on its own timer. Open each tab for that task and its options.
+            </p>
+          </div>
+        )}
+
+        {subTab === 'crimes' && (
+          <div className="space-y-3">
+            <div className="rounded-md border border-zinc-700/35 bg-zinc-900/25 px-2 sm:px-2.5">
+              <ToggleRow
+                icon={Crosshair}
+                label="Run crimes"
+                description="Auto-commit crimes each main cycle"
+                checked={p.auto_rank_enabled ? p.auto_rank_crimes : false}
+                disabled={taskDisabled}
+                onToggle={() => onUpdatePref('auto_rank_crimes', !p.auto_rank_crimes)}
+              />
+            </div>
+            {canEnable ? (
+              <SettingsSelectList
+                title="Which crimes"
+                Icon={Crosshair}
+                items={crimes}
+                selectedIds={selectedCrimeIds}
+                onToggle={onToggleCrime}
+                onSelectAll={onSelectAllCrimes}
+                onDeselectAll={onDeselectAllCrimes}
+                disabled={taskDisabled}
+                subFn={(c) => (c.prestige_required ? `P${c.prestige_required} · Rank ${c.min_rank}` : `Rank ${c.min_rank}`)}
+                hint="Pick the crimes Auto Rank may run, then save."
+              />
+            ) : (
+              <p className="text-[9px] text-zinc-500 font-heading px-1">Unlock Auto Rank to choose which crimes to run.</p>
+            )}
+            {showSave && canEnable && <SettingsSaveBar onSave={onSaveSettings} saving={savingSettings} />}
+          </div>
+        )}
+
+        {subTab === 'gta' && (
+          <div className="space-y-3">
+            <div className="rounded-md border border-zinc-700/35 bg-zinc-900/25 px-2 sm:px-2.5">
+              <ToggleRow
+                icon={Car}
+                label="Run GTA"
+                description="One theft per cycle when cooldown ready"
+                checked={p.auto_rank_enabled ? p.auto_rank_gta : false}
+                disabled={taskDisabled}
+                onToggle={() => onUpdatePref('auto_rank_gta', !p.auto_rank_gta)}
+              />
+            </div>
+            {canEnable ? (
+              <SettingsSelectList
+                title="Which GTA options"
+                Icon={Car}
+                items={gtaOptions}
+                selectedIds={selectedGtaIds}
+                onToggle={onToggleGta}
+                onSelectAll={onSelectAllGta}
+                onDeselectAll={onDeselectAllGta}
+                disabled={taskDisabled}
+                maxH="max-h-52"
+                subFn={(o) => `Rank ${o.min_rank}`}
+                hint="Pick GTA targets Auto Rank may attempt, then save."
+              />
+            ) : (
+              <p className="text-[9px] text-zinc-500 font-heading px-1">Unlock Auto Rank to choose GTA options.</p>
+            )}
+            {showSave && canEnable && <SettingsSaveBar onSave={onSaveSettings} saving={savingSettings} />}
+          </div>
+        )}
+
+        {subTab === 'jail' && (
+          <div className="rounded-md border border-zinc-700/35 bg-zinc-900/25 px-2 sm:px-2.5">
+            <ToggleRow
+              icon={Lock}
+              label="Jail bust every 5 sec"
+              description="Bust attempts every 5s (cron-bust). Runs alongside crimes/GTA when those are enabled."
+              checked={p.auto_rank_enabled ? p.auto_rank_bust_every_5_sec : false}
+              disabled={taskDisabled}
+              onToggle={() => onUpdatePref('auto_rank_bust_every_5_sec', !p.auto_rank_bust_every_5_sec)}
+            />
+          </div>
+        )}
+
+        {subTab === 'oc' && (
+          <div className="space-y-3">
+            <div className="rounded-md border border-zinc-700/35 bg-zinc-900/25 px-2 sm:px-2.5">
+              <ToggleRow
+                icon={Briefcase}
+                label="Run Organised Crime (NPC)"
+                description="Heist with you + 3 NPCs when OC cooldown ready"
+                checked={p.auto_rank_enabled ? p.auto_rank_oc : false}
+                disabled={taskDisabled}
+                onToggle={() => onUpdatePref('auto_rank_oc', !p.auto_rank_oc)}
+              />
+            </div>
+            {canEnable && p.auto_rank_oc ? (
+              <div className="rounded-md border border-zinc-700/40 bg-zinc-900/30 p-2 sm:p-2.5 space-y-2">
+                <div>
+                  <span className="text-[10px] sm:text-xs font-heading font-bold text-zinc-200 flex items-center gap-1.5">
+                    <Briefcase size={12} className="text-primary" />
+                    OC equipment
+                  </span>
+                  <p className="text-[9px] text-zinc-500 font-heading mt-1 leading-snug">
+                    Used when Auto Rank runs Organised Crime. Cost is charged per heist.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  {ocList.map((e) => (
+                    <label
+                      key={e.id}
+                      className={`flex items-center gap-2 py-2 px-2 rounded-md border cursor-pointer transition-colors ${
+                        e.id === selectedOcEquipmentId
+                          ? 'bg-primary/10 border-primary/50'
+                          : 'bg-zinc-800/40 border-zinc-700/30 hover:bg-zinc-800/60'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="oc-equipment"
+                        checked={e.id === selectedOcEquipmentId}
+                        disabled={savingOcEquipment}
+                        onChange={() => onSelectOcEquipment(e.id)}
+                        className="text-primary focus:ring-primary/50"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[10px] sm:text-xs font-heading font-medium text-foreground">{e.name}</span>
+                        <span className="text-[9px] text-zinc-500 font-heading ml-1.5">
+                          ${(e.cost || 0).toLocaleString()}
+                          {e.success_bonus != null && e.success_bonus > 0
+                            ? ` · +${Math.round((e.success_bonus || 0) * 100)}%`
+                            : ''}
+                        </span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                {ocList.length === 0 && (
+                  <p className="text-[10px] text-zinc-500 font-heading">Loading equipment…</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-[9px] text-zinc-500 font-heading px-1">
+                Turn on Organised Crime to pick NPC equipment.
+              </p>
+            )}
+          </div>
+        )}
+
+        {subTab === 'melt' && (
+          <div className="space-y-3">
+            <div className="rounded-md border border-zinc-700/35 bg-zinc-900/25 px-2 sm:px-2.5">
+              <ToggleRow
+                icon={Flame}
+                label="Run melt"
+                description="Melt cars for bullets or cash per main cycle"
+                checked={p.auto_rank_enabled ? p.auto_rank_melt : false}
+                disabled={taskDisabled}
+                onToggle={() => onUpdatePref('auto_rank_melt', !p.auto_rank_melt)}
+              />
+              <ToggleRow
+                icon={DollarSign}
+                label="Run scrap"
+                description="Scrap cars for cash every 2 minutes (separate from melt)"
+                checked={p.auto_rank_enabled ? p.auto_rank_scrap : false}
+                disabled={taskDisabled}
+                onToggle={() => onUpdatePref('auto_rank_scrap', !p.auto_rank_scrap)}
+              />
+            </div>
+            {canEnable ? (
+              <>
+                <SettingsSelectList
+                  title="Melt / Scrap actions"
+                  Icon={Flame}
+                  items={(meltOptions?.actions) || []}
+                  selectedIds={selectedMeltActionIds}
+                  onToggle={onToggleMeltAction}
+                  onSelectAll={onSelectAllMeltActions}
+                  onDeselectAll={onDeselectAllMeltActions}
+                  disabled={taskDisabled}
+                  maxH="max-h-28"
+                  hint='If both "Melt for Bullets" and "Scrap for Cash" are on, each cycle splits your garage batch about 50/50.'
+                />
+                <div className="rounded-md border border-zinc-700/40 bg-zinc-900/30 p-2 sm:p-2.5">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className="text-[10px] sm:text-xs font-heading font-bold text-zinc-200">Melt rarities</span>
+                    <div className="flex gap-1">
+                      <button type="button" onClick={onSelectAllMeltRarities} disabled={taskDisabled} className="text-[9px] font-heading font-bold text-primary hover:underline disabled:opacity-50">All</button>
+                      <span className="text-zinc-600">|</span>
+                      <button type="button" onClick={onDeselectAllMeltRarities} disabled={taskDisabled} className="text-[9px] font-heading font-bold text-zinc-400 hover:underline disabled:opacity-50">None</button>
+                    </div>
+                  </div>
+                  <p className="text-[9px] text-zinc-500 font-heading mb-1.5">Select at least one rarity to melt; empty = none</p>
+                  <div className="max-h-36 overflow-y-auto rounded border border-zinc-700/30 bg-zinc-800/30 divide-y divide-zinc-700/25">
+                    {((meltOptions?.rarities) || []).map((r) => (
+                      <OptionCheckbox
+                        key={r.id}
+                        id={r.id}
+                        label={r.name}
+                        checked={selectedMeltRarityIds.includes(r.id)}
+                        disabled={taskDisabled || selectedScrapRarityIds.includes(r.id)}
+                        onChange={onToggleMeltRarity}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-md border border-zinc-700/40 bg-zinc-900/30 p-2 sm:p-2.5">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className="text-[10px] sm:text-xs font-heading font-bold text-zinc-200">Scrap rarities</span>
+                    <div className="flex gap-1">
+                      <button type="button" onClick={onSelectAllScrapRarities} disabled={taskDisabled} className="text-[9px] font-heading font-bold text-primary hover:underline disabled:opacity-50">All</button>
+                      <span className="text-zinc-600">|</span>
+                      <button type="button" onClick={onDeselectAllScrapRarities} disabled={taskDisabled} className="text-[9px] font-heading font-bold text-zinc-400 hover:underline disabled:opacity-50">None</button>
+                    </div>
+                  </div>
+                  <p className="text-[9px] text-zinc-500 font-heading mb-1.5">Select rarities to scrap for cash (every 2 min). Empty = none.</p>
+                  <div className="max-h-36 overflow-y-auto rounded border border-zinc-700/30 bg-zinc-800/30 divide-y divide-zinc-700/25">
+                    {((meltOptions?.scrap_rarities) || (meltOptions?.rarities) || []).map((r) => (
+                      <OptionCheckbox
+                        key={r.id}
+                        id={r.id}
+                        label={r.name}
+                        checked={selectedScrapRarityIds.includes(r.id)}
+                        disabled={taskDisabled || selectedMeltRarityIds.includes(r.id)}
+                        onChange={onToggleScrapRarity}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <SettingsSaveBar onSave={onSaveSettings} saving={savingSettings} />
+              </>
+            ) : (
+              <p className="text-[9px] text-zinc-500 font-heading px-1">Unlock Auto Rank to configure melt / scrap options.</p>
+            )}
+          </div>
+        )}
+
+        {subTab === 'booze' && (
+          <div className="rounded-md border border-zinc-700/35 bg-zinc-900/25 px-2 sm:px-2.5">
+            <ToggleRow
+              icon={Wine}
+              label="Run booze running"
+              description={
+                p.passive_booze_paused
+                  ? 'Blocked while all booze intake is on — turn that off under General first'
+                  : !p.auto_rank_enabled && p.auto_rank_booze
+                    ? 'Still on in your account — turn off to allow manual travel (Auto Rank is off)'
+                    : 'Buy, travel, sell on round-trip route (city arbitrage only)'
+              }
+              checked={!!p.auto_rank_booze}
+              disabled={savingPrefs || p.passive_booze_paused || (!p.auto_rank_enabled && !p.auto_rank_booze)}
+              onToggle={() => onUpdatePref('auto_rank_booze', !p.auto_rank_booze)}
+            />
+          </div>
+        )}
+      </div>
     </div>
-    {/* Sticky under page tabs so Save stays reachable on mobile without scrolling to the end */}
-    <div className="sticky top-12 z-10 px-2.5 sm:px-3 py-2 border-b border-zinc-700/40 bg-zinc-950/95 backdrop-blur-md">
-      <button
-        type="button"
-        onClick={onSaveSettings}
-        disabled={savingSettings}
-        className="w-full py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-[10px] sm:text-xs hover:bg-primary/30 disabled:opacity-50 transition-all active:scale-[0.99]"
-      >
-        {savingSettings ? 'Saving...' : 'Save options'}
-      </button>
-    </div>
-    <div className="p-2.5 sm:p-3 space-y-4">
-      <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">
-        Choose which crimes and GTA options to run. Melt: select bullets and/or cash; rarities empty = all. Save to apply.
-      </p>
-
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <span className="text-[10px] sm:text-xs font-heading font-bold text-zinc-300 flex items-center gap-1.5">
-            <Crosshair size={12} className="text-primary" />
-            Crimes
-          </span>
-          <div className="flex gap-1">
-            <button type="button" onClick={onSelectAllCrimes} disabled={crimesDisabled} className="text-[9px] font-heading font-bold text-primary hover:underline disabled:opacity-50">All</button>
-            <span className="text-zinc-600">|</span>
-            <button type="button" onClick={onDeselectAllCrimes} disabled={crimesDisabled} className="text-[9px] font-heading font-bold text-zinc-400 hover:underline disabled:opacity-50">None</button>
-          </div>
-        </div>
-        <div className="max-h-48 overflow-y-auto rounded bg-zinc-800/40 border border-zinc-700/30 divide-y divide-zinc-700/30">
-          {(crimes || []).map((c) => (
-            <OptionCheckbox
-              key={c.id}
-              id={c.id}
-              label={c.name}
-              sub={c.prestige_required ? `P${c.prestige_required} · Rank ${c.min_rank}` : `Rank ${c.min_rank}`}
-              checked={selectedCrimeIds.includes(c.id)}
-              disabled={crimesDisabled}
-              onChange={onToggleCrime}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <span className="text-[10px] sm:text-xs font-heading font-bold text-zinc-300 flex items-center gap-1.5">
-            <Car size={12} className="text-primary" />
-            GTA
-          </span>
-          <div className="flex gap-1">
-            <button type="button" onClick={onSelectAllGta} disabled={gtaDisabled} className="text-[9px] font-heading font-bold text-primary hover:underline disabled:opacity-50">All</button>
-            <span className="text-zinc-600">|</span>
-            <button type="button" onClick={onDeselectAllGta} disabled={gtaDisabled} className="text-[9px] font-heading font-bold text-zinc-400 hover:underline disabled:opacity-50">None</button>
-          </div>
-        </div>
-        <div className="max-h-40 overflow-y-auto rounded bg-zinc-800/40 border border-zinc-700/30 divide-y divide-zinc-700/30">
-          {(gtaOptions || []).map((o) => (
-            <OptionCheckbox
-              key={o.id}
-              id={o.id}
-              label={o.name}
-              sub={`Rank ${o.min_rank}`}
-              checked={selectedGtaIds.includes(o.id)}
-              disabled={gtaDisabled}
-              onChange={onToggleGta}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <span className="text-[10px] sm:text-xs font-heading font-bold text-zinc-300 flex items-center gap-1.5">
-            <Flame size={12} className="text-primary" />
-            Melt / Scrap actions
-          </span>
-          <div className="flex gap-1">
-            <button type="button" onClick={onSelectAllMeltActions} disabled={meltDisabled} className="text-[9px] font-heading font-bold text-primary hover:underline disabled:opacity-50">All</button>
-            <span className="text-zinc-600">|</span>
-            <button type="button" onClick={onDeselectAllMeltActions} disabled={meltDisabled} className="text-[9px] font-heading font-bold text-zinc-400 hover:underline disabled:opacity-50">None</button>
-          </div>
-        </div>
-        <div className="max-h-24 overflow-y-auto rounded bg-zinc-800/40 border border-zinc-700/30 divide-y divide-zinc-700/30">
-          {((meltOptions?.actions) || []).map((a) => (
-            <OptionCheckbox
-              key={a.id}
-              id={a.id}
-              label={a.name}
-              checked={selectedMeltActionIds.includes(a.id)}
-              disabled={meltDisabled}
-              onChange={onToggleMeltAction}
-            />
-          ))}
-        </div>
-        <p className="text-[9px] text-zinc-500 font-heading mt-1.5 leading-snug">
-          If both &quot;Melt for Bullets&quot; and &quot;Scrap for Cash&quot; are on, each cycle splits your garage batch about 50/50 between melt and scrap (one shared pool).
-          For scrap-only automation here, turn off &quot;Melt for Bullets&quot;. Garage Melt / Scrap buttons always use only the action you press.
-        </p>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <span className="text-[10px] sm:text-xs font-heading font-bold text-zinc-300 flex items-center gap-1.5">
-            Melt rarities
-          </span>
-          <div className="flex gap-1">
-            <button type="button" onClick={onSelectAllMeltRarities} disabled={meltDisabled} className="text-[9px] font-heading font-bold text-primary hover:underline disabled:opacity-50">All</button>
-            <span className="text-zinc-600">|</span>
-            <button type="button" onClick={onDeselectAllMeltRarities} disabled={meltDisabled} className="text-[9px] font-heading font-bold text-zinc-400 hover:underline disabled:opacity-50">None</button>
-          </div>
-        </div>
-        <p className="text-[9px] text-zinc-500 font-heading mb-1">Select at least one rarity to melt; empty = none</p>
-        <div className="max-h-32 overflow-y-auto rounded bg-zinc-800/40 border border-zinc-700/30 divide-y divide-zinc-700/30">
-          {((meltOptions?.rarities) || []).map((r) => (
-            <OptionCheckbox
-              key={r.id}
-              id={r.id}
-              label={r.name}
-              checked={selectedMeltRarityIds.includes(r.id)}
-              disabled={meltDisabled || selectedScrapRarityIds.includes(r.id)}
-              onChange={onToggleMeltRarity}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <span className="text-[10px] sm:text-xs font-heading font-bold text-zinc-300 flex items-center gap-1.5">
-            Scrap rarities
-          </span>
-          <div className="flex gap-1">
-            <button type="button" onClick={onSelectAllScrapRarities} disabled={scrapDisabled} className="text-[9px] font-heading font-bold text-primary hover:underline disabled:opacity-50">All</button>
-            <span className="text-zinc-600">|</span>
-            <button type="button" onClick={onDeselectAllScrapRarities} disabled={scrapDisabled} className="text-[9px] font-heading font-bold text-zinc-400 hover:underline disabled:opacity-50">None</button>
-          </div>
-        </div>
-        <p className="text-[9px] text-zinc-500 font-heading mb-1">Select rarities to scrap for cash (runs every 2 min). Empty = none.</p>
-        <div className="max-h-32 overflow-y-auto rounded bg-zinc-800/40 border border-zinc-700/30 divide-y divide-zinc-700/30">
-          {((meltOptions?.scrap_rarities) || (meltOptions?.rarities) || []).map((r) => (
-            <OptionCheckbox
-              key={r.id}
-              id={r.id}
-              label={r.name}
-              checked={selectedScrapRarityIds.includes(r.id)}
-              disabled={scrapDisabled || selectedMeltRarityIds.includes(r.id)}
-              onChange={onToggleScrapRarity}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  </div>
-);
+  );
+};
 
 /* ═══════════════════════════════════════════════════════
    Summary / Status Card (what Auto Rank is doing)
@@ -1331,49 +1467,6 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
             </p>
           </>
         )}
-      </div>
-    </div>
-  );
-};
-
-/* ═══════════════════════════════════════════════════════
-   OC Equipment Options Card
-   ═══════════════════════════════════════════════════════ */
-const OCOptionsCard = ({ equipment, selectedId, saving, onSelect }) => {
-  const list = Array.isArray(equipment) ? equipment : [];
-  return (
-    <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`} style={{ animationDelay: '0.2s' }}>
-      <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
-        <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
-          <Briefcase size={14} className="sm:w-4 sm:h-4" />
-          OC equipment (Auto Rank heists)
-        </h2>
-      </div>
-      <div className="p-2.5 sm:p-3 space-y-2">
-        <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">
-          Equipment used when Auto Rank runs Organised Crime. Cost is charged per heist when it runs.
-        </p>
-        <div className="space-y-1.5">
-          {list.map((e) => (
-            <label key={e.id} className={`flex items-center gap-2 py-2 px-2 rounded border cursor-pointer transition-colors ${e.id === selectedId ? 'bg-primary/10 border-primary/50' : 'bg-zinc-800/40 border-zinc-700/30 hover:bg-zinc-800/60'}`}>
-              <input
-                type="radio"
-                name="oc-equipment"
-                checked={e.id === selectedId}
-                disabled={saving}
-                onChange={() => onSelect(e.id)}
-                className="text-primary focus:ring-primary/50"
-              />
-              <div className="flex-1 min-w-0">
-                <span className="text-[10px] sm:text-xs font-heading font-medium text-foreground">{e.name}</span>
-                <span className="text-[9px] text-zinc-500 font-heading ml-1.5">
-                  ${(e.cost || 0).toLocaleString()}{e.success_bonus != null && e.success_bonus > 0 ? ` · +${Math.round((e.success_bonus || 0) * 100)}%` : ''}
-                </span>
-              </div>
-            </label>
-          ))}
-        </div>
-        {list.length === 0 && <p className="text-[10px] text-zinc-500 font-heading">Loading equipment…</p>}
       </div>
     </div>
   );
@@ -2570,50 +2663,36 @@ export default function AutoRank() {
             onUpdatePref={updatePref}
             skipTokens={stats?.skip_tokens}
             hasUsableArSkips={stats?.has_usable_ar_skips}
+            crimes={settingsData?.crimes ?? []}
+            gtaOptions={settingsData?.gta_options ?? []}
+            meltOptions={settingsData?.melt_options ?? { actions: [], rarities: [], scrap_rarities: [] }}
+            selectedCrimeIds={selectedCrimeIds}
+            selectedGtaIds={selectedGtaIds}
+            selectedMeltActionIds={selectedMeltActionIds}
+            selectedMeltRarityIds={selectedMeltRarityIds}
+            selectedScrapRarityIds={selectedScrapRarityIds}
+            onToggleCrime={toggleCrimeId}
+            onToggleGta={toggleGtaId}
+            onToggleMeltAction={toggleMeltActionId}
+            onToggleMeltRarity={toggleMeltRarityId}
+            onToggleScrapRarity={toggleScrapRarityId}
+            onSelectAllCrimes={selectAllCrimes}
+            onDeselectAllCrimes={deselectAllCrimes}
+            onSelectAllGta={selectAllGta}
+            onDeselectAllGta={deselectAllGta}
+            onSelectAllMeltActions={selectAllMeltActions}
+            onDeselectAllMeltActions={deselectAllMeltActions}
+            onSelectAllMeltRarities={selectAllMeltRarities}
+            onDeselectAllMeltRarities={deselectAllMeltRarities}
+            onSelectAllScrapRarities={selectAllScrapRarities}
+            onDeselectAllScrapRarities={deselectAllScrapRarities}
+            onSaveSettings={handleSaveSettings}
+            savingSettings={savingSettings}
+            ocEquipment={ocEquipment}
+            selectedOcEquipmentId={selectedOcEquipmentId}
+            savingOcEquipment={savingOcEquipment}
+            onSelectOcEquipment={handleSelectOcEquipment}
           />
-
-          {canEnable && (prefs?.auto_rank_crimes || prefs?.auto_rank_gta || prefs?.auto_rank_melt || prefs?.auto_rank_scrap) && (
-            <CrimesGtaSettingsCard
-              crimes={settingsData?.crimes ?? []}
-              gtaOptions={settingsData?.gta_options ?? []}
-              meltOptions={settingsData?.melt_options ?? { actions: [], rarities: [], scrap_rarities: [] }}
-              selectedCrimeIds={selectedCrimeIds}
-              selectedGtaIds={selectedGtaIds}
-              selectedMeltActionIds={selectedMeltActionIds}
-              selectedMeltRarityIds={selectedMeltRarityIds}
-              selectedScrapRarityIds={selectedScrapRarityIds}
-              onToggleCrime={toggleCrimeId}
-              onToggleGta={toggleGtaId}
-              onToggleMeltAction={toggleMeltActionId}
-              onToggleMeltRarity={toggleMeltRarityId}
-              onToggleScrapRarity={toggleScrapRarityId}
-              onSelectAllCrimes={selectAllCrimes}
-              onDeselectAllCrimes={deselectAllCrimes}
-              onSelectAllGta={selectAllGta}
-              onDeselectAllGta={deselectAllGta}
-              onSelectAllMeltActions={selectAllMeltActions}
-              onDeselectAllMeltActions={deselectAllMeltActions}
-              onSelectAllMeltRarities={selectAllMeltRarities}
-              onDeselectAllMeltRarities={deselectAllMeltRarities}
-              onSelectAllScrapRarities={selectAllScrapRarities}
-              onDeselectAllScrapRarities={deselectAllScrapRarities}
-              onSaveSettings={handleSaveSettings}
-              savingSettings={savingSettings}
-              crimesDisabled={savingPrefs || !prefs?.auto_rank_enabled}
-              gtaDisabled={savingPrefs || !prefs?.auto_rank_enabled}
-              meltDisabled={savingPrefs || !prefs?.auto_rank_enabled}
-              scrapDisabled={savingPrefs || !prefs?.auto_rank_enabled}
-            />
-          )}
-
-          {canEnable && prefs?.auto_rank_oc && (
-            <OCOptionsCard
-              equipment={ocEquipment}
-              selectedId={selectedOcEquipmentId}
-              saving={savingOcEquipment}
-              onSelect={handleSelectOcEquipment}
-            />
-          )}
         </div>
       )}
 
