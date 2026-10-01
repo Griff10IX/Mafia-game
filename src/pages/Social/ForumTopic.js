@@ -440,6 +440,7 @@ export default function ForumTopic() {
   const [designerConfirmSubmitting, setDesignerConfirmSubmitting] = useState(false);
   const [designerDisputeReason, setDesignerDisputeReason] = useState('');
   const [designerDisputeSubmitting, setDesignerDisputeSubmitting] = useState(false);
+  const [pollBusy, setPollBusy] = useState(false);
 
   const forumHashScrollDoneRef = useRef('');
 
@@ -467,6 +468,25 @@ export default function ForumTopic() {
       setHasLoaded(true);
     }
   }, [topicId, navigate]);
+
+  const votePoll = async (optionId) => {
+    if (!topicId || pollBusy) return;
+    setPollBusy(true);
+    try {
+      const res = await api.post(`/forum/topics/${topicId}/poll/vote`, { option_id: optionId });
+      const poll = res.data?.poll;
+      if (poll) {
+        setTopic((t) => (t ? { ...t, poll } : t));
+      }
+      const awarded = Number(res.data?.points_awarded || 0);
+      if (awarded > 0) toast.success(`You received ${awarded} points for voting`);
+      else toast.success(res.data?.message || 'Vote saved');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to vote');
+    } finally {
+      setPollBusy(false);
+    }
+  };
 
   useLayoutEffect(() => {
     if (!topicId) return;
@@ -1512,6 +1532,64 @@ export default function ForumTopic() {
           />
         </div>
       </div>
+
+      {Array.isArray(topic.poll?.options) && topic.poll.options.length > 0 && (
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Poll</span>
+            <span className="ml-2 text-[10px] text-mutedForeground">
+              {Number(topic.poll.reward_points || 0).toLocaleString()} points for voting
+            </span>
+          </div>
+          <div className="p-3 space-y-2">
+            <p className="text-xs text-mutedForeground">
+              You can change your vote. The {Number(topic.poll.reward_points || 0).toLocaleString()} points are paid once.
+            </p>
+            {topic.poll.already_rewarded && (
+              <p className="text-xs text-emerald-400">
+                You already received {Number(topic.poll.reward_points || 0).toLocaleString()} points for voting.
+              </p>
+            )}
+            {topic.poll.options.map((opt) => {
+              const total = Number(topic.poll.total_votes || 0);
+              const votes = Number(opt.votes || 0);
+              const pct = total > 0 ? Math.round((votes / total) * 100) : 0;
+              const selected = topic.poll.my_option_id === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  disabled={pollBusy}
+                  onClick={() => votePoll(opt.id)}
+                  className={`relative w-full text-left px-3 py-2 rounded border overflow-hidden touch-manipulation ${
+                    selected
+                      ? 'border-primary/60 bg-primary/15'
+                      : 'border-zinc-700/50 bg-zinc-900/40 hover:border-primary/40'
+                  } disabled:opacity-60`}
+                >
+                  <span
+                    className="absolute inset-y-0 left-0 bg-primary/15"
+                    style={{ width: `${pct}%` }}
+                    aria-hidden
+                  />
+                  <span className="relative flex items-center justify-between gap-3">
+                    <span className="text-sm text-foreground">
+                      {opt.label}
+                      {selected ? <span className="ml-2 text-[10px] font-heading uppercase text-primary">Your vote</span> : null}
+                    </span>
+                    <span className="text-[10px] text-mutedForeground tabular-nums shrink-0">
+                      {votes.toLocaleString()} · {pct}%
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+            <p className="text-[10px] text-mutedForeground">
+              {Number(topic.poll.total_votes || 0).toLocaleString()} vote{Number(topic.poll.total_votes || 0) === 1 ? '' : 's'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Crew OC: Apply to join */}
       {topic.crew_oc_family_id && (

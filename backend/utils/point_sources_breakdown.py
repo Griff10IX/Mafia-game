@@ -74,6 +74,7 @@ _EVENT_LABELS: Dict[str, str] = {
     "world_cup_payout": "World Cup",
     "world_cup_pick_correction": "World Cup correction",
     "designer_comp_vote": "Designer competition",
+    "forum_poll_vote": "Forum poll",
     "referral_weekly": "Referral weekly",
     "hitlist_bounty_claim": "Hitlist bounty",
     "kill_loot": "Kill loot",

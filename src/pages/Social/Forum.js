@@ -907,6 +907,7 @@ const TopicRowDesktop = ({ topic, designerCompId, myEntryTopicIds, meUsername, o
             {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
             {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
             {topic.is_important && <span className="text-amber-400 font-heading shrink-0">IMPORTANT:&nbsp;</span>}
+            {topic.has_poll && <span className="text-primary font-heading shrink-0">POLL:&nbsp;</span>}
             {topic.is_sticky && !topic.is_important && <span className="text-amber-400 font-heading shrink-0">STICKY:&nbsp;</span>}
             <span
               className="truncate font-heading inline-flex items-baseline gap-1 min-w-0"
@@ -1038,6 +1039,7 @@ const TopicRowMobile = ({ topic, designerCompId, myEntryTopicIds, meUsername, on
           {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
           {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
           {topic.is_important && <span className="text-amber-400 font-heading shrink-0 text-xs">IMPORTANT:&nbsp;</span>}
+          {topic.has_poll && <span className="text-primary font-heading shrink-0 text-xs">POLL:&nbsp;</span>}
           {topic.is_sticky && !topic.is_important && <span className="text-amber-400 font-heading shrink-0 text-xs">STICKY:&nbsp;</span>}
           <span
             className="text-xs font-heading truncate inline-flex items-baseline gap-1 min-w-0 flex-1"

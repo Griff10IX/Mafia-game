@@ -4146,6 +4146,12 @@ async def startup_db():
         await ensure_topic_of_shame_forum_topic(db)
     except Exception as e:
         logging.exception("Topic of Shame forum topic sync: %s", e)
+    try:
+        from utils.ensure_kill_bodyguard_poll import ensure_kill_bodyguard_poll
+
+        await ensure_kill_bodyguard_poll(db)
+    except Exception as e:
+        logging.exception("KillBodyguard poll: %s", e)
     from routers.crime.jail import spawn_jail_npcs
     asyncio.create_task(spawn_jail_npcs())
     # Start security monitoring background task

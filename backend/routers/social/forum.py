@@ -12,7 +12,10 @@ from pydantic import BaseModel
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from pymongo.errors import DuplicateKeyError
+
 from server import db, get_current_user, _is_admin, _is_moderator, _is_hdo, log_activity, send_notification, ADMIN_EMAILS, require_staff_issued_if_staff_capable
+from utils.point_provenance import log_points_event
 from utils.text import strip_emoji
 from utils.mentions import extract_mention_usernames, resolve_usernames_to_ids
 from utils.sustained_page_ratelimit import PAGE_KEY_FORUM, check_sustained_page_rl
@@ -380,6 +383,10 @@ class CommentCreate(BaseModel):
     reply_to_comment_id: Optional[str] = None  # when replying to another comment, notify its author
 
 
+class PollVoteBody(BaseModel):
+    option_id: str
+
+
 class TopicUpdate(BaseModel):
     is_sticky: Optional[bool] = None
     is_important: Optional[bool] = None
@@ -408,6 +415,7 @@ async def _delete_topic_fully(topic_id: str, deleted_by_id: str = None, deleted_
         await db.forum_comment_likes.delete_many({"comment_id": {"$in": comment_ids}})
         await db.forum_comment_dislikes.delete_many({"comment_id": {"$in": comment_ids}})
     await db.forum_comments.delete_many({"topic_id": topic_id})
+    await db.forum_poll_votes.delete_many({"topic_id": topic_id})
     if topic:
         await archive_message(source="forum_topic", doc=topic, deleted_by_id=deleted_by_id, deleted_by_username=deleted_by_username)
     await db.forum_topics.delete_one({"id": topic_id})
@@ -499,6 +507,7 @@ async def get_topics(
         "updated_at": 1,
         "crew_oc_family_id": 1,
         "redeem_code": 1,
+        "poll.id": 1,
     }
     topics = await db.forum_topics.find(query, topic_projection).sort(sort).skip(skip).limit(per_page).to_list(per_page)
     author_ids = [t.get("author_id") for t in topics if t.get("author_id")]
@@ -587,6 +596,7 @@ async def get_topics(
             "is_sticky": t.get("is_sticky", False),
             "is_important": t.get("is_important", False),
             "is_locked": t.get("is_locked", False),
+            "has_poll": bool((t.get("poll") or {}).get("id")),
             "created_at": t.get("created_at"),
             "updated_at": t.get("updated_at"),
         }
@@ -776,6 +786,8 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
                 "end_at": auc.get("end_at"),
                 "winner_username": auc.get("winner_username"),
             }
+    if isinstance(topic.get("poll"), dict) and topic["poll"].get("options"):
+        topic["poll"] = await _public_poll(topic, uid)
     if (topic.get("redeem_code") or "").strip():
         rc_code = (topic["redeem_code"] or "").strip().upper()
         rc_doc = await db.redeem_codes.find_one(
@@ -1463,6 +1475,147 @@ async def delete_comment(
     return {"message": "Comment deleted"}
 
 
+_poll_indexes_ready = False
+
+
+async def _ensure_poll_indexes() -> None:
+    global _poll_indexes_ready
+    if _poll_indexes_ready:
+        return
+    await db.forum_poll_votes.create_index(
+        [("topic_id", 1), ("user_id", 1)],
+        unique=True,
+        name="forum_poll_vote_user",
+    )
+    _poll_indexes_ready = True
+
+
+async def _public_poll(topic: dict, user_id: str) -> dict:
+    raw = topic.get("poll") or {}
+    options = [o for o in (raw.get("options") or []) if isinstance(o, dict) and o.get("id")]
+    topic_id = topic.get("id")
+    counts: dict = {}
+    if topic_id:
+        async for row in db.forum_poll_votes.aggregate([
+            {"$match": {"topic_id": topic_id}},
+            {"$group": {"_id": "$option_id", "n": {"$sum": 1}}},
+        ]):
+            counts[row.get("_id")] = int(row.get("n") or 0)
+    mine = None
+    if topic_id and user_id:
+        mine = await db.forum_poll_votes.find_one(
+            {"topic_id": topic_id, "user_id": user_id},
+            {"_id": 0, "option_id": 1, "rewarded": 1},
+        )
+    public_options = []
+    total = 0
+    for opt in options:
+        n = int(counts.get(opt.get("id")) or 0)
+        total += n
+        public_options.append({
+            "id": opt.get("id"),
+            "label": opt.get("label") or opt.get("id"),
+            "votes": n,
+        })
+    return {
+        "reward_points": int(raw.get("reward_points") or 0),
+        "my_option_id": mine.get("option_id") if mine else None,
+        "already_rewarded": bool(mine and mine.get("rewarded")),
+        "total_votes": total,
+        "options": public_options,
+    }
+
+
+async def vote_poll(
+    topic_id: str,
+    body: PollVoteBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Cast or change a forum poll vote. Points are paid once per user."""
+    await _ensure_poll_indexes()
+    topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0, "id": 1, "title": 1, "poll": 1})
+    raw = (topic or {}).get("poll") if topic else None
+    options = [o for o in ((raw or {}).get("options") or []) if isinstance(o, dict) and o.get("id")]
+    if not topic or not options:
+        raise HTTPException(status_code=404, detail="Poll not found")
+    option_id = (body.option_id or "").strip()
+    if option_id not in {o.get("id") for o in options}:
+        raise HTTPException(status_code=400, detail="That is not one of the choices")
+    uid = current_user.get("id") or ""
+    if not uid:
+        raise HTTPException(status_code=401, detail="Not logged in")
+    reward = int(raw.get("reward_points") or 0)
+    now = datetime.now(timezone.utc).isoformat()
+    vote_filter = {"topic_id": topic_id, "user_id": uid}
+
+    try:
+        await db.forum_poll_votes.insert_one({
+            "topic_id": topic_id,
+            "user_id": uid,
+            "option_id": option_id,
+            "rewarded": False,
+            "created_at": now,
+            "updated_at": now,
+        })
+        first = True
+    except DuplicateKeyError:
+        first = False
+
+    points_awarded = 0
+    if first:
+        if reward:
+            updated = await db.users.update_one({"id": uid}, {"$inc": {"points": reward}})
+            if updated.matched_count == 0:
+                await db.forum_poll_votes.delete_one(vote_filter)
+                raise HTTPException(status_code=404, detail="User not found")
+        await db.forum_poll_votes.update_one(vote_filter, {"$set": {"rewarded": True}})
+        if reward:
+            await log_points_event(
+                db,
+                user_id=uid,
+                points=reward,
+                event_type="forum_poll_vote",
+                event_ref=topic_id,
+            )
+        points_awarded = reward
+        message = f"Vote recorded. You received {reward} points."
+    else:
+        prev = await db.forum_poll_votes.find_one(vote_filter, {"_id": 0, "option_id": 1, "rewarded": 1})
+        same = bool(prev and prev.get("option_id") == option_id)
+        if prev and not same:
+            await db.forum_poll_votes.update_one(
+                vote_filter,
+                {"$set": {"option_id": option_id, "updated_at": now}},
+            )
+        if prev and not prev.get("rewarded") and reward:
+            claim = await db.forum_poll_votes.update_one(
+                {**vote_filter, "rewarded": {"$ne": True}},
+                {"$set": {"rewarded": True, "option_id": option_id, "updated_at": now}},
+            )
+            if claim.modified_count:
+                await db.users.update_one({"id": uid}, {"$inc": {"points": reward}})
+                await log_points_event(
+                    db,
+                    user_id=uid,
+                    points=reward,
+                    event_type="forum_poll_vote",
+                    event_ref=topic_id,
+                )
+                points_awarded = reward
+        if points_awarded:
+            message = f"Vote recorded. You received {reward} points."
+        elif same:
+            message = "You already voted for this."
+        else:
+            message = f"Vote changed. You already received {reward} points for voting."
+
+    return {
+        "message": message,
+        "points_awarded": points_awarded,
+        "poll": await _public_poll(topic, uid),
+    }
+
+
 def register(router):
     _forum_rl = [Depends(_forum_sustained_rl_user)]
     router.add_api_route("/forum/update-log/status", get_update_log_status, methods=["GET"], dependencies=_forum_rl)
@@ -1470,6 +1623,7 @@ def register(router):
     router.add_api_route("/forum/topics", get_topics, methods=["GET"], dependencies=_forum_rl)
     router.add_api_route("/forum/topics", create_topic, methods=["POST"], dependencies=_forum_rl)
     router.add_api_route("/forum/topics/{topic_id}", get_topic, methods=["GET"], dependencies=_forum_rl)
+    router.add_api_route("/forum/topics/{topic_id}/poll/vote", vote_poll, methods=["POST"], dependencies=_forum_rl)
     router.add_api_route("/forum/topics/{topic_id}/comments", add_comment, methods=["POST"], dependencies=_forum_rl)
     router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/reactions/users", list_comment_emoji_reaction_users, methods=["GET"], dependencies=_forum_rl)
     router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/reactions", set_comment_emoji_reaction, methods=["POST"], dependencies=_forum_rl)
