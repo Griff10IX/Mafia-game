@@ -604,6 +604,66 @@ def register(r) -> None:
         )
         return {"message": "Deleted"}
 
+    class AiCheckoutBody(BaseModel):
+        pack_id: str = Field(..., min_length=1, max_length=40)
+        origin_url: str = Field(..., min_length=8, max_length=300)
+
+    class AiGenerateBody(BaseModel):
+        prompt: str = Field(..., min_length=3, max_length=2000)
+        model_id: str = Field("flare", min_length=1, max_length=40)
+        size: str = Field("1024x1024", min_length=1, max_length=20)
+        is_public_gallery: bool = False
+
+    async def ai_picture_status(current_user: dict = Depends(get_current_user_verified)):
+        from utils.ai_image_credits import balance_of, public_catalog
+
+        payload = public_catalog()
+        payload["balance"] = await balance_of(db, current_user.get("id") or "")
+        return payload
+
+    async def ai_picture_checkout(body: AiCheckoutBody, current_user: dict = Depends(get_current_user_verified)):
+        from utils.ai_image_credits import create_checkout
+
+        url = await create_checkout(db, current_user, body.pack_id, body.origin_url)
+        return {"url": url}
+
+    async def ai_picture_generate(body: AiGenerateBody, current_user: dict = Depends(get_current_user_verified)):
+        from utils.ai_image_credits import MODELS, balance_of, generate_image_bytes, record_spend, refund_credits, reserve_credits
+
+        model = MODELS.get((body.model_id or "").strip())
+        if not model:
+            raise HTTPException(status_code=400, detail="Unknown picture quality")
+        uid = current_user.get("id") or ""
+        if await _count_active(uid) >= IMAGE_HOST_MAX_PER_USER:
+            raise HTTPException(status_code=400, detail="Image host is full. Delete one first.")
+        cost = int(model["cost"])
+        await reserve_credits(db, uid, cost)
+        try:
+            raw, mime = await generate_image_bytes(body.prompt, body.model_id, body.size)
+            saved = await _persist_hosted_image(
+                uid=uid,
+                raw=raw,
+                mime=mime,
+                original_filename="ai-picture.png",
+                resize_meta=None,
+                is_public_gallery=bool(body.is_public_gallery),
+            )
+        except HTTPException as exc:
+            detail = exc.detail if isinstance(exc.detail, str) else "failed"
+            await refund_credits(db, uid, cost, detail)
+            raise
+        except Exception as exc:
+            logger.exception("ai picture save failed")
+            await refund_credits(db, uid, cost, "save failed")
+            raise HTTPException(status_code=502, detail="That picture could not be saved") from exc
+        await record_spend(db, uid, cost, body.model_id)
+        saved["credits_spent"] = cost
+        saved["credits_balance"] = await balance_of(db, uid)
+        return saved
+
+    r.add_api_route("/image-host/ai", ai_picture_status, methods=["GET"])
+    r.add_api_route("/image-host/ai/checkout", ai_picture_checkout, methods=["POST"])
+    r.add_api_route("/image-host/ai/generate", ai_picture_generate, methods=["POST"])
     r.add_api_route("/image-host/mine", list_my_images, methods=["GET"])
     r.add_api_route("/image-host/upload", upload_image, methods=["POST"])
     r.add_api_route("/image-host/import-url", import_from_url, methods=["POST"])

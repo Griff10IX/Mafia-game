@@ -6,7 +6,18 @@
 
 [hr]
 
-[size=1.5][b][color=#2ECC71]2026-10-01[/color][/b] — [b]Garage wear[/b][/size]
+[size=1.5][b][color=#2ECC71]2026-10-02[/color][/b] — [b]Picture credits[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Image host:[/b] You can describe a picture and save it to your image host.[/color]
+[*][color=#888888][b]Credits:[/b] Try £2.49 (180), Starter £5.99 (500), Creator £17.99 (1,600), Power £35.99 (3,300). A picture costs 3, 8, or 15 credits depending on the quality.[/color]
+[*][color=#888888][b]Payment:[/b] Credits are added only after the card payment is confirmed. A failed picture puts the credits back.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-10-01[/color][/b] — [b]Garage wear[/b][/size
 [quote]
 [list]
 [*][color=#888888][b]Cars:[/b] Cars in your garage now pick up wear over time. Repair them from the garage when you want them looked after.[/color]

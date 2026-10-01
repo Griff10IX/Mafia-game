@@ -13548,7 +13548,7 @@ export default function Admin() {
           />
           {!collapsed.donationsPayments && (
             <div className="p-3 space-y-3">
-              <p className="text-[10px] text-mutedForeground font-heading">Stripe point purchases. Status shows whether Stripe reports paid or unpaid. "Paid — points not credited yet" means Stripe charged successfully but our DB row is still pending (often a missed/delayed webhook or the player never hit the store success page). Staff receive an inbox notification once per session when this is detected. "Credit" appears when Stripe is paid but points are not in-game yet. Use "Check &amp; Process" to reconcile a session id.</p>
+              <p className="text-[10px] text-mutedForeground font-heading">Stripe point purchases and picture-credit packs. Status shows whether Stripe reports paid or unpaid. Picture-credit rows show the pack, the money Stripe took, credits added, credits spent on pictures, and credits left. "Paid — points not credited yet" means Stripe charged successfully but our DB row is still pending (often a missed/delayed webhook or the player never hit the store success page). Staff receive an inbox notification once per session when this is detected. "Credit" appears when Stripe is paid but points are not in-game yet. Use "Check &amp; Process" to reconcile a session id, including a picture-credit pack that was paid but not added.</p>
               <div className="flex flex-wrap gap-2 items-center">
                 <label className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground cursor-pointer select-none">
                   <input
@@ -13601,6 +13601,8 @@ export default function Admin() {
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">User</th>
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Package</th>
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Points</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Spent</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Left</th>
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Paid</th>
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Status</th>
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Action</th>
@@ -13638,8 +13640,10 @@ export default function Admin() {
                               <td className="py-1 pr-1 font-mono text-[8px] align-top break-all whitespace-normal min-w-[12rem] max-w-[28rem]" title={sessionTitle}>{sessionId}</td>
                               <td className="py-1 pr-1 font-mono text-[8px] align-top break-all whitespace-normal min-w-[12rem] max-w-[28rem]" title={lotId}>{lotId}</td>
                               <td className="py-1 pr-1">{row.username ?? row.user_id ?? '—'}</td>
-                              <td className="py-1 pr-1 capitalize">{row.package_id ?? '—'}</td>
-                              <td className="py-1 pr-1 font-mono">{Number(added).toLocaleString()}</td>
+                              <td className="py-1 pr-1">{row.package_label || row.package_id || '—'}</td>
+                              <td className="py-1 pr-1 font-mono">{row.ai_credits ? `${Number(row.ai_credits).toLocaleString()} credits` : Number(added).toLocaleString()}</td>
+                              <td className="py-1 pr-1 font-mono">{row.ai_credits != null ? Number(row.credits_spent || 0).toLocaleString() : '—'}</td>
+                              <td className="py-1 pr-1 font-mono">{row.credits_left != null ? Number(row.credits_left).toLocaleString() : '—'}</td>
                               <td className="py-1 pr-1 font-mono text-emerald-300/90">{row.paid_display ?? '—'}</td>
                               <td className="py-1 pr-1">
                                 <span className={statusClass}>{statusLabel}</span>
@@ -13706,8 +13710,11 @@ export default function Admin() {
                             ) : null}
                           </div>
                           <div><span className="text-mutedForeground">User:</span> {row.username ?? row.user_id ?? '—'}</div>
-                          <div><span className="text-mutedForeground">Package:</span> <span className="capitalize">{row.package_id ?? '—'}</span></div>
-                          <div><span className="text-mutedForeground">Points:</span> <span className="font-mono">{Number(added).toLocaleString()}</span></div>
+                          <div><span className="text-mutedForeground">Package:</span> {row.package_label || row.package_id || '—'}</div>
+                          <div><span className="text-mutedForeground">{row.ai_credits ? 'Credits:' : 'Points:'}</span> <span className="font-mono">{row.ai_credits ? Number(row.ai_credits).toLocaleString() : Number(added).toLocaleString()}</span></div>
+                          {row.ai_credits != null ? (
+                            <div><span className="text-mutedForeground">Spent / left:</span> <span className="font-mono">{Number(row.credits_spent || 0).toLocaleString()} / {row.credits_left != null ? Number(row.credits_left).toLocaleString() : '—'}</span></div>
+                          ) : null}
                           <div><span className="text-mutedForeground">Paid:</span> <span className="font-mono text-emerald-300/90">{row.paid_display ?? '—'}</span></div>
                           <div>
                             <span className="text-mutedForeground">Status:</span>{' '}

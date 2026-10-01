@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, Image as ImageIcon, Upload, Link2, Trash2, Copy, Loader2 } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, Image as ImageIcon, Upload, Link2, Trash2, Copy, Loader2, Sparkles } from 'lucide-react';
 import api, { imageHostDisplayUrl, imageHostGalleryDisplayUrl } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -45,6 +45,29 @@ export default function ImageHost() {
   const [importing, setImporting] = useState(false);
   const [activeTab, setActiveTab] = useState('mine');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [aiBalance, setAiBalance] = useState(0);
+  const [aiPacks, setAiPacks] = useState([]);
+  const [aiModels, setAiModels] = useState([]);
+  const [aiSizes, setAiSizes] = useState(['1024x1024']);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiModel, setAiModel] = useState('flare');
+  const [aiSize, setAiSize] = useState('1024x1024');
+  const [aiPublic, setAiPublic] = useState(false);
+  const [aiBuying, setAiBuying] = useState('');
+  const [aiMaking, setAiMaking] = useState(false);
+
+  const loadAi = useCallback(async () => {
+    try {
+      const r = await api.get('/image-host/ai');
+      setAiBalance(Number(r.data?.balance) || 0);
+      setAiPacks(Array.isArray(r.data?.packs) ? r.data.packs : []);
+      setAiModels(Array.isArray(r.data?.models) ? r.data.models : []);
+      setAiSizes(Array.isArray(r.data?.sizes) && r.data.sizes.length ? r.data.sizes : ['1024x1024']);
+    } catch {
+      setAiPacks([]);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -78,8 +101,91 @@ export default function ImageHost() {
   useEffect(() => {
     load();
     loadPublic();
+    loadAi();
     api.get('/auth/staff-flags').then((r) => setIsAdmin(!!r.data?.is_admin)).catch(() => setIsAdmin(false));
-  }, [load, loadPublic]);
+  }, [load, loadPublic, loadAi]);
+
+  useEffect(() => {
+    const sid = searchParams.get('session_id');
+    const cancelled = searchParams.get('payment_cancel');
+    if (!sid && !cancelled) return undefined;
+    let stop = false;
+    (async () => {
+      if (cancelled) {
+        toast.message('Payment cancelled. No credits were added.');
+      } else {
+        try {
+          const res = await api.get(`/payments/status/${encodeURIComponent(sid)}`);
+          if (stop) return;
+          if (res.data?.status === 'completed') {
+            const added = Number(res.data?.ai_credits_added) || 0;
+            toast.success(added ? `${added.toLocaleString()} picture credits added.` : 'Picture credits confirmed.');
+            await loadAi();
+          } else if (res.data?.status === 'fulfillment_blocked') {
+            toast.error(res.data?.detail || 'That payment could not be applied.');
+          } else {
+            toast.message('Payment is still confirming. Credits are added only after Stripe confirms it.');
+          }
+        } catch (err) {
+          if (!stop) toast.error(err.response?.data?.detail || 'Could not confirm that payment.');
+        }
+      }
+      if (!stop) setSearchParams({}, { replace: true });
+    })();
+    return () => { stop = true; };
+  }, [searchParams, setSearchParams, loadAi]);
+
+  const buyCredits = async (packId) => {
+    setAiBuying(packId);
+    try {
+      const res = await api.post('/image-host/ai/checkout', {
+        pack_id: packId,
+        origin_url: `${window.location.origin}/social/image-host`,
+      });
+      if (res.data?.url) {
+        window.location.href = res.data.url;
+        return;
+      }
+      toast.error('Checkout did not start.');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Checkout failed.');
+    } finally {
+      setAiBuying('');
+    }
+  };
+
+  const makePicture = async (e) => {
+    e.preventDefault();
+    const model = aiModels.find((m) => m.id === aiModel);
+    const cost = Number(model?.cost) || 0;
+    if (cost && aiBalance < cost) {
+      toast.error('Not enough picture credits.');
+      return;
+    }
+    if (count >= max) {
+      toast.error(`You already have ${max} images. Delete one first.`);
+      return;
+    }
+    setAiMaking(true);
+    try {
+      await api.post('/image-host/ai/generate', {
+        prompt: aiPrompt.trim(),
+        model_id: aiModel,
+        size: aiSize,
+        is_public_gallery: aiPublic,
+      });
+      toast.success('Picture saved to your image host.');
+      setAiPrompt('');
+      await load();
+      await loadAi();
+      if (aiPublic) await loadPublic();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'That picture could not be made.');
+      await loadAi();
+    } finally {
+      setAiMaking(false);
+    }
+  };
 
   const onFile = async (e) => {
     const f = e.target.files?.[0];
@@ -335,6 +441,75 @@ export default function ImageHost() {
           </div>
         </div>
         <span className="text-xs font-heading text-primary font-bold">{count}/{max}</span>
+      </div>
+
+      <div className={`${styles.panel} rounded-md border border-primary/20 p-4 space-y-3`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-heading font-bold text-primary flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            Make a picture
+          </h2>
+          <span className="text-xs font-heading font-bold text-foreground">{aiBalance.toLocaleString()} credits</span>
+        </div>
+        <p className="text-[10px] font-heading text-mutedForeground">
+          Buy credits, then describe a picture. Credits are added only after the card payment is confirmed. A failed picture puts the credits back.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {aiPacks.map((pack) => (
+            <button
+              key={pack.id}
+              type="button"
+              onClick={() => buyCredits(pack.id)}
+              disabled={!!aiBuying || aiMaking}
+              className="min-h-12 w-full text-left px-3 py-2 rounded border border-primary/30 hover:bg-primary/10 disabled:opacity-40"
+            >
+              <span className="block text-[11px] font-heading font-bold text-foreground">{pack.name} · {pack.label}</span>
+              <span className="block text-[10px] font-heading text-mutedForeground">{Number(pack.credits).toLocaleString()} credits{aiBuying === pack.id ? ' · opening checkout…' : ''}</span>
+            </button>
+          ))}
+        </div>
+        <form onSubmit={makePicture} className="space-y-2">
+          <textarea
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+            maxLength={2000}
+            rows={3}
+            placeholder="Describe the picture"
+            className="w-full px-3 py-2 rounded border border-zinc-600 bg-transparent text-sm text-foreground"
+          />
+          <div className="flex flex-col sm:flex-row gap-2">
+            <select
+              value={aiModel}
+              onChange={(e) => setAiModel(e.target.value)}
+              className="min-h-12 flex-1 px-3 rounded border border-zinc-600 bg-zinc-950 text-sm text-foreground"
+            >
+              {aiModels.map((model) => (
+                <option key={model.id} value={model.id}>{model.name} · {model.cost} credits</option>
+              ))}
+            </select>
+            <select
+              value={aiSize}
+              onChange={(e) => setAiSize(e.target.value)}
+              className="min-h-12 flex-1 px-3 rounded border border-zinc-600 bg-zinc-950 text-sm text-foreground"
+            >
+              {aiSizes.map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 text-[10px] font-heading text-mutedForeground">
+            <input type="checkbox" checked={aiPublic} onChange={(e) => setAiPublic(e.target.checked)} />
+            Show in the public gallery
+          </label>
+          <button
+            type="submit"
+            disabled={aiMaking || !!aiBuying || aiPrompt.trim().length < 3}
+            className="min-h-12 w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded border border-primary/50 bg-primary/20 text-primary text-xs font-heading font-bold uppercase tracking-wider disabled:opacity-40"
+          >
+            {aiMaking ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+            Make picture
+          </button>
+        </form>
       </div>
 
       <div className={`${styles.panel} rounded-md border border-primary/20 p-4 space-y-4 mobile-panel`}>

@@ -54,12 +54,14 @@ GAME_PASS_SEASON_END_AT = DEFAULT_GAME_PASS_SEASON_END_AT
 
 def _is_non_points_stripe_package(package_id: Optional[str]) -> bool:
     pid = (package_id or "").strip()
+    from utils.ai_image_credits import is_ai_credit_package
+
     return pid in {
         RANK_XP_PASS_PACKAGE_ID,
         AUTO_RANK_PERMANENT_PACKAGE_ID,
         DEAD_ALIVE_REVIVE_PACKAGE_ID,
         GAME_PASS_PRESTIGE_PACKAGE_ID,
-    } or is_loot_piece_package(pid)
+    } or is_loot_piece_package(pid) or is_ai_credit_package(pid)
 
 
 def _loot_piece_status_fields(package_id: Optional[str], txn: Optional[dict] = None) -> Dict[str, int]:
@@ -2113,6 +2115,9 @@ def register(router):
                 out["game_pass_prestige_count"] = transaction.get("game_pass_prestige_count")
                 out["bonus_summary"] = transaction.get("game_pass_prestige_bonus_summary")
             out.update(_loot_piece_status_fields(pkg, transaction))
+            if str(pkg).startswith("ai_credit_"):
+                out["ai_credits_added"] = int(transaction.get("ai_credits") or 0)
+                out["credits_balance"] = transaction.get("credits_after")
             return out
         
         if transaction and transaction.get("payment_status") == "manual_credit_pending":
@@ -2154,6 +2159,29 @@ def register(router):
             logger.info("Stripe session status: id=%s payment_status=%s status=%s", session_id, session.payment_status, session.status)
             
             if session.payment_status == "paid" and session.metadata:
+                if session.metadata.get("payment_kind") == "ai_image_credits":
+                    if session.metadata.get("user_id") != current_user["id"]:
+                        raise HTTPException(status_code=403, detail="Unauthorized")
+                    from utils.ai_image_credits import fulfill_ai_credit_session
+
+                    ai_result = await fulfill_ai_credit_session(db, session)
+                    if ai_result.get("credited") or ai_result.get("already"):
+                        return {
+                            "status": "completed",
+                            "payment_status": "paid",
+                            "points_added": 0,
+                            "ai_credits_added": ai_result.get("credits") or 0,
+                            "credits_balance": ai_result.get("balance"),
+                            "package_id": session.metadata.get("package_id"),
+                        }
+                    if ai_result.get("reason") == "amount_mismatch":
+                        return {
+                            "status": "fulfillment_blocked",
+                            "payment_status": "fulfillment_blocked",
+                            "points_added": 0,
+                            "detail": "This purchase could not be completed. If you were charged, contact support for a refund.",
+                        }
+                    return {"status": "pending", "payment_status": session.payment_status}
                 user_id = session.metadata.get("user_id")
                 package_id = session.metadata.get("package_id") or (transaction or {}).get("package_id")
                 if user_id != current_user["id"]:
@@ -2381,6 +2409,12 @@ def register(router):
 
         if event.type == "checkout.session.completed":
             session = event.data.object
+            if (getattr(session, "metadata", None) or {}).get("payment_kind") == "ai_image_credits":
+                if session.payment_status == "paid":
+                    from utils.ai_image_credits import fulfill_ai_credit_session
+
+                    await fulfill_ai_credit_session(db, session)
+                return {"received": True}
             if session.payment_status == "paid":
                 _at = getattr(session, "amount_total", None)
                 _ac = getattr(session, "currency", None) or "gbp"
@@ -2724,6 +2758,9 @@ def register(router):
                 "expected_amount_minor": 1,
                 "stripe_amount_total_minor": 1,
                 "stripe_currency": 1,
+                "ai_credits": 1,
+                "credits_after": 1,
+                "payment_kind": 1,
             },
         ).sort("created_at", -1).limit(500)
         items = await cursor.to_list(500)
@@ -2736,6 +2773,9 @@ def register(router):
         for t in items:
             t["username"] = by_id.get(t.get("user_id"), "?")
         await _enrich_admin_payment_log_rows(db, items, _get_stripe_key(), POINT_PACKAGES)
+        from utils.ai_image_credits import attach_admin_credit_fields
+
+        await attach_admin_credit_fields(db, items)
         filtered_open_unpaid = sum(1 for t in items if _admin_payment_log_row_is_unpaid_checkout_noise(t))
         if not include_open_unpaid:
             items = [t for t in items if not _admin_payment_log_row_is_unpaid_checkout_noise(t)]
@@ -2797,6 +2837,16 @@ def register(router):
         # Check our transaction record
         txn = await db.payment_transactions.find_one({"session_id": body.session_id}, {"_id": 0})
         result["our_transaction"] = txn
+
+        if session.payment_status == "paid" and session.metadata and session.metadata.get("payment_kind") == "ai_image_credits":
+            from utils.ai_image_credits import fulfill_ai_credit_session
+
+            result["ai_credit"] = await fulfill_ai_credit_session(db, session)
+            result["processed"] = bool(result["ai_credit"].get("credited") or result["ai_credit"].get("already"))
+            result["our_transaction"] = await db.payment_transactions.find_one(
+                {"session_id": body.session_id}, {"_id": 0}
+            )
+            return result
         
         # If Stripe shows paid but we haven't processed, process now
         if session.payment_status == "paid" and session.metadata:
