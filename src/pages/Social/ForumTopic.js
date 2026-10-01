@@ -165,6 +165,25 @@ const FORUM_CONTENT_STYLES = `
     z-index: 30;
     bottom: 0;
   }
+  .forum-poll {
+    display: block;
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+    clear: both;
+  }
+  .forum-poll-option {
+    display: block;
+    width: 100%;
+    min-height: 48px;
+    overflow: visible;
+  }
+  .forum-topic-post,
+  .forum-topic-post .forum-poll {
+    overflow: visible !important;
+  }
   @media (max-width: 767px) {
     [id^="forum-comment-"],
     [id^="forum-topic-"] {
@@ -359,6 +378,63 @@ function ForumEmojiReactionBar({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function ForumPollCard({ poll, busy, onVote }) {
+  const options = Array.isArray(poll?.options) ? poll.options : [];
+  if (!options.length) return null;
+  const total = Number(poll.total_votes || 0);
+  const reward = Number(poll.reward_points || 0);
+  return (
+    <div className="forum-poll mt-3 rounded-md border border-primary/50 bg-zinc-950 p-3 space-y-2" data-testid="forum-poll">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+        <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Poll</span>
+        <span className="text-[11px] text-mutedForeground">{reward.toLocaleString()} points for voting</span>
+      </div>
+      <p className="text-xs text-mutedForeground">
+        You can change your vote. The {reward.toLocaleString()} points are paid once.
+      </p>
+      {poll.already_rewarded && (
+        <p className="text-xs text-emerald-400">
+          You already received {reward.toLocaleString()} points for voting.
+        </p>
+      )}
+      <div className="flex flex-col gap-2">
+        {options.map((opt) => {
+          const votes = Number(opt.votes || 0);
+          const pct = total > 0 ? Math.round((votes / total) * 100) : 0;
+          const selected = poll.my_option_id === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              disabled={busy}
+              onClick={() => onVote(opt.id)}
+              className={`forum-poll-option text-left px-3 py-2.5 rounded-md border-2 touch-manipulation ${
+                selected ? 'border-primary bg-primary/25' : 'border-zinc-500 bg-zinc-800'
+              } disabled:opacity-60`}
+              style={{
+                backgroundImage: `linear-gradient(to right, rgba(var(--noir-primary-rgb), 0.35) ${pct}%, transparent ${pct}%)`,
+              }}
+            >
+              <span className="flex flex-col items-start gap-0.5">
+                <span className="text-sm text-foreground font-heading break-words">
+                  {opt.label}
+                  {selected ? <span className="ml-2 text-[10px] font-heading uppercase text-primary">Your vote</span> : null}
+                </span>
+                <span className="text-[11px] text-mutedForeground tabular-nums">
+                  {votes.toLocaleString()} · {pct}%
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-mutedForeground">
+        {total.toLocaleString()} vote{total === 1 ? '' : 's'}
+      </p>
     </div>
   );
 }
@@ -1468,7 +1544,7 @@ export default function ForumTopic() {
       )}
 
       {/* Topic Content */}
-      <div id={topic?.id ? `forum-topic-${topic.id}` : undefined} className={`${styles.panel} rounded-md overflow-hidden mobile-panel ${isTopicOfShame ? 'border-amber-500/30' : 'border-primary/20'}`}>
+      <div id={topic?.id ? `forum-topic-${topic.id}` : undefined} className={`forum-topic-post ${styles.panel} rounded-md overflow-visible mobile-panel ${isTopicOfShame ? 'border-amber-500/30' : 'border-primary/20'}`}>
         <div className={`px-3 py-2 border-b flex flex-wrap items-center justify-between gap-2 ${isTopicOfShame ? 'bg-amber-500/[0.08] border-amber-500/20' : 'bg-primary/10 border-primary/30'}`}>
           {isTopicOfShame ? (
             <ForumSystemAiAuthor className="text-xs uppercase tracking-widest" avatarClassName="w-4 h-4" />
@@ -1511,6 +1587,7 @@ export default function ForumTopic() {
               dangerouslySetInnerHTML={{ __html: parseForumContent(topicContent, forumParseOpts) }}
             />
           )}
+          <ForumPollCard poll={topic.poll} busy={pollBusy} onVote={votePoll} />
           <ForumEmojiReactionBar
             topicId={topicId}
             commentId={null}
@@ -1532,64 +1609,6 @@ export default function ForumTopic() {
           />
         </div>
       </div>
-
-      {Array.isArray(topic.poll?.options) && topic.poll.options.length > 0 && (
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
-          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Poll</span>
-            <span className="ml-2 text-[10px] text-mutedForeground">
-              {Number(topic.poll.reward_points || 0).toLocaleString()} points for voting
-            </span>
-          </div>
-          <div className="p-3 space-y-2">
-            <p className="text-xs text-mutedForeground">
-              You can change your vote. The {Number(topic.poll.reward_points || 0).toLocaleString()} points are paid once.
-            </p>
-            {topic.poll.already_rewarded && (
-              <p className="text-xs text-emerald-400">
-                You already received {Number(topic.poll.reward_points || 0).toLocaleString()} points for voting.
-              </p>
-            )}
-            {topic.poll.options.map((opt) => {
-              const total = Number(topic.poll.total_votes || 0);
-              const votes = Number(opt.votes || 0);
-              const pct = total > 0 ? Math.round((votes / total) * 100) : 0;
-              const selected = topic.poll.my_option_id === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  disabled={pollBusy}
-                  onClick={() => votePoll(opt.id)}
-                  className={`relative w-full text-left px-3 py-2 rounded border overflow-hidden touch-manipulation ${
-                    selected
-                      ? 'border-primary/60 bg-primary/15'
-                      : 'border-zinc-700/50 bg-zinc-900/40 hover:border-primary/40'
-                  } disabled:opacity-60`}
-                >
-                  <span
-                    className="absolute inset-y-0 left-0 bg-primary/15"
-                    style={{ width: `${pct}%` }}
-                    aria-hidden
-                  />
-                  <span className="relative flex items-center justify-between gap-3">
-                    <span className="text-sm text-foreground">
-                      {opt.label}
-                      {selected ? <span className="ml-2 text-[10px] font-heading uppercase text-primary">Your vote</span> : null}
-                    </span>
-                    <span className="text-[10px] text-mutedForeground tabular-nums shrink-0">
-                      {votes.toLocaleString()} · {pct}%
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-            <p className="text-[10px] text-mutedForeground">
-              {Number(topic.poll.total_votes || 0).toLocaleString()} vote{Number(topic.poll.total_votes || 0) === 1 ? '' : 's'}
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Crew OC: Apply to join */}
       {topic.crew_oc_family_id && (
