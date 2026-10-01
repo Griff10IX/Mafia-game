@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-10-01[/color][/b] — [b]Garage wear[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Cars:[/b] Cars in your garage now pick up wear over time. Repair them from the garage when you want them looked after.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-09-30[/color][/b] — [b]Cosmetic sets[/b][/size]
 [quote]
 [list]

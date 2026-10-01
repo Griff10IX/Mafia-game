@@ -4295,6 +4295,8 @@ async def startup_db():
     from routers.cars import gta as gta_router
     asyncio.create_task(gta_router.run_dealer_replenish_loop())
     asyncio.create_task(gta_router.run_dealer_auto_stock_loop())
+    from utils.car_wear import run_car_wear_loop
+    asyncio.create_task(run_car_wear_loop())
     from utils.exclusive_car_id_rotate import run_exclusive_car_id_rotate_loop
     asyncio.create_task(run_exclusive_car_id_rotate_loop())
     from utils.exclusive_car_weekly_loot import run_exclusive_car_weekly_loot_loop

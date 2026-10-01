@@ -34,6 +34,7 @@ from utils.garage_dealership import (
     dealership_stack_conflict_status,
 )
 from utils.global_property_owner_shares import load_global_property_owner_shares
+from utils.car_wear import settle_car_wear
 
 from utils.referral_ids import (
     apply_referrer_referral_increment,
@@ -1039,6 +1040,7 @@ async def _attempt_gta_impl(
                 "car_name": car["name"],
                 "acquired_at": car_acquired_at,
                 "damage_percent": damage_percent,
+                "damage_as_of": car_acquired_at,
             }
             for _ in range(copy_count)
         ]
@@ -1581,6 +1583,7 @@ async def get_garage(current_user: dict = Depends(get_current_user)):
     always_car_ids = {cid for cid in _damage_immune_car_ids() if cid}
     immune_catalog_ids = {cid for cid in always_car_ids if cid != "car_custom"}
     all_rows = await db.user_cars.find({"user_id": uid}).sort("acquired_at", -1).to_list(GARAGE_FETCH_LIMIT)
+    all_rows = await settle_car_wear(db, all_rows)
     main_rows: List[dict] = []
     extra_rows: List[dict] = []
     custom_rows: List[dict] = []
@@ -1643,6 +1646,7 @@ async def get_recent_stolen(current_user: dict = Depends(get_current_user)):
         .limit(10)
     )
     cars = await cursor.to_list(10)
+    cars = await settle_car_wear(db, cars)
     car_details = []
     for user_car in cars:
         entry = _garage_entry_from_user_car(user_car)
@@ -1696,6 +1700,7 @@ async def _melt_cars_impl(
     pre_docs = await db.user_cars.find(
         {**owner, "id": {"$in": list(car_ids)}, "listed_for_sale": {"$ne": True}},
     ).to_list(limit)
+    pre_docs = await settle_car_wear(db, pre_docs)
     cars_by_id = {d.get("id"): d for d in pre_docs if d.get("id")}
 
     if in_war:
@@ -2881,6 +2886,7 @@ async def buy_car(
         "car_name": car_info.get("name"),
         "acquired_at": now.isoformat(),
         "damage_percent": 0,
+        "damage_as_of": now.isoformat(),
     }
     await db.user_cars.insert_one(doc)
     buy_inc = {"cars_purchased_from_dealership": 1}
@@ -3026,6 +3032,7 @@ async def buy_cars_bulk(
             "car_name": car_info.get("name"),
             "acquired_at": now_iso,
             "damage_percent": 0,
+            "damage_as_of": now_iso,
         })
         transfer_docs.append({
             "id": str(uuid.uuid4()),
@@ -3110,9 +3117,10 @@ async def get_marketplace_listings(current_user: dict = Depends(get_current_user
     buyer_id = current_user.get("id") or ""
     cursor = db.user_cars.find(
         {"listed_for_sale": True},
-        {"_id": 1, "id": 1, "user_id": 1, "car_id": 1, "car_name": 1, "custom_name": 1, "sale_price": 1, "listed_at": 1, "damage_percent": 1},
+        {"_id": 1, "id": 1, "user_id": 1, "car_id": 1, "car_name": 1, "custom_name": 1, "sale_price": 1, "listed_at": 1, "damage_percent": 1, "damage_as_of": 1},
     ).sort("listed_at", -1)
     listings = await cursor.to_list(200)
+    listings = await settle_car_wear(db, listings)
     seller_ids = list({uc["user_id"] for uc in listings if uc.get("user_id")})
     seller_map = {}
     if seller_ids:
@@ -3434,6 +3442,10 @@ async def repair_car(
             user_car = None
     if not user_car:
         raise HTTPException(status_code=404, detail="Car not found in your garage")
+    kept = await settle_car_wear(db, [user_car])
+    if not kept:
+        raise HTTPException(status_code=404, detail="Car not found in your garage")
+    user_car = kept[0]
     car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
     if not car_info:
         raise HTTPException(status_code=400, detail="Car type not found")
@@ -3452,7 +3464,10 @@ async def repair_car(
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail=f"Insufficient money. Repair costs ${cost:,}.")
     q = _repair_car_query_from_user_car(user_car, current_user.get("id") or "")
-    await db.user_cars.update_one(q, {"$set": {"damage_percent": 0}})
+    await db.user_cars.update_one(
+        q,
+        {"$set": {"damage_percent": 0, "damage_as_of": datetime.now(timezone.utc).isoformat()}},
+    )
     await log_activity(current_user.get("id", ""), current_user.get("username", "?"), "gta_repair", {"car": car_info.get("name"), "cost": cost})
     return {
         "message": f"Repaired for ${cost:,}. Damage 0%.",
@@ -3475,6 +3490,7 @@ async def repair_all_cars(current_user: dict = Depends(get_current_user_verified
             {"$set": {"damage_percent": 0}},
         )
         rows = await db.user_cars.find({"user_id": uid}).to_list(GARAGE_FETCH_LIMIT)
+        rows = await settle_car_wear(db, rows)
         repairs: List[Tuple[dict, int]] = []
         total = 0
         for uc in rows:
@@ -3496,7 +3512,8 @@ async def repair_all_cars(current_user: dict = Depends(get_current_user_verified
                 detail=f"Insufficient money. Repair all costs ${total:,}.",
             )
         try:
-            ops = [UpdateOne(q, {"$set": {"damage_percent": 0}}) for q, _ in repairs]
+            repaired_at = datetime.now(timezone.utc).isoformat()
+            ops = [UpdateOne(q, {"$set": {"damage_percent": 0, "damage_as_of": repaired_at}}) for q, _ in repairs]
             await db.user_cars.bulk_write(ops, ordered=False)
         except Exception:
             logger.exception("repair_all bulk_write failed user=%s", uid)
@@ -3602,6 +3619,10 @@ async def get_view_car(
             user_car = None
     if not user_car:
         raise HTTPException(status_code=404, detail="Car not found")
+    kept = await settle_car_wear(db, [user_car])
+    if not kept:
+        raise HTTPException(status_code=404, detail="Car not found")
+    user_car = kept[0]
     car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
     if not car_info:
         raise HTTPException(status_code=404, detail="Car not found")

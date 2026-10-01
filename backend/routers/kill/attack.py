@@ -3151,7 +3151,15 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                             logging.exception("Rank-up notification (hitlist NPC): %s", e)
                 car_id = (rewards.get("car_id") or "").strip()
                 if car_id and next((c for c in CARS if c.get("id") == car_id), None):
-                    await db.user_cars.insert_one({"id": str(uuid.uuid4()), "user_id": killer_id, "car_id": car_id, "acquired_at": datetime.now(timezone.utc).isoformat()})
+                    _car_now = datetime.now(timezone.utc).isoformat()
+                    await db.user_cars.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "user_id": killer_id,
+                        "car_id": car_id,
+                        "acquired_at": _car_now,
+                        "damage_percent": 0,
+                        "damage_as_of": _car_now,
+                    })
                 try:
                     await update_objectives_progress(killer_id, "hitlist_npc_kills", 1)
                 except Exception:
