@@ -190,13 +190,13 @@ def _oc_prizes() -> Dict[int, List[Dict[str, Any]]]:
 
 def _hitlist_prizes() -> Dict[int, List[Dict[str, Any]]]:
     points = [2000, 1500, 1250, 1000, 750, 500, 400, 300, 200, 100]
-    melt = [5, 4, 3, 2, 2, 1, 1, 0, 0, 0]
+    spins = [5, 4, 3, 2, 2, 1, 1, 0, 0, 0]
     bg = [2, 1, 1, 0, 0, 0, 0, 0, 0, 0]
     out: Dict[int, List[Dict[str, Any]]] = {}
     for i in range(10):
         parts = [_p("points", points[i])]
-        if melt[i]:
-            parts.append(_p("melt_token", melt[i]))
+        if spins[i]:
+            parts.append(_p("wof_spins", spins[i]))
         if bg[i]:
             parts.append(_p("robot_bg_token", bg[i]))
         out[i + 1] = _prize(*parts)
