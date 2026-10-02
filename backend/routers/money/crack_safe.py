@@ -226,7 +226,8 @@ def register(router):
         replays_today = replay_count_stored if replay_day == day_key else 0
         replay_slots_remaining = max(0, SAFE_REPLAY_MAX_PER_DAY - replays_today)
 
-        can_guess = is_admin or (user_money >= SAFE_ENTRY_COST and not win_locked)
+        free_attempts = int(user.get("crack_safe_free_attempts") or 0)
+        can_guess = is_admin or ((user_money >= SAFE_ENTRY_COST or free_attempts > 0) and not win_locked)
 
         base = {
             "jackpot": safe.get("jackpot", SAFE_JACKPOT_SEED),
@@ -237,6 +238,7 @@ def register(router):
             "can_guess": can_guess if not is_admin else True,
             "next_guess_at": next_guess_at,
             "entry_cost": SAFE_ENTRY_COST,
+            "free_attempts": free_attempts,
             "clues": clues,
             "is_admin": is_admin,
             "possible_rewards": possible_rewards,
@@ -355,14 +357,23 @@ def register(router):
                 raise HTTPException(status_code=400, detail=f"Wait {remaining}s before your next guess.")
 
         cooldown_until = now + timedelta(seconds=apply_game_pass_wait_seconds(SAFE_GUESS_COOLDOWN_SECONDS, user))
-        result = await db.users.update_one(
-            {"id": uid, "money": {"$gte": SAFE_ENTRY_COST}},
-            {"$inc": {"money": -SAFE_ENTRY_COST}, "$set": {"crack_safe_cooldown_until": cooldown_until}},
-        )
-        if result.modified_count == 0:
-            raise HTTPException(status_code=400, detail=f"You need ${SAFE_ENTRY_COST:,} to attempt to crack the safe.")
-
-        await db.safe_game.update_one({}, {"$inc": {"jackpot": SAFE_JACKPOT_PER_ATTEMPT, "total_attempts": 1}})
+        free_left = int(fresh.get("crack_safe_free_attempts") or 0)
+        if free_left > 0:
+            result = await db.users.update_one(
+                {"id": uid, "crack_safe_free_attempts": {"$gte": 1}},
+                {"$inc": {"crack_safe_free_attempts": -1}, "$set": {"crack_safe_cooldown_until": cooldown_until}},
+            )
+            if result.modified_count == 0:
+                raise HTTPException(status_code=400, detail="Could not use a free Crack the Safe attempt.")
+            await db.safe_game.update_one({}, {"$inc": {"total_attempts": 1}})
+        else:
+            result = await db.users.update_one(
+                {"id": uid, "money": {"$gte": SAFE_ENTRY_COST}},
+                {"$inc": {"money": -SAFE_ENTRY_COST}, "$set": {"crack_safe_cooldown_until": cooldown_until}},
+            )
+            if result.modified_count == 0:
+                raise HTTPException(status_code=400, detail=f"You need ${SAFE_ENTRY_COST:,} to attempt to crack the safe.")
+            await db.safe_game.update_one({}, {"$inc": {"jackpot": SAFE_JACKPOT_PER_ATTEMPT, "total_attempts": 1}})
 
         cracked = req.numbers == combo
         correct_positions = sum(1 for a, b in zip(req.numbers, combo) if a == b)

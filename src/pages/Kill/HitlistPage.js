@@ -236,6 +236,19 @@ function NpcKillRewardsDropdown({ preview }) {
 }
 
 function HitlistRewardCell({ item }) {
+  if (item?.target_type === 'bounty') {
+    return (
+      <span className="block min-w-0">
+        <span className="text-primary font-bold text-xs">Random rewards</span>
+        {item.location ? (
+          <span className="block text-[9px] font-heading font-normal text-zinc-400 truncate">{item.location}</span>
+        ) : null}
+        {item.sitting_out ? (
+          <span className="block text-[9px] font-heading font-normal text-amber-300">You sit this one out</span>
+        ) : null}
+      </span>
+    );
+  }
   if (item?.target_type === 'npc') {
     const lines = npcRewardLines(item.npc_rewards);
     if (!lines.length) {
@@ -599,7 +612,7 @@ const PlaceBountyCard = ({
    Active Bounties Card
    ═══════════════════════════════════════════════════════ */
 function getBuyOffCostForTarget(list, targetUsername) {
-  const entries = list.filter((i) => i.target_username === targetUsername && i.target_type !== 'npc');
+  const entries = list.filter((i) => i.target_username === targetUsername && i.target_type !== 'npc' && i.target_type !== 'bounty');
   const cash = Math.floor(entries.filter((e) => e.reward_type === 'cash').reduce((s, e) => s + (e.reward_amount || 0) * BUY_OFF_MULTIPLIER, 0));
   const points = Math.floor(entries.filter((e) => e.reward_type === 'points').reduce((s, e) => s + (e.reward_amount || 0) * BUY_OFF_MULTIPLIER, 0));
   return { cash, points };
@@ -608,7 +621,8 @@ function getBuyOffCostForTarget(list, targetUsername) {
 const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
   const isFirstForTarget = (item, index) =>
     item.target_type !== 'npc' &&
-    list.findIndex((i) => i.target_username === item.target_username && i.target_type !== 'npc') === index;
+    item.target_type !== 'bounty' &&
+    list.findIndex((i) => i.target_username === item.target_username && i.target_type !== 'npc' && i.target_type !== 'bounty') === index;
   const haveCash = Number(user?.money ?? 0);
   const havePoints = Number(user?.points ?? 0);
   const canAffordBuyOff = (cash, points) =>
@@ -670,13 +684,15 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                           >
                             {item.target_username ?? ''}
                           </Link>
+                          {item.sitting_out ? null : (
                           <Link
-                            to={`/kill/attack?target=${encodeURIComponent(item.target_username ?? '')}${item.target_type === 'npc' ? '&hitlist_npc=1' : ''}`}
+                            to={`/kill/attack?target=${encodeURIComponent(item.target_username ?? '')}${(item.target_type === 'npc' || item.target_type === 'bounty') ? '&hitlist_npc=1' : ''}`}
                             className="shrink-0 p-1 rounded hover:bg-primary/20 text-primary transition-colors"
                             title="Attack"
                           >
                             <Crosshair size={11} />
                           </Link>
+                          )}
                         </div>
                       </td>
                       <td className="py-2 px-3 text-zinc-400">
@@ -688,6 +704,8 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                             </>
                           ) : item.target_type === 'npc' ? (
                             <>NPC</>
+                          ) : item.target_type === 'bounty' ? (
+                            <>Bounty</>
                           ) : (
                             <>
                               <User size={11} />
@@ -697,7 +715,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                         </div>
                       </td>
                       <td className="py-2 px-3 align-top max-w-[12rem]">
-                        <div className={`text-primary font-bold text-xs ${item.target_type === 'npc' ? '' : 'flex items-center gap-1'}`}>
+                        <div className={`text-primary font-bold text-xs ${(item.target_type === 'npc' || item.target_type === 'bounty') ? '' : 'flex items-center gap-1'}`}>
                           <HitlistRewardCell item={item} />
                         </div>
                       </td>
@@ -747,13 +765,15 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                         >
                           {item.target_username ?? ''}
                         </Link>
+                        {item.sitting_out ? null : (
                         <Link
-                          to={`/kill/attack?target=${encodeURIComponent(item.target_username ?? '')}${isNpc ? '&hitlist_npc=1' : ''}`}
+                          to={`/kill/attack?target=${encodeURIComponent(item.target_username ?? '')}${(isNpc || item.target_type === 'bounty') ? '&hitlist_npc=1' : ''}`}
                           className="shrink-0 p-1 rounded hover:bg-primary/20 text-primary transition-colors"
                           title="Attack"
                         >
                           <Crosshair size={10} />
                         </Link>
+                        )}
                       </div>
                       <div className="flex items-center gap-1 text-[9px] text-zinc-400 font-heading mt-0.5">
                         {item.target_type === 'bodyguards' ? (
@@ -763,6 +783,8 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                           </>
                         ) : isNpc ? (
                           <>NPC</>
+                        ) : item.target_type === 'bounty' ? (
+                          <>Bounty</>
                         ) : (
                           <>
                             <User size={9} />
@@ -773,7 +795,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                         <span className="truncate">by {item.placer_username ?? 'Hidden'}</span>
                       </div>
                     </div>
-                    {!isNpc ? (
+                    {!isNpc && item.target_type !== 'bounty' ? (
                       <div className="shrink-0 text-right">
                         <div className="flex items-center justify-end gap-1 text-primary font-heading font-bold text-xs">
                           <HitlistRewardCell item={item} />
@@ -781,7 +803,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                       </div>
                     ) : null}
                   </div>
-                  {isNpc ? (
+                  {isNpc || item.target_type === 'bounty' ? (
                     <div className="rounded border border-zinc-700/40 bg-zinc-800/30 px-2 py-1.5">
                       <HitlistRewardCell item={item} />
                     </div>

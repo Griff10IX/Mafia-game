@@ -576,6 +576,13 @@ async def hitlist_list(current_user: dict = Depends(get_current_user)):
             "placer_username": None if doc.get("hidden") else (doc.get("placer_username") or "Unknown"),
             "created_at": doc.get("created_at"),
         }
+        if doc.get("target_type") == "bounty":
+            item["reward_type"] = "bounty"
+            item["reward_amount"] = 0
+            item["placer_username"] = "Bounty"
+            item["location"] = doc.get("location") or ""
+            item["sitting_out"] = str(doc.get("blocked_user_id") or "") == str(user_id)
+            item["reward_label"] = "Random rewards"
         if doc.get("target_type") == "npc":
             item["npc_rank"] = doc.get("npc_rank", 1)
             raw_rewards = doc.get("npc_rewards") or {}

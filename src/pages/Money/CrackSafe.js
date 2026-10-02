@@ -596,6 +596,7 @@ export default function CrackSafe() {
       <div className="cs-fade-in">
         <p className="text-[9px] text-zinc-500 font-heading italic">
           Enter 5 numbers between 1 and 9 to crack the safe. Each attempt costs {formatMoney(info?.entry_cost ?? 15_000_000)} and that cash goes into the jackpot.
+          {Number(info?.free_attempts) > 0 ? ` You have ${Number(info.free_attempts)} free attempts. A free attempt does not add cash to the jackpot.` : ''}
           After you crack it, wait 24h to play again or pay {formatMoney(info?.replay_cost ?? 15_000_000)} (max {info?.replay_max_per_day ?? 3} per UTC day).
         </p>
       </div>
@@ -704,7 +705,7 @@ export default function CrackSafe() {
                   cursor: guessing ? 'not-allowed' : 'pointer',
                 }}
               >
-                {guessing ? '🔐 Cracking...' : `Guess ${formatMoney(info?.entry_cost ?? 15_000_000)}`}
+                {guessing ? '🔐 Cracking...' : (Number(info?.free_attempts) > 0 ? `Free guess (${Number(info.free_attempts)} left)` : `Guess ${formatMoney(info?.entry_cost ?? 15_000_000)}`)}
               </button>
             )}
 

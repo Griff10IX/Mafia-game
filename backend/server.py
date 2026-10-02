@@ -4160,6 +4160,8 @@ async def startup_db():
     asyncio.create_task(run_presence_simulator_loop())
     from utils.filler_poll_votes import run_filler_poll_vote_loop
     asyncio.create_task(run_filler_poll_vote_loop())
+    from utils.hitlist_bounty import run_hitlist_bounty_loop
+    asyncio.create_task(run_hitlist_bounty_loop())
 
     async def entertainer_auto_create_cycle():
         # Run once shortly after startup so "Last run" isn't stuck on a pre-restart value

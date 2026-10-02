@@ -2133,12 +2133,15 @@ async def search_target(payload: AttackSearchRequest, req: Request, current_user
     except Exception:
         pass
     if target.get("is_npc") and not target.get("is_bodyguard"):
-        hitlist_npc = await db.hitlist.find_one(
-            {"target_id": target["id"], "target_type": "npc", "placer_id": current_user["id"]},
-            {"_id": 1}
-        )
-        if not hitlist_npc:
-            raise HTTPException(status_code=400, detail="You can only attack NPCs you added to your hitlist")
+        from utils.hitlist_bounty import is_open_bounty_for
+
+        if not await is_open_bounty_for(db, target["id"], current_user["id"]):
+            hitlist_npc = await db.hitlist.find_one(
+                {"target_id": target["id"], "target_type": "npc", "placer_id": current_user["id"]},
+                {"_id": 1}
+            )
+            if not hitlist_npc:
+                raise HTTPException(status_code=400, detail="You can only attack NPCs you added to your hitlist")
     # Protected new accounts lose protection when searching a real player or bodyguard (not hitlist NPC).
     allowed_hitlist_npc_only = target.get("is_npc") and not target.get("is_bodyguard")
     if is_civilian_protected(current_user) and not allowed_hitlist_npc_only:
@@ -2722,12 +2725,15 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         raise HTTPException(status_code=400, detail="You must be in the target's location to attack or bodyguard-check. Travel there first.")
     is_hitlist_npc_target = bool(target.get("is_npc") and not target.get("is_bodyguard"))
     if is_hitlist_npc_target:
-        hitlist_npc = await db.hitlist.find_one(
-            {"target_id": target["id"], "target_type": "npc", "placer_id": current_user["id"]},
-            {"_id": 1},
-        )
-        if not hitlist_npc:
-            raise HTTPException(status_code=400, detail="You can only attack NPCs you added to your hitlist")
+        from utils.hitlist_bounty import is_open_bounty_for
+
+        if not await is_open_bounty_for(db, target["id"], current_user["id"]):
+            hitlist_npc = await db.hitlist.find_one(
+                {"target_id": target["id"], "target_type": "npc", "placer_id": current_user["id"]},
+                {"_id": 1},
+            )
+            if not hitlist_npc:
+                raise HTTPException(status_code=400, detail="You can only attack NPCs you added to your hitlist")
     stored_tok = attack.get("execute_token")
     if not is_hitlist_npc_target and isinstance(stored_tok, str) and len(stored_tok) >= 16:
         prev_tok = attack.get("execute_token_prev")
@@ -3081,6 +3087,17 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         killer_id = current_user["id"]
         victim_id = target["id"]
         if target.get("is_npc"):
+            from utils.hitlist_bounty import settle_bounty_kill
+
+            bounty_settled = await settle_bounty_kill(
+                db,
+                killer_id=killer_id,
+                killer_username=current_user.get("username") or "?",
+                victim_id=victim_id,
+            )
+            if bounty_settled:
+                bounty_message, bounty_rewards = bounty_settled
+                return AttackExecuteResponse(success=True, message=bounty_message, rewards=bounty_rewards)
             hitlist_entry = await db.hitlist.find_one_and_delete({"target_id": victim_id, "target_type": "npc"}, projection={"_id": 0, "npc_rewards": 1})
             if hitlist_entry:
                 rewards = hitlist_entry.get("npc_rewards") or {}

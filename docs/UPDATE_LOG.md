@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-10-02[/color][/b] — [b]Hitlist bounty[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Bounty:[/b] A random NPC lands on the hitlist, up to 3 a day, one at a time. It leaves after 4 hours if nobody gets the kill.[/color]
+[*][color=#888888][b]Sit out:[/b] If you kill one, you sit the next one out. You can take the one after that.[/color]
+[*][color=#888888][b]Rewards:[/b] You get 1 to 3 rewards. Points 500–1,500, cash $1 billion–$3 billion, Wheel of Fortune spins 1–3, respect 2,000–3,000, robot bodyguard tokens 1–2, bullets 5,000–15,000, Crack the Safe free attempts 10–20, or lottery tickets 50–200. An ultra rare loot box open is rare (about 2.5%). Mission skip tokens (1–3) are rare (about 5%).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-10-02[/color][/b] — [b]Picture credits[/b][/size]
 [quote]
 [list]

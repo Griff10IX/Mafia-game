@@ -181,7 +181,7 @@ async def _ensure_open_round() -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     open_rounds = await db.lottery_rounds.find(
         {"status": "open"},
-        {"_id": 1, "closes_at": 1, "status": 1, "created_at": 1, "rollover_in": 1, "starting_pot": 1},
+        {"_id": 1, "closes_at": 1, "status": 1, "created_at": 1, "rollover_in": 1, "starting_pot": 1, "complimentary_count": 1},
     ).to_list(500)
     future_rounds: list[tuple[int, datetime, dict[str, Any]]] = []
     for r in open_rounds:
@@ -213,6 +213,32 @@ async def _ensure_open_round() -> dict[str, Any]:
     ins = await db.lottery_rounds.insert_one(doc)
     doc["_id"] = ins.inserted_id
     return doc
+
+
+async def grant_complimentary_lottery_tickets(user_id: str, username: str, count: int) -> int:
+    """Real tickets in the open round. They do not add cash to the pot."""
+    count = max(0, min(200, int(count or 0)))
+    if count <= 0 or not user_id:
+        return 0
+    rd = await _ensure_open_round()
+    rid = rd["_id"]
+    now_iso = datetime.now(timezone.utc).isoformat()
+    uname = (username or "?").strip() or "?"
+    docs = [
+        {
+            "round_id": rid,
+            "user_id": user_id,
+            "username": uname,
+            "created_at": now_iso,
+            "ticket_id": str(uuid.uuid4()),
+            "numbers": _random_lottery_numbers(),
+            "complimentary": True,
+        }
+        for _ in range(count)
+    ]
+    await db.lottery_tickets.insert_many(docs)
+    await db.lottery_rounds.update_one({"_id": rid}, {"$inc": {"complimentary_count": count}})
+    return count
 
 
 class LotteryBuyBody(BaseModel):
@@ -260,7 +286,8 @@ async def get_lottery_state(current_user: dict = Depends(get_current_user)):
     mine = await db.lottery_tickets.count_documents({"round_id": rid, "user_id": current_user["id"]})
     rollover_in = int(rd.get("rollover_in") or 0)
     starting_pot = int(rd.get("starting_pot") or 0)
-    gross = _round_gross_pot(rd, total)
+    complimentary = int(rd.get("complimentary_count") or 0)
+    gross = _round_gross_pot(rd, max(0, total - complimentary))
     closed_projection = {
         "_id": 0,
         "drawn_at": 1,
@@ -547,7 +574,11 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
     n = await db.lottery_tickets.count_documents({"round_id": rid})
     rollover_start = int(rd.get("rollover_in") or 0)
     starting_pot = int(rd.get("starting_pot") or 0)
-    ticket_revenue = n * TICKET_PRICE
+    if "complimentary_count" in rd:
+        complimentary = int(rd.get("complimentary_count") or 0)
+    else:
+        complimentary = await db.lottery_tickets.count_documents({"round_id": rid, "complimentary": True})
+    ticket_revenue = max(0, n - complimentary) * TICKET_PRICE
     gross = ticket_revenue + rollover_start + starting_pot
     sink = (gross * POT_TAX_PERCENT) // 100 if gross > 0 else 0
     payout = gross - sink
@@ -795,7 +826,7 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
     while True:
         open_rounds = await db.lottery_rounds.find(
             {"status": "open"},
-            {"_id": 1, "closes_at": 1, "status": 1, "created_at": 1, "rollover_in": 1, "starting_pot": 1},
+            {"_id": 1, "closes_at": 1, "status": 1, "created_at": 1, "rollover_in": 1, "starting_pot": 1, "complimentary_count": 1},
         ).to_list(500)
         due_rounds = []
         for r in open_rounds:
