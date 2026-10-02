@@ -431,6 +431,20 @@ async def execute_paid_revive(
                 dead_user.get("id"),
             )
 
+        # Swiss bank moves with the sacrifice (pocket cash does not).
+        swiss_claim = await db.users.find_one_and_update(
+            {"id": reviver["id"], "swiss_balance": {"$gt": 0}, "swiss_retrieval_used": {"$ne": True}},
+            {"$set": {"swiss_balance": 0, "swiss_retrieval_used": True}},
+            projection={"_id": 0, "swiss_balance": 1, "swiss_limit": 1},
+        )
+        swiss_moved = max(0, int((swiss_claim or {}).get("swiss_balance") or 0))
+        if swiss_moved > 0:
+            swiss_update = {"$inc": {"swiss_balance": swiss_moved}}
+            reviver_swiss_limit = int((swiss_claim or {}).get("swiss_limit") or 0)
+            if reviver_swiss_limit > int(dead_user.get("swiss_limit") or 0):
+                swiss_update["$max"] = {"swiss_limit": reviver_swiss_limit}
+            await db.users.update_one({"id": dead_user["id"]}, swiss_update)
+
         await db.users.update_one(
             {"id": reviver["id"]},
             {
@@ -478,6 +492,8 @@ async def execute_paid_revive(
             f"Balance after revive: ${revived_cash:,} cash, {revived_points:,} points"
             f"\nPocket cash from the revive alt was wiped (${reviver_money:,} dead money)."
         )
+        if swiss_moved > 0:
+            notification_body += f"\nSwiss bank moved over: ${swiss_moved:,}."
         estate_text = (restore_summary or {}).get("summary_text") or ""
         if estate_text:
             notification_body += f"\n\nEstate restored: {estate_text}."
@@ -510,6 +526,7 @@ async def execute_paid_revive(
                     "reviver_points_after_death": 0,
                     "reviver_money_transferred": 0,
                     "reviver_money_wiped": reviver_money,
+                    "swiss_transferred": swiss_moved,
                     "points_transferred": revived_points,
                     "dead_carry_points": dead_carry,
                     "retrieval_used_on_dead": bool(dead_user.get("retrieval_used")),
