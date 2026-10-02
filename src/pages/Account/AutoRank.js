@@ -198,12 +198,12 @@ const ManagerToggleRow = ({ label, checked, disabled, onChange }) => (
 );
 
 const BUY_BULLETS_AMOUNT_MIN = 1;
-const BUY_BULLETS_AMOUNT_MAX = 5000;
+const BUY_BULLETS_AMOUNT_MAX = 250000;
 
 const ManagerBuyBulletsAmount = ({ prefs, disabled, onSave }) => {
   const saved = Math.min(
     BUY_BULLETS_AMOUNT_MAX,
-    Math.max(BUY_BULLETS_AMOUNT_MIN, Number(prefs?.auto_rank_events_buy_bullets_amount) || BUY_BULLETS_AMOUNT_MAX)
+    Math.max(BUY_BULLETS_AMOUNT_MIN, Number(prefs?.auto_rank_events_buy_bullets_amount) || 5000)
   );
   const [draft, setDraft] = useState(String(saved));
   useEffect(() => {
@@ -212,7 +212,7 @@ const ManagerBuyBulletsAmount = ({ prefs, disabled, onSave }) => {
   const commit = () => {
     const n = Math.min(
       BUY_BULLETS_AMOUNT_MAX,
-      Math.max(BUY_BULLETS_AMOUNT_MIN, parseInt(String(draft).replace(/,/g, ''), 10) || BUY_BULLETS_AMOUNT_MAX)
+      Math.max(BUY_BULLETS_AMOUNT_MIN, parseInt(String(draft).replace(/,/g, ''), 10) || 5000)
     );
     setDraft(String(n));
     if (n !== saved) onSave(n);
@@ -220,7 +220,7 @@ const ManagerBuyBulletsAmount = ({ prefs, disabled, onSave }) => {
   return (
     <div className={`rounded-lg border border-zinc-700/50 bg-zinc-900/40 px-3 py-2 space-y-1.5 ${!prefs?.auto_rank_events_buy_bullets ? 'opacity-50' : ''}`}>
       <label className="text-[11px] sm:text-xs font-heading text-foreground block">
-        Bullets bought per top-up (armoury max {BUY_BULLETS_AMOUNT_MAX.toLocaleString()})
+        Bullets bought per top-up (store max {BUY_BULLETS_AMOUNT_MAX.toLocaleString()})
       </label>
       <div className="flex gap-2 items-center">
         <input
@@ -249,7 +249,7 @@ const ManagerBuyBulletsAmount = ({ prefs, disabled, onSave }) => {
         </button>
       </div>
       <p className="text-[9px] text-zinc-500 font-heading">
-        When short for hitlist kills, buys this many at a time until there are enough (or the factory runs out).
+        When short for hitlist kills, buys this many from the Points Store at a time until there are enough (costs points).
       </p>
     </div>
   );
@@ -2230,7 +2230,7 @@ export default function AutoRank() {
             auto_rank_event_ids: meRes.data.auto_rank_event_ids || [],
             auto_rank_missions_enabled: !!meRes.data.auto_rank_missions_enabled,
             auto_rank_events_buy_bullets: !!meRes.data.auto_rank_events_buy_bullets,
-            auto_rank_events_buy_bullets_amount: Math.min(5000, Math.max(1, Number(meRes.data.auto_rank_events_buy_bullets_amount) || 5000)),
+            auto_rank_events_buy_bullets_amount: Math.min(250000, Math.max(1, Number(meRes.data.auto_rank_events_buy_bullets_amount) || 5000)),
             auto_rank_events_cost: meRes.data.auto_rank_events_cost || 2000,
             auto_rank_live_event_name: meRes.data.auto_rank_live_event_name || '',
             auto_rank_live_event_id: meRes.data.auto_rank_live_event_id || '',
@@ -2944,7 +2944,7 @@ export default function AutoRank() {
                 />
               ))}
               <ManagerToggleRow
-                label="Buy armoury bullets when hitlist kills are short (Hitlist Hunt + Auto missions)"
+                label="Buy store bullets when hitlist kills are short (Hitlist Hunt + Auto missions)"
                 checked={!!prefs?.auto_rank_events_buy_bullets}
                 disabled={savingPrefs}
                 onChange={(v) => updatePref('auto_rank_events_buy_bullets', v)}
@@ -2976,7 +2976,7 @@ export default function AutoRank() {
                 onChange={(v) => updatePref('auto_rank_missions_enabled', v)}
               />
               <ManagerToggleRow
-                label="Buy armoury bullets when mission hitlist kills are short"
+                label="Buy store bullets when mission hitlist kills are short"
                 checked={!!prefs?.auto_rank_events_buy_bullets}
                 disabled={savingPrefs}
                 onChange={(v) => updatePref('auto_rank_events_buy_bullets', v)}
@@ -2987,7 +2987,7 @@ export default function AutoRank() {
                 onSave={(n) => updatePref('auto_rank_events_buy_bullets_amount', n)}
               />
               <p className="text-[10px] text-zinc-500 font-heading">
-                Same buy setting as Auto events. When on, Auto missions tops up armoury bullets before shooting found hitlist NPCs.
+                Same buy setting as Auto events. When on, Auto missions tops up Points Store bullets before shooting found hitlist NPCs.
               </p>
               <div className="space-y-2">
                 <h2 className="text-[10px] font-heading font-bold uppercase tracking-wider text-primary">Missions completed</h2>

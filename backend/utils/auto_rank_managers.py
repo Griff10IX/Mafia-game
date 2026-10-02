@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 AUTO_EVENTS_COST_POINTS = 2000
 BUY_BULLETS_AMOUNT_MIN = 1
-BUY_BULLETS_AMOUNT_MAX = 5000  # armoury factory max per purchase
+BUY_BULLETS_AMOUNT_MAX = 250_000  # Points Store max per purchase
 BUY_BULLETS_AMOUNT_DEFAULT = 5000
 _CONTEST_CACHE: Dict[str, Any] = {"at": 0.0, "type_id": "", "name": ""}
 _CACHE_SECONDS = 60
@@ -69,7 +69,7 @@ def _event_ids(user: dict) -> List[str]:
 
 
 def buy_bullets_amount_for_user(user: dict) -> int:
-    """Bullets bought per armoury purchase when Auto hitlist/mission work is short."""
+    """Bullets bought per Points Store purchase when Auto hitlist/mission work is short."""
     raw = (user or {}).get("auto_rank_events_buy_bullets_amount")
     try:
         n = int(raw)
@@ -524,9 +524,10 @@ async def _buy_rarity(user: dict, rarity: str) -> bool:
 
 
 async def _buy_bullets(user: dict, amount: int) -> bool:
-    from routers.kill.armoury import buy_bullets_for_auto_rank
+    """Buy bullets from the Points Store (not the city armoury factory)."""
+    from routers.game.store import store_buy_bullets
 
-    await buy_bullets_for_auto_rank(user, amount)
+    await store_buy_bullets(bullets=int(amount), pay_with="auto", current_user=user)
     return True
 
 
@@ -598,10 +599,15 @@ async def _hitlist_batch(db, user: dict, remaining: Optional[int]) -> bool:
                     await _buy_bullets(user, chunk)
                 except HTTPException:
                     return False
-                fresh = await db.users.find_one({"id": uid}, {"_id": 0, "bullets": 1, "current_state": 1}) or {}
+                fresh = await db.users.find_one(
+                    {"id": uid},
+                    {"_id": 0, "bullets": 1, "current_state": 1, "points": 1, "respect_points": 1},
+                ) or {}
                 user = {
                     **user,
                     "bullets": int(fresh.get("bullets") or 0),
+                    "points": int(fresh.get("points") or 0),
+                    "respect_points": int(fresh.get("respect_points") or 0),
                     "current_state": fresh.get("current_state") or user.get("current_state"),
                 }
                 if int(user.get("bullets") or 0) <= have:
