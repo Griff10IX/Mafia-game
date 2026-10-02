@@ -184,7 +184,7 @@ const ManagerBuyCard = ({ prefs, buying, onBuy }) => {
   );
 };
 
-const ToggleRow = ({ label, checked, disabled, onChange }) => (
+const ManagerToggleRow = ({ label, checked, disabled, onChange }) => (
   <button
     type="button"
     onClick={() => !disabled && onChange(!checked)}
@@ -2857,7 +2857,7 @@ export default function AutoRank() {
                 <p className="text-[11px] font-heading text-primary">Live now: {prefs.auto_rank_live_event_name}</p>
               ) : null}
               {AUTO_EVENT_OPTIONS.map((ev) => (
-                <ToggleRow
+                <ManagerToggleRow
                   key={ev.id}
                   label={ev.name}
                   checked={(prefs?.auto_rank_event_ids || []).includes(ev.id)}
@@ -2865,7 +2865,7 @@ export default function AutoRank() {
                   onChange={() => toggleEventId(ev.id)}
                 />
               ))}
-              <ToggleRow
+              <ManagerToggleRow
                 label="Buy armoury bullets when a hitlist batch is short"
                 checked={!!prefs?.auto_rank_events_buy_bullets}
                 disabled={savingPrefs}
@@ -2886,7 +2886,7 @@ export default function AutoRank() {
           ) : null}
           {currentTab === 'missions' && prefs?.auto_rank_events_unlocked ? (
             <div className="space-y-2">
-              <ToggleRow
+              <ManagerToggleRow
                 label="Auto missions"
                 checked={!!prefs?.auto_rank_missions_enabled}
                 disabled={savingPrefs}
