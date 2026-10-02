@@ -45,10 +45,10 @@ def offered(difficulty, bet, tables):
 def main():
     tables = build()
     # max bet expert should still offer early lanes under 50M
-    o = offered("expert", 5_000_000_000, tables)
+    o = offered("expert", 2_000_000_000, tables)
     assert o, "expert max bet should offer at least one lane"
     for lane in o:
-        assert payout(5_000_000_000, tables["expert"][lane - 1]) <= CHICKEN_CROSS_PAYOUT_CAP
+        assert payout(2_000_000_000, tables["expert"][lane - 1]) <= CHICKEN_CROSS_PAYOUT_CAP
     # tiny bet can see deep expert
     assert len(offered("expert", 100, tables)) == 15
     # easy first cashout under fair RTP

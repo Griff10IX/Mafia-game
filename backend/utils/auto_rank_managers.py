@@ -11,6 +11,9 @@ from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 
 AUTO_EVENTS_COST_POINTS = 2000
+BUY_BULLETS_AMOUNT_MIN = 1
+BUY_BULLETS_AMOUNT_MAX = 5000  # armoury factory max per purchase
+BUY_BULLETS_AMOUNT_DEFAULT = 5000
 _CONTEST_CACHE: Dict[str, Any] = {"at": 0.0, "type_id": "", "name": ""}
 _CACHE_SECONDS = 60
 
@@ -63,6 +66,18 @@ def _event_ids(user: dict) -> List[str]:
     if not isinstance(raw, list):
         return []
     return [str(x) for x in raw if str(x).strip()]
+
+
+def buy_bullets_amount_for_user(user: dict) -> int:
+    """Bullets bought per armoury purchase when Auto hitlist/mission work is short."""
+    raw = (user or {}).get("auto_rank_events_buy_bullets_amount")
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        n = BUY_BULLETS_AMOUNT_DEFAULT
+    if n <= 0:
+        n = BUY_BULLETS_AMOUNT_DEFAULT
+    return max(BUY_BULLETS_AMOUNT_MIN, min(BUY_BULLETS_AMOUNT_MAX, n))
 
 
 def managers_enabled(user: dict, live_type: str) -> tuple[bool, bool]:
@@ -194,7 +209,7 @@ async def _run_mission(db, user: dict) -> bool:
                 return True
             if action == "travel" and await _travel_to(fresh, (mission.get("requirements") or {}).get("in_state")):
                 return True
-            if action == "bullets" and fresh.get("auto_rank_events_buy_bullets") and await _buy_bullets(fresh, 1000):
+            if action == "bullets" and fresh.get("auto_rank_events_buy_bullets") and await _buy_bullets(fresh, buy_bullets_amount_for_user(fresh)):
                 return True
         except HTTPException:
             continue
@@ -577,12 +592,21 @@ async def _hitlist_batch(db, user: dict, remaining: Optional[int]) -> bool:
         if needed > have:
             if not user.get("auto_rank_events_buy_bullets"):
                 return False
-            try:
-                await _buy_bullets(user, needed - have)
-            except HTTPException:
-                return False
-            fresh = await db.users.find_one({"id": uid}, {"_id": 0, "bullets": 1, "current_state": 1}) or {}
-            user = {**user, "bullets": int(fresh.get("bullets") or 0), "current_state": fresh.get("current_state") or user.get("current_state")}
+            chunk = buy_bullets_amount_for_user(user)
+            while int(user.get("bullets") or 0) < needed:
+                try:
+                    await _buy_bullets(user, chunk)
+                except HTTPException:
+                    return False
+                fresh = await db.users.find_one({"id": uid}, {"_id": 0, "bullets": 1, "current_state": 1}) or {}
+                user = {
+                    **user,
+                    "bullets": int(fresh.get("bullets") or 0),
+                    "current_state": fresh.get("current_state") or user.get("current_state"),
+                }
+                if int(user.get("bullets") or 0) <= have:
+                    return False
+                have = int(user.get("bullets") or 0)
         shot_any = False
         token = _AUTO_RANK_ATTACK.set(True)
         try:
@@ -687,6 +711,7 @@ def public_manager_fields(user: dict, live: Optional[Dict[str, str]] = None) -> 
         "auto_rank_event_ids": ids,
         "auto_rank_missions_enabled": bool(user.get("auto_rank_missions_enabled")),
         "auto_rank_events_buy_bullets": bool(user.get("auto_rank_events_buy_bullets")),
+        "auto_rank_events_buy_bullets_amount": buy_bullets_amount_for_user(user),
         "auto_rank_events_cost": AUTO_EVENTS_COST_POINTS,
         "auto_rank_live_event_id": live_type,
         "auto_rank_live_event_name": live.get("name") or "",

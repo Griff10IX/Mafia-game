@@ -3102,6 +3102,7 @@ def register(router):
         auto_rank_event_ids: Optional[list] = None
         auto_rank_missions_enabled: Optional[bool] = None
         auto_rank_events_buy_bullets: Optional[bool] = None
+        auto_rank_events_buy_bullets_amount: Optional[int] = None
 
     from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_AUTO_RANK
 
@@ -3662,6 +3663,7 @@ def register(router):
             body.auto_rank_event_ids is not None
             or body.auto_rank_missions_enabled is not None
             or body.auto_rank_events_buy_bullets is not None
+            or body.auto_rank_events_buy_bullets_amount is not None
         )
         if manager_touch and not user_row.get("auto_rank_events_unlocked"):
             raise HTTPException(status_code=400, detail="Buy Auto events first.")
@@ -3674,6 +3676,21 @@ def register(router):
             updates["auto_rank_missions_enabled"] = bool(body.auto_rank_missions_enabled)
         if body.auto_rank_events_buy_bullets is not None:
             updates["auto_rank_events_buy_bullets"] = bool(body.auto_rank_events_buy_bullets)
+        if body.auto_rank_events_buy_bullets_amount is not None:
+            from utils.auto_rank_managers import BUY_BULLETS_AMOUNT_MAX, BUY_BULLETS_AMOUNT_MIN, buy_bullets_amount_for_user
+
+            try:
+                amt = int(body.auto_rank_events_buy_bullets_amount)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="Bullet buy amount must be a number")
+            if amt < BUY_BULLETS_AMOUNT_MIN or amt > BUY_BULLETS_AMOUNT_MAX:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Bullet buy amount must be between {BUY_BULLETS_AMOUNT_MIN:,} and {BUY_BULLETS_AMOUNT_MAX:,}",
+                )
+            updates["auto_rank_events_buy_bullets_amount"] = buy_bullets_amount_for_user(
+                {"auto_rank_events_buy_bullets_amount": amt}
+            )
         if body.robot_bg_auto_search_enabled is not None:
             from utils.robot_bg_auto_search import robot_bg_auto_search_active
 
@@ -3691,7 +3708,7 @@ def register(router):
         await db.users.update_one({"id": user_id}, op)
         updated = await db.users.find_one(
             {"id": user_id},
-            {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1, "auto_rank_melt_action_ids": 1, "auto_rank_melt_rarity_ids": 1, "auto_rank_scrap_rarity_ids": 1, "passive_booze_paused": 1, "robot_bg_auto_search_enabled": 1, "robot_bg_auto_search_until": 1, "auto_rank_events_unlocked": 1, "auto_rank_event_ids": 1, "auto_rank_missions_enabled": 1, "auto_rank_events_buy_bullets": 1, "auto_rank_event_rewards": 1, "auto_rank_mission_rewards": 1, "points": 1},
+            {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1, "auto_rank_melt_action_ids": 1, "auto_rank_melt_rarity_ids": 1, "auto_rank_scrap_rarity_ids": 1, "passive_booze_paused": 1, "robot_bg_auto_search_enabled": 1, "robot_bg_auto_search_until": 1, "auto_rank_events_unlocked": 1, "auto_rank_event_ids": 1, "auto_rank_missions_enabled": 1, "auto_rank_events_buy_bullets": 1, "auto_rank_events_buy_bullets_amount": 1, "auto_rank_event_rewards": 1, "auto_rank_mission_rewards": 1, "points": 1},
         )
         out = {"message": "Preferences saved", **_extract_preferences(updated)}
         out["auto_rank_has_access"] = _user_has_auto_rank_access(updated or {})
@@ -3865,6 +3882,7 @@ def register(router):
             "auto_rank_event_ids": 1,
             "auto_rank_missions_enabled": 1,
             "auto_rank_events_buy_bullets": 1,
+            "auto_rank_events_buy_bullets_amount": 1,
             "auto_rank_mission_rewards": 1,
             "mission_completions": 1,
             "points": 1,
@@ -3977,7 +3995,7 @@ def register(router):
             }
         cursor = db.users.find(
             query,
-            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "forced_online_until": 1, "auto_rank_idle": 1, "auto_rank_events_unlocked": 1, "auto_rank_missions_enabled": 1, "auto_rank_event_ids": 1, "auto_rank_events_buy_bullets": 1, **{f: 1 for f in _PREFERENCE_FIELDS}},
+            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "forced_online_until": 1, "auto_rank_idle": 1, "auto_rank_events_unlocked": 1, "auto_rank_missions_enabled": 1, "auto_rank_event_ids": 1, "auto_rank_events_buy_bullets": 1, "auto_rank_events_buy_bullets_amount": 1, **{f: 1 for f in _PREFERENCE_FIELDS}},
         )
         users = await cursor.to_list(500)
 
@@ -4020,6 +4038,8 @@ def register(router):
                     pass
             return False
 
+        from utils.auto_rank_managers import buy_bullets_amount_for_user
+
         return {
             "users": [
                 {
@@ -4034,6 +4054,7 @@ def register(router):
                     "auto_rank_missions_enabled": bool(u.get("auto_rank_missions_enabled")),
                     "auto_rank_event_ids": u.get("auto_rank_event_ids") if isinstance(u.get("auto_rank_event_ids"), list) else [],
                     "auto_rank_events_buy_bullets": bool(u.get("auto_rank_events_buy_bullets")),
+                    "auto_rank_events_buy_bullets_amount": buy_bullets_amount_for_user(u),
                 }
                 for u in users
             ],

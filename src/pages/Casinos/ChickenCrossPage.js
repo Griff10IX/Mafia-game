@@ -32,7 +32,7 @@ const ASSET = {
   ],
 };
 
-const HOP_MS = 220;
+const HOP_MS = 280;
 const VISIBLE_AHEAD = 5;
 const QUICK_BETS = [1_000_000, 100_000_000, 1_000_000_000];
 
@@ -49,46 +49,89 @@ const PAGE_STYLES = `
     animation: cc-shine 8s ease-in-out infinite alternate;
   }
   .cc-touch { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .cc-stage {
+    display: grid;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  .cc-controls { order: 2; }
+  .cc-board-wrap { order: 1; min-width: 0; }
+  @media (min-width: 1024px) {
+    .cc-stage { grid-template-columns: minmax(17rem, 19.5rem) minmax(0, 1fr); }
+    .cc-controls { order: 1; }
+    .cc-board-wrap { order: 2; }
+  }
   .cc-board {
-    --cc-lane-w: 4.6rem;
     position: relative;
+    width: 100%;
+    min-height: 18rem;
+    height: clamp(18rem, 48vw, 26rem);
     overflow: hidden;
     border-radius: 0.9rem;
+    isolation: isolate;
     background:
-      radial-gradient(ellipse at 20% 0%, rgba(90,120,180,0.18), transparent 42%),
-      linear-gradient(180deg, #1a2233 0%, #0d121c 100%);
-    min-height: 17rem;
+      radial-gradient(ellipse at 18% 12%, rgba(110,140,200,0.16), transparent 40%),
+      linear-gradient(180deg, #152033 0%, #0a0f18 100%);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
   }
-  @media (min-width: 640px) { .cc-board { --cc-lane-w: 5.4rem; min-height: 19rem; } }
+  @media (min-width: 1024px) {
+    .cc-board { min-height: 26rem; height: 26rem; }
+  }
   .cc-strip {
-    display: flex;
-    align-items: stretch;
-    height: 15.5rem;
-    transition: transform 220ms cubic-bezier(.2,.8,.2,1);
-    will-change: transform;
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    width: 100%;
+    height: 100%;
   }
   .cc-cell {
     position: relative;
-    flex: 0 0 var(--cc-lane-w);
-    width: var(--cc-lane-w);
-    background-size: cover;
-    background-position: center;
+    height: 100%;
+    min-width: 0;
     overflow: hidden;
+    background-color: #343b4a;
+    container-type: size;
+  }
+  .cc-cell.cc-road {
+    background:
+      linear-gradient(90deg, rgba(255,255,255,0.1) 0 2px, transparent 2px),
+      linear-gradient(90deg, transparent calc(50% - 1.5px), rgba(255,255,255,0.42) calc(50% - 1.5px) calc(50% + 1.5px), transparent calc(50% + 1.5px)),
+      repeating-linear-gradient(180deg, transparent 0 22px, rgba(255,255,255,0.32) 22px 36px, transparent 36px 58px),
+      linear-gradient(180deg, #3f4758 0%, #2d3342 48%, #222836 100%);
+    background-size: 100% 100%, 100% 100%, 5px 100%, 100% 100%;
+    background-position: left top, center, center, center;
+    background-repeat: no-repeat, no-repeat, repeat-y, no-repeat;
+  }
+  .cc-cell.cc-sidewalk {
+    background:
+      linear-gradient(90deg, rgba(0,0,0,0.22) 0, transparent 22%),
+      repeating-linear-gradient(0deg, #727888 0 32px, #606674 32px 34px),
+      linear-gradient(180deg, #858b9a, #5c6272);
+  }
+  .cc-cell.cc-current::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 56%, rgba(230,194,41,0.18), transparent 58%);
+    z-index: 1;
   }
   .cc-mult {
     position: absolute;
-    top: 0.55rem;
+    top: 0.7rem;
     left: 50%;
     transform: translateX(-50%);
-    z-index: 4;
-    width: 2.55rem;
-    height: 2.55rem;
+    z-index: 5;
+    width: 3.15rem;
+    height: 3.15rem;
     display: flex;
     align-items: center;
     justify-content: center;
     background: url(${ASSET.coin}) center / contain no-repeat;
     font-family: var(--font-heading, serif);
-    font-size: 0.58rem;
+    font-size: 0.64rem;
     font-weight: 900;
     color: #3a2508;
     text-shadow: 0 1px 0 rgba(255,236,160,0.45);
@@ -96,50 +139,84 @@ const PAGE_STYLES = `
   .cc-car {
     position: absolute;
     left: 50%;
-    width: 58%;
-    max-width: 3.2rem;
+    width: min(70%, 4rem);
     height: auto;
-    transform: translate3d(-50%, var(--cc-y, -40%), 0);
+    transform: translate3d(-50%, -70%, 0);
     animation: cc-traffic var(--cc-dur, 2.8s) linear infinite;
     animation-delay: var(--cc-delay, 0s);
     will-change: transform;
     z-index: 2;
     pointer-events: none;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.35));
   }
   .cc-car.cc-rev { animation-name: cc-traffic-rev; }
   @keyframes cc-traffic {
-    0% { transform: translate3d(-50%, -55%, 0); }
-    100% { transform: translate3d(-50%, 155%, 0); }
+    0% { transform: translate3d(-50%, -80%, 0); }
+    100% { transform: translate3d(-50%, 180%, 0); }
   }
   @keyframes cc-traffic-rev {
-    0% { transform: translate3d(-50%, 155%, 0); }
-    100% { transform: translate3d(-50%, -55%, 0); }
+    0% { transform: translate3d(-50%, 180%, 0); }
+    100% { transform: translate3d(-50%, -80%, 0); }
   }
   .cc-chicken {
     position: absolute;
-    left: calc(var(--cc-lane-w) * 0.5);
-    bottom: 1.15rem;
-    width: 3.35rem;
-    height: 3.35rem;
-    margin-left: -1.675rem;
-    z-index: 6;
-    transition: transform 220ms cubic-bezier(.2,.8,.2,1);
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: min(74%, 5.5rem);
+    max-width: 5.75rem;
+    max-height: 62%;
+    aspect-ratio: 1;
+    height: auto;
+    margin: auto;
+    z-index: 8;
+    transform: translate3d(0, 0, 0);
     will-change: transform;
     pointer-events: none;
+    filter: drop-shadow(0 10px 12px rgba(0,0,0,0.55));
   }
   .cc-chicken img { width: 100%; height: 100%; object-fit: contain; display: block; }
-  .cc-chicken.cc-hopping { transform: translateY(-0.55rem) scale(1.04); }
+  .cc-chicken.cc-hopping {
+    animation: cc-hop-fwd ${HOP_MS}ms cubic-bezier(.2,.85,.25,1) forwards;
+  }
+  .cc-chicken.cc-hop-hit {
+    animation: cc-hop-hit ${HOP_MS}ms cubic-bezier(.2,.85,.25,1) forwards;
+  }
+  @keyframes cc-hop-fwd {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    40% { transform: translate3d(50cqw, -22%, 0) scale(1.14); }
+    100% { transform: translate3d(100cqw, 0, 0) scale(1); }
+  }
+  @keyframes cc-hop-hit {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(28cqw, -16%, 0) scale(1.08); }
+    100% { transform: translate3d(42cqw, 6%, 0) scale(0.94) rotate(-14deg); }
+  }
   .cc-hit-flash {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: radial-gradient(circle at 35% 70%, rgba(220,50,50,0.28), transparent 45%);
+    background: radial-gradient(circle at 18% 55%, rgba(220,50,50,0.34), transparent 50%);
     opacity: 0;
     transition: opacity 180ms ease;
+    z-index: 7;
   }
   .cc-hit-flash.on { opacity: 1; }
+  .cc-board-label {
+    position: absolute;
+    left: 0.75rem;
+    bottom: 0.6rem;
+    z-index: 6;
+    font-family: var(--font-heading, serif);
+    font-size: 0.62rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(226,232,240,0.5);
+    pointer-events: none;
+  }
   @media (prefers-reduced-motion: reduce) {
-    .cc-strip, .cc-chicken { transition: none !important; }
+    .cc-chicken.cc-hopping, .cc-chicken.cc-hop-hit { animation: none !important; transform: none !important; }
     .cc-car { animation: none !important; transform: translate3d(-50%, 35%, 0) !important; }
     .cc-fade-in { animation: none !important; opacity: 1 !important; transform: none !important; }
   }
@@ -245,7 +322,7 @@ export default function ChickenCrossPage() {
   const [staffOk, setStaffOk] = useState(_staffOkCache);
   const [config, setConfig] = useState(_cachedConfig || {
     current_state: '',
-    max_bet: 5_000_000_000,
+    max_bet: 2_000_000_000,
     payout_cap: 250_000_000_000,
     difficulties: [],
     admin_only: true,
@@ -256,12 +333,13 @@ export default function ChickenCrossPage() {
   const [stats, setStats] = useState(_cachedStats);
   const [loading, setLoading] = useState(false);
   const [pose, setPose] = useState('idle');
+  const [hopAnim, setHopAnim] = useState(''); // '' | 'fwd' | 'hit'
   const [lastRound, setLastRound] = useState(null);
   const [hitFlash, setHitFlash] = useState(false);
   const lastBetRef = useRef('100000');
   const busyRef = useRef(false);
 
-  const maxBet = Number(config.max_bet || 5_000_000_000);
+  const maxBet = Number(config.max_bet || 2_000_000_000);
   const betNum = parseInt(String(bet || '').replace(/\D/g, ''), 10) || 0;
   const active = !!game;
   const lane = Number(game?.lane || 0);
@@ -431,6 +509,7 @@ export default function ChickenCrossPage() {
     setLoading(true);
     setHitFlash(false);
     setPose('idle');
+    setHopAnim('');
     try {
       const res = await apiRequestWith429Retry(() => api.post('/casino/chicken-cross/start', { bet: betNum, difficulty }));
       lastBetRef.current = String(betNum);
@@ -449,20 +528,28 @@ export default function ChickenCrossPage() {
     if (busyRef.current || loading || !canStep) return;
     busyRef.current = true;
     setLoading(true);
-    setPose('hop');
     setHitFlash(false);
     try {
       const res = await apiRequestWith429Retry(() => api.post('/casino/chicken-cross/step'));
+      const isHit = res.data?.settled?.result === 'hit';
+      setPose('hop');
+      setHopAnim(isHit ? 'hit' : 'fwd');
       await waitHop();
       if (res.data?.active && res.data?.game) {
+        setHopAnim('');
         setGame(res.data.game);
         setPose('idle');
       } else if (res.data?.settled) {
-        setHitFlash(res.data.settled.result === 'hit');
+        setHitFlash(isHit);
+        setHopAnim('');
         afterSettle(res.data.settled);
-        if (res.data.settled.result === 'hit') toast.message('Squashed. Stake lost.');
+        if (isHit) toast.message('Squashed. Stake lost.');
+      } else {
+        setHopAnim('');
+        setPose('idle');
       }
     } catch (e) {
+      setHopAnim('');
       setPose('idle');
       toast.error(getApiErrorMessage(e) || 'Hop failed');
     } finally {
@@ -551,8 +638,8 @@ export default function ChickenCrossPage() {
         <section className={`${styles.panel} mobile-panel relative overflow-hidden rounded-xl border border-primary/25`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
           <div className="relative p-3 sm:p-5 space-y-4">
-            <div className="relative grid grid-cols-1 lg:grid-cols-[1fr_1.25fr] gap-4 items-stretch">
-              <div className="rounded-xl border border-zinc-700/60 bg-zinc-950/60 p-3 sm:p-4 space-y-3">
+            <div className="cc-stage">
+              <div className="cc-controls rounded-xl border border-zinc-700/60 bg-zinc-950/60 p-3 sm:p-4 space-y-3">
                 <div>
                   <p className="text-[9px] font-heading uppercase tracking-widest text-zinc-500 mb-1.5">Difficulty</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
@@ -670,44 +757,52 @@ export default function ChickenCrossPage() {
                 </div>
               </div>
 
-              <div className="cc-board border border-primary/20">
+              <div className="cc-board-wrap">
+              <div className="cc-board border border-primary/20" data-testid="chicken-cross-board">
                 <div className={`cc-hit-flash ${hitFlash ? 'on' : ''}`} />
                 <div className="cc-strip">
-                  {boardLanes.map((cell) => (
-                    <div
-                      key={cell.key}
-                      className="cc-cell"
-                      style={{
-                        backgroundImage: `url(${cell.kind === 'sidewalk' ? ASSET.sidewalk : ASSET.lane})`,
-                      }}
-                    >
-                      {cell.kind === 'lane' && cell.mult ? (
-                        <div className="cc-mult">x{cell.mult}</div>
-                      ) : null}
-                      {cell.kind === 'lane' && cell.traffic ? (
-                        <>
-                          <img
-                            src={cell.traffic.cars[0]}
-                            alt=""
-                            className={`cc-car ${cell.traffic.rev ? 'cc-rev' : ''}`}
-                            style={{ '--cc-dur': cell.traffic.durs[0], '--cc-delay': cell.traffic.delays[0] }}
-                            draggable={false}
-                          />
-                          <img
-                            src={cell.traffic.cars[1]}
-                            alt=""
-                            className={`cc-car ${cell.traffic.rev ? '' : 'cc-rev'}`}
-                            style={{ '--cc-dur': cell.traffic.durs[1], '--cc-delay': cell.traffic.delays[1] }}
-                            draggable={false}
-                          />
-                        </>
-                      ) : null}
-                    </div>
-                  ))}
+                  {boardLanes.map((cell, idx) => {
+                    const isCurrent = idx === 0;
+                    return (
+                      <div
+                        key={cell.key}
+                        className={`cc-cell ${cell.kind === 'sidewalk' ? 'cc-sidewalk' : 'cc-road'}${isCurrent ? ' cc-current' : ''}`}
+                      >
+                        {cell.kind === 'lane' && cell.mult ? (
+                          <div className="cc-mult">x{cell.mult}</div>
+                        ) : null}
+                        {cell.kind === 'lane' && cell.traffic ? (
+                          <>
+                            <img
+                              src={cell.traffic.cars[0]}
+                              alt=""
+                              className={`cc-car ${cell.traffic.rev ? 'cc-rev' : ''}`}
+                              style={{ '--cc-dur': cell.traffic.durs[0], '--cc-delay': cell.traffic.delays[0] }}
+                              draggable={false}
+                            />
+                            <img
+                              src={cell.traffic.cars[1]}
+                              alt=""
+                              className={`cc-car ${cell.traffic.rev ? '' : 'cc-rev'}`}
+                              style={{ '--cc-dur': cell.traffic.durs[1], '--cc-delay': cell.traffic.delays[1] }}
+                              draggable={false}
+                            />
+                          </>
+                        ) : null}
+                        {isCurrent ? (
+                          <div
+                            className={`cc-chicken ${hopAnim === 'fwd' ? 'cc-hopping' : ''} ${hopAnim === 'hit' ? 'cc-hop-hit' : ''}`}
+                            aria-hidden
+                          >
+                            <img src={chickenSrc} alt="" draggable={false} />
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className={`cc-chicken ${pose === 'hop' ? 'cc-hopping' : ''}`} aria-hidden>
-                  <img src={chickenSrc} alt="" draggable={false} />
-                </div>
+                <div className="cc-board-label">{active ? (lane > 0 ? `Lane ${lane}` : 'Sidewalk') : 'Ready'}</div>
+              </div>
               </div>
             </div>
 

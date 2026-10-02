@@ -197,6 +197,64 @@ const ManagerToggleRow = ({ label, checked, disabled, onChange }) => (
   </button>
 );
 
+const BUY_BULLETS_AMOUNT_MIN = 1;
+const BUY_BULLETS_AMOUNT_MAX = 5000;
+
+const ManagerBuyBulletsAmount = ({ prefs, disabled, onSave }) => {
+  const saved = Math.min(
+    BUY_BULLETS_AMOUNT_MAX,
+    Math.max(BUY_BULLETS_AMOUNT_MIN, Number(prefs?.auto_rank_events_buy_bullets_amount) || BUY_BULLETS_AMOUNT_MAX)
+  );
+  const [draft, setDraft] = useState(String(saved));
+  useEffect(() => {
+    setDraft(String(saved));
+  }, [saved]);
+  const commit = () => {
+    const n = Math.min(
+      BUY_BULLETS_AMOUNT_MAX,
+      Math.max(BUY_BULLETS_AMOUNT_MIN, parseInt(String(draft).replace(/,/g, ''), 10) || BUY_BULLETS_AMOUNT_MAX)
+    );
+    setDraft(String(n));
+    if (n !== saved) onSave(n);
+  };
+  return (
+    <div className={`rounded-lg border border-zinc-700/50 bg-zinc-900/40 px-3 py-2 space-y-1.5 ${!prefs?.auto_rank_events_buy_bullets ? 'opacity-50' : ''}`}>
+      <label className="text-[11px] sm:text-xs font-heading text-foreground block">
+        Bullets bought per top-up (armoury max {BUY_BULLETS_AMOUNT_MAX.toLocaleString()})
+      </label>
+      <div className="flex gap-2 items-center">
+        <input
+          type="number"
+          min={BUY_BULLETS_AMOUNT_MIN}
+          max={BUY_BULLETS_AMOUNT_MAX}
+          value={draft}
+          disabled={disabled || !prefs?.auto_rank_events_buy_bullets}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commit();
+            }
+          }}
+          className="flex-1 min-w-0 px-2.5 py-1.5 rounded bg-zinc-800/80 border border-zinc-700/50 text-foreground font-heading text-[10px] sm:text-xs focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 disabled:opacity-50"
+        />
+        <button
+          type="button"
+          disabled={disabled || !prefs?.auto_rank_events_buy_bullets}
+          onClick={commit}
+          className="shrink-0 min-h-[36px] px-3 rounded-lg bg-primary/20 border border-primary/50 text-primary font-heading text-[10px] font-bold uppercase tracking-wide disabled:opacity-50 touch-manipulation"
+        >
+          Save
+        </button>
+      </div>
+      <p className="text-[9px] text-zinc-500 font-heading">
+        When short for hitlist kills, buys this many at a time until there are enough (or the factory runs out).
+      </p>
+    </div>
+  );
+};
+
 const AdminDiagnosticsPanel = ({ inspectData, inspectLoading, inspectError, inspectUsername, setInspectUsername, onLoad, onRefresh }) => {
   const d = inspectData?.diagnostics;
   const statusClass = DIAG_STATUS_STYLES[d?.status] || DIAG_STATUS_STYLES.inactive;
@@ -289,6 +347,7 @@ const AdminDiagnosticsPanel = ({ inspectData, inspectLoading, inspectError, insp
                 <div><span className="text-zinc-500">Add-on:</span> {inspectData.preferences?.auto_rank_events_unlocked ? 'owned' : 'not owned'}</div>
                 <div><span className="text-zinc-500">Missions:</span> {inspectData.preferences?.auto_rank_missions_enabled ? 'on' : 'off'}</div>
                 <div><span className="text-zinc-500">Buy bullets:</span> {inspectData.preferences?.auto_rank_events_buy_bullets ? 'on' : 'off'}</div>
+                <div><span className="text-zinc-500">Buy amount:</span> {(inspectData.preferences?.auto_rank_events_buy_bullets_amount || 5000).toLocaleString()}</div>
                 <div><span className="text-zinc-500">Events:</span> {(inspectData.preferences?.auto_rank_event_ids || []).join(', ') || 'none'}</div>
                 <div><span className="text-zinc-500">Working:</span> {inspectData.preferences?.auto_rank_current_mission || '—'}</div>
                 <div><span className="text-zinc-500">Last mission:</span> {inspectData.preferences?.auto_rank_mission_rewards?.[0]?.mission_name || '—'}{inspectData.preferences?.auto_rank_mission_rewards?.[0] ? ` — ${formatRewardBits(inspectData.preferences.auto_rank_mission_rewards[0].rewards)}` : ''}</div>
@@ -2171,6 +2230,7 @@ export default function AutoRank() {
             auto_rank_event_ids: meRes.data.auto_rank_event_ids || [],
             auto_rank_missions_enabled: !!meRes.data.auto_rank_missions_enabled,
             auto_rank_events_buy_bullets: !!meRes.data.auto_rank_events_buy_bullets,
+            auto_rank_events_buy_bullets_amount: Math.min(5000, Math.max(1, Number(meRes.data.auto_rank_events_buy_bullets_amount) || 5000)),
             auto_rank_events_cost: meRes.data.auto_rank_events_cost || 2000,
             auto_rank_live_event_name: meRes.data.auto_rank_live_event_name || '',
             auto_rank_live_event_id: meRes.data.auto_rank_live_event_id || '',
@@ -2363,6 +2423,7 @@ export default function AutoRank() {
         auto_rank_event_ids: res.data?.auto_rank_event_ids ?? p?.auto_rank_event_ids,
         auto_rank_missions_enabled: res.data?.auto_rank_missions_enabled ?? p?.auto_rank_missions_enabled,
         auto_rank_events_buy_bullets: res.data?.auto_rank_events_buy_bullets ?? p?.auto_rank_events_buy_bullets,
+        auto_rank_events_buy_bullets_amount: res.data?.auto_rank_events_buy_bullets_amount ?? p?.auto_rank_events_buy_bullets_amount,
         auto_rank_event_rewards: res.data?.auto_rank_event_rewards ?? p?.auto_rank_event_rewards,
         auto_rank_mission_rewards: res.data?.auto_rank_mission_rewards ?? p?.auto_rank_mission_rewards,
         auto_rank_live_event_name: res.data?.auto_rank_live_event_name ?? p?.auto_rank_live_event_name,
@@ -2883,10 +2944,15 @@ export default function AutoRank() {
                 />
               ))}
               <ManagerToggleRow
-                label="Buy armoury bullets when a hitlist batch is short"
+                label="Buy armoury bullets when hitlist kills are short (Hitlist Hunt + Auto missions)"
                 checked={!!prefs?.auto_rank_events_buy_bullets}
                 disabled={savingPrefs}
                 onChange={(v) => updatePref('auto_rank_events_buy_bullets', v)}
+              />
+              <ManagerBuyBulletsAmount
+                prefs={prefs}
+                disabled={savingPrefs}
+                onSave={(n) => updatePref('auto_rank_events_buy_bullets_amount', n)}
               />
               <div className="space-y-2">
                 <h2 className="text-[10px] font-heading font-bold uppercase tracking-wider text-primary">Past event rewards</h2>
@@ -2909,6 +2975,20 @@ export default function AutoRank() {
                 disabled={savingPrefs}
                 onChange={(v) => updatePref('auto_rank_missions_enabled', v)}
               />
+              <ManagerToggleRow
+                label="Buy armoury bullets when mission hitlist kills are short"
+                checked={!!prefs?.auto_rank_events_buy_bullets}
+                disabled={savingPrefs}
+                onChange={(v) => updatePref('auto_rank_events_buy_bullets', v)}
+              />
+              <ManagerBuyBulletsAmount
+                prefs={prefs}
+                disabled={savingPrefs}
+                onSave={(n) => updatePref('auto_rank_events_buy_bullets_amount', n)}
+              />
+              <p className="text-[10px] text-zinc-500 font-heading">
+                Same buy setting as Auto events. When on, Auto missions tops up armoury bullets before shooting found hitlist NPCs.
+              </p>
               <div className="space-y-2">
                 <h2 className="text-[10px] font-heading font-bold uppercase tracking-wider text-primary">Missions completed</h2>
                 {(prefs?.auto_rank_mission_rewards || []).length === 0 ? (

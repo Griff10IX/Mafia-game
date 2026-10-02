@@ -24,7 +24,7 @@ from utils.gambling_self_ban import raise_if_gambling_self_banned
 _rng = secrets.SystemRandom()
 
 CHICKEN_CROSS_ADMIN_ONLY = True
-CHICKEN_CROSS_MAX_BET = 5_000_000_000
+CHICKEN_CROSS_MAX_BET = 2_000_000_000
 CHICKEN_CROSS_PAYOUT_CAP = 250_000_000_000
 CHICKEN_CROSS_STREAK_SCAN_LIMIT = 120
 # 98% RTP. Multipliers are floored so a cash-out is never worth more than the fair value.
