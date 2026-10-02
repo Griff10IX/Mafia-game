@@ -500,6 +500,12 @@ async def settle_contest_if_needed(db, event: dict) -> dict:
         },
     )
     await _set_previous_type(db, type_id)
+    try:
+        from utils.auto_rank_managers import note_contest_payouts
+
+        await note_contest_payouts(db, type_id, str(claimed.get("name") or meta.get("name") or type_id), rankings)
+    except Exception:
+        logger.exception("auto events payout ledger")
     return await db[COL_EVENTS].find_one({"id": claimed["id"]}) or claimed
 
 

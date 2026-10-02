@@ -6,6 +6,18 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-10-02[/color][/b] — [b]Auto events[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Add-on:[/b] Auto events is 2,000 points on the Auto Rank page. You need Auto Rank first. It unlocks Auto events and Auto missions.[/color]
+[*][color=#888888][b]Events:[/b] Pick which live events it follows. Auto missions works the current mission’s tasks together, including hitlist NPCs while other tasks keep moving.[/color]
+[*][color=#888888][b]Done:[/b] You get an inbox note when a mission is completed. The tabs list past event rewards and the missions it finished, with what each one paid.[/color]
+[*][color=#888888][b]Together:[/b] Normal Auto Rank still runs. One manager at a time works best.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-10-02[/color][/b] — [b]Hitlist bounty[/b][/size]
 [quote]
 [list]

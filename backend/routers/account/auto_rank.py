@@ -1300,6 +1300,14 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         else:
             return
 
+    try:
+        from utils.auto_rank_managers import consume_manager_wake
+
+        if await consume_manager_wake(db, user):
+            return
+    except Exception:
+        logger.exception("Auto rank manager wake for %s", user_id)
+
     has_success = False
     respect_before = int(user.get("respect_points") or 0)
     use_skips = user.get("auto_rank_use_skip_tokens") is True
@@ -2589,6 +2597,20 @@ SCRAP_RARITIES = list(MELT_RARITIES)
 SCRAP_INTERVAL_SECONDS = 120  # Scrap (when run separately) runs once every 2 minutes
 
 
+async def _manager_prefs(user: dict) -> dict:
+    from utils.auto_rank_managers import cached_live_contest, public_manager_fields
+    import server as srv
+
+    live = {}
+    try:
+        live = await cached_live_contest(srv.db)
+    except Exception:
+        live = {}
+    out = public_manager_fields(user or {}, live)
+    out["points"] = int((user or {}).get("points") or 0)
+    return out
+
+
 def _extract_preferences(user: dict) -> dict:
     if not user:
         return dict(_PREFERENCE_DEFAULTS)
@@ -3077,6 +3099,9 @@ def register(router):
         auto_rank_scrap_rarity_ids: Optional[list] = None
         auto_rank_trial_dismissed: Optional[bool] = None
         robot_bg_auto_search_enabled: Optional[bool] = None
+        auto_rank_event_ids: Optional[list] = None
+        auto_rank_missions_enabled: Optional[bool] = None
+        auto_rank_events_buy_bullets: Optional[bool] = None
 
     from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_AUTO_RANK
 
@@ -3130,11 +3155,36 @@ def register(router):
             prefs["robot_bg_auto_search_subscription_active"] = robot_bg_auto_search_active(user)
             prefs["robot_bg_auto_search_enabled"] = robot_bg_auto_search_enabled(user)
             prefs["robot_bg_auto_search_until"] = user.get("robot_bg_auto_search_until")
+            prefs.update(await _manager_prefs(user))
             logger.debug("Auto rank GET /me ok user_id=%s", user_id)
             return prefs
         except Exception as e:
             logger.exception("Auto rank GET /me failed: %s", e)
             raise
+
+    @router.post("/auto-rank/buy-events")
+    async def buy_auto_events(current_user: dict = Depends(get_current_user)):
+        """2,000 points. Unlocks Auto events and Auto missions. Requires Auto Rank."""
+        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0}) or current_user
+        if not _user_has_auto_rank_access(user):
+            raise HTTPException(status_code=400, detail="Buy Auto Rank first.")
+        if user.get("auto_rank_events_unlocked"):
+            raise HTTPException(status_code=400, detail="You already own Auto events.")
+        from routers.game.store import _record_store_points_spend, _store_cost_inc
+        from utils.auto_rank_managers import AUTO_EVENTS_COST_POINTS
+
+        cost_used, inc, gte_filter = _store_cost_inc(user, AUTO_EVENTS_COST_POINTS)
+        if not cost_used:
+            raise HTTPException(status_code=400, detail="Insufficient points")
+        result = await db.users.update_one(
+            {"id": user["id"], "auto_rank_events_unlocked": {"$ne": True}, **gte_filter},
+            {"$inc": inc, "$set": {"auto_rank_events_unlocked": True}},
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Insufficient points")
+        await _record_store_points_spend(user, inc, "buy-auto-events", cost_used=cost_used)
+        updated = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+        return {"message": "Auto events unlocked. Auto missions is included.", "cost": cost_used, **(await _manager_prefs(updated or {}))}
 
     @router.get("/auto-rank/settings")
     async def get_settings_options(current_user: dict = Depends(get_current_user)):
@@ -3608,6 +3658,22 @@ def register(router):
             updates["auto_rank_scrap_rarity_ids"] = scrap_ids
         if body.auto_rank_trial_dismissed is not None:
             updates["auto_rank_trial_dismissed"] = bool(body.auto_rank_trial_dismissed)
+        manager_touch = (
+            body.auto_rank_event_ids is not None
+            or body.auto_rank_missions_enabled is not None
+            or body.auto_rank_events_buy_bullets is not None
+        )
+        if manager_touch and not user_row.get("auto_rank_events_unlocked"):
+            raise HTTPException(status_code=400, detail="Buy Auto events first.")
+        if body.auto_rank_event_ids is not None:
+            from utils.daily_contests import CONTEST_TYPE_IDS
+
+            allowed_ids = set(CONTEST_TYPE_IDS)
+            updates["auto_rank_event_ids"] = [str(x) for x in body.auto_rank_event_ids if str(x) in allowed_ids]
+        if body.auto_rank_missions_enabled is not None:
+            updates["auto_rank_missions_enabled"] = bool(body.auto_rank_missions_enabled)
+        if body.auto_rank_events_buy_bullets is not None:
+            updates["auto_rank_events_buy_bullets"] = bool(body.auto_rank_events_buy_bullets)
         if body.robot_bg_auto_search_enabled is not None:
             from utils.robot_bg_auto_search import robot_bg_auto_search_active
 
@@ -3625,7 +3691,7 @@ def register(router):
         await db.users.update_one({"id": user_id}, op)
         updated = await db.users.find_one(
             {"id": user_id},
-            {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1, "auto_rank_melt_action_ids": 1, "auto_rank_melt_rarity_ids": 1, "auto_rank_scrap_rarity_ids": 1, "passive_booze_paused": 1, "robot_bg_auto_search_enabled": 1, "robot_bg_auto_search_until": 1},
+            {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1, "auto_rank_melt_action_ids": 1, "auto_rank_melt_rarity_ids": 1, "auto_rank_scrap_rarity_ids": 1, "passive_booze_paused": 1, "robot_bg_auto_search_enabled": 1, "robot_bg_auto_search_until": 1, "auto_rank_events_unlocked": 1, "auto_rank_event_ids": 1, "auto_rank_missions_enabled": 1, "auto_rank_events_buy_bullets": 1, "auto_rank_event_rewards": 1, "auto_rank_mission_rewards": 1, "points": 1},
         )
         out = {"message": "Preferences saved", **_extract_preferences(updated)}
         out["auto_rank_has_access"] = _user_has_auto_rank_access(updated or {})
@@ -3641,6 +3707,7 @@ def register(router):
         out["robot_bg_auto_search_subscription_active"] = robot_bg_auto_search_active(updated or {})
         out["robot_bg_auto_search_enabled"] = robot_bg_auto_search_enabled(updated or {})
         out["robot_bg_auto_search_until"] = (updated or {}).get("robot_bg_auto_search_until")
+        out.update(await _manager_prefs(updated or {}))
         return out
 
     @router.get("/auto-rank/interval")
@@ -3730,6 +3797,8 @@ def register(router):
         telegram_chat_id: Optional[str] = None
         telegram_bot_token: Optional[str] = None
         auto_rank_enabled: Optional[bool] = None
+        auto_rank_events_unlocked: Optional[bool] = None
+        auto_rank_missions_enabled: Optional[bool] = None
 
     @router.get("/admin/auto-rank/user-inspect")
     async def admin_auto_rank_user_inspect(
@@ -3792,6 +3861,13 @@ def register(router):
             "booze_carrying": 1,
             "presence_simulator_auto_rank_managed": 1,
             "presence_simulator_auto_rank_prev": 1,
+            "auto_rank_events_unlocked": 1,
+            "auto_rank_event_ids": 1,
+            "auto_rank_missions_enabled": 1,
+            "auto_rank_events_buy_bullets": 1,
+            "auto_rank_mission_rewards": 1,
+            "mission_completions": 1,
+            "points": 1,
         }
         doc = await db.users.find_one(q, proj)
         if not doc:
@@ -3807,6 +3883,11 @@ def register(router):
         selection_labels = await _auto_rank_selection_labels_for_inspect(db, doc)
         global_enabled = await get_auto_rank_enabled(db)
         diagnostics = _build_auto_rank_diagnostics(doc, global_enabled=global_enabled)
+        from routers.account.missions import _current_open_mission
+
+        open_mission = _current_open_mission(doc)
+        manager_prefs = await _manager_prefs(doc)
+        manager_prefs["auto_rank_current_mission"] = (open_mission or {}).get("title") or ""
 
         saved_on_idle: Dict[str, Any] = {}
         for k in _IDLE_SAVE_FIELDS:
@@ -3844,7 +3925,7 @@ def register(router):
             },
             "entitlement_provenance": provenance,
             "diagnostics": diagnostics,
-            "preferences": _extract_preferences(doc),
+            "preferences": {**_extract_preferences(doc), **manager_prefs},
             "selection_ids": {
                 "auto_rank_crime_ids": doc.get("auto_rank_crime_ids") if isinstance(doc.get("auto_rank_crime_ids"), list) else [],
                 "auto_rank_gta_option_ids": doc.get("auto_rank_gta_option_ids") if isinstance(doc.get("auto_rank_gta_option_ids"), list) else [],
@@ -3896,7 +3977,7 @@ def register(router):
             }
         cursor = db.users.find(
             query,
-            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "forced_online_until": 1, "auto_rank_idle": 1, **{f: 1 for f in _PREFERENCE_FIELDS}},
+            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "forced_online_until": 1, "auto_rank_idle": 1, "auto_rank_events_unlocked": 1, "auto_rank_missions_enabled": 1, "auto_rank_event_ids": 1, "auto_rank_events_buy_bullets": 1, **{f: 1 for f in _PREFERENCE_FIELDS}},
         )
         users = await cursor.to_list(500)
 
@@ -3949,6 +4030,10 @@ def register(router):
                     **_extract_preferences(u),
                     "telegram_chat_id": u.get("telegram_chat_id") or "",
                     "telegram_bot_token": u.get("telegram_bot_token") or "",
+                    "auto_rank_events_unlocked": bool(u.get("auto_rank_events_unlocked")),
+                    "auto_rank_missions_enabled": bool(u.get("auto_rank_missions_enabled")),
+                    "auto_rank_event_ids": u.get("auto_rank_event_ids") if isinstance(u.get("auto_rank_event_ids"), list) else [],
+                    "auto_rank_events_buy_bullets": bool(u.get("auto_rank_events_buy_bullets")),
                 }
                 for u in users
             ],
@@ -4004,6 +4089,12 @@ def register(router):
                 for f in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze"]:
                     updates[f] = False
                 updates["passive_booze_paused"] = True
+        if body.auto_rank_events_unlocked is not None:
+            updates["auto_rank_events_unlocked"] = bool(body.auto_rank_events_unlocked)
+            if body.auto_rank_events_unlocked is False:
+                updates["auto_rank_missions_enabled"] = False
+        if body.auto_rank_missions_enabled is not None:
+            updates["auto_rank_missions_enabled"] = bool(body.auto_rank_missions_enabled)
         if not updates:
             return {"message": "No changes", "username": target.get("username")}
         op = {"$set": updates}

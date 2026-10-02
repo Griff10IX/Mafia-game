@@ -1677,6 +1677,54 @@ async def buy_bullets(
     }
 
 
+async def buy_bullets_for_auto_rank(current_user: dict, amount: int) -> dict:
+    """Factory bullet buy for Auto Rank. Same price and stock as buy_bullets, without the page ticket."""
+    amount = int(amount or 0)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+    if amount > BULLET_FACTORY_BUY_MAX_PER_PURCHASE:
+        amount = BULLET_FACTORY_BUY_MAX_PER_PURCHASE
+    state = _normalize_state(current_user.get("current_state"))
+    factory = await _get_or_create_factory(state)
+    from utils.mdg_prize_holds import casino_economy_owner_id
+    owner_id = casino_economy_owner_id(factory.get("owner_id"))
+    accumulated = _accumulated_bullets(factory)
+    if amount > accumulated:
+        amount = int(accumulated)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Factory has no bullets")
+    if owner_id and owner_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="You own this factory")
+    if owner_id:
+        price = factory.get("price_per_bullet")
+        if price is None or price < BULLET_FACTORY_PRICE_MIN:
+            raise HTTPException(status_code=400, detail="Owner has not set a price yet")
+    else:
+        price = factory.get("unowned_price") or random.randint(BULLET_FACTORY_UNOWNED_PRICE_MIN, BULLET_FACTORY_UNOWNED_PRICE_MAX)
+    total_cost = amount * price
+    now_iso = datetime.now(timezone.utc).isoformat()
+    result = await db.users.update_one(
+        {"id": current_user["id"], "money": {"$gte": total_cost}},
+        {"$inc": {"money": -total_cost, "bullets": amount, "bullets_purchased_from_armoury": amount}, "$set": {"last_bullet_factory_bought_at": now_iso}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail=f"You need ${total_cost:,}")
+    stock_res = await db.bullet_factory.update_one(
+        {"state": state, "bullet_stock": {"$gte": amount}},
+        {"$inc": {"bullet_stock": -amount}},
+    )
+    if stock_res.modified_count == 0:
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$inc": {"money": total_cost, "bullets": -amount, "bullets_purchased_from_armoury": -amount}},
+        )
+        raise HTTPException(status_code=400, detail="Factory no longer has that many bullets")
+    if owner_id:
+        await db.bullet_factory.update_one({"state": state}, {"$inc": {"owner_pending_profit": total_cost}})
+    await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_bullets", {"amount": amount, "cost": total_cost, "state": state, "source": "auto_rank"})
+    return {"amount": amount, "total_paid": total_cost}
+
+
 CUSTOM_BULLETS_MAX = 250_000
 
 def _calculate_bullet_cost(bullets: int) -> int:

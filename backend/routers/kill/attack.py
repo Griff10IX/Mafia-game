@@ -14,6 +14,7 @@ import uuid
 import os
 import sys
 import logging
+import contextvars
 from fastapi import Depends, HTTPException, Request, Query
 from jose import JWTError, jwt
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
@@ -2641,8 +2642,95 @@ async def reset_kill_inflation(current_user: dict = Depends(get_current_user_ver
     }
 
 
+_AUTO_RANK_ATTACK = contextvars.ContextVar("auto_rank_attack", default=False)
+
+
+async def compute_bullets_required(current_user: dict, target: dict) -> int:
+    """Real Attack bullet count for this shooter and target."""
+    target_armour = target.get("armour_level", 0)
+    attacker_rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
+    target_rank_id, _ = get_rank_info(target.get("rank_points", 0), user_prestige_rank_mult(target))
+    equipped_weapon_id = (current_user.get("equipped_weapon_id") or "").strip() or None
+    from routers.game.achievements import get_badge_bonuses as _get_badge_bonuses
+
+    async def _badge_bonuses_safe(uid: str) -> dict:
+        if not uid:
+            return {}
+        try:
+            return (await _get_badge_bonuses(uid)) or {}
+        except Exception:
+            return {}
+
+    (
+        owned_weapons,
+        inflation,
+        bb_a,
+        bb_v,
+        exclusive_car_bullet_mult,
+    ) = await asyncio.gather(
+        db.user_weapons.find(
+            {"user_id": current_user["id"], "quantity": {"$gt": 0}},
+            {"_id": 0, "weapon_id": 1},
+        ).to_list(100),
+        _get_kill_inflation_cached(current_user["id"]),
+        _badge_bonuses_safe(current_user.get("id") or ""),
+        _badge_bonuses_safe(target.get("id") or "") if not target.get("is_npc") else _badge_bonuses_safe(""),
+        _exclusive_car_bullet_defense_multiplier(target),
+    )
+    attacker_kill_badges = bb_a.get("kills", 0) * bb_a.get("prestige_badge_mult", 1)
+    victim_kill_badges = bb_v.get("kills", 0) * bb_v.get("prestige_badge_mult", 1)
+    owned_weapon_ids = {w.get("weapon_id") for w in owned_weapons if w.get("weapon_id")}
+    if not owned_weapon_ids:
+        raise HTTPException(status_code=400, detail="You don't own a gun. Visit the armoury or store to buy one before you can attack.")
+    if not equipped_weapon_id or equipped_weapon_id not in owned_weapon_ids:
+        raise HTTPException(status_code=400, detail="You need to equip a gun before you can attack.")
+    (best_damage, _best_weapon_name), mastery_pct = await asyncio.gather(
+        _best_weapon_for_user(current_user["id"], equipped_weapon_id),
+        _get_weapon_mastery_pct(current_user["id"], equipped_weapon_id),
+    )
+    bullets_base = _bullets_to_kill(target_armour, target_rank_id, best_damage, attacker_rank_id, attacker_kill_badges, victim_kill_badges)
+    weapon_name = _best_weapon_name
+    discount = (mastery_pct / 100.0) * (MASTERY_MAX_BULLET_REDUCTION_PCT / 100.0)
+    bullets_required = int(math.ceil(bullets_base * (1.0 + inflation) * (1.0 - discount)))
+    target_has_armour_bonus = bool(target.get("completed_it_armour_bonus"))
+    if not target_has_armour_bonus and target.get("is_bodyguard"):
+        bg_owner_doc = await db.bodyguards.find_one({"bodyguard_user_id": target["id"]}, {"_id": 0, "user_id": 1})
+        if bg_owner_doc:
+            owner_user = await db.users.find_one({"id": bg_owner_doc["user_id"]}, {"_id": 0, "completed_it_armour_bonus": 1})
+            target_has_armour_bonus = bool((owner_user or {}).get("completed_it_armour_bonus"))
+    if target_has_armour_bonus:
+        bullets_required = bullets_required * 2
+    if exclusive_car_bullet_mult > 1.0:
+        bullets_required = int(math.ceil(bullets_required * exclusive_car_bullet_mult))
+    loot_mult = _loot_weapon_attack_bullet_mult(equipped_weapon_id)
+    if loot_mult < 0.999:
+        bullets_required = max(1, int(round(bullets_required * loot_mult)))
+    try:
+        from utils.loot_reclaimable_passives import BUFF_KILL_BULLETS, get_reclaimable_passive_mults_from_user
+
+        kmult = float(get_reclaimable_passive_mults_from_user(current_user).get(BUFF_KILL_BULLETS) or 1.0)
+        if kmult < 0.999:
+            bullets_required = max(1, int(round(bullets_required * kmult)))
+    except Exception:
+        pass
+    if current_user.get("completed_it_bullet_reduction"):
+        bullets_required = max(1, int(bullets_required * 0.35))
+    bullets_required = max(1, int(round(bullets_required * bullets_needed_mult(current_user))))
+    bullets_required = _apply_bullet_caps(target, bullets_required)
+    return {
+        "bullets_required": bullets_required,
+        "attacker_rank_id": attacker_rank_id,
+        "target_rank_id": target_rank_id,
+        "inflation": inflation,
+        "best_damage": best_damage,
+        "best_weapon_name": weapon_name,
+        "bullets_base": bullets_base,
+    }
+
+
 async def execute_attack(request: AttackExecuteRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
   try:
+    _via_auto_rank = bool(_AUTO_RANK_ATTACK.get())
     try:
         from utils.safehouse import raise_if_safehouse_blocks_combat
 
@@ -2653,7 +2741,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         pass
     meta = _request_meta(req)
     # --- Bot trap check (dynamic challenge field for suspected bots) ---
-    bot_trap = await db.bot_traps.find_one({"user_id": current_user["id"], "active": True})
+    bot_trap = None if _via_auto_rank else await db.bot_traps.find_one({"user_id": current_user["id"], "active": True})
     if bot_trap:
         try:
             body_bytes = await req.body()
@@ -2671,7 +2759,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         else:
             await db.bot_traps.update_one({"_id": bot_trap["_id"]}, {"$inc": {"successes": 1}})
     # --- End bot trap check ---
-    submitted_execute_token = await _submitted_execute_token(request, req)
+    submitted_execute_token = None if _via_auto_rank else await _submitted_execute_token(request, req)
     attack = await _resolve_attack_row_for_execute(
         current_user["id"],
         request.attack_id,
@@ -2680,15 +2768,16 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if not attack:
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "No active attack to execute", req), label="log_no_active_attack")
         raise HTTPException(status_code=404, detail="No active attack to execute")
-    await require_attack_turnstile(
-        db,
-        request=req,
-        current_user=current_user,
-        action="execute",
-        captcha_token=request.captcha_token,
-        captcha_nonce=request.captcha_nonce,
-        risk_score=int(meta.get("client_risk_score") or 0),
-    )
+    if not _via_auto_rank:
+        await require_attack_turnstile(
+            db,
+            request=req,
+            current_user=current_user,
+            action="execute",
+            captcha_token=request.captcha_token,
+            captcha_nonce=request.captcha_nonce,
+            risk_score=int(meta.get("client_risk_score") or 0),
+        )
     # Parallel: target + attacker location lookups are independent — saves one round trip
     target, attacker_row = await asyncio.gather(
         db.users.find_one({"id": attack["target_id"]}, {"_id": 0}),
@@ -2921,96 +3010,19 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if _staff_unattackable_target(target):
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Target cannot be attacked", req), label="log_target_unattackable")
         raise HTTPException(status_code=403, detail="Target cannot be attacked")
-    target_armour = target.get("armour_level", 0)
-    attacker_rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
-    target_rank_id, _ = get_rank_info(target.get("rank_points", 0), user_prestige_rank_mult(target))
     attacker_armour = int(current_user.get("armour_level") or 0)
     attacker_bullets = current_user.get("bullets", 0)
     attacker_molotovs = int(current_user.get("molotovs") or 0)
     MOLOTOV_BULLET_EQUIV = 250
     equipped_weapon_id = (current_user.get("equipped_weapon_id") or "").strip() or None
-
-    # Require an owned and equipped gun before attacking. This avoids \"punch\" attacks
-    # and gives clearer feedback when players forget to buy/equip a weapon.
-    # Parallel: reads below are independent of each other (each only depends on `target`/current_user, not on prior awaits).
-    # Cuts wall-clock under high traffic by removing 5 sequential round-trips.
-    from routers.game.achievements import get_badge_bonuses as _get_badge_bonuses
-    async def _badge_bonuses_safe(uid: str) -> dict:
-        if not uid:
-            return {}
-        try:
-            return (await _get_badge_bonuses(uid)) or {}
-        except Exception:
-            return {}
-    (
-        owned_weapons,
-        inflation,
-        bb_a,
-        bb_v,
-        exclusive_car_bullet_mult,
-    ) = await asyncio.gather(
-        db.user_weapons.find(
-            {"user_id": current_user["id"], "quantity": {"$gt": 0}},
-            {"_id": 0, "weapon_id": 1},
-        ).to_list(100),
-        _get_kill_inflation_cached(current_user["id"]),
-        _badge_bonuses_safe(current_user.get("id") or ""),
-        _badge_bonuses_safe(target.get("id") or "") if not target.get("is_npc") else _badge_bonuses_safe(""),
-        _exclusive_car_bullet_defense_multiplier(target),
-    )
-    attacker_kill_badges = bb_a.get("kills", 0) * bb_a.get("prestige_badge_mult", 1)
-    victim_kill_badges = bb_v.get("kills", 0) * bb_v.get("prestige_badge_mult", 1)
-
-    owned_weapon_ids = {w.get("weapon_id") for w in owned_weapons if w.get("weapon_id")}
-    if not owned_weapon_ids:
-        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "You don't own a gun. Visit the armoury or store to buy one before you can attack.", req), label="log_no_gun")
-        raise HTTPException(
-            status_code=400,
-            detail="You don't own a gun. Visit the armoury or store to buy one before you can attack.",
-        )
-    if not equipped_weapon_id or equipped_weapon_id not in owned_weapon_ids:
-        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "You need to equip a gun before you can attack.", req), label="log_no_equipped_gun")
-        raise HTTPException(
-            status_code=400,
-            detail="You need to equip a gun before you can attack.",
-        )
-
-    # Parallel: best weapon damage + per-weapon mastery; both only need a validated equipped_weapon_id.
-    (best_damage, best_weapon_name), mastery_pct = await asyncio.gather(
-        _best_weapon_for_user(current_user["id"], equipped_weapon_id),
-        _get_weapon_mastery_pct(current_user["id"], equipped_weapon_id),
-    )
-    bullets_base = _bullets_to_kill(target_armour, target_rank_id, best_damage, attacker_rank_id, attacker_kill_badges, victim_kill_badges)
-    discount = (mastery_pct / 100.0) * (MASTERY_MAX_BULLET_REDUCTION_PCT / 100.0)
-    bullets_required = int(math.ceil(bullets_base * (1.0 + inflation) * (1.0 - discount)))
-    # "Completed it" perk on target: 2x bullets required to attack them
-    # Also applies to bodyguards if their owner has the perk
-    target_has_armour_bonus = bool(target.get("completed_it_armour_bonus"))
-    if not target_has_armour_bonus and target.get("is_bodyguard"):
-        bg_owner_doc = await db.bodyguards.find_one({"bodyguard_user_id": target["id"]}, {"_id": 0, "user_id": 1})
-        if bg_owner_doc:
-            owner_user = await db.users.find_one({"id": bg_owner_doc["user_id"]}, {"_id": 0, "completed_it_armour_bonus": 1})
-            target_has_armour_bonus = bool((owner_user or {}).get("completed_it_armour_bonus"))
-    if target_has_armour_bonus:
-        bullets_required = bullets_required * 2
-    if exclusive_car_bullet_mult > 1.0:
-        bullets_required = int(math.ceil(bullets_required * exclusive_car_bullet_mult))
-    loot_mult = _loot_weapon_attack_bullet_mult(equipped_weapon_id)
-    if loot_mult < 0.999:
-        bullets_required = max(1, int(round(bullets_required * loot_mult)))
-    try:
-        from utils.loot_reclaimable_passives import BUFF_KILL_BULLETS, get_reclaimable_passive_mults_from_user
-
-        kmult = float(get_reclaimable_passive_mults_from_user(current_user).get(BUFF_KILL_BULLETS) or 1.0)
-        if kmult < 0.999:
-            bullets_required = max(1, int(round(bullets_required * kmult)))
-    except Exception:
-        pass
-    # "Completed it" perk: 65% fewer bullets needed when attacking
-    if current_user.get("completed_it_bullet_reduction"):
-        bullets_required = max(1, int(bullets_required * 0.35))
-    bullets_required = max(1, int(round(bullets_required * bullets_needed_mult(current_user))))
-    bullets_required = _apply_bullet_caps(target, bullets_required)
+    shot = await compute_bullets_required(current_user, target)
+    bullets_required = int(shot["bullets_required"])
+    attacker_rank_id = shot["attacker_rank_id"]
+    target_rank_id = shot["target_rank_id"]
+    inflation = shot["inflation"]
+    best_damage = shot["best_damage"]
+    best_weapon_name = shot["best_weapon_name"]
+    bullets_base = shot["bullets_base"]
     if attacker_bullets <= 0:
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "You need bullets to attack.", req), label="log_no_bullets")
         raise HTTPException(status_code=400, detail="You need bullets to attack.")

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Unlock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame, CircleDot, Search, AlertTriangle, CheckCircle2, Info, PauseCircle, Zap } from 'lucide-react';
+import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Unlock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame, CircleDot, Search, AlertTriangle, CheckCircle2, Info, PauseCircle, Zap, Trophy, ScrollText } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -14,7 +14,21 @@ const MIN_INTERVAL = 5;
 const MIN_BUST_INTERVAL = 1;
 const MIN_OC_INTERVAL = 10;
 
-const AR_TAB_IDS = new Set(['summary', 'settings', 'stats', 'admin']);
+const AR_TAB_IDS = new Set(['summary', 'settings', 'stats', 'events', 'missions', 'admin']);
+const AUTO_EVENT_OPTIONS = [
+  { id: 'crime', name: 'Crime Spree' },
+  { id: 'gta', name: 'Grand Theft' },
+  { id: 'crime_gta', name: 'Street Run' },
+  { id: 'melt', name: 'Meltdown' },
+  { id: 'jailbust', name: 'Jailbusta' },
+  { id: 'booze', name: 'Booze Run' },
+  { id: 'racket', name: 'Collection Day' },
+  { id: 'oc', name: 'Crew Work' },
+  { id: 'hitlist', name: 'Hitlist Hunt' },
+  { id: 'mission', name: 'Mission Marathon' },
+  { id: 'property', name: 'Landlord' },
+  { id: 'grave', name: 'Grave Duty' },
+];
 const AR_TAB_STORAGE_KEY = 'ar_tab';
 const readStoredArTab = () => {
   try {
@@ -129,6 +143,59 @@ const DiagList = ({ title, items, tone }) => {
   );
 };
 
+function formatRewardBits(rewards) {
+  if (!rewards) return '';
+  const bits = [];
+  if (rewards.cash) bits.push(`$${Number(rewards.cash).toLocaleString()} cash`);
+  if (rewards.tribute) bits.push(`$${Number(rewards.tribute).toLocaleString()} tribute`);
+  if (rewards.points) bits.push(`${Number(rewards.points).toLocaleString()} rank points`);
+  if (rewards.respect) bits.push(`${Number(rewards.respect).toLocaleString()} respect`);
+  if (Array.isArray(rewards.cars) && rewards.cars.length) bits.push(rewards.cars.join(', '));
+  if (rewards.bullets) bits.push(`${Number(rewards.bullets).toLocaleString()} bullets`);
+  if (rewards.loot_pieces) bits.push(`${Number(rewards.loot_pieces).toLocaleString()} loot pieces`);
+  if (rewards.auto_rank_hours) bits.push(`${rewards.auto_rank_hours}h Auto Rank`);
+  if (rewards.city) bits.push(`unlocked ${rewards.city}`);
+  if (rewards.booze) bits.push('booze');
+  return bits.join(' · ') || 'rewards granted';
+}
+
+const ManagerBuyCard = ({ prefs, buying, onBuy }) => {
+  const owned = !!prefs?.auto_rank_events_unlocked;
+  if (owned) return null;
+  const cost = prefs?.auto_rank_events_cost || 2000;
+  const points = Number(prefs?.points || 0);
+  const can = !!prefs?.auto_rank_has_access && points >= cost;
+  return (
+    <div className={`rounded-lg border border-primary/30 p-3 space-y-2 ${styles.panel} mobile-panel`}>
+      <p className="text-[11px] sm:text-xs font-heading text-zinc-300">
+        Auto events is {cost.toLocaleString()} points. It unlocks Auto events and Auto missions, and you need Auto Rank first.
+      </p>
+      <button
+        type="button"
+        onClick={onBuy}
+        disabled={buying || !can}
+        className="w-full min-h-[44px] rounded-lg bg-primary/20 border border-primary/50 text-primary font-heading text-xs font-bold uppercase tracking-wide disabled:opacity-50 touch-manipulation"
+      >
+        {buying ? 'Buying…' : `Buy for ${cost.toLocaleString()} points`}
+      </button>
+      {!prefs?.auto_rank_has_access ? <p className="text-[10px] text-amber-400 font-heading">Buy Auto Rank before this add-on.</p> : null}
+      {prefs?.auto_rank_has_access && points < cost ? <p className="text-[10px] text-amber-400 font-heading">You need {cost.toLocaleString()} points.</p> : null}
+    </div>
+  );
+};
+
+const ToggleRow = ({ label, checked, disabled, onChange }) => (
+  <button
+    type="button"
+    onClick={() => !disabled && onChange(!checked)}
+    disabled={disabled}
+    className="w-full min-h-[44px] flex items-center justify-between gap-3 rounded-lg border border-zinc-700/50 bg-zinc-900/40 px-3 py-2 text-left touch-manipulation disabled:opacity-50"
+  >
+    <span className="text-[11px] sm:text-xs font-heading text-foreground">{label}</span>
+    <span className={`shrink-0 text-[10px] font-heading font-bold uppercase ${checked ? 'text-emerald-400' : 'text-zinc-500'}`}>{checked ? 'On' : 'Off'}</span>
+  </button>
+);
+
 const AdminDiagnosticsPanel = ({ inspectData, inspectLoading, inspectError, inspectUsername, setInspectUsername, onLoad, onRefresh }) => {
   const d = inspectData?.diagnostics;
   const statusClass = DIAG_STATUS_STYLES[d?.status] || DIAG_STATUS_STYLES.inactive;
@@ -215,6 +282,15 @@ const AdminDiagnosticsPanel = ({ inspectData, inspectLoading, inspectError, insp
                 <div><span className="text-zinc-500">Bust 5s loop:</span> {d.cron?.bust_loop_eligible ? 'eligible' : 'no'}</div>
                 <div><span className="text-zinc-500">OC loop:</span> {d.cron?.oc_loop_eligible ? 'eligible' : 'no'}{d.cron?.oc_retry_at ? <span className="text-zinc-500"> (retry {formatAdminDateTime(d.cron.oc_retry_at)})</span> : null}</div>
                 <div><span className="text-zinc-500">Tasks on:</span> {(d.active_task_toggles || []).length ? d.active_task_toggles.join(', ') : 'none'}</div>
+              </div>
+              <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1 sm:col-span-2">
+                <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Auto events</div>
+                <div><span className="text-zinc-500">Add-on:</span> {inspectData.preferences?.auto_rank_events_unlocked ? 'owned' : 'not owned'}</div>
+                <div><span className="text-zinc-500">Missions:</span> {inspectData.preferences?.auto_rank_missions_enabled ? 'on' : 'off'}</div>
+                <div><span className="text-zinc-500">Buy bullets:</span> {inspectData.preferences?.auto_rank_events_buy_bullets ? 'on' : 'off'}</div>
+                <div><span className="text-zinc-500">Events:</span> {(inspectData.preferences?.auto_rank_event_ids || []).join(', ') || 'none'}</div>
+                <div><span className="text-zinc-500">Working:</span> {inspectData.preferences?.auto_rank_current_mission || '—'}</div>
+                <div><span className="text-zinc-500">Last mission:</span> {inspectData.preferences?.auto_rank_mission_rewards?.[0]?.mission_name || '—'}{inspectData.preferences?.auto_rank_mission_rewards?.[0] ? ` — ${formatRewardBits(inspectData.preferences.auto_rank_mission_rewards[0].rewards)}` : ''}</div>
               </div>
               <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
                 <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Live activity</div>
@@ -1805,6 +1881,7 @@ export default function AutoRank() {
   });
   const [autoRankStripeLoading, setAutoRankStripeLoading] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
+  const [buyingEvents, setBuyingEvents] = useState(false);
   const [settingsData, setSettingsData] = useState({
     crimes: [], gta_options: [], melt_options: { actions: [], rarities: [], scrap_rarities: [] },
     auto_rank_crime_ids: [], auto_rank_gta_option_ids: [], auto_rank_melt_action_ids: [], auto_rank_melt_rarity_ids: [], auto_rank_scrap_rarity_ids: [],
@@ -1905,6 +1982,8 @@ export default function AutoRank() {
     { id: 'summary', label: 'Summary', icon: Activity },
     { id: 'settings', label: 'Settings', icon: Settings2 },
     { id: 'stats', label: 'Stats', icon: BarChart3 },
+    { id: 'events', label: 'Auto events', icon: Trophy },
+    { id: 'missions', label: 'Auto missions', icon: ScrollText },
     ...(isAdmin ? [{ id: 'admin', label: 'Admin', icon: Shield }] : []),
   ];
   const currentTab = pageTabs.some((t) => t.id === activeTab) ? activeTab : 'summary';
@@ -2268,6 +2347,14 @@ export default function AutoRank() {
         auto_rank_scrap: res.data?.auto_rank_scrap === true,
         auto_rank_telegram_notify: res.data?.auto_rank_telegram_notify !== false,
         auto_rank_use_skip_tokens: !!res.data?.auto_rank_use_skip_tokens,
+        auto_rank_events_unlocked: res.data?.auto_rank_events_unlocked ?? p?.auto_rank_events_unlocked,
+        auto_rank_event_ids: res.data?.auto_rank_event_ids ?? p?.auto_rank_event_ids,
+        auto_rank_missions_enabled: res.data?.auto_rank_missions_enabled ?? p?.auto_rank_missions_enabled,
+        auto_rank_events_buy_bullets: res.data?.auto_rank_events_buy_bullets ?? p?.auto_rank_events_buy_bullets,
+        auto_rank_event_rewards: res.data?.auto_rank_event_rewards ?? p?.auto_rank_event_rewards,
+        auto_rank_mission_rewards: res.data?.auto_rank_mission_rewards ?? p?.auto_rank_mission_rewards,
+        auto_rank_live_event_name: res.data?.auto_rank_live_event_name ?? p?.auto_rank_live_event_name,
+        points: res.data?.points ?? p?.points,
         auto_rank_crime_ids: res.data?.auto_rank_crime_ids ?? p.auto_rank_crime_ids,
         auto_rank_gta_option_ids: res.data?.auto_rank_gta_option_ids ?? p.auto_rank_gta_option_ids,
         auto_rank_melt_action_ids: res.data?.auto_rank_melt_action_ids ?? p.auto_rank_melt_action_ids,
@@ -2283,6 +2370,25 @@ export default function AutoRank() {
     } finally {
       setSavingPrefs(false);
     }
+  };
+
+  const buyAutoEvents = async () => {
+    setBuyingEvents(true);
+    try {
+      const res = await api.post('/auto-rank/buy-events');
+      setPrefs((p) => ({ ...p, ...res.data }));
+      toast.success(res.data?.message || 'Auto events unlocked');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not buy Auto events');
+    } finally {
+      setBuyingEvents(false);
+    }
+  };
+
+  const toggleEventId = (id) => {
+    const current = Array.isArray(prefs?.auto_rank_event_ids) ? prefs.auto_rank_event_ids : [];
+    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+    updatePref('auto_rank_event_ids', next);
   };
 
   const toggleCrimeId = (id) => {
@@ -2554,6 +2660,32 @@ export default function AutoRank() {
     }
   };
 
+  const handleAdminEvents = async (username, unlocked) => {
+    setSavingUser(username);
+    try {
+      await api.patch(`/admin/auto-rank/users/${encodeURIComponent(username)}`, { auto_rank_events_unlocked: unlocked });
+      toast.success(unlocked ? `Granted Auto events to ${username}` : `Removed Auto events from ${username}`);
+      fetchAdminUsers();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update Auto events');
+    } finally {
+      setSavingUser(null);
+    }
+  };
+
+  const handleAdminMissionsOff = async (username) => {
+    setSavingUser(username);
+    try {
+      await api.patch(`/admin/auto-rank/users/${encodeURIComponent(username)}`, { auto_rank_missions_enabled: false });
+      toast.success(`Auto missions off for ${username}`);
+      fetchAdminUsers();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to turn missions off');
+    } finally {
+      setSavingUser(null);
+    }
+  };
+
   const handleWipeUserTelegram = async (username) => {
     if (!window.confirm(`Clear Telegram (chat ID + bot token) for ${username}? They will need to re-link.`)) return;
     setSavingUser(username);
@@ -2713,6 +2845,69 @@ export default function AutoRank() {
       )}
 
       {/* ─── Admin ─── */}
+      {(currentTab === 'events' || currentTab === 'missions') && (
+        <div className="space-y-3 ar-fade-in">
+          <ManagerBuyCard prefs={prefs} buying={buyingEvents} onBuy={buyAutoEvents} />
+          <p className="text-[10px] sm:text-xs text-zinc-400 font-heading">
+            One manager at a time works best. Both can stay on. Normal Auto Rank still takes its turn.
+          </p>
+          {currentTab === 'events' && prefs?.auto_rank_events_unlocked ? (
+            <div className="space-y-2">
+              {prefs?.auto_rank_live_event_name ? (
+                <p className="text-[11px] font-heading text-primary">Live now: {prefs.auto_rank_live_event_name}</p>
+              ) : null}
+              {AUTO_EVENT_OPTIONS.map((ev) => (
+                <ToggleRow
+                  key={ev.id}
+                  label={ev.name}
+                  checked={(prefs?.auto_rank_event_ids || []).includes(ev.id)}
+                  disabled={savingPrefs}
+                  onChange={() => toggleEventId(ev.id)}
+                />
+              ))}
+              <ToggleRow
+                label="Buy armoury bullets when a hitlist batch is short"
+                checked={!!prefs?.auto_rank_events_buy_bullets}
+                disabled={savingPrefs}
+                onChange={(v) => updatePref('auto_rank_events_buy_bullets', v)}
+              />
+              <div className="space-y-2">
+                <h2 className="text-[10px] font-heading font-bold uppercase tracking-wider text-primary">Past event rewards</h2>
+                {(prefs?.auto_rank_event_rewards || []).length === 0 ? (
+                  <p className="text-[10px] text-zinc-500 font-heading">None yet.</p>
+                ) : (prefs.auto_rank_event_rewards || []).map((row, i) => (
+                  <div key={`${row.at}-${i}`} className={`rounded-lg border border-zinc-700/50 p-3 ${styles.panel} mobile-panel`}>
+                    <div className="text-[11px] font-heading font-bold text-foreground">#{row.place} {row.name}</div>
+                    <div className="text-[10px] font-heading text-emerald-400/90 mt-1">{row.prize_label || '—'}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {currentTab === 'missions' && prefs?.auto_rank_events_unlocked ? (
+            <div className="space-y-2">
+              <ToggleRow
+                label="Auto missions"
+                checked={!!prefs?.auto_rank_missions_enabled}
+                disabled={savingPrefs}
+                onChange={(v) => updatePref('auto_rank_missions_enabled', v)}
+              />
+              <div className="space-y-2">
+                <h2 className="text-[10px] font-heading font-bold uppercase tracking-wider text-primary">Missions completed</h2>
+                {(prefs?.auto_rank_mission_rewards || []).length === 0 ? (
+                  <p className="text-[10px] text-zinc-500 font-heading">None yet.</p>
+                ) : (prefs.auto_rank_mission_rewards || []).map((row, i) => (
+                  <div key={`${row.mission_id}-${i}`} className={`rounded-lg border border-zinc-700/50 p-3 ${styles.panel} mobile-panel`}>
+                    <div className="text-[11px] font-heading font-bold text-foreground">{row.mission_name}</div>
+                    <div className="text-[10px] font-heading text-emerald-400/90 mt-1 break-words">{formatRewardBits(row.rewards)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
+
       {isAdmin && currentTab === 'admin' && (
         <div className="space-y-3 sm:space-y-4 ar-fade-in">
           <div ref={adminDiagRef}>
@@ -2838,6 +3033,8 @@ export default function AutoRank() {
                         <th className="py-2 pr-2 font-bold text-zinc-400 uppercase text-[8px] sm:text-[9px]">B5</th>
                         <th className="py-2 pr-2 font-bold text-zinc-400 uppercase text-[8px] sm:text-[9px]">OC</th>
                         <th className="py-2 pr-2 font-bold text-zinc-400 uppercase text-[8px] sm:text-[9px]">Bz</th>
+                        <th className="py-2 pr-2 font-bold text-zinc-400 uppercase text-[8px] sm:text-[9px]">Ev</th>
+                        <th className="py-2 pr-2 font-bold text-zinc-400 uppercase text-[8px] sm:text-[9px]">Ms</th>
                         <th className="py-2 pr-2 font-bold text-zinc-400 uppercase text-[8px] sm:text-[9px]">Chat</th>
                         <th className="py-2 pr-2 font-bold text-zinc-400 uppercase text-[8px] sm:text-[9px]">Token</th>
                         <th className="py-2 pr-2 font-bold text-zinc-400 uppercase text-[8px] sm:text-[9px]">Diag</th>
@@ -2863,6 +3060,8 @@ export default function AutoRank() {
                           <td className="py-2 pr-2 text-zinc-400">{u.auto_rank_bust_every_5_sec ? '✓' : '–'}</td>
                           <td className="py-2 pr-2 text-zinc-400">{u.auto_rank_oc ? '✓' : '–'}</td>
                           <td className="py-2 pr-2 text-zinc-400">{u.auto_rank_booze ? '✓' : '–'}</td>
+                          <td className="py-2 pr-2 text-zinc-400">{u.auto_rank_events_unlocked ? 'Y' : '–'}</td>
+                          <td className="py-2 pr-2 text-zinc-400">{u.auto_rank_missions_enabled ? 'Y' : '–'}</td>
                           <td className="py-2 pr-2">
                             {editingChatId[u.username] ? (
                               <div className="flex gap-1 items-center">
@@ -2985,6 +3184,24 @@ export default function AutoRank() {
                                   Off
                                 </button>
                               )}
+                              <button
+                                type="button"
+                                onClick={() => handleAdminEvents(u.username, !u.auto_rank_events_unlocked)}
+                                disabled={savingUser === u.username}
+                                className="inline-flex items-center px-1.5 py-0.5 rounded bg-primary/15 border border-primary/40 text-primary text-[8px] font-bold disabled:opacity-50"
+                              >
+                                {u.auto_rank_events_unlocked ? 'Remove events' : 'Grant events'}
+                              </button>
+                              {u.auto_rank_missions_enabled ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleAdminMissionsOff(u.username)}
+                                  disabled={savingUser === u.username}
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/50 text-amber-400 text-[8px] font-bold disabled:opacity-50"
+                                >
+                                  Missions off
+                                </button>
+                              ) : null}
                             </div>
                           </td>
                         </tr>

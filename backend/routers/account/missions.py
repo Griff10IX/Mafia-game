@@ -354,16 +354,20 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
             )
         else:
             progress["description"] = f"{len(done):,}/{progress['target']:,} missions complete"
+        progress["unmet_keys"] = [] if met else ["complete_missions"]
         return met, progress
 
     # Multiple simple requirements: all must be met (e.g. crimes + jail_busts_npc + in_state)
     met_count = 0
+    unmet_keys: List[str] = []
     parts = []
     for key, target in req.items():
         if key == "in_state":
             met = (user.get("current_state") or "").strip() == target
             if met:
                 met_count += 1
+            else:
+                unmet_keys.append("in_state")
             parts.append(f"Be in {target}: done" if met else f"Be in {target}: travel there")
             continue
         if key == "crimes" and mission.get("id") == FIRST_MISSION_ID:
@@ -446,6 +450,8 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
             met = current >= target
         if met:
             met_count += 1
+        else:
+            unmet_keys.append(key)
         # Cap displayed progress at target so we show e.g. 200/200 not 202/200
         display = min(current, target)
         if key == "rank_id":
@@ -495,7 +501,7 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
             parts.append(f"${display:,} / ${target:,} to interest bank")
         else:
             parts.append(f"{display:,}/{target:,}")
-    progress = {"current": met_count, "target": len(req), "description": " · ".join(parts)}
+    progress = {"current": met_count, "target": len(req), "description": " · ".join(parts), "unmet_keys": unmet_keys}
     return met_count >= len(req), progress
 
 
