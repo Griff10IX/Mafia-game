@@ -2725,6 +2725,7 @@ async def compute_bullets_required(current_user: dict, target: dict) -> int:
         "best_damage": best_damage,
         "best_weapon_name": weapon_name,
         "bullets_base": bullets_base,
+        "target_armour": int(target_armour or 0),
     }
 
 
@@ -3023,6 +3024,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     best_damage = shot["best_damage"]
     best_weapon_name = shot["best_weapon_name"]
     bullets_base = shot["bullets_base"]
+    target_armour = int(shot.get("target_armour") or 0)
     if attacker_bullets <= 0:
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "You need bullets to attack.", req), label="log_no_bullets")
         raise HTTPException(status_code=400, detail="You need bullets to attack.")

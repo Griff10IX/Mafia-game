@@ -1,5 +1,7 @@
-import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Users, LayoutGrid, Sparkles, Ban, Trophy } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Users, LayoutGrid, Sparkles, Ban, Trophy, Bird } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import api from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 import { SLOTS_FEATURE_ENABLED } from '../../config/gameFeatures';
 import { useAuthUser } from '../../context/AuthContext';
@@ -38,6 +40,23 @@ export default function Casino() {
   const user = useAuthUser();
   const banned = isGamblingSelfBanned(user);
   const banLeft = formatGamblingSelfBanRemaining(user);
+  const [showChicken, setShowChicken] = useState(false);
+
+  useEffect(() => {
+    let cancel = false;
+    api.get('/auth/staff-flags')
+      .then((r) => {
+        if (!cancel && r.data?.is_admin) setShowChicken(true);
+      })
+      .catch(() => {});
+    return () => { cancel = true; };
+  }, []);
+
+  const games = showChicken
+    ? GAMES.flatMap((g) => (g.to === '/casino/coin-flip'
+      ? [g, { to: '/casino/chicken-cross', label: 'Chicken Cross', desc: 'Admin test · hop, cash out, or get hit', Icon: Bird, testId: 'play-chicken-cross' }]
+      : [g]))
+    : GAMES;
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="casino-page">
@@ -83,7 +102,7 @@ export default function Casino() {
           <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Games</h2>
         </div>
         <div className="p-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-          {GAMES.map(({ to, label, desc, Icon, testId }, idx) => (
+          {games.map(({ to, label, desc, Icon, testId }, idx) => (
             <Link
               key={to}
               to={to}

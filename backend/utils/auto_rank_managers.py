@@ -145,7 +145,8 @@ async def _run_mission(db, user: dict) -> bool:
         _mission_completion_reward_mult,
         _run_mission_completion_side_effects,
     )
-    from server import apply_season_rp_mirror_to_update, rank_points_in_update, send_notification
+    from server import send_notification
+    from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0}) or user
     mission = _current_open_mission(fresh)

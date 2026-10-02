@@ -3795,7 +3795,7 @@ async def _user_owns_any_property(user_id: str):
 from routers.account import auth, profile, prestige, user_progress, users
 from routers.admin import admin, security_admin, airport, investigate
 from routers.cars import gta
-from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, horseracing, slots, keno, coin_flip, video_poker, mdg, sports_betting, wheel_of_fortune
+from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, horseracing, slots, keno, coin_flip, chicken_cross, video_poker, mdg, sports_betting, wheel_of_fortune
 from routers.crime import crimes, jail, organised_crime, oc
 from routers.game import families, leaderboard, states, stats, store, dead_alive, events, notifications, meta, entertainer, entertainer_staff, achievements, daily_contests
 from routers.kill import attack, armoury, bodyguards, hitlist, witness_statements
@@ -3854,6 +3854,7 @@ if SLOTS_FEATURE_ENABLED:
     slots.register(api_router)
 keno.register(api_router)
 coin_flip.register(api_router)
+chicken_cross.register(api_router)
 video_poker.register(api_router)
 wheel_of_fortune.register(api_router)
 mdg.register(api_router)

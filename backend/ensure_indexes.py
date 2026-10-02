@@ -398,6 +398,8 @@ async def ensure_all_indexes(db):
         await db.user_pool_cues.create_index([("user_id", 1), ("cue_id", 1)], unique=True)
         await db.pool_cue_upgrades.create_index([("user_id", 1), ("cue_instance_id", 1)], unique=True)
         await db.videopoker_games.create_index("user_id")
+        await db.chicken_cross_games.create_index("user_id", unique=True)
+        await db.chicken_cross_games.create_index("id", unique=True)
 
         # --- Organised crime ---
         await db.user_organised_crime.create_index("user_id", unique=True)
