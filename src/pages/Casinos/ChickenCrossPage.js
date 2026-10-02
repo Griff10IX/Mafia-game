@@ -246,12 +246,13 @@ function useChickenSprite(pose) {
       setAnim((a) => {
         const frames = CHICKEN_FRAMES[a.name] || CHICKEN_FRAMES.idle;
         if (a.name === 'hit' && a.i >= frames.length - 1) return { name: 'ko', i: 0 };
+        if (a.name === 'ko' && a.i >= frames.length - 1) return a;
         return { name: a.name, i: (a.i + 1) % frames.length };
       });
     }, SPRITE_FRAME_MS[anim.name] || SPRITE_FRAME_MS.idle);
     return () => clearInterval(id);
   }, [anim.name]);
-  if (prefersReducedMotion()) return pose === 'hit' ? CHICKEN_FRAMES.ko[1] : (CHICKEN_FRAMES[pose] || CHICKEN_FRAMES.idle)[0];
+  if (prefersReducedMotion()) return pose === 'hit' ? CHICKEN_FRAMES.ko[CHICKEN_FRAMES.ko.length - 1] : (CHICKEN_FRAMES[pose] || CHICKEN_FRAMES.idle)[0];
   return (CHICKEN_FRAMES[anim.name] || CHICKEN_FRAMES.idle)[anim.i] || CHICKEN_FRAMES.idle[0];
 }
 
@@ -323,7 +324,7 @@ function applyRoundToStats(prev, round) {
 let _introPlayed = false;
 let _cachedConfig = null;
 let _cachedStats = null;
-let _staffOkCache = null;
+let _staffOkCache = true;
 
 export default function ChickenCrossPage() {
   const animateIn = useRef(!_introPlayed).current;
@@ -335,7 +336,7 @@ export default function ChickenCrossPage() {
     max_bet: 2_000_000_000,
     payout_cap: 250_000_000_000,
     difficulties: [],
-    admin_only: true,
+    admin_only: false,
   });
   const [difficulty, setDifficulty] = useState('easy');
   const [bet, setBet] = useState('100000');
@@ -385,10 +386,8 @@ export default function ChickenCrossPage() {
       ? offered
       : ((config.difficulties || []).find((d) => d.id === difficulty)?.lanes || []);
     const multByLane = new Map(catalog.map((r) => [Number(r.lane), r]));
-    const maxLane = Math.max(
-      catalog.length ? Number(catalog[catalog.length - 1].lane) : (lastOffered || VISIBLE_AHEAD),
-      chickenLane,
-    );
+    const roadEnd = catalog.length ? Number(catalog[catalog.length - 1].lane) : (lastOffered || VISIBLE_AHEAD);
+    const maxLane = Math.max(Math.min(roadEnd, chickenLane + boardCols + 1), chickenLane);
 
     rows.push({ kind: 'sidewalk', key: 'lane-0', lane: 0 });
     for (let i = 1; i <= maxLane; i += 1) {
@@ -397,7 +396,7 @@ export default function ChickenCrossPage() {
       rows.push({ kind, key: `lane-${i}`, lane: i, mult: info?.multiplier || '' });
     }
     return rows;
-  }, [chickenLane, lastOffered, offered, config.difficulties, difficulty]);
+  }, [chickenLane, lastOffered, offered, config.difficulties, difficulty, boardCols]);
 
   const boardMaxLane = boardLanes.length - 1;
   const cameraLane = Math.max(0, Math.min(chickenLane - CLEARED_KEEP, boardMaxLane + 1 - boardCols));
@@ -595,6 +594,7 @@ export default function ChickenCrossPage() {
         setHopKey((k) => k + 1);
         await waitHop();
         afterSettle(res.data.settled);
+        toast.success(`Crossed the road! Paid ${formatMoney(res.data.settled?.payout || 0)}`);
       } else {
         setPose('idle');
       }
@@ -663,7 +663,9 @@ export default function ChickenCrossPage() {
             <p className="text-[9px] sm:text-[10px] text-zinc-500 font-heading italic flex items-center gap-1.5 tracking-wide">
               <MapPin size={12} className="text-primary" />
               House table · <span className="text-primary font-bold not-italic">{config.current_state || '—'}</span>
-              <span className="ml-1 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-heading font-bold uppercase tracking-wider text-amber-300 not-italic">Admin test</span>
+              {config.admin_only ? (
+                <span className="ml-1 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-heading font-bold uppercase tracking-wider text-amber-300 not-italic">Admin test</span>
+              ) : null}
             </p>
             <div className="flex items-center gap-2">
               <Footprints size={22} className="text-primary/75 hidden sm:block" />
@@ -828,7 +830,7 @@ export default function ChickenCrossPage() {
                             <img src={ASSET.bush} alt="" className="cc-bush cc-bush-b" draggable={false} />
                           </>
                         ) : null}
-                        {cell.kind === 'cleared' ? (
+                        {cell.kind === 'cleared' && cell.lane >= cameraLane - 1 ? (
                           <>
                             <div className="cc-car cc-parked">
                               <img src={ASSET.cars[Math.floor(seed * ASSET.cars.length)]} alt="" draggable={false} />
@@ -939,7 +941,7 @@ export default function ChickenCrossPage() {
             <div className="relative flex items-start gap-2 rounded-lg border border-zinc-700/50 bg-zinc-950/50 px-3 py-2 text-[10px] font-heading text-zinc-500">
               <ShieldCheck size={15} className="mt-0.5 shrink-0 text-primary/70" />
               <span>
-                Admin test only. Outcome is fixed when you start. Cash out after a safe hop. Max bet {formatMoney(maxBet)}, payout cap {formatMoney(config.payout_cap || 250_000_000_000)}.
+                Outcome is fixed when you start. Cash out after a safe hop. Max bet {formatMoney(maxBet)}, payout cap {formatMoney(config.payout_cap || 250_000_000_000)}.
               </span>
             </div>
           </div>

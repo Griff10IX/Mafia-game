@@ -23,7 +23,7 @@ from utils.gambling_self_ban import raise_if_gambling_self_banned
 
 _rng = secrets.SystemRandom()
 
-CHICKEN_CROSS_ADMIN_ONLY = True
+CHICKEN_CROSS_ADMIN_ONLY = False
 CHICKEN_CROSS_MAX_BET = 2_000_000_000
 CHICKEN_CROSS_PAYOUT_CAP = 250_000_000_000
 CHICKEN_CROSS_STREAK_SCAN_LIMIT = 120
@@ -31,25 +31,28 @@ CHICKEN_CROSS_STREAK_SCAN_LIMIT = 120
 _RTP = Fraction(98, 100)
 
 DIFFICULTY_SPECS: Dict[str, Dict[str, Any]] = {
-    "easy": {"label": "Easy", "lanes": 24, "survive_num": 7, "survive_den": 8},
-    "medium": {"label": "Medium", "lanes": 22, "survive_num": 73, "survive_den": 100},
-    "hard": {"label": "Hard", "lanes": 18, "survive_num": 57, "survive_den": 100},
-    "expert": {"label": "Expert", "lanes": 15, "survive_num": 445, "survive_den": 1000},
+    "easy": {"label": "Easy", "survive_num": 7, "survive_den": 8},
+    "medium": {"label": "Medium", "survive_num": 73, "survive_den": 100},
+    "hard": {"label": "Hard", "survive_num": 57, "survive_den": 100},
+    "expert": {"label": "Expert", "survive_num": 445, "survive_den": 1000},
 }
 
 
 def _build_multiplier_tables() -> Dict[str, tuple]:
+    """No fixed road length: lanes run until even a $1 stake would pass the payout cap."""
     tables: Dict[str, tuple] = {}
     for key, spec in DIFFICULTY_SPECS.items():
         reached = Fraction(1)
         survival = Fraction(int(spec["survive_num"]), int(spec["survive_den"]))
         cents_rows: List[int] = []
-        for _lane in range(int(spec["lanes"])):
+        while True:
             reached *= survival
             cents = int((_RTP / reached) * 100)
             if Fraction(cents, 100) * reached > _RTP:
                 raise RuntimeError(f"Chicken Cross multiplier exceeds RTP for {key}")
             cents_rows.append(cents)
+            if cents // 100 > CHICKEN_CROSS_PAYOUT_CAP:
+                break
         tables[key] = tuple(cents_rows)
     return tables
 
@@ -79,15 +82,16 @@ def _mult_string(cents: int) -> str:
 def _offered_lanes(difficulty: str, bet: int) -> List[Dict[str, Any]]:
     rows = []
     for lane, cents in enumerate(MULTIPLIER_CENTS[difficulty], start=1):
-        payout = (int(bet) * int(cents)) // 100
-        if payout > CHICKEN_CROSS_PAYOUT_CAP:
-            break
+        payout = _payout(bet, cents)
         rows.append({
             "lane": lane,
             "multiplier_cents": int(cents),
             "multiplier": _mult_string(cents),
             "payout": payout,
         })
+        # The lane that reaches the cap pays exactly the cap and ends the road.
+        if payout >= CHICKEN_CROSS_PAYOUT_CAP:
+            break
     return rows
 
 
@@ -95,7 +99,7 @@ def _roll_death_lane(difficulty: str) -> int:
     spec = DIFFICULTY_SPECS[difficulty]
     num = int(spec["survive_num"])
     den = int(spec["survive_den"])
-    lanes = int(spec["lanes"])
+    lanes = len(MULTIPLIER_CENTS[difficulty])
     for lane in range(1, lanes + 1):
         if _rng.randrange(den) >= num:
             return lane
@@ -325,6 +329,19 @@ async def _apply_step(doc: dict) -> Dict[str, Any]:
         )
         return await _finish(doomed, won=False, payout=0, void=False, result="hit", lane=next_lane)
     cents = _multiplier_cents(difficulty, next_lane)
+    if next_lane >= last_lane:
+        payout = _payout(bet, cents)
+        await db.chicken_cross_games.update_one(
+            {"id": sid, "status": "settling", "settle_kind": "step"},
+            {"$set": {
+                "lane": next_lane,
+                "multiplier_cents": cents,
+                "settle_kind": "cashout",
+                "settle_result": "cashout",
+                "settle_payout": payout,
+            }},
+        )
+        return await _finish({**doc, "lane": next_lane}, won=True, payout=payout, void=False, result="cashout")
     await db.chicken_cross_games.update_one(
         {"id": sid, "status": "settling", "settle_kind": "step"},
         {

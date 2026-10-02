@@ -6,6 +6,19 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-10-03[/color][/b] — [b]Chicken Cross (new casino game)[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]How it plays:[/b] Place a bet and hop the road one lane at a time. Each safe hop raises your multiplier. Cash out whenever you like, or get hit by a car and lose the stake.[/color]
+[*][color=#888888][b]Difficulty:[/b] Easy, Medium, Hard and Expert. Harder roads are riskier per lane but the multiplier climbs much faster.[/color]
+[*][color=#888888][b]No finish line:[/b] Keep hopping until you cash out, get hit, or reach the $250 billion payout cap. Reaching the cap pays it out automatically.[/color]
+[*][color=#888888][b]Limits:[/b] Max bet $2 billion. Max win $250 billion. You can take your stake back before the first hop.[/color]
+[*][color=#888888][b]Fair:[/b] The outcome is fixed when you bet. Find it in the Casino menu.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-10-02[/color][/b] — [b]Auto events[/b][/size]
 [quote]
 [list]
