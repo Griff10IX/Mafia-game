@@ -112,6 +112,13 @@ function StatChipGrid({ chips }) {
   );
 }
 
+function prizeLabelFor(ev, row) {
+  const stored = String(row?.prize_label || '').trim();
+  if (stored) return stored;
+  const match = (ev?.prize_table || []).find((p) => Number(p.rank) === Number(row?.rank));
+  return String(match?.label || '').trim();
+}
+
 function PrizeTable({ rows }) {
   if (!Array.isArray(rows) || !rows.length) return null;
   return (
@@ -454,16 +461,24 @@ export default function GameEvents() {
                     </div>
                     {ev.results?.length ? (
                       <ul className="list-none m-0 space-y-0.5">
-                        {ev.results.slice(0, 10).map((r) => (
-                          <li
-                            key={`${ev.id}-${r.rank}-${r.user_id}`}
-                            className="flex items-center gap-2 text-[10px] font-heading rounded border border-zinc-700/30 bg-zinc-950/30 px-2 py-1"
-                          >
-                            <span className="text-amber-300 font-bold w-6 shrink-0">#{r.rank}</span>
-                            <span className="min-w-0 flex-1 truncate">{r.username || r.user_id}</span>
-                            <span className="text-mutedForeground shrink-0">{Number(r.score || 0).toLocaleString()}</span>
-                          </li>
-                        ))}
+                        {ev.results.slice(0, 10).map((r) => {
+                          const prize = prizeLabelFor(ev, r);
+                          return (
+                            <li
+                              key={`${ev.id}-${r.rank}-${r.user_id}`}
+                              className="rounded border border-zinc-700/30 bg-zinc-950/30 px-2 py-1"
+                            >
+                              <div className="flex items-center gap-2 text-[10px] font-heading">
+                                <span className="text-amber-300 font-bold w-6 shrink-0">#{r.rank}</span>
+                                <span className="min-w-0 flex-1 truncate">{r.username || r.user_id}</span>
+                                <span className="text-mutedForeground shrink-0">{Number(r.score || 0).toLocaleString()}</span>
+                              </div>
+                              {prize ? (
+                                <p className="text-[9px] font-heading text-emerald-300 pl-8 mt-0.5 break-words">{prize}</p>
+                              ) : null}
+                            </li>
+                          );
+                        })}
                       </ul>
                     ) : (
                       <p className="text-[9px] text-mutedForeground font-heading">No placers.</p>
