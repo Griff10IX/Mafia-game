@@ -56,6 +56,7 @@ export default function ImageHost() {
   const [aiPublic, setAiPublic] = useState(false);
   const [aiBuying, setAiBuying] = useState('');
   const [aiMaking, setAiMaking] = useState(false);
+  const [enlarged, setEnlarged] = useState(null);
 
   const loadAi = useCallback(async () => {
     try {
@@ -373,6 +374,15 @@ export default function ImageHost() {
     }
   };
 
+  useEffect(() => {
+    if (!enlarged) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setEnlarged(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [enlarged]);
+
   const copyLink = (img) => {
     const url = imageHostDisplayUrl(img);
     if (!url) {
@@ -591,51 +601,51 @@ export default function ImageHost() {
       ) : images.length === 0 ? (
         <p className="text-center text-mutedForeground font-heading text-sm py-8">No images yet. Upload or import one above.</p>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {images.map((img) => {
             const src = imageHostDisplayUrl(img);
+            const thumb = galleryUrl(img) || src;
             return (
               <div
                 key={img.public_id}
-                className={`${styles.panel} rounded-md border border-primary/20 overflow-hidden mobile-panel`}
+                className={`${styles.panel} rounded-md border border-primary/20 overflow-hidden flex flex-col min-w-0`}
               >
-                <div className="bg-zinc-950/90 flex justify-center p-2">
-                  <img
-                    src={src}
-                    alt=""
-                    className="block max-w-full h-auto w-auto"
-                    style={{ maxHeight: 'min(70vh, 720px)' }}
-                    loading="lazy"
-                  />
-                </div>
-                <div className="p-3 space-y-2 border-t border-primary/10">
+                <button
+                  type="button"
+                  onClick={() => setEnlarged({ src, title: 'Your picture' })}
+                  className="relative aspect-square bg-zinc-950/90 w-full cursor-zoom-in"
+                  aria-label="Enlarge picture"
+                >
+                  <img src={thumb} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                </button>
+                <div className="p-2 space-y-1.5 border-t border-primary/10 min-w-0">
                   {img.resize_max_edge != null ? (
                     <p className="text-[9px] font-heading text-primary/90">Saved max side {img.resize_max_edge}px</p>
                   ) : (
                     <p className="text-[9px] font-heading text-zinc-500">Original size (no max-side resize)</p>
                   )}
-                  <label className="inline-flex items-center gap-2 text-[10px] font-heading text-mutedForeground">
+                  <label className="flex items-center gap-2 text-[10px] font-heading text-mutedForeground">
                     <input
                       type="checkbox"
                       checked={img.is_public_gallery === true}
                       onChange={(e) => setVisibility(img.public_id, e.target.checked)}
-                      className="w-3.5 h-3.5 accent-primary"
+                      className="w-3.5 h-3.5 accent-primary shrink-0"
                     />
                     Show in public gallery
                   </label>
-                  <p className="text-[9px] font-mono text-mutedForeground break-all line-clamp-2">{src}</p>
-                  <div className="flex flex-wrap gap-2">
+                  <p className="text-[9px] font-mono text-mutedForeground break-all line-clamp-2" title={src}>{src}</p>
+                  <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
                       onClick={() => copyLink(img)}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-primary/15 text-primary text-[10px] font-heading font-bold uppercase border border-primary/40"
+                      className="inline-flex items-center gap-1 px-2 py-1.5 min-h-8 rounded bg-primary/15 text-primary text-[10px] font-heading font-bold uppercase border border-primary/40"
                     >
                       <Copy size={12} /> Copy link
                     </button>
                     <button
                       type="button"
                       onClick={() => remove(img.public_id)}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-red-500/40 text-red-400 text-[10px] font-heading font-bold uppercase hover:bg-red-950/30"
+                      className="inline-flex items-center gap-1 px-2 py-1.5 min-h-8 rounded border border-red-500/40 text-red-400 text-[10px] font-heading font-bold uppercase hover:bg-red-950/30"
                     >
                       <Trash2 size={12} /> Delete
                     </button>
@@ -652,36 +662,75 @@ export default function ImageHost() {
       ) : publicItems.length === 0 ? (
         <p className="text-center text-mutedForeground font-heading text-sm py-8">No public images yet.</p>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {publicItems.map((img) => {
-            const src = galleryUrl(img);
+            const src = imageHostDisplayUrl(img);
+            const thumb = galleryUrl(img) || src;
             return (
-              <div key={`pub-${img.public_id}`} className={`${styles.panel} rounded-md border border-primary/20 overflow-hidden mobile-panel`}>
-                <div className="aspect-square bg-zinc-950/90">
-                  <img
-                    src={src}
-                    alt=""
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                </div>
-                <div className="p-2 border-t border-primary/10">
+              <div key={`pub-${img.public_id}`} className={`${styles.panel} rounded-md border border-primary/20 overflow-hidden flex flex-col min-w-0`}>
+                <button
+                  type="button"
+                  onClick={() => setEnlarged({ src, title: img.username || 'Public picture' })}
+                  className="relative aspect-square bg-zinc-950/90 w-full cursor-zoom-in"
+                  aria-label="Enlarge picture"
+                >
+                  <img src={thumb} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                </button>
+                <div className="p-2 space-y-1.5 border-t border-primary/10 min-w-0">
                   <p className="text-[10px] font-heading text-foreground truncate">{img.username || 'Unknown'}</p>
-                  {isAdmin && (
+                  <p className="text-[9px] font-mono text-mutedForeground break-all line-clamp-2" title={src}>{src}</p>
+                  <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
-                      onClick={() => adminRemovePublic(img.public_id)}
-                      className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded border border-red-500/40 text-red-400 text-[10px] font-heading font-bold uppercase hover:bg-red-950/30"
+                      onClick={() => copyLink(img)}
+                      className="inline-flex items-center gap-1 px-2 py-1.5 min-h-8 rounded bg-primary/15 text-primary text-[10px] font-heading font-bold uppercase border border-primary/40"
                     >
-                      <Trash2 size={11} /> Admin delete
+                      <Copy size={12} /> Copy link
                     </button>
-                  )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => adminRemovePublic(img.public_id)}
+                        className="inline-flex items-center gap-1 px-2 py-1.5 min-h-8 rounded border border-red-500/40 text-red-400 text-[10px] font-heading font-bold uppercase hover:bg-red-950/30"
+                      >
+                        <Trash2 size={11} /> Admin delete
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
       ))}
+
+      {enlarged ? (
+        <div
+          className="fixed inset-0 z-[80] bg-black/80 flex items-center justify-center p-3"
+          onClick={() => setEnlarged(null)}
+          role="presentation"
+        >
+          <div
+            className={`${styles.panel} max-w-5xl w-full max-h-[92vh] overflow-auto rounded-md border border-primary/30 p-3`}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={enlarged.title || 'Picture'}
+          >
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Click outside to close</p>
+              <button
+                type="button"
+                onClick={() => setEnlarged(null)}
+                className="min-h-10 px-3 rounded border border-zinc-600 text-[10px] font-heading font-bold uppercase text-foreground"
+              >
+                Close
+              </button>
+            </div>
+            <img src={enlarged.src} alt="" className="block max-w-full max-h-[75vh] w-auto h-auto mx-auto" />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
