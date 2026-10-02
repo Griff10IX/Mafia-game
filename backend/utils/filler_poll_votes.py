@@ -2,7 +2,8 @@
 
 The presence simulator only fakes who looks online. It does not create users.
 Accounts created by the daily roster are listed in the server ledger. This loop
-votes those accounts on the KillBodyguard poll, about 55% for allowing bots,
+votes those accounts on the KillBodyguard poll, about 25% to keep it as it is
+and the rest to allow kill bots,
 with gaps of several minutes so the totals do not jump in one go.
 
 No points are paid. A restart cannot dump the remaining votes at once.
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 POLL_ID = "kill_bodyguard_bots"
 ALLOW_OPTION = "allow"
 KEEP_OPTION = "keep"
-ALLOW_SHARE = 0.55
+KEEP_SHARE = 0.25
 STATE_ID = "kill_bodyguard_bots"
 LEDGER_PATH = Path(
     os.environ.get("AMBIENT_ROSTER_LEDGER")
@@ -76,11 +77,11 @@ def load_roster_user_ids(path: Path = LEDGER_PATH) -> list:
 
 
 def _option_for_next(allow_n: int, keep_n: int) -> str:
-    """Next choice that keeps the roster share as close as possible to 55% allow."""
-    target_allow = int(round((allow_n + keep_n + 1) * ALLOW_SHARE))
-    if allow_n < target_allow:
-        return ALLOW_OPTION
-    return KEEP_OPTION
+    """Next choice that keeps about 25% of roster votes on keep, the rest on allow."""
+    target_keep = int(round((allow_n + keep_n + 1) * KEEP_SHARE))
+    if keep_n < target_keep:
+        return KEEP_OPTION
+    return ALLOW_OPTION
 
 
 async def _ensure_state(db) -> None:
