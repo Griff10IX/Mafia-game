@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Unlock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame, CircleDot, Search, AlertTriangle, CheckCircle2, Info, PauseCircle, Zap, Trophy, ScrollText } from 'lucide-react';
 import api from '../../utils/api';
+import { useAuthUser } from '../../context/AuthContext';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import {
@@ -159,11 +160,11 @@ function formatRewardBits(rewards) {
   return bits.join(' · ') || 'rewards granted';
 }
 
-const ManagerBuyCard = ({ prefs, buying, onBuy }) => {
+const ManagerBuyCard = ({ prefs, pointBalance, buying, onBuy }) => {
   const owned = !!prefs?.auto_rank_events_unlocked;
   if (owned) return null;
   const cost = prefs?.auto_rank_events_cost || 2000;
-  const points = Number(prefs?.points || 0);
+  const points = Number(pointBalance ?? prefs?.points ?? 0);
   const can = !!prefs?.auto_rank_has_access && points >= cost;
   return (
     <div className={`rounded-lg border border-primary/30 p-3 space-y-2 ${styles.panel} mobile-panel`}>
@@ -1844,6 +1845,7 @@ const AdminGlobalLoopCard = ({
    Main Component
    ═══════════════════════════════════════════════════════ */
 export default function AutoRank() {
+  const authUser = useAuthUser();
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState(readStoredArTab);
   const switchTab = (id) => {
@@ -2164,6 +2166,16 @@ export default function AutoRank() {
             robot_bg_auto_search_subscription_active: !!meRes.data.robot_bg_auto_search_subscription_active,
             robot_bg_auto_search_enabled: meRes.data.robot_bg_auto_search_enabled !== false,
             robot_bg_auto_search_until: meRes.data.robot_bg_auto_search_until || null,
+            points: Number(meRes.data.points || 0),
+            auto_rank_events_unlocked: !!meRes.data.auto_rank_events_unlocked,
+            auto_rank_event_ids: meRes.data.auto_rank_event_ids || [],
+            auto_rank_missions_enabled: !!meRes.data.auto_rank_missions_enabled,
+            auto_rank_events_buy_bullets: !!meRes.data.auto_rank_events_buy_bullets,
+            auto_rank_events_cost: meRes.data.auto_rank_events_cost || 2000,
+            auto_rank_live_event_name: meRes.data.auto_rank_live_event_name || '',
+            auto_rank_live_event_id: meRes.data.auto_rank_live_event_id || '',
+            auto_rank_event_rewards: meRes.data.auto_rank_event_rewards || [],
+            auto_rank_mission_rewards: meRes.data.auto_rank_mission_rewards || [],
           });
         }
         const hasFeature = meRes?.data?.auto_rank_has_access || meRes?.data?.auto_rank_purchased || meRes?.data?.auto_rank_enabled;
@@ -2847,7 +2859,12 @@ export default function AutoRank() {
       {/* ─── Admin ─── */}
       {(currentTab === 'events' || currentTab === 'missions') && (
         <div className="space-y-3 ar-fade-in">
-          <ManagerBuyCard prefs={prefs} buying={buyingEvents} onBuy={buyAutoEvents} />
+          <ManagerBuyCard
+            prefs={prefs}
+            pointBalance={authUser?.points != null ? authUser.points : prefs?.points}
+            buying={buyingEvents}
+            onBuy={buyAutoEvents}
+          />
           <p className="text-[10px] sm:text-xs text-zinc-400 font-heading">
             One manager at a time works best. Both can stay on. Normal Auto Rank still takes its turn.
           </p>
