@@ -7,7 +7,7 @@ DIFFICULTY_SPECS = {
     "easy": {"survive_num": 90, "survive_den": 100},
     "medium": {"survive_num": 80, "survive_den": 100},
     "hard": {"survive_num": 68, "survive_den": 100},
-    "expert": {"survive_num": 52, "survive_den": 100},
+    "expert": {"survive_num": 50, "survive_den": 100, "pay_num": 52},
 }
 
 
@@ -15,7 +15,7 @@ def build():
     tables = {}
     for key, spec in DIFFICULTY_SPECS.items():
         reached = Fraction(1)
-        survival = Fraction(int(spec["survive_num"]), int(spec["survive_den"]))
+        survival = Fraction(int(spec.get("pay_num", spec["survive_num"])), int(spec["survive_den"]))
         cents_rows = []
         while True:
             reached *= survival
@@ -57,7 +57,8 @@ def main():
     for diff, spec in DIFFICULTY_SPECS.items():
         p = spec["survive_num"] / spec["survive_den"]
         for lane in (1, 3, 5, 10, 15, 20):
-            print(f"{diff:7} lane {lane:>2}: x{tables[diff][lane - 1] / 100:,.2f}  reached {p ** lane:.1%} of rounds")
+            mult = tables[diff][lane - 1] / 100
+            print(f"{diff:7} lane {lane:>2}: x{mult:,.2f}  reached {p ** lane:.1%} of rounds  return {mult * p ** lane:.1%}")
     print("ok", {k: len(v) for k, v in tables.items()})
 
 
