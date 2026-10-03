@@ -17,7 +17,7 @@ from server import db, get_current_user_verified, require_admin_verified
 
 logger = logging.getLogger(__name__)
 
-RR_PACMAN_ADMIN_ONLY = True
+RR_PACMAN_ADMIN_ONLY = False
 _auth = require_admin_verified if RR_PACMAN_ADMIN_ONLY else get_current_user_verified
 
 CAMPAIGN_LEVELS = 35

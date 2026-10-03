@@ -3,7 +3,7 @@ import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Users, Lay
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import styles from '../../styles/noir.module.css';
-import { SLOTS_FEATURE_ENABLED } from '../../config/gameFeatures';
+import { SLOTS_FEATURE_ENABLED, RR_PACMAN_ADMIN_ONLY } from '../../config/gameFeatures';
 import { useAuthUser } from '../../context/AuthContext';
 import {
   GAMBLING_BAN_COMMERCE_NOTE,
@@ -52,7 +52,7 @@ export default function Casino() {
     ? [
       g,
       { to: '/casino/chicken-cross', label: 'Chicken Cross', desc: 'House table · hop lanes, cash out or get hit · max $2B', Icon: Bird, testId: 'play-chicken-cross' },
-      ...(isAdmin ? [{ to: '/casino/road-runner-pacman', label: 'Road Runner Pac-Man', desc: 'Admin test · arcade maze, leaderboard & daily rewards', Icon: Gamepad2, testId: 'play-rr-pacman' }] : []),
+      ...(isAdmin || !RR_PACMAN_ADMIN_ONLY ? [{ to: '/casino/road-runner-pacman', label: 'Road Runner Pac-Man', desc: `${RR_PACMAN_ADMIN_ONLY ? 'Admin test · ' : ''}arcade maze, leaderboard & daily rewards`, Icon: Gamepad2, testId: 'play-rr-pacman' }] : []),
     ]
     : [g]));
 

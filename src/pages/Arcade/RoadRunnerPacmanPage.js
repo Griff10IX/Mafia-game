@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import api, { apiRequestWith429Retry, getApiErrorMessage, refreshUser } from '../../utils/api';
 import { publicAsset } from '../../utils/publicAssets';
 import styles from '../../styles/noir.module.css';
+import { RR_PACMAN_ADMIN_ONLY } from '../../config/gameFeatures';
 import { createGame, setWant, step, summary } from './rrPacman/engine';
 import { createRenderer } from './rrPacman/renderer';
 import { BANNERS, LOGO_URL, loadBanners, loadBoss, loadCore, loadSkin, loadTiles, pickAtlasSize } from './rrPacman/sprites';
@@ -243,7 +244,7 @@ function Stars({ n, size = 12 }) {
 }
 
 export default function RoadRunnerPacmanPage() {
-  const [staffOk, setStaffOk] = useState(_staffOkCache);
+  const [staffOk, setStaffOk] = useState(RR_PACMAN_ADMIN_ONLY ? _staffOkCache : true);
   const [config, setConfig] = useState(null);
   const [view, setView] = useState('menu');
   const [run, setRun] = useState(null);
@@ -254,7 +255,7 @@ export default function RoadRunnerPacmanPage() {
 
   useEffect(() => {
     let cancelled = false;
-    if (_staffOkCache === true) {
+    if (!RR_PACMAN_ADMIN_ONLY || _staffOkCache === true) {
       setStaffOk(true);
       return undefined;
     }

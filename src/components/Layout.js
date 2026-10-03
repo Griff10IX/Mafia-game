@@ -18,7 +18,7 @@ import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readDashboardSessionCache, writeDashboardSessionUserProgress, clearDashboardSessionCache } from '../utils/dashboardSessionCache';
 import { fetchAuthMe } from '../utils/authMeBootstrap';
 import { readSessionJson, writeSessionJson } from '../utils/sessionPageCache';
-import { SLOTS_FEATURE_ENABLED } from '../config/gameFeatures';
+import { SLOTS_FEATURE_ENABLED, RR_PACMAN_ADMIN_ONLY } from '../config/gameFeatures';
 import { buildLayoutStaffNavItems } from '../pages/StaffRole/adminToolMap';
 import { preloadRoute, preloadRouteHandlers } from '../utils/routePreload';
 import { prefetchTravelPageData } from '../utils/travelPageWarm';
@@ -207,7 +207,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/casino/keno', label: 'Keno' },
         { path: '/casino/coin-flip', label: 'Coin Flip' },
         { path: '/casino/chicken-cross', label: 'Chicken Cross' },
-        ...(isAdmin ? [{ path: '/casino/road-runner-pacman', label: 'Road Runner Pac-Man' }] : []),
+        ...(isAdmin || !RR_PACMAN_ADMIN_ONLY ? [{ path: '/casino/road-runner-pacman', label: 'Road Runner Pac-Man' }] : []),
         { path: '/casino/videopoker', label: 'Video Poker' },
         { path: '/casino/mdg', label: 'MDG' },
         { path: '/casino/mp-blackjack', label: 'MP Blackjack' },
@@ -2647,7 +2647,7 @@ export default function Layout({ children }) {
             { to: '/casino/keno', label: 'Keno', testId: 'nav-keno', Icon: Grid3x3 },
             { to: '/casino/coin-flip', label: 'Coin Flip', testId: 'nav-coin-flip', Icon: CircleDot },
             { to: '/casino/chicken-cross', label: 'Chicken Cross', testId: 'nav-chicken-cross', Icon: Bird },
-            ...(isAdmin ? [{ to: '/casino/road-runner-pacman', label: 'Road Runner Pac-Man', testId: 'nav-rr-pacman', Icon: Gamepad2 }] : []),
+            ...(isAdmin || !RR_PACMAN_ADMIN_ONLY ? [{ to: '/casino/road-runner-pacman', label: 'Road Runner Pac-Man', testId: 'nav-rr-pacman', Icon: Gamepad2 }] : []),
             { to: '/casino/videopoker', label: 'Video Poker', testId: 'nav-videopoker', Icon: Video },
             { to: '/casino/mdg', label: 'MDG', testId: 'nav-mdg', Icon: Sparkles },
             { to: '/casino/mp-blackjack', label: 'MP Blackjack', testId: 'nav-mp-blackjack', matchPrefix: true, Icon: Users },
