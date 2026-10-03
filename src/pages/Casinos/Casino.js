@@ -1,5 +1,7 @@
-import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Users, LayoutGrid, Sparkles, Ban, Trophy, Bird } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Users, LayoutGrid, Sparkles, Ban, Trophy, Bird, Gamepad2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import api from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 import { SLOTS_FEATURE_ENABLED } from '../../config/gameFeatures';
 import { useAuthUser } from '../../context/AuthContext';
@@ -38,8 +40,20 @@ export default function Casino() {
   const user = useAuthUser();
   const banned = isGamblingSelfBanned(user);
   const banLeft = formatGamblingSelfBanRemaining(user);
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/auth/staff-flags')
+      .then((r) => { if (!cancelled) setIsAdmin(!!r.data?.is_admin); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   const games = GAMES.flatMap((g) => (g.to === '/casino/coin-flip'
-    ? [g, { to: '/casino/chicken-cross', label: 'Chicken Cross', desc: 'House table · hop lanes, cash out or get hit · max $2B', Icon: Bird, testId: 'play-chicken-cross' }]
+    ? [
+      g,
+      { to: '/casino/chicken-cross', label: 'Chicken Cross', desc: 'House table · hop lanes, cash out or get hit · max $2B', Icon: Bird, testId: 'play-chicken-cross' },
+      ...(isAdmin ? [{ to: '/casino/road-runner-pacman', label: 'Road Runner Pac-Man', desc: 'Admin test · arcade maze, leaderboard & daily rewards', Icon: Gamepad2, testId: 'play-rr-pacman' }] : []),
+    ]
     : [g]));
 
   return (

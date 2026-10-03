@@ -141,6 +141,7 @@ const Slots = lazy(() => import("./pages/Casinos/SlotsPage"));
 const Keno = lazy(() => import("./pages/Casinos/KenoPage"));
 const CoinFlip = lazy(() => import("./pages/Casinos/CoinFlipPage"));
 const ChickenCross = lazy(() => import("./pages/Casinos/ChickenCrossPage"));
+const RoadRunnerPacman = lazy(() => import("./pages/Arcade/RoadRunnerPacmanPage"));
 const VideoPoker = lazy(() => import("./pages/Casinos/VideoPokerPage"));
 const WheelOfFortune = lazy(() => import("./pages/Casinos/WheelOfFortunePage"));
 const MDG = lazy(() => import("./pages/Casinos/MDGPage"));
@@ -865,6 +866,14 @@ function App() {
               </ErrorBoundary>,
               'lock-page',
               )
+              }
+            />
+            <Route
+              path="/casino/road-runner-pacman"
+              element={
+              <ErrorBoundary>
+                <RoadRunnerPacman />
+              </ErrorBoundary>
               }
             />
             <Route

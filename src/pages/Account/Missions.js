@@ -300,8 +300,17 @@ function MissionFocusSection({
   orderedTotal,
   completedCount,
   onOpen,
+  skipTokens = 0,
+  onSkip,
+  skipBusy = false,
 }) {
   const allDone = !currentMission && orderedTotal > 0 && completedCount >= orderedTotal;
+  const [confirmSkip, setConfirmSkip] = useState(false);
+  useEffect(() => { setConfirmSkip(false); }, [currentMission?.id]);
+  const canSkip = Boolean(
+    currentMission && currentMission.unlocked && !currentMission.completed
+    && Number(skipTokens) > 0 && typeof onSkip === 'function',
+  );
 
   return (
     <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/25 m-fade-in mobile-panel shadow-lg shadow-black/20`}>
@@ -323,6 +332,38 @@ function MissionFocusSection({
       </div>
 
       <div className="p-4 md:p-5">
+        {canSkip && (
+          <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 rounded-xl border border-violet-400/50 bg-violet-500/10 px-3 py-2.5">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <Zap size={16} className="text-violet-300 shrink-0" />
+              <span className="text-[11px] md:text-xs text-violet-100 leading-snug">
+                You have <span className="font-bold tabular-nums">{fmtInt(skipTokens)}</span> Mission Skip{Number(skipTokens) === 1 ? '' : 's'}.
+                Skipping completes &quot;{currentMission.title}&quot; instantly with full rewards.
+              </span>
+            </div>
+            <button
+              type="button"
+              data-testid="mission-skip-focus-btn"
+              disabled={skipBusy}
+              onClick={() => {
+                if (!confirmSkip) {
+                  setConfirmSkip(true);
+                  return;
+                }
+                setConfirmSkip(false);
+                onSkip();
+              }}
+              className={`shrink-0 inline-flex items-center justify-center gap-1.5 min-h-[40px] rounded-lg border px-4 text-[12px] font-heading font-bold uppercase tracking-wide disabled:opacity-60 ${
+                confirmSkip
+                  ? 'border-violet-300 bg-violet-500/40 text-white'
+                  : 'border-violet-400/70 bg-violet-500/20 text-violet-100 hover:bg-violet-500/30'
+              }`}
+            >
+              <Zap size={14} />
+              {skipBusy ? 'Skipping…' : confirmSkip ? 'Tap again to confirm' : 'Skip mission'}
+            </button>
+          </div>
+        )}
         {allDone ? (
           <div className="rounded-xl border border-green-500/35 bg-green-500/[0.06] px-5 py-8 text-center">
             <CheckCircle size={36} className="text-green-400 mx-auto mb-3 opacity-90" />
@@ -364,6 +405,8 @@ function MissionFocusSection({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function MissionModal({ mission, onClose, onComplete, onSkip, completing, skipTokens = 0, isCurrentOpen = false }) {
+  const [confirmSkip, setConfirmSkip] = useState(false);
+  useEffect(() => { setConfirmSkip(false); }, [mission?.id]);
   if (!mission) return null;
   const { completed, requirements_met, is_boss, progress, difficulty, unlocked, previous_mission_title } = mission;
   const canComplete = !completed && requirements_met && unlocked;
@@ -659,11 +702,18 @@ function MissionModal({ mission, onClose, onComplete, onSkip, completing, skipTo
                 <button
                   type="button"
                   data-testid="mission-skip-btn"
-                  onClick={() => onSkip()}
+                  onClick={() => {
+                    if (!confirmSkip) {
+                      setConfirmSkip(true);
+                      return;
+                    }
+                    setConfirmSkip(false);
+                    onSkip();
+                  }}
                   disabled={completing}
                   style={{
                     width: '100%', padding: '10px',
-                    background: 'rgba(155,89,182,0.14)',
+                    background: confirmSkip ? 'rgba(155,89,182,0.32)' : 'rgba(155,89,182,0.14)',
                     border: '1px solid rgba(155,89,182,0.55)',
                     borderRadius: 7,
                     color: '#d8b4fe', fontWeight: 700, fontSize: '0.85rem',
@@ -674,7 +724,10 @@ function MissionModal({ mission, onClose, onComplete, onSkip, completing, skipTo
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   }}
                 >
-                  <Zap size={14} /> Skip Mission ({fmtInt(skipTokens)} left)
+                  <Zap size={14} />
+                  {confirmSkip
+                    ? 'Tap again to use 1 Mission Skip'
+                    : `Skip Mission (${fmtInt(skipTokens)} left)`}
                 </button>
               )}
             </div>
@@ -1077,7 +1130,6 @@ export default function Missions() {
   };
 
   const handleSkip = async () => {
-    if (!window.confirm('Use 1 Mission Skip to instantly complete your current mission and claim its rewards?')) return;
     setCompleting(true);
     try {
       const res = await api.post('/missions/skip');
@@ -1352,6 +1404,9 @@ export default function Missions() {
           orderedTotal={(authUser?.has_commissioners_pardon || data?.has_commissioners_pardon) ? 75 : totalMissions}
           completedCount={completedCount}
           onOpen={setSelected}
+          skipTokens={skipTokens}
+          onSkip={handleSkip}
+          skipBusy={completing}
         />
         </>
       )}

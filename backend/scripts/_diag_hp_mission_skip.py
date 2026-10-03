@@ -26,6 +26,9 @@ async def main():
     for r in rows or []:
         if r.get("id") in want:
             print(" row", {k: r.get(k) for k in ("id", "title", "order", "completed", "unlocked", "requirements_met", "previous_mission_title")})
+    for r in rows or []:
+        if r.get("unlocked") and not r.get("completed"):
+            print(" UNLOCKED-OPEN", {k: r.get(k) for k in ("id", "title", "order", "is_boss", "city")})
     comp_ids = [c.get("mission_id") for c in (u.get("mission_completions") or [])]
     print("completion ids", comp_ids)
 

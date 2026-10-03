@@ -1,0 +1,458 @@
+{
+  "frame_size": 256,
+  "roadrunner_shared": {
+    "dir": "/images/chicken-cross/roadrunner",
+    "anims": [
+      "idle",
+      "run",
+      "hit",
+      "ko"
+    ]
+  },
+  "roadrunner": {
+    "up": [
+      "up_01.png",
+      "up_02.png",
+      "up_03.png",
+      "up_04.png"
+    ],
+    "down": [
+      "down_01.png",
+      "down_02.png",
+      "down_03.png",
+      "down_04.png"
+    ],
+    "eat": [
+      "eat_01.png",
+      "eat_02.png",
+      "eat_03.png",
+      "eat_04.png"
+    ],
+    "win": [
+      "win_01.png",
+      "win_02.png",
+      "win_03.png",
+      "win_04.png"
+    ]
+  },
+  "enemies": {
+    "coyote": {
+      "side": [
+        "side_01.png",
+        "side_02.png",
+        "side_03.png",
+        "side_04.png"
+      ],
+      "up": [
+        "up_01.png",
+        "up_02.png",
+        "up_03.png",
+        "up_04.png"
+      ],
+      "down": [
+        "down_01.png",
+        "down_02.png",
+        "down_03.png",
+        "down_04.png"
+      ],
+      "scared": [
+        "scared_01.png",
+        "scared_02.png",
+        "scared_03.png",
+        "scared_04.png"
+      ]
+    },
+    "cop": {
+      "side": [
+        "side_01.png",
+        "side_02.png",
+        "side_03.png",
+        "side_04.png"
+      ],
+      "up": [
+        "up_01.png",
+        "up_02.png",
+        "up_03.png",
+        "up_04.png"
+      ],
+      "down": [
+        "down_01.png",
+        "down_02.png",
+        "down_03.png",
+        "down_04.png"
+      ],
+      "scared": [
+        "scared_01.png",
+        "scared_02.png",
+        "scared_03.png",
+        "scared_04.png"
+      ]
+    },
+    "mobster": {
+      "side": [
+        "side_01.png",
+        "side_02.png",
+        "side_03.png",
+        "side_04.png"
+      ],
+      "up": [
+        "up_01.png",
+        "up_02.png",
+        "up_03.png",
+        "up_04.png"
+      ],
+      "down": [
+        "down_01.png",
+        "down_02.png",
+        "down_03.png",
+        "down_04.png"
+      ],
+      "scared": [
+        "scared_01.png",
+        "scared_02.png",
+        "scared_03.png",
+        "scared_04.png"
+      ]
+    },
+    "rocket": {
+      "side": [
+        "side_01.png",
+        "side_02.png",
+        "side_03.png",
+        "side_04.png"
+      ],
+      "up": [
+        "up_01.png",
+        "up_02.png",
+        "up_03.png",
+        "up_04.png"
+      ],
+      "down": [
+        "down_01.png",
+        "down_02.png",
+        "down_03.png",
+        "down_04.png"
+      ],
+      "scared": [
+        "scared_01.png",
+        "scared_02.png",
+        "scared_03.png",
+        "scared_04.png"
+      ]
+    },
+    "eyes": [
+      "right.png",
+      "left.png",
+      "up.png",
+      "down.png"
+    ]
+  },
+  "items": [
+    "seed.png",
+    "power_bag.png",
+    "acme_crate.png",
+    "anvil.png",
+    "money_bag.png",
+    "dynamite.png",
+    "gold_bar.png",
+    "diamond.png",
+    "fedora.png",
+    "tommy_gun.png",
+    "cash_stack.png",
+    "trophy.png"
+  ],
+  "fx": {
+    "dust": [
+      "dust_01.png",
+      "dust_02.png",
+      "dust_03.png",
+      "dust_04.png"
+    ],
+    "sparkle": [
+      "sparkle_01.png",
+      "sparkle_02.png",
+      "sparkle_03.png",
+      "sparkle_04.png"
+    ],
+    "boom": [
+      "boom_01.png",
+      "boom_02.png",
+      "boom_03.png",
+      "boom_04.png"
+    ],
+    "aura_speed": [
+      "aura_speed_01.png",
+      "aura_speed_02.png",
+      "aura_speed_03.png",
+      "aura_speed_04.png"
+    ],
+    "aura_magnet": [
+      "aura_magnet_01.png",
+      "aura_magnet_02.png",
+      "aura_magnet_03.png",
+      "aura_magnet_04.png"
+    ],
+    "aura_shield": [
+      "aura_shield_01.png",
+      "aura_shield_02.png",
+      "aura_shield_03.png",
+      "aura_shield_04.png"
+    ],
+    "aura_freeze": [
+      "aura_freeze_01.png",
+      "aura_freeze_02.png",
+      "aura_freeze_03.png",
+      "aura_freeze_04.png"
+    ]
+  },
+  "tiles": {
+    "desert": [
+      "floor.jpg",
+      "wall.jpg"
+    ],
+    "city": [
+      "floor.jpg",
+      "wall.jpg"
+    ],
+    "casino": [
+      "floor.jpg",
+      "wall.jpg"
+    ],
+    "docks": [
+      "floor.jpg",
+      "wall.jpg"
+    ],
+    "prison": [
+      "floor.jpg",
+      "wall.jpg"
+    ],
+    "mansion": [
+      "floor.jpg",
+      "wall.jpg"
+    ],
+    "acme": [
+      "floor.jpg",
+      "wall.jpg"
+    ]
+  },
+  "powerups": [
+    "speed.png",
+    "freeze.png",
+    "magnet.png",
+    "shield.png",
+    "double.png",
+    "extra_life.png"
+  ],
+  "boss": {
+    "side": [
+      "side_01.png",
+      "side_02.png",
+      "side_03.png",
+      "side_04.png"
+    ],
+    "down": [
+      "down_01.png",
+      "down_02.png",
+      "down_03.png",
+      "down_04.png"
+    ],
+    "attack": [
+      "attack_01.png",
+      "attack_02.png",
+      "attack_03.png",
+      "attack_04.png"
+    ],
+    "damaged": [
+      "damaged_01.png",
+      "damaged_02.png",
+      "damaged_03.png",
+      "damaged_04.png"
+    ],
+    "missile": [
+      "missile_01.png",
+      "missile_02.png",
+      "missile_03.png",
+      "missile_04.png"
+    ],
+    "shockwave": [
+      "shockwave_01.png",
+      "shockwave_02.png",
+      "shockwave_03.png",
+      "shockwave_04.png"
+    ],
+    "target": [
+      "target_01.png",
+      "target_02.png",
+      "target_03.png",
+      "target_04.png"
+    ]
+  },
+  "ui": [
+    "life_portrait.png",
+    "star.png",
+    "star_empty.png",
+    "lock.png",
+    "medal.png",
+    "timer.png",
+    "flag.png",
+    "play.png",
+    "life.png",
+    "logo.png",
+    "banner_ready.png",
+    "banner_level_clear.png",
+    "banner_game_over.png",
+    "banner_boss_stage.png"
+  ],
+  "skins": {
+    "mafia": {
+      "run": [
+        "run_01.png",
+        "run_02.png",
+        "run_03.png",
+        "run_04.png"
+      ],
+      "up": [
+        "up_01.png",
+        "up_02.png",
+        "up_03.png",
+        "up_04.png"
+      ],
+      "down": [
+        "down_01.png",
+        "down_02.png",
+        "down_03.png",
+        "down_04.png"
+      ],
+      "eat": [
+        "eat_01.png",
+        "eat_02.png",
+        "eat_03.png",
+        "eat_04.png"
+      ],
+      "idle": [
+        "idle_01.png",
+        "idle_02.png",
+        "idle_03.png",
+        "idle_04.png"
+      ],
+      "win": [
+        "win_01.png",
+        "win_02.png",
+        "win_03.png",
+        "win_04.png"
+      ],
+      "hit": [
+        "hit_01.png",
+        "hit_02.png",
+        "hit_03.png",
+        "hit_04.png"
+      ],
+      "ko": [
+        "ko_01.png",
+        "ko_02.png",
+        "ko_03.png",
+        "ko_04.png"
+      ]
+    },
+    "cop": {
+      "run": [
+        "run_01.png",
+        "run_02.png",
+        "run_03.png",
+        "run_04.png"
+      ],
+      "up": [
+        "up_01.png",
+        "up_02.png",
+        "up_03.png",
+        "up_04.png"
+      ],
+      "down": [
+        "down_01.png",
+        "down_02.png",
+        "down_03.png",
+        "down_04.png"
+      ],
+      "eat": [
+        "eat_01.png",
+        "eat_02.png",
+        "eat_03.png",
+        "eat_04.png"
+      ],
+      "idle": [
+        "idle_01.png",
+        "idle_02.png",
+        "idle_03.png",
+        "idle_04.png"
+      ],
+      "win": [
+        "win_01.png",
+        "win_02.png",
+        "win_03.png",
+        "win_04.png"
+      ],
+      "hit": [
+        "hit_01.png",
+        "hit_02.png",
+        "hit_03.png",
+        "hit_04.png"
+      ],
+      "ko": [
+        "ko_01.png",
+        "ko_02.png",
+        "ko_03.png",
+        "ko_04.png"
+      ]
+    },
+    "gold": {
+      "run": [
+        "run_01.png",
+        "run_02.png",
+        "run_03.png",
+        "run_04.png"
+      ],
+      "up": [
+        "up_01.png",
+        "up_02.png",
+        "up_03.png",
+        "up_04.png"
+      ],
+      "down": [
+        "down_01.png",
+        "down_02.png",
+        "down_03.png",
+        "down_04.png"
+      ],
+      "eat": [
+        "eat_01.png",
+        "eat_02.png",
+        "eat_03.png",
+        "eat_04.png"
+      ],
+      "idle": [
+        "idle_01.png",
+        "idle_02.png",
+        "idle_03.png",
+        "idle_04.png"
+      ],
+      "win": [
+        "win_01.png",
+        "win_02.png",
+        "win_03.png",
+        "win_04.png"
+      ],
+      "hit": [
+        "hit_01.png",
+        "hit_02.png",
+        "hit_03.png",
+        "hit_04.png"
+      ],
+      "ko": [
+        "ko_01.png",
+        "ko_02.png",
+        "ko_03.png",
+        "ko_04.png"
+      ]
+    }
+  }
+}

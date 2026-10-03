@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment, lazy, Suspense } from 'react';
 import { Link, useNavigate, useLocation, useNavigationType, Navigate } from 'react-router-dom';
 import { SAME_ROUTE_NAV_CLICK } from '../constants/navigationEvents';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Leaf, Ban, BookOpen, Tag, Bird } from './layoutLucideIcons';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Leaf, Ban, BookOpen, Tag, Bird, Gamepad2 } from './layoutLucideIcons';
 import api, {
   getApiErrorMessage,
   onCooldownChange,
@@ -207,6 +207,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/casino/keno', label: 'Keno' },
         { path: '/casino/coin-flip', label: 'Coin Flip' },
         { path: '/casino/chicken-cross', label: 'Chicken Cross' },
+        ...(isAdmin ? [{ path: '/casino/road-runner-pacman', label: 'Road Runner Pac-Man' }] : []),
         { path: '/casino/videopoker', label: 'Video Poker' },
         { path: '/casino/mdg', label: 'MDG' },
         { path: '/casino/mp-blackjack', label: 'MP Blackjack' },
@@ -2646,6 +2647,7 @@ export default function Layout({ children }) {
             { to: '/casino/keno', label: 'Keno', testId: 'nav-keno', Icon: Grid3x3 },
             { to: '/casino/coin-flip', label: 'Coin Flip', testId: 'nav-coin-flip', Icon: CircleDot },
             { to: '/casino/chicken-cross', label: 'Chicken Cross', testId: 'nav-chicken-cross', Icon: Bird },
+            ...(isAdmin ? [{ to: '/casino/road-runner-pacman', label: 'Road Runner Pac-Man', testId: 'nav-rr-pacman', Icon: Gamepad2 }] : []),
             { to: '/casino/videopoker', label: 'Video Poker', testId: 'nav-videopoker', Icon: Video },
             { to: '/casino/mdg', label: 'MDG', testId: 'nav-mdg', Icon: Sparkles },
             { to: '/casino/mp-blackjack', label: 'MP Blackjack', testId: 'nav-mp-blackjack', matchPrefix: true, Icon: Users },

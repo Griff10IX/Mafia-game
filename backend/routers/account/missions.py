@@ -1036,6 +1036,13 @@ async def _run_mission_completion_side_effects(
             category="missions",
         )
 
+    try:
+        from utils.mission_ladder_complete_reward import maybe_grant_ladder_complete_reward
+
+        await maybe_grant_ladder_complete_reward(db, user_id)
+    except Exception:
+        logging.getLogger(__name__).exception("mission ladder complete reward check failed for %s", user_id)
+
 
 async def complete_mission(
     request: CompleteMissionRequest = Body(...),

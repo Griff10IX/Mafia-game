@@ -233,8 +233,7 @@ function runAfterUiSettles(fn) {
 
 function prefersReducedMotion() {
   if (typeof window === 'undefined' || !window.matchMedia) return false;
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    || document.documentElement.getAttribute('data-mobile-compositor-safe') === 'on';
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 function useChickenSprite(pose) {
@@ -830,13 +829,16 @@ export default function ChickenCrossPage() {
                             <img src={ASSET.bush} alt="" className="cc-bush cc-bush-b" draggable={false} />
                           </>
                         ) : null}
-                        {cell.kind === 'cleared' && cell.lane >= cameraLane - 1 ? (
+                        {(cell.kind === 'cleared' && cell.lane >= cameraLane - 1)
+                          || (cell.kind === 'current' && !killCar && pose !== 'hit') ? (
                           <>
                             <div className="cc-car cc-parked">
                               <img src={ASSET.cars[Math.floor(seed * ASSET.cars.length)]} alt="" draggable={false} />
                             </div>
                             <img src={ASSET.barrier} alt="" className="cc-barrier" draggable={false} />
-                            <img src={ASSET.coin} alt="" className="cc-coin" draggable={false} />
+                            {cell.kind === 'cleared' ? (
+                              <img src={ASSET.coin} alt="" className="cc-coin" draggable={false} />
+                            ) : null}
                           </>
                         ) : null}
                         {cell.kind === 'ahead' && cell.mult ? (

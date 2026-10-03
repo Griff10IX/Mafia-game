@@ -4,10 +4,10 @@ from fractions import Fraction
 CHICKEN_CROSS_PAYOUT_CAP = 250_000_000_000
 _RTP = Fraction(98, 100)
 DIFFICULTY_SPECS = {
-    "easy": {"survive_num": 7, "survive_den": 8},
-    "medium": {"survive_num": 73, "survive_den": 100},
-    "hard": {"survive_num": 57, "survive_den": 100},
-    "expert": {"survive_num": 445, "survive_den": 1000},
+    "easy": {"survive_num": 92, "survive_den": 100},
+    "medium": {"survive_num": 84, "survive_den": 100},
+    "hard": {"survive_num": 73, "survive_den": 100},
+    "expert": {"survive_num": 58, "survive_den": 100},
 }
 
 
@@ -53,7 +53,11 @@ def main():
             assert o[-1][1] == CHICKEN_CROSS_PAYOUT_CAP, (diff, bet, o[-1])
             assert all(p < CHICKEN_CROSS_PAYOUT_CAP for _, p in o[:-1])
             print(f"{diff:7} bet {bet:>13,}: road ends lane {o[-1][0]:>3} paying ${o[-1][1]:,}")
-    assert payout(100_000, tables["easy"][0]) == 112000
+    assert payout(100_000, tables["easy"][0]) == 106000
+    for diff, spec in DIFFICULTY_SPECS.items():
+        p = spec["survive_num"] / spec["survive_den"]
+        for lane in (1, 3, 5, 10, 15, 20):
+            print(f"{diff:7} lane {lane:>2}: x{tables[diff][lane - 1] / 100:,.2f}  reached {p ** lane:.1%} of rounds")
     print("ok", {k: len(v) for k, v in tables.items()})
 
 

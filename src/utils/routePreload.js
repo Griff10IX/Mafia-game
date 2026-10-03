@@ -100,6 +100,7 @@ const ROUTE_PRELOADERS = {
   '/casino/keno': () => import('../pages/Casinos/KenoPage'),
   '/casino/coin-flip': () => import('../pages/Casinos/CoinFlipPage'),
   '/casino/chicken-cross': () => import('../pages/Casinos/ChickenCrossPage'),
+  '/casino/road-runner-pacman': () => import('../pages/Arcade/RoadRunnerPacmanPage'),
   '/casino/videopoker': () => import('../pages/Casinos/VideoPokerPage'),
   '/casino/mdg': () => import('../pages/Casinos/MDGPage'),
   '/casino/mp-blackjack': () => import('../pages/Casinos/MPBlackjackPage'),
