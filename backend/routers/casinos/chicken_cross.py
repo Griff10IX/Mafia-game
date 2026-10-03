@@ -31,10 +31,10 @@ CHICKEN_CROSS_STREAK_SCAN_LIMIT = 120
 _RTP = Fraction(98, 100)
 
 DIFFICULTY_SPECS: Dict[str, Dict[str, Any]] = {
-    "easy": {"label": "Easy", "survive_num": 92, "survive_den": 100},
-    "medium": {"label": "Medium", "survive_num": 84, "survive_den": 100},
-    "hard": {"label": "Hard", "survive_num": 73, "survive_den": 100},
-    "expert": {"label": "Expert", "survive_num": 58, "survive_den": 100},
+    "easy": {"label": "Easy", "survive_num": 90, "survive_den": 100},
+    "medium": {"label": "Medium", "survive_num": 80, "survive_den": 100},
+    "hard": {"label": "Hard", "survive_num": 68, "survive_den": 100},
+    "expert": {"label": "Expert", "survive_num": 52, "survive_den": 100},
 }
 
 
