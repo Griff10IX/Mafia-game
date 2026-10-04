@@ -1934,6 +1934,16 @@ async def maybe_promote_after_boss_death(dead_user_id: str) -> None:
         )
         await db.users.update_one({"id": user_id}, {"$set": {"family_role": new_role}})
         _invalidate_my_cache(user_id)
+    # Otherwise a revived ex-Don comes back as a second "boss" with no Don powers.
+    await db.family_members.update_one(
+        {"family_id": family_id, "user_id": dead_user_id},
+        {"$set": {"role": "associate"}},
+    )
+    await db.users.update_one(
+        {"id": dead_user_id, "family_id": family_id},
+        {"$set": {"family_role": "associate"}},
+    )
+    _invalidate_my_cache(dead_user_id)
     _list_cache = None
     logger.info("Family %s: promoted %s to boss after previous boss died.", family_id, new_boss_id)
 

@@ -101,6 +101,10 @@ async def consume_manager_wake(db, user: dict) -> bool:
     event_on, mission_on = managers_enabled(user, live.get("type_id") or "")
     if not event_on and not mission_on:
         return False
+    # Offline players never load a page, so a trip the managers started would otherwise never land.
+    from routers.account.auto_rank import _apply_overdue_travel
+
+    user = await _apply_overdue_travel(db, user["id"], user, datetime.now(timezone.utc)) or user
     seq = []
     if event_on:
         seq.append("event")
@@ -387,17 +391,20 @@ async def _one_scrap_uncommon(db, user: dict) -> bool:
 
 
 async def _melt_one(db, user: dict, *, action: str, rarity: Optional[str]) -> bool:
-    from routers.cars.gta import CARS, melt_cars_locked
+    from routers.cars.gta import CARS, _MARKET_EXCLUSIVE_RARITIES, melt_cars_locked
 
-    rows = await db.user_cars.find({"user_id": user["id"]}, {"_id": 0, "id": 1, "car_id": 1, "listed_for_sale": 1}).to_list(200)
+    rows = await db.user_cars.find({"user_id": user["id"]}, {"_id": 0, "id": 1, "car_id": 1, "rarity": 1, "listed_for_sale": 1}).to_list(200)
     catalog = {c.get("id"): c for c in (CARS or [])}
     for uc in rows:
         if uc.get("listed_for_sale") or not uc.get("id"):
             continue
         info = catalog.get(uc.get("car_id")) or {}
-        if rarity and (info.get("rarity") or "") != rarity:
+        car_rarity = str(info.get("rarity") or uc.get("rarity") or "common").strip().lower()
+        if car_rarity in _MARKET_EXCLUSIVE_RARITIES:
             continue
-        result = await melt_cars_locked(user, [uc["id"]], action, manual_garage=False, allowed_rarities={rarity} if rarity else None)
+        if rarity and car_rarity != rarity:
+            continue
+        result = await melt_cars_locked(user, [uc["id"]], action, manual_garage=False, allowed_rarities={car_rarity})
         return bool(result.get("success"))
     return False
 
@@ -631,19 +638,11 @@ async def _hitlist_batch(db, user: dict, remaining: Optional[int]) -> bool:
         finally:
             _AUTO_RANK_ATTACK.reset(token)
         return shot_any
-    if any(r.get("status") in ("searching", "found") for r in rows):
-        # Searches are still running, or found NPCs are in another city. Travel once if one is found elsewhere.
-        for row in rows:
-            if row.get("status") == "found" and row.get("location_state") and row.get("location_state") != user.get("current_state"):
-                return await _travel_to(user, row.get("location_state"))
-        return False
     cap = await _hitlist_npc_max_per_window_for_user(user)
     active = await _hitlist_npc_active_on_board_count(uid)
     free = max(0, cap - active)
     if remaining is not None:
-        free = min(free, remaining)
-    if free <= 0:
-        return False
+        free = min(free, max(0, remaining - len(rows)))
     added = 0
     for _ in range(free):
         try:
@@ -651,7 +650,17 @@ async def _hitlist_batch(db, user: dict, remaining: Optional[int]) -> bool:
             added += 1
         except HTTPException:
             break
-    return added > 0
+    if added:
+        return True
+    # Found NPCs are elsewhere: go where the most of them are so one trip clears the most.
+    by_city: Dict[str, int] = {}
+    for row in rows:
+        city = row.get("location_state") or ""
+        if row.get("status") == "found" and city and city != user.get("current_state"):
+            by_city[city] = by_city.get(city, 0) + 1
+    if by_city:
+        return await _travel_to(user, max(by_city, key=by_city.get))
+    return False
 
 
 def _internal_request():
