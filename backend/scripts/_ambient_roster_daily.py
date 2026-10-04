@@ -319,10 +319,38 @@ def _pick_name_group(exclude: Optional[set] = None) -> str:
     return random.choices(groups, weights=weights, k=1)[0]
 
 
+_FIRST_LOWER = {n.lower() for n in FIRST}
+_LAST_LOWER = {n.lower() for n in LAST}
+_LOC_LOWER = {n.lower() for n in LOC_PREFIX}
+
+
+def _looks_generated(name: str) -> bool:
+    """Name/Lastname/number shapes (Peter82x, NiklasBernard39, OzzieCraig2) and long digit tails read as bots."""
+    low = name.lower()
+    core = low.rstrip("xz")
+    stripped = core.rstrip("0123456789")
+    if len(core) - len(stripped) >= 3:
+        return True
+    has_digits = stripped != core
+    for first in _FIRST_LOWER | _LOC_LOWER:
+        if not stripped.startswith(first):
+            continue
+        rest = stripped[len(first):]
+        if rest in _LAST_LOWER or rest in _FIRST_LOWER:
+            return True
+        if rest == "" and has_digits:
+            return True
+    return False
+
+
 def _rand_username(exclude_groups: Optional[set] = None) -> Tuple[str, str]:
     """Return (username, name_group). Skips groups used by the previous 2 creates."""
-    group = _pick_name_group(exclude_groups)
-    return _build_username_for_group(group), group
+    for _ in range(60):
+        group = _pick_name_group(exclude_groups)
+        name = _build_username_for_group(group)
+        if not _looks_generated(name):
+            return name, group
+    return name, group
 
 
 COUNTRY_PROFILES: List[Dict[str, Any]] = [
