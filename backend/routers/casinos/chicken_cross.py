@@ -50,7 +50,7 @@ DIFFICULTY_SPECS: Dict[str, Dict[str, Any]] = {
 # Multipliers are floored so a cash-out is never worth more than the profile's RTP.
 ODDS_PROFILES: Dict[str, Dict[str, Any]] = {
     "normal": {"rtp": Fraction(98, 100), "survive_bonus": {}},
-    "boost": {"rtp": Fraction(99, 100), "survive_bonus": {}},
+    "boost": {"rtp": Fraction(100, 100), "survive_bonus": {}},
 }
 DEFAULT_PROFILE = "normal"
 ECONOMY_BOOST_BELOW = 700_000_000_000
