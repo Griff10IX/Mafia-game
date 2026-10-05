@@ -52,7 +52,20 @@ const VISIBLE_AHEAD = 6;
 const CLEARED_KEEP = 2;
 const BOARD_COLS = 8;
 const BOARD_COLS_NARROW = 6;
-const QUICK_BETS = [1_000_000, 100_000_000, 1_000_000_000];
+const QUICK_BETS = {
+  cash: [1_000_000, 100_000_000, 1_000_000_000],
+  points: [50, 100, 250],
+};
+const DEFAULT_BET = { cash: '100000', points: '100' };
+const DEFAULT_LIMITS = {
+  cash: { max_bet: 2_000_000_000, payout_cap: 250_000_000_000 },
+  points: { max_bet: 500, payout_cap: 50_000 },
+};
+
+function quickBetLabel(amount, currency) {
+  if (currency === 'points') return `${amount.toLocaleString()} pts`;
+  return amount >= 1_000_000_000 ? '$1B' : amount >= 100_000_000 ? '$100M' : '$1M';
+}
 
 const PAGE_STYLES = `
   .cc-fade-in { animation: cc-fade-in 0.45s ease-out both; }
@@ -204,16 +217,17 @@ const PAGE_STYLES = `
   }
 `;
 
-function formatMoney(n) {
+function formatMoney(n, currency = 'cash') {
   const num = Number(n ?? 0);
-  if (Number.isNaN(num)) return '$0';
-  return `$${Math.trunc(num).toLocaleString()}`;
+  const safe = Number.isNaN(num) ? 0 : Math.trunc(num);
+  if (currency === 'points') return `${safe.toLocaleString()} pts`;
+  return `$${safe.toLocaleString()}`;
 }
 
-function formatSignedMoney(n) {
+function formatSignedMoney(n, currency = 'cash') {
   const num = Number(n ?? 0);
-  if (Number.isNaN(num) || num === 0) return '$0';
-  return `${num > 0 ? '+' : '-'}$${Math.abs(Math.trunc(num)).toLocaleString()}`;
+  if (Number.isNaN(num) || num === 0) return formatMoney(0, currency);
+  return `${num > 0 ? '+' : '-'}${formatMoney(Math.abs(num), currency)}`;
 }
 
 function streakLabel(type, count) {
@@ -338,6 +352,7 @@ export default function ChickenCrossPage() {
     admin_only: false,
   });
   const [difficulty, setDifficulty] = useState('easy');
+  const [currency, setCurrency] = useState('cash');
   const [bet, setBet] = useState('100000');
   const [game, setGame] = useState(null);
   const [stats, setStats] = useState(_cachedStats);
@@ -349,12 +364,15 @@ export default function ChickenCrossPage() {
   const [hitFlash, setHitFlash] = useState(false);
   const [killCar, setKillCar] = useState(false);
   const [killCarSrc, setKillCarSrc] = useState(ASSET.cars[0]);
-  const lastBetRef = useRef('100000');
+  const lastBetRef = useRef({ cash: DEFAULT_BET.cash, points: DEFAULT_BET.points });
   const busyRef = useRef(false);
 
-  const maxBet = Number(config.max_bet || 2_000_000_000);
-  const betNum = parseInt(String(bet || '').replace(/\D/g, ''), 10) || 0;
   const active = !!game;
+  const cur = active ? (game?.currency || 'cash') : currency;
+  const limits = config.currencies?.[cur] || DEFAULT_LIMITS[cur];
+  const maxBet = Number(limits.max_bet || DEFAULT_LIMITS[cur].max_bet);
+  const payoutCap = Number(limits.payout_cap || DEFAULT_LIMITS[cur].payout_cap);
+  const betNum = parseInt(String(bet || '').replace(/\D/g, ''), 10) || 0;
   const lane = Number(game?.lane || 0);
   const offered = game?.offered_lanes || [];
   const lastOffered = offered.length ? Number(offered[offered.length - 1].lane) : 0;
@@ -369,8 +387,8 @@ export default function ChickenCrossPage() {
     const first = (diff?.lanes || [])[0];
     if (!first || betNum < 1) return 0;
     const cents = Number(first.multiplier_cents || 0);
-    return Math.min(Number(config.payout_cap || 250_000_000_000), Math.floor((betNum * cents) / 100));
-  }, [active, game, config, difficulty, betNum]);
+    return Math.min(payoutCap, Math.floor((betNum * cents) / 100));
+  }, [active, game, config, difficulty, betNum, payoutCap]);
 
   const boardCols = useBoardCols();
   const chickenSrc = useChickenSprite(pose);
@@ -421,22 +439,32 @@ export default function ChickenCrossPage() {
   }, []);
 
   const fetchStats = useCallback(() => {
-    apiRequestWith429Retry(() => api.get('/casino/chicken-cross/stats'))
+    apiRequestWith429Retry(() => api.get('/casino/chicken-cross/stats', { params: { currency: cur } }))
       .then((r) => {
-        _cachedStats = r.data || null;
+        if (cur === 'cash') _cachedStats = r.data || null;
         setStats(r.data || null);
       })
       .catch(() => setStats((prev) => prev ?? null));
-  }, []);
+  }, [cur]);
 
   const fetchGame = useCallback(() => {
     apiRequestWith429Retry(() => api.get('/casino/chicken-cross/game'))
       .then((r) => {
-        if (r.data?.active && r.data?.game) setGame(r.data.game);
-        else setGame(null);
+        if (r.data?.active && r.data?.game) {
+          setGame(r.data.game);
+          setCurrency(r.data.game.currency || 'cash');
+        } else setGame(null);
       })
       .catch(() => {});
   }, []);
+
+  const switchCurrency = (next) => {
+    if (next === currency || active || loading) return;
+    lastBetRef.current[currency] = bet;
+    setCurrency(next);
+    setBet(lastBetRef.current[next] || DEFAULT_BET[next]);
+    setStats(null);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -490,7 +518,7 @@ export default function ChickenCrossPage() {
   }, [active, loading, canStep]);
 
   const setQuickBet = (amount) => setBet(String(Math.min(amount, maxBet)));
-  const repeatLast = () => setBet(lastBetRef.current || '100000');
+  const repeatLast = () => setBet(lastBetRef.current[currency] || DEFAULT_BET[currency]);
 
   const afterSettle = (settled) => {
     setGame(null);
@@ -520,7 +548,7 @@ export default function ChickenCrossPage() {
       return;
     }
     if (betNum > maxBet) {
-      toast.error(`Max bet is ${formatMoney(maxBet)}`);
+      toast.error(`Max bet is ${formatMoney(maxBet, currency)}`);
       return;
     }
     busyRef.current = true;
@@ -530,8 +558,8 @@ export default function ChickenCrossPage() {
     setPose('idle');
     setChickenLane(0);
     try {
-      const res = await apiRequestWith429Retry(() => api.post('/casino/chicken-cross/start', { bet: betNum, difficulty }));
-      lastBetRef.current = String(betNum);
+      const res = await apiRequestWith429Retry(() => api.post('/casino/chicken-cross/start', { bet: betNum, difficulty, currency }));
+      lastBetRef.current[currency] = String(betNum);
       setGame(res.data?.game || null);
       setLastRound(null);
       runAfterUiSettles(() => refreshUser());
@@ -593,7 +621,7 @@ export default function ChickenCrossPage() {
         setHopKey((k) => k + 1);
         await waitHop();
         afterSettle(res.data.settled);
-        toast.success(`Crossed the road! Paid ${formatMoney(res.data.settled?.payout || 0)}`);
+        toast.success(`Crossed the road! Paid ${formatMoney(res.data.settled?.payout || 0, res.data.settled?.currency)}`);
       } else {
         setPose('idle');
       }
@@ -614,7 +642,7 @@ export default function ChickenCrossPage() {
     try {
       const res = await apiRequestWith429Retry(() => api.post('/casino/chicken-cross/cashout'));
       afterSettle(res.data?.settled);
-      toast.success(`Cashed out ${formatMoney(res.data?.settled?.payout || 0)}`);
+      toast.success(`Cashed out ${formatMoney(res.data?.settled?.payout || 0, res.data?.settled?.currency)}`);
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Cash out failed');
     } finally {
@@ -677,10 +705,10 @@ export default function ChickenCrossPage() {
           <div className="rounded-lg border border-primary/20 bg-zinc-950/60 px-3 py-2 shadow-inner">
             <p className="text-[9px] font-heading text-zinc-500 uppercase tracking-widest">Limits</p>
             <p className="text-[12px] font-heading text-zinc-300">
-              Max <span className="text-primary font-bold tabular-nums">{formatMoney(maxBet)}</span>
+              Max <span className="text-primary font-bold tabular-nums">{formatMoney(maxBet, cur)}</span>
             </p>
             <p className="text-[10px] font-heading text-zinc-500">
-              Cap <span className="tabular-nums">{formatMoney(config.payout_cap || 250_000_000_000)}</span>
+              Cap <span className="tabular-nums">{formatMoney(payoutCap, cur)}</span>
             </p>
           </div>
         </header>
@@ -712,17 +740,36 @@ export default function ChickenCrossPage() {
                   </div>
                 </div>
 
+                <div>
+                  <p className="text-[9px] font-heading uppercase tracking-widest text-zinc-500 mb-1.5">Bet with</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {['cash', 'points'].map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        disabled={loading || active}
+                        onClick={() => switchCurrency(c)}
+                        className={`cc-touch min-h-[36px] rounded-lg border px-2 text-[10px] font-heading font-bold uppercase tracking-wide disabled:opacity-55 ${
+                          cur === c ? 'border-primary/70 bg-primary/15 text-primary' : 'border-zinc-700/70 bg-zinc-900/50 text-zinc-300 hover:border-primary/35'
+                        }`}
+                      >
+                        {c === 'cash' ? 'Cash' : 'Points'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <label className="text-[9px] font-heading uppercase tracking-widest text-zinc-500">Wager</label>
                   <FormattedNumberInput
                     value={bet}
                     onChange={setBet}
                     disabled={loading || active}
-                    placeholder="100000"
+                    placeholder={DEFAULT_BET[cur]}
                     className="w-full min-h-[44px] rounded-md border border-primary/25 bg-zinc-950/90 px-3 py-2 text-base sm:text-sm font-heading text-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-45"
                   />
                   <div className="grid grid-cols-4 gap-1.5">
-                    {QUICK_BETS.map((amount) => (
+                    {QUICK_BETS[cur].map((amount) => (
                       <button
                         key={amount}
                         type="button"
@@ -730,7 +777,7 @@ export default function ChickenCrossPage() {
                         disabled={loading || active}
                         className="cc-touch min-h-[36px] rounded border border-zinc-700/70 bg-zinc-900/70 px-1 text-[9px] font-heading font-bold uppercase text-zinc-300 hover:border-primary/40 hover:text-primary disabled:opacity-45"
                       >
-                        {amount >= 1_000_000_000 ? '$1B' : amount >= 100_000_000 ? '$100M' : '$1M'}
+                        {quickBetLabel(amount, cur)}
                       </button>
                     ))}
                     <button
@@ -754,10 +801,10 @@ export default function ChickenCrossPage() {
 
                 <div className="rounded-lg border border-zinc-700/50 bg-zinc-900/40 px-3 py-2">
                   <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500">{active ? 'Cash out now' : 'First lane pays'}</p>
-                  <p className="text-xl font-heading font-black text-primary tabular-nums">{formatMoney(potentialCashout)}</p>
+                  <p className="text-xl font-heading font-black text-primary tabular-nums">{formatMoney(potentialCashout, cur)}</p>
                   {active && (
                     <p className="text-[10px] font-heading text-zinc-500">
-                      Lane {lane} · x{game?.multiplier || '0.00'} · stake {formatMoney(game?.bet || 0)}
+                      Lane {lane} · x{game?.multiplier || '0.00'} · stake {formatMoney(game?.bet || 0, cur)}
                     </p>
                   )}
                 </div>
@@ -890,7 +937,7 @@ export default function ChickenCrossPage() {
                   Overall
                 </div>
                 <div className={`mt-1 text-lg sm:text-xl font-heading font-black tabular-nums ${netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                  {formatSignedMoney(netProfit)}
+                  {formatSignedMoney(netProfit, cur)}
                 </div>
               </div>
               <div className="rounded-xl border border-zinc-700/55 bg-zinc-950/45 p-3 shadow-inner">
@@ -898,8 +945,8 @@ export default function ChickenCrossPage() {
                   <CircleDollarSign size={13} className="text-primary/80" />
                   Won / paid
                 </div>
-                <div className="mt-1 text-lg sm:text-xl font-heading font-black text-primary tabular-nums">{formatMoney(stats?.total_paid || 0)}</div>
-                <div className="text-[9px] font-heading text-zinc-500">Staked {formatMoney(stats?.total_wagered || 0)}</div>
+                <div className="mt-1 text-lg sm:text-xl font-heading font-black text-primary tabular-nums">{formatMoney(stats?.total_paid || 0, cur)}</div>
+                <div className="text-[9px] font-heading text-zinc-500">Staked {formatMoney(stats?.total_wagered || 0, cur)}</div>
               </div>
               <div className="rounded-xl border border-zinc-700/55 bg-zinc-950/45 p-3 shadow-inner">
                 <div className="flex items-center gap-1.5 text-[9px] font-heading uppercase tracking-wider text-zinc-500">
@@ -930,11 +977,11 @@ export default function ChickenCrossPage() {
                   {!lastRound.void ? ` · lane ${lastRound.lane}` : ''}
                 </p>
                 <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-heading">
-                  <span className="rounded border border-zinc-700/60 bg-zinc-950/50 px-2 py-1">Stake <b>{formatMoney(lastRound.bet)}</b></span>
+                  <span className="rounded border border-zinc-700/60 bg-zinc-950/50 px-2 py-1">Stake <b>{formatMoney(lastRound.bet, lastRound.currency)}</b></span>
                   <span className="rounded border border-zinc-700/60 bg-zinc-950/50 px-2 py-1">Mult <b className="text-primary">x{lastRound.multiplier || '0.00'}</b></span>
-                  <span className="rounded border border-zinc-700/60 bg-zinc-950/50 px-2 py-1">Paid <b className="text-primary">{formatMoney(lastRound.payout)}</b></span>
+                  <span className="rounded border border-zinc-700/60 bg-zinc-950/50 px-2 py-1">Paid <b className="text-primary">{formatMoney(lastRound.payout, lastRound.currency)}</b></span>
                   <span className="rounded border border-zinc-700/60 bg-zinc-950/50 px-2 py-1">
-                    Net <b className={lastRound.net >= 0 ? 'text-emerald-400' : 'text-rose-300'}>{formatSignedMoney(lastRound.net)}</b>
+                    Net <b className={lastRound.net >= 0 ? 'text-emerald-400' : 'text-rose-300'}>{formatSignedMoney(lastRound.net, lastRound.currency)}</b>
                   </span>
                 </div>
               </div>
@@ -943,7 +990,7 @@ export default function ChickenCrossPage() {
             <div className="relative flex items-start gap-2 rounded-lg border border-zinc-700/50 bg-zinc-950/50 px-3 py-2 text-[10px] font-heading text-zinc-500">
               <ShieldCheck size={15} className="mt-0.5 shrink-0 text-primary/70" />
               <span>
-                Outcome is fixed when you start. Cash out after a safe hop. Max bet {formatMoney(maxBet)}, payout cap {formatMoney(config.payout_cap || 250_000_000_000)}.
+                Outcome is fixed when you start. Cash out after a safe hop. Max bet {formatMoney(maxBet, cur)}, payout cap {formatMoney(payoutCap, cur)}.
               </span>
             </div>
           </div>
@@ -959,9 +1006,9 @@ export default function ChickenCrossPage() {
             <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500">{active ? 'Live' : 'Ready'}</p>
             <p className="truncate text-[11px] font-heading text-zinc-200">
               {active ? (
-                <>Lane {lane} · {formatMoney(potentialCashout)}</>
+                <>Lane {lane} · {formatMoney(potentialCashout, cur)}</>
               ) : (
-                <><span className="text-primary capitalize">{difficulty}</span> · {formatMoney(betNum)}</>
+                <><span className="text-primary capitalize">{difficulty}</span> · {formatMoney(betNum, cur)}</>
               )}
             </p>
           </div>

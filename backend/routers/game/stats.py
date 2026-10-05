@@ -127,6 +127,10 @@ def _build_recent_kills_for_viewer(
     return recent_kills
 
 
+def _gambling_is_points_round(game_type: str, details: dict) -> bool:
+    return game_type == "chicken_cross" and (details or {}).get("currency") == "points"
+
+
 def _gambling_profit_from_details(game_type: str, details: dict) -> int:
     """Compute profit from gambling_log details. Positive = won, negative = lost."""
     # Handle different field names used by different games
@@ -135,6 +139,10 @@ def _gambling_profit_from_details(game_type: str, details: dict) -> int:
     
     # Sports betting uses separate sports_bets collection
     if game_type == "sports_bet":
+        return 0
+
+    # Cash profit only: points stakes must not count as dollars.
+    if _gambling_is_points_round(game_type, details):
         return 0
     
     # MDG: track fees paid vs payouts received
@@ -250,6 +258,8 @@ def _gambling_stake_payout_for_analytics(game_type: str, details: dict) -> tuple
 def _gambling_analytics_bucket(game_type: str, details: dict) -> str:
     """Stable aggregation key for gambling_log (splits mp_poker vs dealer vs multiplayer)."""
     gt = (game_type or "").strip() or "unknown"
+    if _gambling_is_points_round(gt, details):
+        return "chicken_cross_points"
     if gt != "mp_poker":
         return gt
     d = details or {}

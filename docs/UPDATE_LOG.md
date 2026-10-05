@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-10-05[/color][/b] — [b]Chicken Cross: bet with points[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Points:[/b] You can now bet points on Chicken Cross. Pick Cash or Points above your wager.[/color]
+[*][color=#888888][b]Limits:[/b] Max bet 500 points. Max win 50,000 points.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-10-03[/color][/b] — [b]Chicken Cross (new casino game)[/b][/size]
 [quote]
 [list]

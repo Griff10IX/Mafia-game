@@ -12997,6 +12997,8 @@ def register(router):
             _gambling_stake_payout_for_analytics,
         )
 
+        # Reported in points and kept out of the cash totals.
+        POINTS_ANALYTICS_BUCKETS = {"chicken_cross_points"}
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         now = datetime.now(timezone.utc)
@@ -13011,9 +13013,14 @@ def register(router):
         async for row in cursor:
             gt = (row.get("game_type") or "").strip() or "unknown"
             details = row.get("details") or {}
-            profit = _gambling_profit_from_details(gt, details)
-            stake, payout = _gambling_stake_payout_for_analytics(gt, details)
             bucket = _gambling_analytics_bucket(gt, details)
+            if bucket in POINTS_ANALYTICS_BUCKETS:
+                stake = int(details.get("bet") or 0)
+                payout = int(details.get("payout") or 0)
+                profit = payout - stake
+            else:
+                profit = _gambling_profit_from_details(gt, details)
+                stake, payout = _gambling_stake_payout_for_analytics(gt, details)
             s = stats.setdefault(
                 bucket,
                 {
@@ -13045,6 +13052,7 @@ def register(router):
             items.append(
                 {
                     "game_type": gt,
+                    "currency": "points" if gt in POINTS_ANALYTICS_BUCKETS else "cash",
                     "attempts": attempts,
                     "wins": wins,
                     "win_rate": win_rate,
@@ -13056,13 +13064,14 @@ def register(router):
                     "usage_share": usage_share,
                 }
             )
+        cash_stats = [v for k, v in stats.items() if k not in POINTS_ANALYTICS_BUCKETS]
         totals = {
             "total_attempts": sum(v["attempts"] for v in stats.values()),
             "total_wins": sum(v["wins"] for v in stats.values()),
-            "total_stake": sum(v["total_stake"] for v in stats.values()),
-            "total_payout": sum(v["total_payout"] for v in stats.values()),
-            "total_profit": sum(v["total_profit"] for v in stats.values()),
-            "total_house_profit": sum(v["total_stake"] for v in stats.values()) - sum(v["total_payout"] for v in stats.values()),
+            "total_stake": sum(v["total_stake"] for v in cash_stats),
+            "total_payout": sum(v["total_payout"] for v in cash_stats),
+            "total_profit": sum(v["total_profit"] for v in cash_stats),
+            "total_house_profit": sum(v["total_stake"] for v in cash_stats) - sum(v["total_payout"] for v in cash_stats),
             "unique_games": len(stats),
         }
         return {"generated_at": now.isoformat(), "days": days, "items": items, "totals": totals}

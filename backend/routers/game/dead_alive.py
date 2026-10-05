@@ -135,11 +135,6 @@ async def create_revive_payment_intent(
         raise HTTPException(status_code=400, detail="No email linked to this account.")
     if reviver.get("is_dead"):
         raise HTTPException(status_code=400, detail="You must be alive to revive another account.")
-    if await revive_slot_used_for_email(db, email):
-        raise HTTPException(
-            status_code=400,
-            detail="This email has already used its revive (staff can grant another from Admin).",
-        )
     dead_user = await db.users.find_one({"username": username_pattern_fn(dead_username)}, {"_id": 0})
     if not dead_user:
         raise HTTPException(status_code=404, detail="No account found with that username.")
@@ -231,22 +226,19 @@ async def execute_paid_revive(
     email = (intent.get("reviver_email") or reviver.get("email") or "").strip().lower()
     points_balance = int(reviver.get("points") or 0)
     reviver_money = int(reviver.get("money") or 0)
-    # Pocket cash on the sacrificing alt is burned (dead money). Do not put it on the revived character.
-    revived_cash = 0
+    # Pocket cash on the sacrificing alt is burned (dead money). The dead character's own unclaimed estate cash comes back.
+    revived_cash = 0 if dead_user.get("retrieval_used") else max(0, int(dead_user.get("money_at_death") or 0))
     # Full points transfer — fee was paid in GBP via Stripe.
     reviver_points_after = points_balance
-    if dead_user.get("retrieval_used"):
-        dead_carry = max(
-            0,
-            int(dead_user.get("points") or 0) - int(dead_user.get("points_at_death") or 0),
-        )
-    else:
-        dead_carry = max(0, int(dead_user.get("points_at_death") or 0))
+    # Claim Inheritance zeroes the dead wallet when it pays out, so whatever is still on it is owed.
+    dead_carry = max(0, int(dead_user.get("points") or 0))
     revived_points = reviver_points_after + dead_carry
     now_iso = datetime.now(timezone.utc).isoformat()
 
     from pymongo.errors import DuplicateKeyError
 
+    # Unlimited paid revives per email: the row only guards this intent against double fulfillment.
+    await db.revive_used_by_email.delete_many({"email": email, "intent_id": {"$ne": intent_id}})
     try:
         await db.revive_used_by_email.insert_one(
             {"email": email, "used_at": now_iso, "reviver_id": reviver["id"], "intent_id": intent_id}
@@ -263,13 +255,13 @@ async def execute_paid_revive(
                 }
             raise HTTPException(
                 status_code=400,
-                detail="This email has already used its revive (staff can grant another from Admin).",
+                detail="This revive is already being processed.",
             )
         existing = await db.revive_used_by_email.find_one({"email": email})
         if existing:
             raise HTTPException(
                 status_code=400,
-                detail="This email has already used its revive (staff can grant another from Admin).",
+                detail="This revive is already being processed.",
             )
 
     try:
@@ -284,6 +276,9 @@ async def execute_paid_revive(
                     "health": default_health,
                     "health_regen_last_at": now_iso,
                     "in_jail": False,
+                    "retrieval_used": False,
+                    "swiss_retrieval_used": False,
+                    "rank_xp_pass_dead_alive_carry_used": False,
                 },
                 "$unset": {
                     "killed_by_username": "",
@@ -1248,15 +1243,6 @@ def register(router):
                 "can_revive": False,
                 "reason": "You must be alive to revive another account.",
                 "revive_used": False,
-                "dead_accounts_same_email": [],
-            }
-        revive_used = await revive_slot_used_for_email(db, email)
-        if revive_used:
-            return {
-                **base,
-                "can_revive": False,
-                "reason": "This email has already used its revive (staff can grant another from Admin).",
-                "revive_used": True,
                 "dead_accounts_same_email": [],
             }
         dead_same_email = await db.users.find(

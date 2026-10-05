@@ -3426,6 +3426,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     "points_at_death": int(death_claim.get("points", 0) or 0),
                     "money_at_death": 0,
                     "tokens_at_death": _tokens_at_death_immediate,
+                    "retrieval_used": False,
+                    "swiss_retrieval_used": False,
+                    "rank_xp_pass_dead_alive_carry_used": False,
                 }
             },
         )

@@ -211,7 +211,15 @@ const CASINO_ANALYTICS_GAME_LABELS = {
   mp_poker_vs_dealer: 'Poker (vs dealer)',
   mp_poker_vs_players: 'Poker (multiplayer)',
   mp_poker: 'Poker (legacy)',
+  chicken_cross: 'Chicken Cross',
+  chicken_cross_points: 'Chicken Cross (points)',
 };
+
+function casinoAnalyticsAmount(item, value) {
+  if (value == null) return '—';
+  const n = Number(value);
+  return item.currency === 'points' ? `${n.toLocaleString()} pts` : `$${n.toLocaleString()}`;
+}
 
 const SECTIONS_KEY = 'admin_sections_collapsed';
 
@@ -20440,9 +20448,9 @@ export default function Admin() {
                               <td className="py-1.5 text-right">{item.attempts != null ? item.attempts.toLocaleString() : '—'}</td>
                               <td className="py-1.5 text-right">{item.wins != null ? item.wins.toLocaleString() : '—'}</td>
                               <td className="py-1.5 text-right">{item.win_rate != null ? `${(item.win_rate * 100).toFixed(1)}%` : '—'}</td>
-                              <td className="py-1.5 text-right">{item.total_stake != null ? `$${Number(item.total_stake).toLocaleString()}` : '—'}</td>
-                              <td className="py-1.5 text-right">{item.total_payout != null ? `$${Number(item.total_payout).toLocaleString()}` : '—'}</td>
-                              <td className={`py-1.5 text-right ${(item.house_profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{item.house_profit != null ? `$${Number(item.house_profit).toLocaleString()}` : '—'}</td>
+                              <td className="py-1.5 text-right">{casinoAnalyticsAmount(item, item.total_stake)}</td>
+                              <td className="py-1.5 text-right">{casinoAnalyticsAmount(item, item.total_payout)}</td>
+                              <td className={`py-1.5 text-right ${(item.house_profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{casinoAnalyticsAmount(item, item.house_profit)}</td>
                               <td className="py-1.5 text-right">{item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}</td>
                             </tr>
                           ))}
