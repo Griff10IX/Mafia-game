@@ -5,9 +5,9 @@ CHICKEN_CROSS_PAYOUT_CAP = 250_000_000_000
 _RTP = Fraction(98, 100)
 DIFFICULTY_SPECS = {
     "easy": {"survive_num": 90, "survive_den": 100, "lanes": 50},
-    "medium": {"survive_num": 80, "survive_den": 100, "lanes": 25},
-    "hard": {"survive_num": 68, "survive_den": 100, "lanes": 20},
-    "expert": {"survive_num": 50, "survive_den": 100, "pay_num": 52, "lanes": 15},
+    "medium": {"survive_num": 83, "survive_den": 100, "lanes": 25},
+    "hard": {"survive_num": 71, "survive_den": 100, "lanes": 20},
+    "expert": {"survive_num": 52, "survive_den": 100, "pay_num": 52, "lanes": 15},
 }
 
 

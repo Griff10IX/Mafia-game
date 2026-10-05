@@ -39,10 +39,10 @@ CURRENCIES: Dict[str, Dict[str, Any]] = {
 }
 DIFFICULTY_SPECS: Dict[str, Dict[str, Any]] = {
     "easy": {"label": "Easy", "survive_num": 90, "survive_den": 100, "lanes": 50},
-    "medium": {"label": "Medium", "survive_num": 80, "survive_den": 100, "lanes": 25},
-    "hard": {"label": "Hard", "survive_num": 68, "survive_den": 100, "lanes": 20},
+    "medium": {"label": "Medium", "survive_num": 83, "survive_den": 100, "lanes": 25},
+    "hard": {"label": "Hard", "survive_num": 71, "survive_den": 100, "lanes": 20},
     # pay_num prices the multipliers; survive_num is the real per-hop roll.
-    "expert": {"label": "Expert", "survive_num": 50, "survive_den": 100, "pay_num": 52, "lanes": 15},
+    "expert": {"label": "Expert", "survive_num": 52, "survive_den": 100, "pay_num": 52, "lanes": 15},
 }
 
 # Odds follow total player cash: "boost" below the low mark, back to "normal" at the high mark.
@@ -50,7 +50,7 @@ DIFFICULTY_SPECS: Dict[str, Dict[str, Any]] = {
 # Multipliers are floored so a cash-out is never worth more than the profile's RTP.
 ODDS_PROFILES: Dict[str, Dict[str, Any]] = {
     "normal": {"rtp": Fraction(98, 100), "survive_bonus": {}},
-    "boost": {"rtp": Fraction(99, 100), "survive_bonus": {"expert": 1}},
+    "boost": {"rtp": Fraction(99, 100), "survive_bonus": {}},
 }
 DEFAULT_PROFILE = "normal"
 ECONOMY_BOOST_BELOW = 700_000_000_000
