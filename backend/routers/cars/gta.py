@@ -1149,6 +1149,14 @@ async def _attempt_gta_impl(
                 await update_objectives_progress(current_user.get("id") or "", "gta", 1)
             except Exception:
                 pass
+            if caller_updates_total_gta:
+                # Manual route records contest progress in its own bookkeeping.
+                try:
+                    from utils.daily_contests import record_contest_progress
+
+                    await record_contest_progress(db, current_user.get("id") or "", "gta", 1)
+                except Exception:
+                    logger.exception("Contest GTA progress (auto rank) failed user_id=%s", current_user.get("id"))
             if used_gta_skip:
                 try:
                     from utils.token_perk_stats import bump_token_perk_stats

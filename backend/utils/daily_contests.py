@@ -5,6 +5,7 @@ Score hooks call record_contest_progress from gameplay success paths.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import random
 import uuid
@@ -576,7 +577,27 @@ async def ensure_active_contest(db) -> dict:
             {"$set": {"status": "ended", "settled_at": _iso(now)}},
         )
 
-    cfg = await _get_config(db)
+    # Concurrent callers must not each create a contest when the previous one expires.
+    lock = await db.game_config.find_one_and_update(
+        {"id": CONFIG_ID, "$or": [{"creating_until": {"$exists": False}}, {"creating_until": {"$lt": _iso(now)}}]},
+        {"$set": {"creating_until": _iso(now + timedelta(seconds=30))}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not lock:
+        if not await db.game_config.find_one({"id": CONFIG_ID}, {"_id": 1}):
+            await _set_previous_type(db, "")
+            return await ensure_active_contest(db)
+        for _ in range(25):
+            active = await db[COL_EVENTS].find_one({"status": "active"})
+            if active:
+                return active
+            await asyncio.sleep(0.2)
+        raise RuntimeError("contest rotation in progress")
+    active = await db[COL_EVENTS].find_one({"status": "active"})
+    if active:
+        return active
+
+    cfg = lock
     prev = str(cfg.get("previous_type_id") or "") or None
     # Prefer last ended type as previous if config empty
     if not prev:
