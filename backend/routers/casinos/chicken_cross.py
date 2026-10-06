@@ -35,7 +35,9 @@ CHICKEN_CROSS_POINTS_PAYOUT_CAP = 50_000
 CHICKEN_CROSS_STREAK_SCAN_LIMIT = 120
 CURRENCIES: Dict[str, Dict[str, Any]] = {
     "cash": {"field": "money", "max_bet": CHICKEN_CROSS_MAX_BET, "payout_cap": CHICKEN_CROSS_PAYOUT_CAP},
-    "points": {"field": "points", "max_bet": CHICKEN_CROSS_POINTS_MAX_BET, "payout_cap": CHICKEN_CROSS_POINTS_PAYOUT_CAP},
+    # survive_bonus is added to the real roll only; multipliers stay priced on the base odds.
+    "points": {"field": "points", "max_bet": CHICKEN_CROSS_POINTS_MAX_BET, "payout_cap": CHICKEN_CROSS_POINTS_PAYOUT_CAP,
+               "survive_bonus": {"expert": 2}},
 }
 DIFFICULTY_SPECS: Dict[str, Dict[str, Any]] = {
     "easy": {"label": "Easy", "survive_num": 90, "survive_den": 100, "lanes": 50},
@@ -182,9 +184,9 @@ def _offered_lanes(
     return rows
 
 
-def _roll_death_lane(difficulty: str, profile: str = DEFAULT_PROFILE) -> int:
+def _roll_death_lane(difficulty: str, profile: str = DEFAULT_PROFILE, currency: str = "cash") -> int:
     spec = DIFFICULTY_SPECS[difficulty]
-    num = _survive_num(difficulty, profile)
+    num = _survive_num(difficulty, profile) + int((CURRENCIES[currency].get("survive_bonus") or {}).get(difficulty, 0))
     den = int(spec["survive_den"])
     lanes = len(MULTIPLIER_CENTS_BY_PROFILE[profile][difficulty])
     for lane in range(1, lanes + 1):
@@ -629,7 +631,7 @@ def register(router):
             "lane": 0,
             "multiplier_cents": 0,
             "odds_profile": profile,
-            "death_lane": _roll_death_lane(difficulty, profile),
+            "death_lane": _roll_death_lane(difficulty, profile, currency),
         }
         try:
             await db.chicken_cross_games.insert_one(doc)
