@@ -34,10 +34,11 @@ CHICKEN_CROSS_POINTS_MAX_BET = 500
 CHICKEN_CROSS_POINTS_PAYOUT_CAP = 50_000
 CHICKEN_CROSS_STREAK_SCAN_LIMIT = 120
 CURRENCIES: Dict[str, Dict[str, Any]] = {
-    "cash": {"field": "money", "max_bet": CHICKEN_CROSS_MAX_BET, "payout_cap": CHICKEN_CROSS_PAYOUT_CAP},
     # survive_bonus is added to the real roll only; multipliers stay priced on the base odds.
+    "cash": {"field": "money", "max_bet": CHICKEN_CROSS_MAX_BET, "payout_cap": CHICKEN_CROSS_PAYOUT_CAP,
+             "survive_bonus": {"expert": 5}},
     "points": {"field": "points", "max_bet": CHICKEN_CROSS_POINTS_MAX_BET, "payout_cap": CHICKEN_CROSS_POINTS_PAYOUT_CAP,
-               "survive_bonus": {"expert": 2}},
+               "survive_bonus": {"expert": 5}},
 }
 DIFFICULTY_SPECS: Dict[str, Dict[str, Any]] = {
     "easy": {"label": "Easy", "survive_num": 90, "survive_den": 100, "lanes": 50},
