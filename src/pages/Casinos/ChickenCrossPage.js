@@ -369,7 +369,6 @@ export default function ChickenCrossPage() {
   const lastBetRef = useRef({ cash: DEFAULT_BET.cash, points: DEFAULT_BET.points });
   const busyRef = useRef(false);
   const [playMode, setPlayMode] = useState('manual');
-  const [autoTargetMode, setAutoTargetMode] = useState('lane');
   const [autoTargetValue, setAutoTargetValue] = useState('3');
   const [autoRounds, setAutoRounds] = useState('10');
   const [autoTakeProfit, setAutoTakeProfit] = useState('');
@@ -403,6 +402,12 @@ export default function ChickenCrossPage() {
     const cents = Number(first.multiplier_cents || 0);
     return Math.min(payoutCap, Math.floor((betNum * cents) / 100));
   }, [active, game, config, difficulty, betNum, payoutCap]);
+
+  const autoLanes = (config.difficulties || []).find((d) => d.id === difficulty)?.lanes || [];
+  const autoLaneMax = autoLanes.length;
+  const autoLaneInfo = autoLanes.length
+    ? autoLanes[Math.min(Math.max(1, parseInt(autoTargetValue, 10) || 1), autoLaneMax) - 1]
+    : null;
 
   const boardCols = useBoardCols();
   const chickenSrc = useChickenSprite(pose);
@@ -618,6 +623,7 @@ export default function ChickenCrossPage() {
       setGame((prev) => (prev ? {
         ...prev,
         lane: deathLane,
+        cashout: 0,
         can_step: false,
         can_cashout: false,
         can_void: false,
@@ -690,11 +696,6 @@ export default function ChickenCrossPage() {
     const rows = g?.offered_lanes || [];
     if (!rows.length) return 1;
     const last = Number(rows[rows.length - 1].lane);
-    if (autoTargetMode === 'mult') {
-      const want = Math.round(parseFloat(autoTargetValue) * 100);
-      const reach = rows.find((r) => Number(r.multiplier_cents) >= want);
-      return reach ? Number(reach.lane) : last;
-    }
     return Math.min(Math.max(1, parseInt(autoTargetValue, 10) || 1), last);
   };
 
@@ -703,9 +704,8 @@ export default function ChickenCrossPage() {
   const runAuto = async () => {
     if (busyRef.current || loading || active || autoRunning) return;
     if (!validBet()) return;
-    const targetNum = autoTargetMode === 'mult' ? parseFloat(autoTargetValue) : parseInt(autoTargetValue, 10);
-    if (!targetNum || targetNum <= (autoTargetMode === 'mult' ? 1 : 0)) {
-      toast.error(autoTargetMode === 'mult' ? 'Set a cash out multiplier above 1.00' : 'Set a cash out lane of 1 or more');
+    if (!(parseInt(autoTargetValue, 10) >= 1)) {
+      toast.error('Set a cash out lane of 1 or more');
       return;
     }
     const roundsLimit = parseAmount(autoRounds);
@@ -948,38 +948,25 @@ export default function ChickenCrossPage() {
                 {playMode === 'auto' && (
                   <div className="space-y-2 rounded-lg border border-zinc-700/50 bg-zinc-900/40 p-2.5">
                     <div>
-                      <div className="mb-1 flex items-center justify-between">
-                        <label className="text-[9px] font-heading uppercase tracking-widest text-zinc-500">Cash out at</label>
-                        <div className="flex gap-1">
-                          {['lane', 'mult'].map((m) => (
-                            <button
-                              key={m}
-                              type="button"
-                              disabled={locked}
-                              onClick={() => {
-                                setAutoTargetMode(m);
-                                setAutoTargetValue(m === 'lane' ? '3' : '2.00');
-                              }}
-                              className={`cc-touch rounded border px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase disabled:opacity-55 ${
-                                autoTargetMode === m ? 'border-primary/60 bg-primary/15 text-primary' : 'border-zinc-700/70 text-zinc-400'
-                              }`}
-                            >
-                              {m === 'lane' ? 'Lane' : 'Multiplier'}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                      <label className="text-[9px] font-heading uppercase tracking-widest text-zinc-500">Cash out at lane</label>
                       <input
                         type="number"
-                        inputMode="decimal"
-                        min={autoTargetMode === 'lane' ? 1 : 1.01}
-                        step={autoTargetMode === 'lane' ? 1 : 0.01}
+                        inputMode="numeric"
+                        min={1}
+                        max={autoLaneMax || undefined}
+                        step={1}
                         value={autoTargetValue}
-                        onChange={(e) => setAutoTargetValue(e.target.value)}
+                        onChange={(e) => setAutoTargetValue(e.target.value.replace(/\D/g, ''))}
                         disabled={locked}
-                        placeholder={autoTargetMode === 'lane' ? 'Lane e.g. 3' : 'Multiplier e.g. 2.00'}
+                        placeholder="e.g. 3"
                         className="w-full min-h-[40px] rounded-md border border-primary/25 bg-zinc-950/90 px-3 py-2 text-base sm:text-sm font-heading text-foreground focus:border-primary/50 focus:outline-none disabled:opacity-45"
                       />
+                      {autoLaneInfo && (
+                        <p className="mt-1 text-[10px] font-heading text-zinc-500">
+                          Lane {autoLaneInfo.lane} pays <span className="text-primary">x{autoLaneInfo.multiplier}</span>
+                          {betNum > 0 ? <> · {formatMoney(Math.min(payoutCap, Math.floor((betNum * Number(autoLaneInfo.multiplier_cents || 0)) / 100)), cur)}</> : null}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="text-[9px] font-heading uppercase tracking-widest text-zinc-500">Rounds (blank = until stopped)</label>
