@@ -6,7 +6,7 @@ _RTP = Fraction(98, 100)
 DIFFICULTY_SPECS = {
     "easy": {"survive_num": 90, "survive_den": 100, "lanes": 50},
     "medium": {"survive_num": 86, "survive_den": 100, "lanes": 25},
-    "hard": {"survive_num": 75, "survive_den": 100, "lanes": 20},
+    "hard": {"survive_num": 80, "survive_den": 100, "lanes": 20},
     "expert": {"survive_num": 60, "survive_den": 100, "pay_num": 60, "lanes": 15},
 }
 
