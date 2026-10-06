@@ -4,8 +4,8 @@ from fractions import Fraction
 CHICKEN_CROSS_PAYOUT_CAP = 250_000_000_000
 _RTP = Fraction(98, 100)
 DIFFICULTY_SPECS = {
-    "easy": {"survive_num": 90, "survive_den": 100, "lanes": 50},
-    "medium": {"survive_num": 86, "survive_den": 100, "lanes": 25},
+    "easy": {"survive_num": 96, "survive_den": 100, "lanes": 50},
+    "medium": {"survive_num": 88, "survive_den": 100, "lanes": 25},
     "hard": {"survive_num": 80, "survive_den": 100, "lanes": 20},
     "expert": {"survive_num": 60, "survive_den": 100, "pay_num": 60, "lanes": 15},
 }
@@ -54,7 +54,7 @@ def main():
             assert len(o) <= DIFFICULTY_SPECS[diff]["lanes"]
             assert all(p < CHICKEN_CROSS_PAYOUT_CAP for _, p in o[:-1])
             print(f"{diff:7} bet {bet:>13,}: road ends lane {o[-1][0]:>3} paying ${o[-1][1]:,}")
-    assert payout(100_000, tables["easy"][0]) == 108000
+    assert payout(100_000, tables["easy"][0]) == 102000
     for diff, spec in DIFFICULTY_SPECS.items():
         p = spec["survive_num"] / spec["survive_den"]
         for lane in (1, 3, 5, 10, 15, 20, 25, 50):

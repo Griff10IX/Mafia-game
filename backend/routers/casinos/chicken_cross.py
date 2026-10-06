@@ -41,8 +41,8 @@ CURRENCIES: Dict[str, Dict[str, Any]] = {
                "survive_bonus": {}},
 }
 DIFFICULTY_SPECS: Dict[str, Dict[str, Any]] = {
-    "easy": {"label": "Easy", "survive_num": 90, "survive_den": 100, "lanes": 50},
-    "medium": {"label": "Medium", "survive_num": 86, "survive_den": 100, "lanes": 25},
+    "easy": {"label": "Easy", "survive_num": 96, "survive_den": 100, "lanes": 50},
+    "medium": {"label": "Medium", "survive_num": 88, "survive_den": 100, "lanes": 25},
     "hard": {"label": "Hard", "survive_num": 80, "survive_den": 100, "lanes": 20},
     # pay_num prices the multipliers; survive_num is the real per-hop roll.
     "expert": {"label": "Expert", "survive_num": 60, "survive_den": 100, "pay_num": 60, "lanes": 15},
