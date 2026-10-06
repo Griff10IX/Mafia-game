@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
+  Bot,
   CircleDollarSign,
   Flame,
   MapPin,
   Repeat2,
   ShieldCheck,
   Sparkles,
+  Square,
   Trophy,
   TrendingUp,
   Footprints,
@@ -366,6 +368,17 @@ export default function ChickenCrossPage() {
   const [killCarSrc, setKillCarSrc] = useState(ASSET.cars[0]);
   const lastBetRef = useRef({ cash: DEFAULT_BET.cash, points: DEFAULT_BET.points });
   const busyRef = useRef(false);
+  const [playMode, setPlayMode] = useState('manual');
+  const [autoTargetMode, setAutoTargetMode] = useState('lane');
+  const [autoTargetValue, setAutoTargetValue] = useState('3');
+  const [autoRounds, setAutoRounds] = useState('10');
+  const [autoTakeProfit, setAutoTakeProfit] = useState('');
+  const [autoStopLoss, setAutoStopLoss] = useState('');
+  const [autoRunning, setAutoRunning] = useState(false);
+  const [autoStopping, setAutoStopping] = useState(false);
+  const [autoSession, setAutoSession] = useState(null);
+  const autoRef = useRef(false);
+  useEffect(() => () => { autoRef.current = false; }, []);
 
   const active = !!game;
   const cur = active ? (game?.currency || 'cash') : currency;
@@ -376,10 +389,11 @@ export default function ChickenCrossPage() {
   const lane = Number(game?.lane || 0);
   const offered = game?.offered_lanes || [];
   const lastOffered = offered.length ? Number(offered[offered.length - 1].lane) : 0;
-  const canStart = !active && betNum >= 1 && betNum <= maxBet && !loading;
-  const canStep = active && !!game?.can_step && !loading;
-  const canCashout = active && !!game?.can_cashout && !loading;
-  const canVoid = active && !!game?.can_void && !loading;
+  const canStart = !active && betNum >= 1 && betNum <= maxBet && !loading && !autoRunning;
+  const canStep = active && !!game?.can_step && !loading && !autoRunning;
+  const canCashout = active && !!game?.can_cashout && !loading && !autoRunning;
+  const canVoid = active && !!game?.can_void && !loading && !autoRunning;
+  const locked = loading || active || autoRunning;
 
   const potentialCashout = useMemo(() => {
     if (active) return Number(game?.cashout || 0);
@@ -520,7 +534,7 @@ export default function ChickenCrossPage() {
   const setQuickBet = (amount) => setBet(String(Math.min(amount, maxBet)));
   const repeatLast = () => setBet(lastBetRef.current[currency] || DEFAULT_BET[currency]);
 
-  const afterSettle = (settled) => {
+  const afterSettle = (settled, quiet = false) => {
     setGame(null);
     setPose(settled?.result === 'hit' ? 'hit' : 'idle');
     if (settled) {
@@ -529,7 +543,7 @@ export default function ChickenCrossPage() {
     }
     runAfterUiSettles(() => {
       refreshUser();
-      fetchStats();
+      if (!quiet) fetchStats();
     });
   };
 
@@ -541,28 +555,39 @@ export default function ChickenCrossPage() {
     setTimeout(resolve, HOP_MS);
   });
 
-  const start = async () => {
-    if (busyRef.current || loading || active) return;
+  const validBet = () => {
     if (betNum < 1) {
       toast.error('Enter a bet');
-      return;
+      return false;
     }
     if (betNum > maxBet) {
       toast.error(`Max bet is ${formatMoney(maxBet, currency)}`);
-      return;
+      return false;
     }
-    busyRef.current = true;
-    setLoading(true);
+    return true;
+  };
+
+  const startCore = async () => {
     setHitFlash(false);
     setKillCar(false);
     setPose('idle');
     setChickenLane(0);
+    const res = await apiRequestWith429Retry(() => api.post('/casino/chicken-cross/start', { bet: betNum, difficulty, currency }));
+    lastBetRef.current[currency] = String(betNum);
+    const next = res.data?.game || null;
+    setGame(next);
+    runAfterUiSettles(() => refreshUser());
+    return next;
+  };
+
+  const start = async () => {
+    if (busyRef.current || loading || active || autoRunning) return;
+    if (!validBet()) return;
+    busyRef.current = true;
+    setLoading(true);
     try {
-      const res = await apiRequestWith429Retry(() => api.post('/casino/chicken-cross/start', { bet: betNum, difficulty, currency }));
-      lastBetRef.current[currency] = String(betNum);
-      setGame(res.data?.game || null);
+      await startCore();
       setLastRound(null);
-      runAfterUiSettles(() => refreshUser());
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Could not start');
     } finally {
@@ -581,50 +606,55 @@ export default function ChickenCrossPage() {
 
   const pause = (ms) => new Promise((resolve) => setTimeout(resolve, prefersReducedMotion() ? 0 : ms));
 
+  const hopCore = async (fromLane, quiet = false) => {
+    setHitFlash(false);
+    setKillCar(false);
+    setPose('hop');
+    const res = await apiRequestWith429Retry(() => api.post('/casino/chicken-cross/step'));
+    const isHit = res.data?.settled?.result === 'hit';
+    if (isHit) {
+      const deathLane = Number(res.data?.settled?.lane || fromLane + 1);
+      setKillCarSrc(ASSET.cars[Math.floor(Math.random() * ASSET.cars.length)]);
+      setGame((prev) => (prev ? {
+        ...prev,
+        lane: deathLane,
+        can_step: false,
+        can_cashout: false,
+        can_void: false,
+      } : prev));
+      setHopKey((k) => k + 1);
+      await pause(HOP_MS - KILL_LEAD_MS);
+      setKillCar(true);
+      await pause(KILL_LEAD_MS);
+      setPose('hit');
+      setHitFlash(true);
+      await waitHit();
+      setKillCar(false);
+      afterSettle(res.data.settled, quiet);
+      if (!quiet) toast.message('Squashed. Stake lost.');
+    } else if (res.data?.active && res.data?.game) {
+      setGame(res.data.game);
+      setHopKey((k) => k + 1);
+      await waitHop();
+      setPose('idle');
+    } else if (res.data?.settled) {
+      setChickenLane(Number(res.data.settled?.lane || fromLane + 1));
+      setHopKey((k) => k + 1);
+      await waitHop();
+      afterSettle(res.data.settled, quiet);
+      if (!quiet) toast.success(`Crossed the road! Paid ${formatMoney(res.data.settled?.payout || 0, res.data.settled?.currency)}`);
+    } else {
+      setPose('idle');
+    }
+    return res.data;
+  };
+
   const step = async () => {
     if (busyRef.current || loading || !canStep) return;
     busyRef.current = true;
     setLoading(true);
-    setHitFlash(false);
-    setKillCar(false);
-    setPose('hop');
     try {
-      const res = await apiRequestWith429Retry(() => api.post('/casino/chicken-cross/step'));
-      const isHit = res.data?.settled?.result === 'hit';
-      if (isHit) {
-        const deathLane = Number(res.data?.settled?.lane || lane + 1);
-        setKillCarSrc(ASSET.cars[Math.floor(Math.random() * ASSET.cars.length)]);
-        setGame((prev) => (prev ? {
-          ...prev,
-          lane: deathLane,
-          can_step: false,
-          can_cashout: false,
-          can_void: false,
-        } : prev));
-        setHopKey((k) => k + 1);
-        await pause(HOP_MS - KILL_LEAD_MS);
-        setKillCar(true);
-        await pause(KILL_LEAD_MS);
-        setPose('hit');
-        setHitFlash(true);
-        await waitHit();
-        setKillCar(false);
-        afterSettle(res.data.settled);
-        toast.message('Squashed. Stake lost.');
-      } else if (res.data?.active && res.data?.game) {
-        setGame(res.data.game);
-        setHopKey((k) => k + 1);
-        await waitHop();
-        setPose('idle');
-      } else if (res.data?.settled) {
-        setChickenLane(Number(res.data.settled?.lane || lane + 1));
-        setHopKey((k) => k + 1);
-        await waitHop();
-        afterSettle(res.data.settled);
-        toast.success(`Crossed the road! Paid ${formatMoney(res.data.settled?.payout || 0, res.data.settled?.currency)}`);
-      } else {
-        setPose('idle');
-      }
+      await hopCore(lane);
     } catch (e) {
       setKillCar(false);
       setPose('idle');
@@ -635,20 +665,117 @@ export default function ChickenCrossPage() {
     }
   };
 
+  const cashoutCore = async (quiet = false) => {
+    const res = await apiRequestWith429Retry(() => api.post('/casino/chicken-cross/cashout'));
+    afterSettle(res.data?.settled, quiet);
+    if (!quiet) toast.success(`Cashed out ${formatMoney(res.data?.settled?.payout || 0, res.data?.settled?.currency)}`);
+    return res.data?.settled || null;
+  };
+
   const cashout = async () => {
     if (busyRef.current || loading || !canCashout) return;
     busyRef.current = true;
     setLoading(true);
     try {
-      const res = await apiRequestWith429Retry(() => api.post('/casino/chicken-cross/cashout'));
-      afterSettle(res.data?.settled);
-      toast.success(`Cashed out ${formatMoney(res.data?.settled?.payout || 0, res.data?.settled?.currency)}`);
+      await cashoutCore();
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Cash out failed');
     } finally {
       busyRef.current = false;
       setLoading(false);
     }
+  };
+
+  const autoTargetLane = (g) => {
+    const rows = g?.offered_lanes || [];
+    if (!rows.length) return 1;
+    const last = Number(rows[rows.length - 1].lane);
+    if (autoTargetMode === 'mult') {
+      const want = Math.round(parseFloat(autoTargetValue) * 100);
+      const reach = rows.find((r) => Number(r.multiplier_cents) >= want);
+      return reach ? Number(reach.lane) : last;
+    }
+    return Math.min(Math.max(1, parseInt(autoTargetValue, 10) || 1), last);
+  };
+
+  const parseAmount = (v) => parseInt(String(v || '').replace(/\D/g, ''), 10) || 0;
+
+  const runAuto = async () => {
+    if (busyRef.current || loading || active || autoRunning) return;
+    if (!validBet()) return;
+    const targetNum = autoTargetMode === 'mult' ? parseFloat(autoTargetValue) : parseInt(autoTargetValue, 10);
+    if (!targetNum || targetNum <= (autoTargetMode === 'mult' ? 1 : 0)) {
+      toast.error(autoTargetMode === 'mult' ? 'Set a cash out multiplier above 1.00' : 'Set a cash out lane of 1 or more');
+      return;
+    }
+    const roundsLimit = parseAmount(autoRounds);
+    const takeProfit = parseAmount(autoTakeProfit);
+    const stopLoss = parseAmount(autoStopLoss);
+    const runCurrency = currency;
+    const session = { rounds: 0, wins: 0, net: 0, currency: runCurrency, reason: '' };
+    busyRef.current = true;
+    autoRef.current = true;
+    setAutoRunning(true);
+    setAutoStopping(false);
+    setAutoSession({ ...session });
+    try {
+      while (autoRef.current) {
+        if (roundsLimit && session.rounds >= roundsLimit) {
+          session.reason = 'Rounds done';
+          break;
+        }
+        const g = await startCore();
+        if (!g) throw new Error('Could not start');
+        const target = autoTargetLane(g);
+        let curLane = 0;
+        let settled = null;
+        while (!settled) {
+          if (curLane >= target) {
+            settled = await cashoutCore(true);
+            if (!settled) throw new Error('Cash out failed');
+            break;
+          }
+          const data = await hopCore(curLane, true);
+          if (data?.settled) settled = data.settled;
+          else if (data?.active && data?.game) curLane = Number(data.game.lane || curLane + 1);
+          else throw new Error('Hop failed');
+        }
+        session.rounds += 1;
+        if (settled.won) session.wins += 1;
+        session.net += Number(settled.net ?? (Number(settled.payout || 0) - Number(settled.bet || 0)));
+        setAutoSession({ ...session });
+        if (takeProfit && session.net >= takeProfit) {
+          session.reason = 'Take profit hit';
+          break;
+        }
+        if (stopLoss && session.net <= -stopLoss) {
+          session.reason = 'Stop loss hit';
+          break;
+        }
+        if (!autoRef.current) session.reason = 'Stopped';
+        await pause(350);
+      }
+    } catch (e) {
+      setKillCar(false);
+      setPose('idle');
+      session.reason = getApiErrorMessage(e) || e?.message || 'Auto stopped';
+      toast.error(session.reason);
+      fetchGame();
+    } finally {
+      if (!session.reason) session.reason = 'Stopped';
+      autoRef.current = false;
+      busyRef.current = false;
+      setAutoRunning(false);
+      setAutoStopping(false);
+      setAutoSession({ ...session });
+      fetchStats();
+      toast.message(`Auto: ${session.reason} · ${session.rounds} rounds · ${formatSignedMoney(session.net, runCurrency)}`);
+    }
+  };
+
+  const stopAuto = () => {
+    autoRef.current = false;
+    setAutoStopping(true);
   };
 
   const voidRound = async () => {
@@ -727,7 +854,7 @@ export default function ChickenCrossPage() {
                         <button
                           key={d.id}
                           type="button"
-                          disabled={loading || active}
+                          disabled={locked}
                           onClick={() => setDifficulty(d.id)}
                           className={`cc-touch min-h-[40px] rounded-lg border px-2 text-[10px] font-heading font-bold uppercase tracking-wide disabled:opacity-55 ${
                             on ? 'border-primary/70 bg-primary/15 text-primary' : 'border-zinc-700/70 bg-zinc-900/50 text-zinc-300 hover:border-primary/35'
@@ -747,7 +874,7 @@ export default function ChickenCrossPage() {
                       <button
                         key={c}
                         type="button"
-                        disabled={loading || active}
+                        disabled={locked}
                         onClick={() => switchCurrency(c)}
                         className={`cc-touch min-h-[36px] rounded-lg border px-2 text-[10px] font-heading font-bold uppercase tracking-wide disabled:opacity-55 ${
                           cur === c ? 'border-primary/70 bg-primary/15 text-primary' : 'border-zinc-700/70 bg-zinc-900/50 text-zinc-300 hover:border-primary/35'
@@ -764,7 +891,7 @@ export default function ChickenCrossPage() {
                   <FormattedNumberInput
                     value={bet}
                     onChange={setBet}
-                    disabled={loading || active}
+                    disabled={locked}
                     placeholder={DEFAULT_BET[cur]}
                     className="w-full min-h-[44px] rounded-md border border-primary/25 bg-zinc-950/90 px-3 py-2 text-base sm:text-sm font-heading text-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-45"
                   />
@@ -774,7 +901,7 @@ export default function ChickenCrossPage() {
                         key={amount}
                         type="button"
                         onClick={() => setQuickBet(amount)}
-                        disabled={loading || active}
+                        disabled={locked}
                         className="cc-touch min-h-[36px] rounded border border-zinc-700/70 bg-zinc-900/70 px-1 text-[9px] font-heading font-bold uppercase text-zinc-300 hover:border-primary/40 hover:text-primary disabled:opacity-45"
                       >
                         {quickBetLabel(amount, cur)}
@@ -783,7 +910,7 @@ export default function ChickenCrossPage() {
                     <button
                       type="button"
                       onClick={() => setQuickBet(maxBet)}
-                      disabled={loading || active}
+                      disabled={locked}
                       className="cc-touch min-h-[36px] rounded border border-primary/40 bg-primary/12 px-1 text-[9px] font-heading font-bold uppercase text-primary disabled:opacity-45"
                     >
                       Max
@@ -792,12 +919,111 @@ export default function ChickenCrossPage() {
                   <button
                     type="button"
                     onClick={repeatLast}
-                    disabled={loading || active}
+                    disabled={locked}
                     className="cc-touch inline-flex items-center gap-1.5 rounded border border-zinc-700/60 bg-zinc-900/50 px-2 py-1 text-[10px] font-heading text-zinc-400 hover:text-primary hover:border-primary/35 disabled:opacity-45"
                   >
                     <Repeat2 size={13} /> Repeat last bet
                   </button>
                 </div>
+
+                <div>
+                  <p className="text-[9px] font-heading uppercase tracking-widest text-zinc-500 mb-1.5">Play</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {['manual', 'auto'].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        disabled={locked}
+                        onClick={() => setPlayMode(m)}
+                        className={`cc-touch min-h-[36px] rounded-lg border px-2 text-[10px] font-heading font-bold uppercase tracking-wide disabled:opacity-55 ${
+                          playMode === m ? 'border-primary/70 bg-primary/15 text-primary' : 'border-zinc-700/70 bg-zinc-900/50 text-zinc-300 hover:border-primary/35'
+                        }`}
+                      >
+                        {m === 'manual' ? 'Manual' : 'Auto'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {playMode === 'auto' && (
+                  <div className="space-y-2 rounded-lg border border-zinc-700/50 bg-zinc-900/40 p-2.5">
+                    <div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <label className="text-[9px] font-heading uppercase tracking-widest text-zinc-500">Cash out at</label>
+                        <div className="flex gap-1">
+                          {['lane', 'mult'].map((m) => (
+                            <button
+                              key={m}
+                              type="button"
+                              disabled={locked}
+                              onClick={() => {
+                                setAutoTargetMode(m);
+                                setAutoTargetValue(m === 'lane' ? '3' : '2.00');
+                              }}
+                              className={`cc-touch rounded border px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase disabled:opacity-55 ${
+                                autoTargetMode === m ? 'border-primary/60 bg-primary/15 text-primary' : 'border-zinc-700/70 text-zinc-400'
+                              }`}
+                            >
+                              {m === 'lane' ? 'Lane' : 'Multiplier'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min={autoTargetMode === 'lane' ? 1 : 1.01}
+                        step={autoTargetMode === 'lane' ? 1 : 0.01}
+                        value={autoTargetValue}
+                        onChange={(e) => setAutoTargetValue(e.target.value)}
+                        disabled={locked}
+                        placeholder={autoTargetMode === 'lane' ? 'Lane e.g. 3' : 'Multiplier e.g. 2.00'}
+                        className="w-full min-h-[40px] rounded-md border border-primary/25 bg-zinc-950/90 px-3 py-2 text-base sm:text-sm font-heading text-foreground focus:border-primary/50 focus:outline-none disabled:opacity-45"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-heading uppercase tracking-widest text-zinc-500">Rounds (blank = until stopped)</label>
+                      <FormattedNumberInput
+                        value={autoRounds}
+                        onChange={setAutoRounds}
+                        disabled={locked}
+                        placeholder="Unlimited"
+                        className="w-full min-h-[40px] rounded-md border border-primary/25 bg-zinc-950/90 px-3 py-2 text-base sm:text-sm font-heading text-foreground focus:border-primary/50 focus:outline-none disabled:opacity-45"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] font-heading uppercase tracking-widest text-zinc-500">Take profit</label>
+                        <FormattedNumberInput
+                          value={autoTakeProfit}
+                          onChange={setAutoTakeProfit}
+                          disabled={locked}
+                          placeholder="Off"
+                          className="w-full min-h-[40px] rounded-md border border-emerald-500/25 bg-zinc-950/90 px-2 py-2 text-base sm:text-sm font-heading text-foreground focus:border-emerald-500/50 focus:outline-none disabled:opacity-45"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-heading uppercase tracking-widest text-zinc-500">Stop loss</label>
+                        <FormattedNumberInput
+                          value={autoStopLoss}
+                          onChange={setAutoStopLoss}
+                          disabled={locked}
+                          placeholder="Off"
+                          className="w-full min-h-[40px] rounded-md border border-rose-500/25 bg-zinc-950/90 px-2 py-2 text-base sm:text-sm font-heading text-foreground focus:border-rose-500/50 focus:outline-none disabled:opacity-45"
+                        />
+                      </div>
+                    </div>
+                    {autoSession && (
+                      <p className="text-[10px] font-heading text-zinc-400">
+                        {autoRunning ? (autoStopping ? 'Stopping after this round · ' : 'Running · ') : `${autoSession.reason} · `}
+                        {autoSession.rounds} rounds · {autoSession.wins}W ·{' '}
+                        <span className={autoSession.net >= 0 ? 'text-emerald-400' : 'text-rose-300'}>
+                          {formatSignedMoney(autoSession.net, autoSession.currency)}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div className="rounded-lg border border-zinc-700/50 bg-zinc-900/40 px-3 py-2">
                   <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500">{active ? 'Cash out now' : 'First lane pays'}</p>
@@ -810,7 +1036,27 @@ export default function ChickenCrossPage() {
                 </div>
 
                 <div className="hidden md:flex flex-wrap gap-2">
-                  {!active ? (
+                  {autoRunning ? (
+                    <button
+                      type="button"
+                      onClick={stopAuto}
+                      disabled={autoStopping}
+                      className="cc-touch inline-flex min-h-[44px] min-w-[9rem] items-center justify-center gap-2 rounded-lg border border-rose-500/55 bg-rose-500/15 px-5 text-[12px] font-heading font-black uppercase tracking-wider text-rose-300 disabled:opacity-45"
+                    >
+                      <Square size={15} />
+                      {autoStopping ? 'Stopping…' : 'Stop auto'}
+                    </button>
+                  ) : !active && playMode === 'auto' ? (
+                    <button
+                      type="button"
+                      onClick={runAuto}
+                      disabled={!canStart}
+                      className="cc-touch inline-flex min-h-[44px] min-w-[9rem] items-center justify-center gap-2 rounded-lg border border-primary/55 bg-primary/15 px-5 text-[12px] font-heading font-black uppercase tracking-wider text-primary disabled:opacity-35"
+                    >
+                      <Bot size={16} />
+                      Start auto
+                    </button>
+                  ) : !active ? (
                     <button
                       type="button"
                       onClick={start}
@@ -1012,7 +1258,27 @@ export default function ChickenCrossPage() {
               )}
             </p>
           </div>
-          {!active ? (
+          {autoRunning ? (
+            <button
+              type="button"
+              onClick={stopAuto}
+              disabled={autoStopping}
+              className="cc-touch flex min-h-[44px] min-w-[9rem] items-center justify-center gap-1.5 rounded-lg border border-rose-500/55 bg-rose-500/15 px-4 text-xs font-heading font-black uppercase tracking-wide text-rose-300 disabled:opacity-45"
+            >
+              <Square size={15} />
+              {autoStopping ? 'Stopping…' : 'Stop auto'}
+            </button>
+          ) : !active && playMode === 'auto' ? (
+            <button
+              type="button"
+              onClick={runAuto}
+              disabled={!canStart}
+              className="cc-touch flex min-h-[44px] min-w-[9rem] items-center justify-center gap-1.5 rounded-lg border border-primary/55 bg-primary/15 px-4 text-xs font-heading font-black uppercase tracking-wide text-primary disabled:opacity-35"
+            >
+              <Bot size={17} />
+              Start auto
+            </button>
+          ) : !active ? (
             <button
               type="button"
               onClick={start}
