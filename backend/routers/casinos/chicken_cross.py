@@ -45,7 +45,7 @@ DIFFICULTY_SPECS: Dict[str, Dict[str, Any]] = {
     "medium": {"label": "Medium", "survive_num": 88, "survive_den": 100, "lanes": 25},
     "hard": {"label": "Hard", "survive_num": 80, "survive_den": 100, "lanes": 20},
     # pay_num prices the multipliers; survive_num is the real per-hop roll.
-    "expert": {"label": "Expert", "survive_num": 60, "survive_den": 100, "pay_num": 60, "lanes": 15},
+    "expert": {"label": "Expert", "survive_num": 58, "survive_den": 100, "pay_num": 60, "lanes": 15},
 }
 
 # Odds follow total player cash: "boost" below the low mark, back to "normal" at the high mark.
