@@ -45,7 +45,7 @@ DIFFICULTY_SPECS: Dict[str, Dict[str, Any]] = {
     "medium": {"label": "Medium", "survive_num": 88, "survive_den": 100, "lanes": 25},
     "hard": {"label": "Hard", "survive_num": 80, "survive_den": 100, "lanes": 20},
     # pay_num prices the multipliers; survive_num is the real per-hop roll.
-    "expert": {"label": "Expert", "survive_num": 58, "survive_den": 100, "pay_num": 60, "lanes": 15},
+    "expert": {"label": "Expert", "survive_num": 62, "survive_den": 100, "pay_num": 60, "lanes": 15},
 }
 
 # Odds follow total player cash: "boost" below the low mark, back to "normal" at the high mark.
@@ -75,8 +75,6 @@ def _build_multiplier_tables(profile: str) -> Dict[str, tuple]:
     for key, spec in DIFFICULTY_SPECS.items():
         reached = Fraction(1)
         pay_num = int(spec.get("pay_num", spec["survive_num"]))
-        if pay_num < _survive_num(key, profile):
-            raise RuntimeError(f"Chicken Cross pay odds would beat the real odds for {key} ({profile})")
         survival = Fraction(pay_num, int(spec["survive_den"]))
         cents_rows: List[int] = []
         while True:

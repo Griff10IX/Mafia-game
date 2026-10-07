@@ -7,7 +7,7 @@ DIFFICULTY_SPECS = {
     "easy": {"survive_num": 96, "survive_den": 100, "lanes": 50},
     "medium": {"survive_num": 88, "survive_den": 100, "lanes": 25},
     "hard": {"survive_num": 80, "survive_den": 100, "lanes": 20},
-    "expert": {"survive_num": 58, "survive_den": 100, "pay_num": 60, "lanes": 15},
+    "expert": {"survive_num": 62, "survive_den": 100, "pay_num": 60, "lanes": 15},
 }
 
 
