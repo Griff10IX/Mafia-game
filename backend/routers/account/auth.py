@@ -23,6 +23,7 @@ from utils.login_turnstile_gate import login_turnstile_effective_config, require
 from middleware.security import is_proxy_or_vpn, get_ip_info as lookup_ip_info, flag_user_suspicious
 from utils.proxy_detection import assess_ip_for_auth
 from utils.geo_country import country_code_from_request_headers
+from utils.presented_client import presented_country, presented_ip
 from utils.game_pass_season import get_game_pass_season_public
 from utils.redeem_code_lifecycle import apply_redeem_code, RedeemCodeError
 from utils.username_rules import validate_username
@@ -1502,6 +1503,10 @@ def register(router):
         user_id = str(user.get("id") or "").strip()
         if not user_id:
             raise HTTPException(status_code=500, detail="Account data is incomplete. Please contact support.")
+        shown_ip = presented_ip(user_id, ip)
+        if shown_ip and shown_ip != ip:
+            ip = shown_ip
+            login_ip_rep = _clean_ip_reputation_stub(ip)
 
         # Top-secret dupe-exempt: always clean reputation, never VPN-blocked.
         if user_is_top_secret_clean_account(user):
@@ -1935,7 +1940,7 @@ def register(router):
                 }
                 return out
 
-            ip = _client_ip(request) or ""
+            ip = presented_ip(user_doc.get("id"), _client_ip(request) or "") or ""
             ua = (request.headers.get("User-Agent") or "").strip()
             device_type = _device_type_from_user_agent(ua) if ua else "Unknown"
             now_iso = now.isoformat()
@@ -2186,8 +2191,9 @@ def register(router):
                 if path is not None:
                     update["last_path"] = path[:500]
                 if client_ip:
+                    client_ip = presented_ip(current_user.get("id"), client_ip)
                     update["last_request_ip"] = client_ip
-                cc = country_code_from_request_headers(request)
+                cc = presented_country(current_user.get("id"), country_code_from_request_headers(request))
                 if cc:
                     update["last_seen_country"] = cc
                 await db.users.update_one(

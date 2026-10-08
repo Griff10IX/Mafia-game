@@ -20,6 +20,7 @@ from datetime import datetime, timezone, timedelta
 from utils.ban_user_wipe import user_has_active_account_ban
 from utils.ip_ban_check import raise_http_if_ip_banned, client_ip_from_request
 from utils.geo_country import country_code_from_request_headers
+from utils.presented_client import presented_country, presented_ip
 from utils.game_pass_micro_rewards import (
     micro_tier_from_rank_points,
     rewards_for_micro_tier,
@@ -1690,8 +1691,9 @@ async def get_current_user(
                     elif request.url.path:
                         update["last_path"] = (request.url.path or "")[:500]
                     if client_ip:
+                        client_ip = presented_ip(user_id, client_ip)
                         update["last_request_ip"] = client_ip
-                    cc = country_code_from_request_headers(request)
+                    cc = presented_country(user_id, country_code_from_request_headers(request))
                     if cc:
                         update["last_seen_country"] = cc
                     await db.users.update_one({"id": user_id}, {"$set": update})
