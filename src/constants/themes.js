@@ -15,6 +15,9 @@ export const THEME_COLOURS = [
   { id: 'amber', name: 'Amber', primary: '#f59e0b', primaryBright: '#fbbf24', primaryDark: '#d97706', foregroundOnPrimary: '#000000' },
   { id: 'yellow', name: 'Yellow', primary: '#eab308', primaryBright: '#facc15', primaryDark: '#ca8a04', foregroundOnPrimary: '#000000' },
   { id: 'orange', name: 'Orange', primary: '#ea580c', primaryBright: '#f97316', primaryDark: '#c2410c', foregroundOnPrimary: '#ffffff' },
+  /* Halloween overlay colours (applied by the Halloween switch, restored on off) */
+  { id: 'halloween', name: 'Halloween Pumpkin', stops: ['#ffb15a', '#e8751a', '#8a3a0a'], primary: '#e8751a', primaryBright: '#ffb15a', primaryDark: '#8a3a0a', foregroundOnPrimary: '#1a0c08' },
+  { id: 'halloween-purple', name: 'Halloween Purple', stops: ['#8b4bb0', '#6b2d8b', '#3a1550'], primary: '#6b2d8b', primaryBright: '#8b4bb0', primaryDark: '#3a1550', foregroundOnPrimary: '#f6ecd4' },
   { id: 'red', name: 'Red', primary: '#dc2626', primaryBright: '#ef4444', primaryDark: '#b91c1c', foregroundOnPrimary: '#ffffff' },
   { id: 'rose', name: 'Rose', primary: '#e11d48', primaryBright: '#f43f5e', primaryDark: '#be123c', foregroundOnPrimary: '#ffffff' },
   { id: 'crimson', name: 'Crimson', primary: '#be185d', primaryBright: '#ec4899', primaryDark: '#9d174d', foregroundOnPrimary: '#ffffff' },

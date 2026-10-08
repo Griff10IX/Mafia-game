@@ -32,6 +32,15 @@ import { getThemeUiPlatform } from '../utils/themePlatform';
 import { GAME_CHAT_VISIBLE_KEY, GAME_CHAT_VISIBILITY_EVENT } from '../utils/gameChatVisibility';
 
 const STORAGE_KEY_COLOUR = 'app_theme_colour';
+/** Colour set the Halloween switch applies on top of the player's layout. */
+const HALLOWEEN_THEME = {
+  colourId: 'halloween',
+  buttonColourId: 'halloween',
+  accentLineColourId: 'halloween-purple',
+  writingColourId: 'parchment',
+  mutedWritingColourId: 'warm-gray',
+  toastTextColourId: 'parchment',
+};
 const STORAGE_KEY_TEXTURE = 'app_theme_texture';
 const STORAGE_KEY_BUTTON = 'app_theme_button';
 const STORAGE_KEY_ACCENT_LINE = 'app_theme_accent_line';
@@ -1254,6 +1263,19 @@ export function ThemeProvider({ children }) {
       halloweenSnapshotRef.current = snap;
       try { localStorage.setItem(STORAGE_KEY_HALLOWEEN_SNAPSHOT, JSON.stringify(snap)); } catch (_) {}
       try { localStorage.setItem(STORAGE_KEY_HALLOWEEN, '1'); } catch (_) {}
+      // Apply the Halloween colour set over the current layout (layout, font, button style and shape stay as they are).
+      try { localStorage.setItem(STORAGE_KEY_COLOUR, HALLOWEEN_THEME.colourId); } catch (_) {}
+      setColourIdState(HALLOWEEN_THEME.colourId);
+      try { localStorage.setItem(STORAGE_KEY_BUTTON, HALLOWEEN_THEME.buttonColourId); } catch (_) {}
+      setButtonColourIdState(HALLOWEEN_THEME.buttonColourId);
+      try { localStorage.setItem(STORAGE_KEY_ACCENT_LINE, HALLOWEEN_THEME.accentLineColourId); } catch (_) {}
+      setAccentLineColourIdState(HALLOWEEN_THEME.accentLineColourId);
+      try { localStorage.setItem(STORAGE_KEY_WRITING, HALLOWEEN_THEME.writingColourId); } catch (_) {}
+      setWritingColourIdState(HALLOWEEN_THEME.writingColourId);
+      try { localStorage.setItem(STORAGE_KEY_MUTED_WRITING, HALLOWEEN_THEME.mutedWritingColourId); } catch (_) {}
+      setMutedWritingColourIdState(HALLOWEEN_THEME.mutedWritingColourId);
+      try { localStorage.setItem(STORAGE_KEY_TOAST_TEXT, HALLOWEEN_THEME.toastTextColourId); } catch (_) {}
+      setToastTextColourIdState(HALLOWEEN_THEME.toastTextColourId);
       setHalloweenOnState(true);
       return;
     }
