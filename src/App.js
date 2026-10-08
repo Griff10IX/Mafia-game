@@ -141,6 +141,7 @@ const Slots = lazy(() => import("./pages/Casinos/SlotsPage"));
 const Keno = lazy(() => import("./pages/Casinos/KenoPage"));
 const CoinFlip = lazy(() => import("./pages/Casinos/CoinFlipPage"));
 const ChickenCross = lazy(() => import("./pages/Casinos/ChickenCrossPage"));
+const Crash = lazy(() => import("./pages/Casinos/CrashPage"));
 const RoadRunnerPacman = lazy(() => import("./pages/Arcade/RoadRunnerPacmanPage"));
 const VideoPoker = lazy(() => import("./pages/Casinos/VideoPokerPage"));
 const WheelOfFortune = lazy(() => import("./pages/Casinos/WheelOfFortunePage"));
@@ -863,6 +864,17 @@ function App() {
               withGamblingBan(
               <ErrorBoundary>
                 <ChickenCross />
+              </ErrorBoundary>,
+              'lock-page',
+              )
+              }
+            />
+            <Route
+              path="/casino/crash"
+              element={
+              withGamblingBan(
+              <ErrorBoundary>
+                <Crash />
               </ErrorBoundary>,
               'lock-page',
               )

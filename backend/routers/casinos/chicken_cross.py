@@ -45,7 +45,9 @@ DIFFICULTY_SPECS: Dict[str, Dict[str, Any]] = {
     "medium": {"label": "Medium", "survive_num": 88, "survive_den": 100, "lanes": 25},
     "hard": {"label": "Hard", "survive_num": 80, "survive_den": 100, "lanes": 20},
     # pay_num prices the multipliers; survive_num is the real per-hop roll.
-    "expert": {"label": "Expert", "survive_num": 62, "survive_den": 100, "pay_num": 60, "lanes": 15},
+    # early_lanes uses early_survive_num for the real roll only.
+    "expert": {"label": "Expert", "survive_num": 62, "survive_den": 100, "pay_num": 60, "lanes": 15,
+               "early_lanes": 4, "early_survive_num": 65},
 }
 
 # Odds follow total player cash: "boost" below the low mark, back to "normal" at the high mark.
@@ -185,10 +187,15 @@ def _offered_lanes(
 
 def _roll_death_lane(difficulty: str, profile: str = DEFAULT_PROFILE, currency: str = "cash") -> int:
     spec = DIFFICULTY_SPECS[difficulty]
-    num = _survive_num(difficulty, profile) + int((CURRENCIES[currency].get("survive_bonus") or {}).get(difficulty, 0))
+    base = _survive_num(difficulty, profile) + int((CURRENCIES[currency].get("survive_bonus") or {}).get(difficulty, 0))
     den = int(spec["survive_den"])
+    early_lanes = int(spec.get("early_lanes") or 0)
+    early_num = spec.get("early_survive_num")
     lanes = len(MULTIPLIER_CENTS_BY_PROFILE[profile][difficulty])
     for lane in range(1, lanes + 1):
+        num = base
+        if early_num is not None and lane <= early_lanes:
+            num = int(early_num) + (base - int(spec["survive_num"]))
         if _rng.randrange(den) >= num:
             return lane
     return lanes + 1

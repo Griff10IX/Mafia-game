@@ -3795,7 +3795,7 @@ async def _user_owns_any_property(user_id: str):
 from routers.account import auth, profile, prestige, user_progress, users
 from routers.admin import admin, security_admin, airport, investigate
 from routers.cars import gta
-from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, horseracing, slots, keno, coin_flip, chicken_cross, rr_pacman, video_poker, mdg, sports_betting, wheel_of_fortune
+from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, horseracing, slots, keno, coin_flip, chicken_cross, crash, rr_pacman, video_poker, mdg, sports_betting, wheel_of_fortune
 from routers.crime import crimes, jail, organised_crime, oc
 from routers.game import families, leaderboard, states, stats, store, dead_alive, events, notifications, meta, entertainer, entertainer_staff, achievements, daily_contests
 from routers.kill import attack, armoury, bodyguards, hitlist, witness_statements
@@ -3855,6 +3855,7 @@ if SLOTS_FEATURE_ENABLED:
 keno.register(api_router)
 coin_flip.register(api_router)
 chicken_cross.register(api_router)
+crash.register(api_router)
 rr_pacman.register(api_router)
 video_poker.register(api_router)
 wheel_of_fortune.register(api_router)
@@ -4304,6 +4305,8 @@ async def startup_db():
         logging.getLogger(__name__).info(
             "Family vault hourly bullets: in-process ticker enabled (~60s+jitter; FAMILY_TREASURY_BULLETS_HOURLY_USE_CRON=1 or FAMILY_TREASURY_BULLETS_HOURLY_TICKER=0 for external cron only). Multi-worker: prefer cron-only."
         )
+    from routers.casinos.crash import start_crash_loop
+    start_crash_loop()
     from routers.cars import gta as gta_router
     asyncio.create_task(gta_router.run_dealer_replenish_loop())
     asyncio.create_task(gta_router.run_dealer_auto_stock_loop())

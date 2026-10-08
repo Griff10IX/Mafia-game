@@ -3,3 +3,6 @@ export const SLOTS_FEATURE_ENABLED = false;
 
 /** Road Runner Pac-Man admin-only test mode (must match RR_PACMAN_ADMIN_ONLY in backend/routers/casinos/rr_pacman.py). */
 export const RR_PACMAN_ADMIN_ONLY = false;
+
+/** Crash admin-only test mode (must match CRASH_ADMIN_ONLY in backend/routers/casinos/crash.py). */
+export const CRASH_ADMIN_ONLY = true;

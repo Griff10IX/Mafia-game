@@ -397,11 +397,11 @@ export default function FamilyProfilePage() {
           const until = family.fortnight_theme_until ? new Date(family.fortnight_theme_until).getTime() : 0;
           if (until && until < Date.now()) return null;
           return (
-            <div className="w-full overflow-hidden border-b border-primary/20">
+            <div className="w-full h-36 sm:h-44 overflow-hidden border-b border-primary/20">
               <img
                 src={family.fortnight_theme_image}
                 alt=""
-                className="w-full h-auto block"
+                className="w-full h-full object-cover object-[center_38%] block"
               />
               <div className="px-3 py-1 text-[8px] font-heading uppercase tracking-widest text-amber-300/80 bg-amber-500/10">
                 Crew of the Fortnight
