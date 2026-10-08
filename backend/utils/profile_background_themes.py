@@ -21,7 +21,7 @@ CUSTOM_THEME_NAME = "Admin custom (test)"
 # Catalog: hard-to-get themes (loot later). Image paths are public static assets.
 # ?v= cache-bust when art is replaced.
 # fit: width = natural-aspect banner (default); stretch = fill whole dossier.
-_THEME_ASSET_V = "20260930sets"
+_THEME_ASSET_V = "20261008gif"
 PROFILE_BACKGROUND_THEMES: Dict[str, Dict[str, Any]] = {
     "godfather": {
         "id": "godfather",
@@ -1608,6 +1608,115 @@ def _cover_crop_rgb(im: Any, tw: int, th: int) -> Any:
     return im.crop((left, top, left + tw, top + th))
 
 
+def _animated_theme_size(src_w: int, src_h: int, max_w: int) -> Tuple[int, int]:
+    """Theme aspect ratio, never upscaled, never wider than max_w.
+
+    Upscaling a short GIF to 1024px made 7–9MB files the browser could not
+    decode smoothly. Playing at the source size (capped) keeps the same crop.
+    """
+    tw, th = THEME_IMAGE_WIDTH, THEME_IMAGE_HEIGHT
+    if src_w < 2 or src_h < 2:
+        raise ValueError("Invalid image dimensions")
+    scale = min(src_w / float(tw), src_h / float(th), max_w / float(tw))
+    scale = max(0.2, scale)
+    ow = max(2, int(round(tw * scale)))
+    oh = max(2, int(round(th * scale)))
+    ow -= ow % 2
+    oh -= oh % 2
+    return max(2, ow), max(2, oh)
+
+
+def _encode_animated_theme_gif(im: Any) -> bytes:
+    """Resize an animated GIF without speeding it up or flashing between frames.
+
+    Dropped frames keep their delay, so a 9s source stays ~9s. One shared
+    palette stops the colour flicker that read as stutter. Output stays small
+    enough for the dossier to play it smoothly.
+    """
+    from PIL import Image, ImageSequence
+
+    src_w, src_h = im.size
+    n_frames = int(getattr(im, "n_frames", 1) or 1)
+    raw_frames = []
+    src_durations = []
+    # GIF delays are stored in 10ms steps. Carry the leftover so a 66ms
+    # WebP does not become a 60ms GIF (that was a visible speed-up).
+    delay_carry = 0
+    for frame in ImageSequence.Iterator(im):
+        ms = int(frame.info.get("duration") or 100) + delay_carry
+        if ms < 10:
+            ms = 10
+        stepped = max(20, int(round(ms / 10.0)) * 10)
+        delay_carry = ms - stepped
+        raw_frames.append(frame.convert("RGB"))
+        src_durations.append(stepped)
+    if not raw_frames:
+        raise ValueError("Could not process animated GIF")
+
+    def build(max_w: int, step: int, colors: int):
+        ow, oh = _animated_theme_size(src_w, src_h, max_w)
+        rgb = []
+        durs = []
+        pending = 0
+        for i, fr in enumerate(raw_frames):
+            pending += src_durations[i]
+            if step > 1 and (i % step) != 0 and i != n_frames - 1:
+                continue
+            rgb.append(_cover_crop_rgb(fr, ow, oh).convert("RGB"))
+            durs.append(max(20, pending))
+            pending = 0
+        if not rgb:
+            raise ValueError("Could not process animated GIF")
+        picks = [rgb[0], rgb[len(rgb) // 2], rgb[-1]]
+        sheet = Image.new("RGB", (ow, oh * len(picks)))
+        for i, pic in enumerate(picks):
+            sheet.paste(pic, (0, i * oh))
+        palette = sheet.quantize(colors=colors, method=Image.Quantize.MEDIANCUT)
+        quantized = []
+        for fr in rgb:
+            q = fr.quantize(palette=palette, dither=Image.Dither.NONE)
+            # Pillow throws if a palette frame's transparency is a tuple.
+            q.info.pop("transparency", None)
+            quantized.append(q)
+        return quantized, durs
+
+    def save(frames, durs) -> bytes:
+        buf = io.BytesIO()
+        frames[0].save(
+            buf,
+            format="GIF",
+            save_all=True,
+            append_images=frames[1:],
+            duration=durs,
+            loop=0,
+            optimize=False,
+            disposal=1,
+        )
+        return buf.getvalue()
+
+    # Try sharper / fuller first. Only drop frames after the width is down,
+    # and never shorten a frame's delay (that was the speed-up).
+    # ~4MB is the point where dossier GIFs start dropping frames in Chrome.
+    # Step 2 (every other source frame, delay doubled) stays smooth. Step 3+ looks stuttery.
+    max_bytes = 4_200_000
+    best = None
+    for max_w, step in (
+        (520, 1),
+        (420, 2),
+        (360, 2),
+        (420, 3),
+        (360, 4),
+    ):
+        frames, durs = build(max_w, step, 112)
+        data = save(frames, durs)
+        best = data
+        if len(data) <= max_bytes:
+            return data
+    if best is None:
+        raise ValueError("Could not process animated GIF")
+    return best
+
+
 def encode_theme_jpeg(raw: bytes) -> Tuple[bytes, str]:
     """Back-compat: always return JPEG bytes (first frame if GIF). Prefer encode_theme_image."""
     data, mime, _ext = encode_theme_image(raw, prefer_gif=False)
@@ -1615,12 +1724,13 @@ def encode_theme_jpeg(raw: bytes) -> Tuple[bytes, str]:
 
 
 def encode_theme_image(raw: bytes, *, prefer_gif: bool = True) -> Tuple[bytes, str, str]:
-    """Validate upload and encode a center cover-crop at THEME_IMAGE_SIZE.
+    """Validate upload and encode a center cover-crop.
 
-    Animated GIFs keep animation (resized per frame). Other formats become JPEG.
+    Animated GIFs keep their original timing (smaller canvas so they stay smooth).
+    Other formats become JPEG at THEME_IMAGE_SIZE.
     Returns (bytes, mime, file_ext).
     """
-    from PIL import Image, ImageSequence
+    from PIL import Image
 
     from utils.image_upload_security import sniff_image_mime, verify_image_magic_bytes
 
@@ -1645,67 +1755,10 @@ def encode_theme_image(raw: bytes, *, prefer_gif: bool = True) -> Tuple[bytes, s
     is_gif = bool(prefer_gif and is_animated and mime in ("image/gif", "image/webp"))
 
     if is_gif:
-        # Cap frames so themes stay smooth and don't balloon to 10MB+ (picker + dossier).
-        max_frames = 36
-        step = max(1, (n_frames + max_frames - 1) // max_frames)
-        frames = []
-        durations = []
         try:
-            pending_ms = 0
-            for i, frame in enumerate(ImageSequence.Iterator(im)):
-                frame_ms = int(frame.info.get("duration") or 100)
-                if frame_ms < 20:
-                    frame_ms = 20
-                pending_ms += frame_ms
-                if i % step != 0 and i != n_frames - 1:
-                    continue
-                fr = _cover_crop_rgb(frame.copy(), tw, th)
-                if fr.mode == "RGBA":
-                    bg = Image.new("RGBA", fr.size, (0, 0, 0, 255))
-                    bg.paste(fr, mask=fr.split()[3])
-                    fr = bg.convert("RGB")
-                else:
-                    fr = fr.convert("RGB")
-                frames.append(fr.convert("P", palette=Image.Palette.ADAPTIVE, colors=128))
-                # Keep playback speed: merge skipped-frame time into kept frames
-                # Cap so themes don't look "laggy" / stuttery in the dossier.
-                dur = max(40, min(100, pending_ms if pending_ms > 0 else 80))
-                durations.append(dur)
-                pending_ms = 0
-                if len(frames) >= max_frames:
-                    break
+            data = _encode_animated_theme_gif(im)
         except Exception as e:
             raise ValueError("Could not process animated GIF") from e
-        if not frames:
-            raise ValueError("Could not process animated GIF")
-        buf = io.BytesIO()
-        frames[0].save(
-            buf,
-            format="GIF",
-            save_all=True,
-            append_images=frames[1:],
-            duration=durations,
-            loop=0,
-            optimize=False,
-            disposal=2,
-        )
-        data = buf.getvalue()
-        # If still huge, drop to half the frames (keep duration sum ≈ same speed feel)
-        if len(data) > 4_500_000 and len(frames) > 16:
-            frames2 = frames[::2]
-            durs2 = [min(120, d * 2) for d in durations[::2]]
-            buf = io.BytesIO()
-            frames2[0].save(
-                buf,
-                format="GIF",
-                save_all=True,
-                append_images=frames2[1:],
-                duration=durs2,
-                loop=0,
-                optimize=False,
-                disposal=2,
-            )
-            data = buf.getvalue()
         return data, "image/gif", "gif"
 
     # Static: JPEG (works for jpeg/png/webp/single-frame gif)

@@ -93,7 +93,7 @@ const PROFILE_STYLES = `
   .prof-card { transition: box-shadow 0.3s ease, border-color 0.3s ease; }
   .prof-row { transition: background-color 0.2s ease; }
   .prof-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
-  @keyframes prof-dossier-enter { from { opacity: 0.88; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes prof-dossier-enter { from { opacity: 0.88; } to { opacity: 1; } }
   .prof-dossier-enter { animation: prof-dossier-enter 0.34s ease-out both; }
   /* Theme art: real <img> drives height so the seam sits flush on the picture bottom. */
   .prof-dossier-theme-layer {
@@ -116,41 +116,25 @@ const PROFILE_STYLES = `
     height: auto;
     vertical-align: top;
   }
-  .prof-dossier-theme-layer[data-fit="stretch"] .prof-dossier-theme-img,
-  .prof-dossier-theme-layer[data-fit="cover"] .prof-dossier-theme-img,
-  .prof-dossier-theme-layer[data-fit="height"] .prof-dossier-theme-img {
-    display: none;
-  }
   .prof-dossier-theme-layer[data-fit="stretch"],
   .prof-dossier-theme-layer[data-fit="cover"],
   .prof-dossier-theme-layer[data-fit="height"] {
     bottom: 0 !important;
   }
-  .prof-dossier-theme-bg-fill {
-    display: none;
-    position: absolute;
-    inset: 0;
-    background-repeat: no-repeat;
-    background-position: center top;
-    background-size: 100% 100%;
+  .prof-dossier-theme-layer[data-fit="stretch"] .prof-dossier-theme-layer-inner,
+  .prof-dossier-theme-layer[data-fit="cover"] .prof-dossier-theme-layer-inner,
+  .prof-dossier-theme-layer[data-fit="height"] .prof-dossier-theme-layer-inner {
+    height: 100%;
   }
-  .prof-dossier-theme-layer[data-fit="stretch"] .prof-dossier-theme-bg-fill,
-  .prof-dossier-theme-layer[data-fit="cover"] .prof-dossier-theme-bg-fill,
-  .prof-dossier-theme-layer[data-fit="height"] .prof-dossier-theme-bg-fill {
-    display: block;
+  .prof-dossier-theme-layer[data-fit="stretch"] .prof-dossier-theme-img,
+  .prof-dossier-theme-layer[data-fit="cover"] .prof-dossier-theme-img,
+  .prof-dossier-theme-layer[data-fit="height"] .prof-dossier-theme-img {
+    width: 100%;
+    height: 100%;
   }
-  .prof-dossier-theme-layer[data-fit="stretch"] .prof-dossier-theme-bg-fill {
-    background-size: 100% 100%;
-    background-position: center center;
-  }
-  .prof-dossier-theme-layer[data-fit="cover"] .prof-dossier-theme-bg-fill {
-    background-size: cover;
-    background-position: center center;
-  }
-  .prof-dossier-theme-layer[data-fit="height"] .prof-dossier-theme-bg-fill {
-    background-size: auto 100%;
-    background-position: center center;
-  }
+  .prof-dossier-theme-layer[data-fit="stretch"] .prof-dossier-theme-img { object-fit: fill; }
+  .prof-dossier-theme-layer[data-fit="cover"] .prof-dossier-theme-img { object-fit: cover; }
+  .prof-dossier-theme-layer[data-fit="height"] .prof-dossier-theme-img { object-fit: contain; object-position: center center; }
   .prof-dossier-theme-scrim {
     position: absolute;
     inset: 0;
@@ -170,7 +154,7 @@ const PROFILE_STYLES = `
       0 0 3px rgba(var(--prof-theme-seam-rgb), 0.8);
   }
   @media (hover: hover) and (pointer: fine) {
-    .prof-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+    .prof-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
     .prof-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
   }
   @media (max-width: 767px) {
@@ -215,10 +199,11 @@ const PROFILE_STYLES = `
   }
   /* Store "Name Glow + Border" cosmetic: colored dossier border + soft glow matching the name color */
   ${PROFILE_GLOW_BORDER_CSS}
-  /* Forum BBCode [img]/[gif] use inline max-height 300–400px — tall art shrinks to a narrow strip; override on profile only */
+  /* Forum BBCode [img]/[gif] use inline max-height 300–400px — tall art shrinks to a narrow strip; override on profile only.
+     Keep a hard cap so a notepad GIF cannot become a second full-screen clip over the dossier. */
   .prof-banner-content .forum-content-media {
     max-width: 100% !important;
-    max-height: min(92vh, 1080px) !important;
+    max-height: min(52vh, 480px) !important;
     width: auto !important;
     height: auto !important;
     border-radius: 8px;
@@ -679,13 +664,15 @@ const ProfileInfoCard = ({
           ? defaultPlayerAvatarUrl(profile.id || profile.username)
           : null)));
   const profileNotepadBg = profile.profile_notepad_color || null;
-  const profileNotepadStyle = profileNotepadBg
-    ? { backgroundColor: profileNotepadBg, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04)' }
-    : undefined;
   const bgTheme = profile.profile_background_theme;
   const bgThemeImage = (bgTheme && typeof bgTheme.image === 'string' && bgTheme.image.trim())
     ? bgTheme.image.trim()
     : null;
+  const profileNotepadStyle = profileNotepadBg
+    ? { backgroundColor: profileNotepadBg, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04)' }
+    : (bgThemeImage
+      ? { backgroundColor: '#12141c', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04)' }
+      : undefined);
   const bgThemeFitRaw = String(bgTheme?.fit || 'width').toLowerCase();
   const bgThemeFit = ['width', 'height', 'cover', 'contain', 'stretch'].includes(bgThemeFitRaw)
     ? bgThemeFitRaw
@@ -719,7 +706,7 @@ const ProfileInfoCard = ({
       }
       const clipEl = themeClipRef.current;
       let clipH = imgH;
-      if (clipEl && profileNotepadBg) {
+      if (clipEl) {
         const top = clipEl.getBoundingClientRect().top - card.getBoundingClientRect().top
           - (parseFloat(getComputedStyle(card).borderTopWidth) || 0);
         if (Number.isFinite(top) && top > 8) clipH = Math.min(imgH, top);
@@ -767,7 +754,7 @@ const ProfileInfoCard = ({
                 className="prof-dossier-theme-img"
                 src={bgThemeImage}
                 alt=""
-                decoding="async"
+                decoding={/\.gif(\?|$)/i.test(bgThemeImage) ? 'sync' : 'async'}
                 onLoad={() => {
                   const card = dossierRef.current;
                   const img = themeImgRef.current;
@@ -779,7 +766,7 @@ const ProfileInfoCard = ({
                   }
                   const clipEl = themeClipRef.current;
                   let clipH = imgH;
-                  if (clipEl && profileNotepadBg) {
+                  if (clipEl) {
                     const top = clipEl.getBoundingClientRect().top - card.getBoundingClientRect().top
                       - (parseFloat(getComputedStyle(card).borderTopWidth) || 0);
                     if (Number.isFinite(top) && top > 8) clipH = Math.min(imgH, top);
@@ -792,10 +779,6 @@ const ProfileInfoCard = ({
                   card.style.setProperty('--prof-theme-clip-h', `${Math.round(clipH)}px`);
                   setThemeSeamY(clipH);
                 }}
-              />
-              <div
-                className="prof-dossier-theme-bg-fill"
-                style={{ backgroundImage: `url(${bgThemeImage})` }}
               />
               {themeScrimOn ? <div className="prof-dossier-theme-scrim" /> : null}
             </div>
