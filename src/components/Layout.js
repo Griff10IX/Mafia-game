@@ -580,6 +580,7 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown,
     return (
       <button
         type="button"
+        data-halloween-nav="1"
         {...buttonRest}
         onClick={mergeClick}
         {...warmHandlers}
@@ -590,6 +591,7 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown,
   return (
     <Link
       to={dest}
+      data-halloween-nav="1"
       {...rest}
       onClick={mergeClick}
       {...warmHandlers}

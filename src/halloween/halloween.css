@@ -189,8 +189,8 @@ html[data-halloween="on"] body {
 }
 
 @keyframes hw-bat-bob {
-  from { transform: translateY(0); }
-  to { transform: translateY(-14px); }
+  from { transform: translateY(0) scaleX(-1); }
+  to { transform: translateY(-14px) scaleX(-1); }
 }
 
 /* running tarantula: 4 frames, crosses the bottom now and again */

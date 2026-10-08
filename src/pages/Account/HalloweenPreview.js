@@ -52,7 +52,7 @@ export default function HalloweenPreview() {
       <div className="rounded-md border border-primary/30 bg-zinc-950/80 p-4 space-y-2">
         <h1 className="text-sm font-heading font-bold uppercase tracking-wide text-primary">Halloween preview</h1>
         <p className="text-[11px] text-zinc-300 leading-relaxed">
-          This is the optional overlay. Pumpkins, corner webs, a hanging spider and bats stay on screen. Now and again a spider runs across the bottom, a killer peeks in from an edge or walks across the middle, and once in a while one of them catches someone. A button press grows a web about 1 time in 20. Opening a loot box or committing a crime can flash a scare at the same rate. Turning it on in the theme picker keeps the layout you already use, and turning it off puts that theme back.
+          This is the optional overlay. Pumpkins, corner webs, a hanging spider and bats stay on screen. Now and again a spider runs across the bottom, a killer peeks in from an edge or walks across the middle, and once in a while one of them catches someone. A button press grows a web about 1 time in 20. A menu link, or a button people hit all the time such as Bust, Commit or Steal, can flash a scare at the same rate. Opening a loot box or committing a crime can too. Turning it on in the theme picker keeps the layout you already use, and turning it off puts that theme back.
         </p>
         <p className="text-[11px] text-zinc-400">{note}</p>
       </div>

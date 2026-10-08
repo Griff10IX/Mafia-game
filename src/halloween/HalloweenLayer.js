@@ -11,7 +11,7 @@ import {
 } from './Decor';
 import { halloweenRoll, prefersReducedMotion } from './roll';
 import { ScareFrame, scareDuration } from './Scares';
-import { showButtonWeb } from './trigger';
+import { maybeHalloweenScare, showButtonWeb } from './trigger';
 import './halloween.css';
 
 const RUNNER_MS = 6800;
@@ -31,6 +31,17 @@ function randomBetween([lo, hi]) {
 
 function coin(a, b) {
   return Math.random() < 0.5 ? a : b;
+}
+
+// Buttons players hit over and over. Menu links are handled separately.
+const FREQUENT_TESTID = /^(bust-out-|commit-crime-|skip-crime-|attempt-gta-|skip-gta-|attack-kill-|kill-inline-button|wheel-spin-)/;
+const FREQUENT_LABEL = new Set(['bust', 'commit', 'steal', 'snitch', 'kill', 'attack', 'spin']);
+
+function isFrequentAction(btn) {
+  const id = btn.getAttribute?.('data-testid') || '';
+  if (FREQUENT_TESTID.test(id)) return true;
+  const label = (btn.innerText || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  return FREQUENT_LABEL.has(label);
 }
 
 function useTimedState(ms) {
@@ -62,14 +73,16 @@ export default function HalloweenLayer() {
     if (active) preloadHalloweenSprites();
   }, [active]);
 
-  // 1 in 20 button presses grow a web
+  // 1 in 20: a button grows a web, a menu link (Crimes, GTA, and the rest) flashes a scare.
   useEffect(() => {
     if (!active) return undefined;
     const onClick = (event) => {
       if (!isHalloweenActive() || prefersReducedMotion()) return;
+      if (event.target?.closest?.('[data-halloween-scare]')) return;
+      const nav = event.target?.closest?.('[data-halloween-nav]');
       const btn = event.target?.closest?.('button, [role="button"]');
-      if (!btn || btn.closest('[data-halloween-scare]')) return;
-      if (!halloweenRoll()) return;
+      if (nav || (btn && isFrequentAction(btn))) maybeHalloweenScare();
+      if (!btn || !halloweenRoll()) return;
       showButtonWeb(btn);
     };
     document.addEventListener('click', onClick, true);
