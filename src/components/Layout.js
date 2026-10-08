@@ -52,6 +52,7 @@ import styles from '../styles/noir.module.css';
 
 // PERF #3: ThemePicker (+ themes-expanded) only when opened — see docs/PERF_OPS_CHANGES.md
 const ThemePicker = lazy(() => import('./ThemePicker'));
+const HalloweenLayer = lazy(() => import('../halloween/HalloweenLayer'));
 
 const LazyGameChat = lazy(() => import('./GameChat'));
 
@@ -716,6 +717,7 @@ export default function Layout({ children }) {
   const [weedEmpireVisible, setWeedEmpireVisible] = useState(() => loadNavItemFlags().weed);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const moneyFreshRef = useRef({ value: null, at: 0 });
+  const pointsFreshRef = useRef({ value: null, at: 0 });
   const userSearchRef = useRef(null);
   const userSearchInputRef = useRef(null);
   const userSearchDebounceRef = useRef(null);
@@ -1357,10 +1359,22 @@ export default function Layout({ children }) {
         setUser((prev) => (prev ? { ...prev, in_jail: false, jail_until: null } : null));
       }
       if (detail.points != null) {
-        setUser((prev) => (prev ? { ...prev, points: Number(detail.points) } : null));
+        const n = Number(detail.points);
+        if (Number.isFinite(n)) {
+          pointsFreshRef.current = { value: n, at: Date.now() };
+          setUser((prev) => (prev ? { ...prev, points: n } : null));
+        }
       }
       if (detail.pointsDelta != null) {
-        setUser((prev) => (prev ? { ...prev, points: Number(prev.points || 0) + Number(detail.pointsDelta) } : null));
+        const d = Number(detail.pointsDelta);
+        if (Number.isFinite(d)) {
+          setUser((prev) => {
+            if (!prev) return null;
+            const next = Number(prev.points || 0) + d;
+            pointsFreshRef.current = { value: next, at: Date.now() };
+            return { ...prev, points: next };
+          });
+        }
       }
       if (detail.patch && typeof detail.patch === 'object') {
         setUser((prev) => (prev ? { ...prev, ...detail.patch } : null));
@@ -1778,21 +1792,25 @@ export default function Layout({ children }) {
       delete authUserData.casino_profit;
       delete authUserData.property_profit;
       delete authUserData.has_casino_or_property;
-      setUser((prev) => {
-        const fresh = moneyFreshRef.current;
-        const keepCash = Number.isFinite(fresh.value) && fresh.at >= startedAt;
-        return {
-          ...authUserData,
-          money: keepCash ? fresh.value : authUserData.money,
-          casino_profit: prev?.casino_profit ?? 0,
-          property_profit: prev?.property_profit ?? 0,
-          has_casino_or_property: prev?.has_casino_or_property ?? false,
-        };
-      });
+      const freshMoney = moneyFreshRef.current;
+      const keepCash = Number.isFinite(freshMoney.value) && freshMoney.at >= startedAt;
+      const freshPoints = pointsFreshRef.current;
+      const keepPoints = Number.isFinite(freshPoints.value) && freshPoints.at >= startedAt;
+      const mergedUser = {
+        ...authUserData,
+        money: keepCash ? freshMoney.value : authUserData.money,
+        points: keepPoints ? freshPoints.value : authUserData.points,
+      };
+      setUser((prev) => ({
+        ...mergedUser,
+        casino_profit: prev?.casino_profit ?? 0,
+        property_profit: prev?.property_profit ?? 0,
+        has_casino_or_property: prev?.has_casino_or_property ?? false,
+      }));
       if (userRes.data?.username) setProfileSessionLastMeUsername(userRes.data.username);
       setRankProgress(progressRes.data);
       try {
-        writeDashboardSessionUserProgress(authUserData, progressRes.data);
+        writeDashboardSessionUserProgress(mergedUser, progressRes.data);
       } catch (_) { /* ignore */ }
       try {
         setToastMutedPages(userRes.data?.toast_muted_pages);
@@ -2946,6 +2964,9 @@ export default function Layout({ children }) {
   return (
     <AuthContext.Provider value={user}>
     <div data-app-shell="1" className={`min-h-screen ${styles.page} ${styles.themeGangsterModern} transition-colors`}>
+      <Suspense fallback={null}>
+        <HalloweenLayer />
+      </Suspense>
       <style>{`
         @keyframes gtaExclusivePulse {
           0%, 100% { border-left-color: #a78bfa; color: #a78bfa; }

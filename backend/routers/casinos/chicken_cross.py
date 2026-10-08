@@ -46,8 +46,8 @@ DIFFICULTY_SPECS: Dict[str, Dict[str, Any]] = {
     "hard": {"label": "Hard", "survive_num": 80, "survive_den": 100, "lanes": 20},
     # pay_num prices the multipliers; survive_num is the real per-hop roll.
     # early_lanes uses early_survive_num for the real roll only.
-    "expert": {"label": "Expert", "survive_num": 62, "survive_den": 100, "pay_num": 60, "lanes": 15,
-               "early_lanes": 4, "early_survive_num": 65},
+    "expert": {"label": "Expert", "survive_num": 56, "survive_den": 100, "pay_num": 60, "lanes": 15,
+               "early_lanes": 4, "early_survive_num": 58},
 }
 
 # Odds follow total player cash: "boost" below the low mark, back to "normal" at the high mark.
@@ -62,12 +62,86 @@ ECONOMY_BOOST_BELOW = 700_000_000_000
 ECONOMY_NORMAL_AT = 2_000_000_000_000
 ECONOMY_CHECK_SECONDS = 60
 ODDS_CONFIG_ID = "chicken_cross_dynamic_odds"
+SURVIVE_ODDS_CONFIG_ID = "chicken_cross_survive_odds"
+SURVIVE_ODDS_CACHE_SECONDS = 15
+_survive_odds_cache: Dict[str, Any] = {"rows": None, "checked_at": 0.0}
 
 
-def _survive_num(difficulty: str, profile: str) -> int:
-    spec = DIFFICULTY_SPECS[difficulty]
-    bonus = int((ODDS_PROFILES[profile]["survive_bonus"] or {}).get(difficulty, 0))
-    return int(spec["survive_num"]) + bonus
+def _clamp_roll(num: int, den: int) -> int:
+    return max(0, min(int(den), int(num)))
+
+
+def _default_survive_rows() -> Dict[str, Dict[str, int]]:
+    rows: Dict[str, Dict[str, int]] = {}
+    for key, spec in DIFFICULTY_SPECS.items():
+        row = {"survive_pct": int(spec["survive_num"])}
+        if spec.get("early_survive_num") is not None:
+            row["early_survive_pct"] = int(spec["early_survive_num"])
+        rows[key] = row
+    return rows
+
+
+def _clean_pct(value: Any, fallback: int) -> int:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return int(fallback)
+    if n < 1 or n > 99:
+        return int(fallback)
+    return n
+
+
+def _merge_survive_rows(stored: Any) -> Dict[str, Dict[str, int]]:
+    defaults = _default_survive_rows()
+    raw = stored if isinstance(stored, dict) else {}
+    merged: Dict[str, Dict[str, int]] = {}
+    for key, row in defaults.items():
+        incoming = raw.get(key) if isinstance(raw.get(key), dict) else {}
+        cleaned = {"survive_pct": _clean_pct(incoming.get("survive_pct"), row["survive_pct"])}
+        if "early_survive_pct" in row:
+            cleaned["early_survive_pct"] = _clean_pct(incoming.get("early_survive_pct"), row["early_survive_pct"])
+        merged[key] = cleaned
+    return merged
+
+
+def _invalidate_survive_odds_cache() -> None:
+    _survive_odds_cache["rows"] = None
+    _survive_odds_cache["checked_at"] = 0.0
+
+
+async def _load_survive_rows(*, ttl_sec: float = SURVIVE_ODDS_CACHE_SECONDS) -> Dict[str, Dict[str, int]]:
+    now = time.monotonic()
+    cached = _survive_odds_cache.get("rows")
+    if cached is not None and ttl_sec > 0 and now - float(_survive_odds_cache.get("checked_at") or 0) < ttl_sec:
+        return cached
+    try:
+        doc = await db.game_config.find_one({"id": SURVIVE_ODDS_CONFIG_ID}, {"_id": 0, "difficulties": 1}) or {}
+        rows = _merge_survive_rows(doc.get("difficulties"))
+    except Exception:
+        logger.exception("Chicken Cross survive odds load failed")
+        rows = _default_survive_rows()
+    _survive_odds_cache["rows"] = rows
+    _survive_odds_cache["checked_at"] = now
+    return rows
+
+
+def _survive_admin_view(rows: Dict[str, Dict[str, int]], *, custom: bool) -> Dict[str, Any]:
+    difficulties = []
+    for key, spec in DIFFICULTY_SPECS.items():
+        row = rows[key]
+        item: Dict[str, Any] = {
+            "id": key,
+            "label": spec["label"],
+            "survive_pct": int(row["survive_pct"]),
+            "default_survive_pct": int(spec["survive_num"]),
+            "pay_pct": int(spec.get("pay_num", spec["survive_num"])),
+        }
+        if spec.get("early_survive_num") is not None:
+            item["early_lanes"] = int(spec["early_lanes"])
+            item["early_survive_pct"] = int(row["early_survive_pct"])
+            item["default_early_survive_pct"] = int(spec["early_survive_num"])
+        difficulties.append(item)
+    return {"custom": bool(custom), "difficulties": difficulties}
 
 
 def _build_multiplier_tables(profile: str) -> Dict[str, tuple]:
@@ -185,17 +259,24 @@ def _offered_lanes(
     return rows
 
 
-def _roll_death_lane(difficulty: str, profile: str = DEFAULT_PROFILE, currency: str = "cash") -> int:
+def _roll_death_lane(
+    difficulty: str,
+    profile: str = DEFAULT_PROFILE,
+    currency: str = "cash",
+    survive_rows: Optional[Dict[str, Dict[str, int]]] = None,
+) -> int:
     spec = DIFFICULTY_SPECS[difficulty]
-    base = _survive_num(difficulty, profile) + int((CURRENCIES[currency].get("survive_bonus") or {}).get(difficulty, 0))
+    row = (survive_rows or {}).get(difficulty) or _default_survive_rows()[difficulty]
     den = int(spec["survive_den"])
+    bonus = int((ODDS_PROFILES[profile]["survive_bonus"] or {}).get(difficulty, 0))
+    bonus += int((CURRENCIES[currency].get("survive_bonus") or {}).get(difficulty, 0))
+    base = _clamp_roll(int(row["survive_pct"]) + bonus, den)
     early_lanes = int(spec.get("early_lanes") or 0)
-    early_num = spec.get("early_survive_num")
+    early_pct = row.get("early_survive_pct")
+    early_num = _clamp_roll(int(early_pct) + bonus, den) if early_pct is not None else None
     lanes = len(MULTIPLIER_CENTS_BY_PROFILE[profile][difficulty])
     for lane in range(1, lanes + 1):
-        num = base
-        if early_num is not None and lane <= early_lanes:
-            num = int(early_num) + (base - int(spec["survive_num"]))
+        num = early_num if early_num is not None and lane <= early_lanes else base
         if _rng.randrange(den) >= num:
             return lane
     return lanes + 1
@@ -511,6 +592,27 @@ async def _ready_session(user: dict) -> Optional[dict]:
     return await _recover(doc)
 
 
+class ChickenCrossOddsRowIn(BaseModel):
+    model_config = ConfigDict(strict=True)
+    survive_pct: int
+    early_survive_pct: Optional[int] = None
+
+    @field_validator("survive_pct", "early_survive_pct")
+    @classmethod
+    def whole_pct(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, bool) or not isinstance(v, int) or v < 1 or v > 99:
+            raise ValueError("Use a whole percent from 1 to 99")
+        return v
+
+
+class ChickenCrossOddsPatch(BaseModel):
+    model_config = ConfigDict(strict=True)
+    reset: bool = False
+    difficulties: Optional[Dict[str, ChickenCrossOddsRowIn]] = None
+
+
 class ChickenCrossStartRequest(BaseModel):
     model_config = ConfigDict(strict=True)
     bet: int
@@ -618,6 +720,7 @@ def register(router):
             raise HTTPException(status_code=400, detail=f"Max bet is {limit}")
         difficulty = request.difficulty
         profile = await _current_odds_profile()
+        survive_rows = await _load_survive_rows()
         if not _offered_lanes(difficulty, bet, profile, int(spec["payout_cap"])):
             raise HTTPException(status_code=400, detail="That stake is too high for this difficulty")
         user_id = str(current_user.get("id") or "")
@@ -637,7 +740,7 @@ def register(router):
             "lane": 0,
             "multiplier_cents": 0,
             "odds_profile": profile,
-            "death_lane": _roll_death_lane(difficulty, profile, currency),
+            "death_lane": _roll_death_lane(difficulty, profile, currency, survive_rows),
         }
         try:
             await db.chicken_cross_games.insert_one(doc)
@@ -713,3 +816,55 @@ def register(router):
         if not doc:
             raise HTTPException(status_code=400, detail="Round is busy")
         return await _finish(doc, won=False, payout=bet, void=True, result="void")
+
+    @router.get("/admin/casinos/chicken-cross-odds")
+    async def admin_chicken_cross_odds_get(current_user: dict = Depends(require_admin_verified)):
+        doc = await db.game_config.find_one(
+            {"id": SURVIVE_ODDS_CONFIG_ID}, {"_id": 0, "difficulties": 1, "updated_at": 1}
+        ) or {}
+        rows = _merge_survive_rows(doc.get("difficulties"))
+        _survive_odds_cache["rows"] = rows
+        _survive_odds_cache["checked_at"] = time.monotonic()
+        view = _survive_admin_view(rows, custom=isinstance(doc.get("difficulties"), dict))
+        if doc.get("updated_at"):
+            view["updated_at"] = doc.get("updated_at")
+        return view
+
+    @router.patch("/admin/casinos/chicken-cross-odds")
+    async def admin_chicken_cross_odds_patch(
+        body: ChickenCrossOddsPatch,
+        current_user: dict = Depends(require_admin_verified),
+    ):
+        if body.reset:
+            await db.game_config.delete_one({"id": SURVIVE_ODDS_CONFIG_ID})
+            _invalidate_survive_odds_cache()
+            rows = await _load_survive_rows(ttl_sec=0)
+            return _survive_admin_view(rows, custom=False)
+        incoming = body.difficulties or {}
+        if not incoming:
+            raise HTTPException(status_code=400, detail="Send the hop chances to save")
+        if any(key not in DIFFICULTY_SPECS for key in incoming):
+            raise HTTPException(status_code=400, detail="Unknown difficulty")
+        current = await _load_survive_rows(ttl_sec=0)
+        merged = {key: dict(row) for key, row in current.items()}
+        for key, row in incoming.items():
+            spec = DIFFICULTY_SPECS[key]
+            cleaned = {"survive_pct": int(row.survive_pct)}
+            if spec.get("early_survive_num") is not None:
+                if row.early_survive_pct is None:
+                    raise HTTPException(status_code=400, detail=f"{spec['label']} needs both hop chances")
+                cleaned["early_survive_pct"] = int(row.early_survive_pct)
+            merged[key] = cleaned
+        await db.game_config.update_one(
+            {"id": SURVIVE_ODDS_CONFIG_ID},
+            {"$set": {
+                "id": SURVIVE_ODDS_CONFIG_ID,
+                "difficulties": merged,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True,
+        )
+        _invalidate_survive_odds_cache()
+        _survive_odds_cache["rows"] = merged
+        _survive_odds_cache["checked_at"] = time.monotonic()
+        return _survive_admin_view(merged, custom=True)

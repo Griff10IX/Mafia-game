@@ -51,6 +51,19 @@ const STORAGE_KEY_LEFT_MENU = 'app_theme_left_menu';
 const STORAGE_KEY_RIGHT_MENU = 'app_theme_right_menu';
 const STORAGE_KEY_MODERN_VISUAL_QUALITY = 'app_theme_modern_visual_quality';
 const STORAGE_KEY_BOOT = 'app_theme_boot';
+const STORAGE_KEY_HALLOWEEN = 'app_theme_halloween';
+const STORAGE_KEY_HALLOWEEN_SNAPSHOT = 'app_theme_halloween_snapshot';
+
+function readHalloweenSnapshot() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_HALLOWEEN_SNAPSHOT);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 const THEME_BOOT_ATTRS = ['data-theme-variant', 'data-texture', 'data-button-style', 'data-button-shape', 'data-mobile-layout', 'data-modern-perf', 'data-left-menu', 'data-right-menu', 'data-atmosphere'];
 
 const LS_TOPBAR_GAP = 'topbar_gap';
@@ -690,6 +703,14 @@ export function ThemeProvider({ children }) {
   const themeSourceRef = useRef('local'); // 'server' = just loaded from API, skip next persist
   /** True after first GET /profile/theme settles (success or failure). Used to avoid first-visit theme modal racing server prefs. */
   const [themeServerHydrated, setThemeServerHydrated] = useState(false);
+  const halloweenSnapshotRef = useRef(readHalloweenSnapshot());
+  const [halloweenOn, setHalloweenOnState] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_HALLOWEEN) === '1';
+    } catch {
+      return false;
+    }
+  });
   const [colourId, setColourIdState] = useState(() => {
     try {
       return localStorage.getItem(STORAGE_KEY_COLOUR) || DEFAULT_COLOUR_ID;
@@ -997,6 +1018,14 @@ export function ThemeProvider({ children }) {
         setMobileLayoutIdState(loadedMobileLayout);
       }
       if (prefs.buttonShapeId != null) { localStorage.setItem(STORAGE_KEY_BUTTON_SHAPE, prefs.buttonShapeId); setButtonShapeIdState(prefs.buttonShapeId); }
+      if (prefs.halloweenSnapshot && typeof prefs.halloweenSnapshot === 'object') {
+        halloweenSnapshotRef.current = prefs.halloweenSnapshot;
+        localStorage.setItem(STORAGE_KEY_HALLOWEEN_SNAPSHOT, JSON.stringify(prefs.halloweenSnapshot));
+      }
+      if (typeof prefs.halloweenOn === 'boolean') {
+        localStorage.setItem(STORAGE_KEY_HALLOWEEN, prefs.halloweenOn ? '1' : '0');
+        setHalloweenOnState(prefs.halloweenOn);
+      }
       applyLayoutPrefsFromServerToLS(prefs).forEach((ev) => {
         try { window.dispatchEvent(new Event(ev)); } catch (_) {}
       });
@@ -1031,9 +1060,11 @@ export function ThemeProvider({ children }) {
       mobile_stats_display,
       mobile_layout_id: mobileLayoutId || null,
       button_shape_id: buttonShapeId || null,
+      halloween_on: !!halloweenOn,
+      halloween_snapshot: halloweenSnapshotRef.current,
       ...readLayoutSnapshotForPatch(),
     };
-  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, mobileNavStyle, mobileLayoutId, buttonShapeId]);
+  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, mobileNavStyle, mobileLayoutId, buttonShapeId, halloweenOn]);
 
   useEffect(() => {
     api.get('/profile/theme').then((res) => {
@@ -1087,7 +1118,7 @@ export function ThemeProvider({ children }) {
     api.patch('/profile/theme', payload).then(() => {
       try { window.dispatchEvent(new CustomEvent('theme-saved')); } catch (_) {}
     }).catch(() => {});
-  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, mobileNavStyle, mobileLayoutId, buttonShapeId, buildThemePatchPayload]);
+  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, mobileNavStyle, mobileLayoutId, buttonShapeId, halloweenOn, buildThemePatchPayload]);
 
   const setColour = useCallback((id) => {
     setColourIdState(id);
@@ -1212,6 +1243,49 @@ export function ThemeProvider({ children }) {
       window.dispatchEvent(new Event('toast-prefs-changed'));
     } catch (_) {}
   }, []);
+
+  const setHalloween = useCallback((on) => {
+    const enabled = !!on;
+    if (enabled) {
+      const snap = {
+        colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId,
+        writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, themeVariant, buttonShapeId,
+      };
+      halloweenSnapshotRef.current = snap;
+      try { localStorage.setItem(STORAGE_KEY_HALLOWEEN_SNAPSHOT, JSON.stringify(snap)); } catch (_) {}
+      try { localStorage.setItem(STORAGE_KEY_HALLOWEEN, '1'); } catch (_) {}
+      setHalloweenOnState(true);
+      return;
+    }
+    const snap = halloweenSnapshotRef.current;
+    if (snap && typeof snap === 'object') {
+      if (snap.colourId) { try { localStorage.setItem(STORAGE_KEY_COLOUR, snap.colourId); } catch (_) {} setColourIdState(snap.colourId); }
+      if (snap.textureId) { try { localStorage.setItem(STORAGE_KEY_TEXTURE, snap.textureId); } catch (_) {} setTextureIdState(snap.textureId); }
+      try { localStorage.setItem(STORAGE_KEY_BUTTON, snap.buttonColourId || ''); } catch (_) {}
+      setButtonColourIdState(snap.buttonColourId || null);
+      try { localStorage.setItem(STORAGE_KEY_ACCENT_LINE, snap.accentLineColourId || ''); } catch (_) {}
+      setAccentLineColourIdState(snap.accentLineColourId || null);
+      if (snap.fontId) { try { localStorage.setItem(STORAGE_KEY_FONT, snap.fontId); } catch (_) {} setFontIdState(snap.fontId); }
+      if (snap.buttonStyleId) { try { localStorage.setItem(STORAGE_KEY_BUTTON_STYLE, snap.buttonStyleId); } catch (_) {} setButtonStyleIdState(snap.buttonStyleId); }
+      if (snap.writingColourId) { try { localStorage.setItem(STORAGE_KEY_WRITING, snap.writingColourId); } catch (_) {} setWritingColourIdState(snap.writingColourId); }
+      try { localStorage.setItem(STORAGE_KEY_MUTED_WRITING, snap.mutedWritingColourId || ''); } catch (_) {}
+      setMutedWritingColourIdState(snap.mutedWritingColourId || null);
+      try { localStorage.setItem(STORAGE_KEY_TOAST_TEXT, snap.toastTextColourId || ''); } catch (_) {}
+      setToastTextColourIdState(snap.toastTextColourId || null);
+      if (snap.textStyleId) { try { localStorage.setItem(STORAGE_KEY_TEXT_STYLE, snap.textStyleId); } catch (_) {} setTextStyleIdState(snap.textStyleId); }
+      if (snap.themeVariant) {
+        const v = normalizeThemeVariant(snap.themeVariant);
+        try { localStorage.setItem(STORAGE_KEY_THEME_VARIANT, v); } catch (_) {}
+        setThemeVariantState(v);
+        applyThemeVariantToDocument(v);
+      }
+      if (snap.buttonShapeId) { try { localStorage.setItem(STORAGE_KEY_BUTTON_SHAPE, snap.buttonShapeId); } catch (_) {} setButtonShapeIdState(snap.buttonShapeId); }
+    }
+    halloweenSnapshotRef.current = null;
+    try { localStorage.removeItem(STORAGE_KEY_HALLOWEEN_SNAPSHOT); } catch (_) {}
+    try { localStorage.setItem(STORAGE_KEY_HALLOWEEN, '0'); } catch (_) {}
+    setHalloweenOnState(false);
+  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, themeVariant, buttonShapeId]);
 
   const setThemeVariant = useCallback((variant) => {
     const v = normalizeThemeVariant(variant);
@@ -1436,6 +1510,8 @@ export function ThemeProvider({ children }) {
     modernVisualQuality,
     setModernVisualQuality,
     themeServerHydrated,
+    halloweenOn,
+    setHalloween,
   };
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

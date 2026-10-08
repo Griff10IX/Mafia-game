@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '../utils/api';
 import { getThemeUiPlatform } from '../utils/themePlatform';
@@ -10,6 +11,7 @@ import {
   Search, Eye, Grid3x3
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useAuthUser } from '../context/AuthContext';
 import {
   THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS,
   THEME_BUTTON_STYLES, THEME_BUTTON_SHAPES, THEME_DIVIDER_STYLES,
@@ -314,7 +316,10 @@ export default function ThemePicker({ open, onClose }) {
     setLeftMenuTheme, setRightMenuTheme,
     resetButtonToDefault, resetAccentLineToDefault, resetThemeToPreset,
     customThemes, addCustomTheme, removeCustomTheme,
+    halloweenOn, setHalloween,
   } = useTheme();
+  const authUser = useAuthUser();
+  const staffPreview = !!(authUser?.is_admin || authUser?.is_moderator);
 
   /* ── state ── */
   const [activeTab, setActiveTab] = useState('presets');
@@ -668,6 +673,24 @@ export default function ThemePicker({ open, onClose }) {
           {/* ════ PRESETS ════ */}
           {activeTab === 'presets' && (
             <>
+              <div className="rounded-lg border border-orange-500/30 bg-zinc-950/70 p-3 flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-heading font-black uppercase tracking-wider text-orange-300">Halloween</div>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">Pumpkins and orange light on the theme you already use. A spiderweb or a short scare shows about 1 time in 20. Turning it off puts your theme back.</p>
+                  {staffPreview ? (
+                    <Link to="/account/halloween-preview" onClick={onClose} className="inline-block mt-1 text-[10px] text-primary underline">
+                      Preview
+                    </Link>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setHalloween(!halloweenOn)}
+                  className={`shrink-0 px-3 py-1.5 rounded border text-[10px] font-heading font-bold uppercase ${halloweenOn ? 'border-orange-400 bg-orange-500/20 text-orange-200' : 'border-zinc-600 text-zinc-400'}`}
+                >
+                  {halloweenOn ? 'On' : 'Off'}
+                </button>
+              </div>
               <TabSection icon={PanelLeft} title="Layout mode" sub="Page, forum, and both menus follow this. Mix left/right after if you want them different.">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {THEME_VARIANTS.map((variant) => {

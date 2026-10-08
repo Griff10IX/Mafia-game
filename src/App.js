@@ -112,6 +112,7 @@ const CrackSafe = lazy(() => import("./pages/Money/CrackSafe"));
 const IllegalBusiness = lazy(() => import("./pages/Money/IllegalBusiness"));
 const Distillery = lazy(() => import("./pages/Money/Distillery"));
 const LootBox = lazy(() => import("./pages/Money/LootBox"));
+const HalloweenPreview = lazy(() => import("./pages/Account/HalloweenPreview"));
 const MyProperties = lazy(() => import("./pages/Money/MyProperties"));
 const Properties = lazy(() => import("./pages/Money/Properties"));
 const QuickTrade = lazy(() => import("./pages/Money/QuickTrade"));
@@ -620,6 +621,12 @@ function App() {
               path="/account/missions"
               element={
               <Missions />
+              }
+            />
+            <Route
+              path="/account/halloween-preview"
+              element={
+              <HalloweenPreview />
               }
             />
             <Route

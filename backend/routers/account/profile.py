@@ -1887,6 +1887,8 @@ def register(router):
             "toast_custom_y": "toastCustomY",
             "top_bar_stat_order": "topBarStatOrder",
             "notification_ball_position": "notificationBallPosition",
+            "halloween_on": "halloweenOn",
+            "halloween_snapshot": "halloweenSnapshot",
         }
         stored = {key_map.get(k, k): v for k, v in updates.items()}
         tbg = stored.get("topBarGap")
@@ -1922,6 +1924,8 @@ def register(router):
                 raise HTTPException(status_code=400, detail="Invalid top_bar_stat_order")
             if len(tso) != len(set(tso)):
                 raise HTTPException(status_code=400, detail="Invalid top_bar_stat_order")
+        if "halloweenSnapshot" in stored and stored.get("halloweenSnapshot") is not None and not isinstance(stored.get("halloweenSnapshot"), dict):
+            raise HTTPException(status_code=400, detail="Invalid halloween_snapshot")
         nbp = stored.get("notificationBallPosition")
         if nbp is not None:
             if not isinstance(nbp, dict):

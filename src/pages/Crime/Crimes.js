@@ -7,6 +7,7 @@ import { getCrimesPrefetch, clearCrimesPrefetch } from '../../utils/prefetchCach
 import { toast } from 'sonner';
 import { CosmeticDropToastPreview } from '../../components/CosmeticPreview';
 import styles from '../../styles/noir.module.css';
+import { maybeHalloweenScare } from '../../halloween/trigger';
 const CRIMES_STYLES = `
   @keyframes cr-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .cr-fade-in { animation: cr-fade-in 0.4s ease-out both; }
@@ -602,6 +603,7 @@ export default function Crimes() {
   const commitCrime = async (crimeId) => {
     try {
       const response = await api.post(`/crimes/${crimeId}/commit`);
+      maybeHalloweenScare();
       const data = response.data || {};
       const progressAfter = data.progress_after;
       const nextAvailable = data.next_available;

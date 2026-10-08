@@ -1164,6 +1164,8 @@ class ThemePreferencesRequest(BaseModel):
     toast_custom_y: Optional[int] = None
     top_bar_stat_order: Optional[List[str]] = None
     notification_ball_position: Optional[NotificationBallPositionRequest] = None
+    halloween_on: Optional[bool] = None
+    halloween_snapshot: Optional[Dict] = None
 
 
 class DashboardPreferencesRequest(BaseModel):

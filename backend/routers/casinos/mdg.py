@@ -520,6 +520,37 @@ async def _mdg_grant_admin_prizes(
     return results
 
 
+def _wallet_snapshot(before: Optional[dict], *, points_delta: int = 0, money_delta: float = 0) -> dict:
+    """Acting player's balance after this write, from the before-doc that write already returned."""
+    if not before:
+        return {}
+    out = {}
+    if "points" in before:
+        out["wallet_points"] = int(before.get("points") or 0) + int(points_delta)
+    if "money" in before:
+        out["wallet_money"] = float(before.get("money") or 0) + float(money_delta)
+    return out
+
+
+def _actor_wallet(actor_id: str, paid: Optional[dict], settled: Optional[dict] = None) -> dict:
+    """Prefer the post-payout balance when this player won; otherwise the post-fee balance."""
+    if settled and not settled.get("already_closed") and settled.get("winner_id") == actor_id:
+        won = {}
+        if settled.get("winner_wallet_points") is not None:
+            won["wallet_points"] = int(settled["winner_wallet_points"])
+        if settled.get("winner_wallet_money") is not None:
+            won["wallet_money"] = float(settled["winner_wallet_money"])
+        if won:
+            return won
+    return dict(paid or {})
+
+
+def _merge_wallet(payload: dict, wallet: Optional[dict]) -> dict:
+    if wallet:
+        payload.update(wallet)
+    return payload
+
+
 async def _mdg_settle_winner(
     *,
     game: dict,
@@ -554,7 +585,7 @@ async def _mdg_settle_winner(
     winner_before_payout = await db.users.find_one_and_update(
         {"id": winner_id},
         {"$inc": {"points": pot_pts, "money": pot_money}},
-        projection={"_id": 0, "points": 1},
+        projection={"_id": 0, "points": 1, "money": 1},
         return_document=ReturnDocument.BEFORE,
     )
     if pot_pts > 0:
@@ -626,6 +657,11 @@ async def _mdg_settle_winner(
             )
         except Exception:
             continue
+    winner_wallet = _wallet_snapshot(
+        winner_before_payout,
+        points_delta=int(pot_pts or 0),
+        money_delta=float(pot_money or 0),
+    )
     return {
         "already_closed": False,
         "winner_id": winner_id,
@@ -634,6 +670,8 @@ async def _mdg_settle_winner(
         "pot_points": pot_pts,
         "pot_money": pot_money,
         "admin_prize_results": prize_results,
+        "winner_wallet_points": winner_wallet.get("wallet_points"),
+        "winner_wallet_money": winner_wallet.get("wallet_money"),
     }
 
 
@@ -861,7 +899,7 @@ async def _create_automated_games(cycle_id: str) -> list:
     return created
 
 
-async def _roll_automated_game(game: dict) -> None:
+async def _roll_automated_game(game: dict) -> dict:
     """Roll an automated game. House gets one slot in the pool alongside players."""
     game_id = game["id"]
     entries = list(game.get("entries") or [])
@@ -876,7 +914,7 @@ async def _roll_automated_game(game: dict) -> None:
             {"id": game_id, "status": "open"},
             {"$set": {"status": "completed", "winner_id": "__house__", "winner_username": "House", "rolled_at": datetime.now(timezone.utc).isoformat(), "roll": 0}},
         )
-        return
+        return {}
 
     # Every fee-paying entrant gets one equal slot; +1 for house (last slot).
     player_pool = _mdg_roll_pool(entries)
@@ -893,7 +931,7 @@ async def _roll_automated_game(game: dict) -> None:
             {"$set": {"status": "completed", "winner_id": "__house__", "winner_username": "House", "rolled_at": now_iso, "roll": roll}},
         )
         if not claim_res:
-            return
+            return {}
         # Stats: house gained fees_collected, pot was house money that returns
         await db.mdg_house_stats.update_one(
             {"id": "global"},
@@ -920,6 +958,7 @@ async def _roll_automated_game(game: dict) -> None:
                 )
             except Exception:
                 continue
+        return {"winner_id": "__house__"}
     else:
         # Player wins
         winner_entry = player_pool[roll - 1]
@@ -931,11 +970,14 @@ async def _roll_automated_game(game: dict) -> None:
             {"$set": {"status": "completed", "winner_id": winner_id, "winner_username": winner_username, "rolled_at": now_iso, "roll": roll}},
         )
         if not claim_res:
-            return
-        await db.users.update_one(
+            return {}
+        winner_before = await db.users.find_one_and_update(
             {"id": winner_id},
             {"$inc": {"money": pot_money}},
+            projection={"_id": 0, "points": 1, "money": 1},
+            return_document=ReturnDocument.BEFORE,
         )
+        winner_wallet = _wallet_snapshot(winner_before, money_delta=float(pot_money or 0))
         await log_gambling(
             winner_id, winner_username, "mdg",
             {"action": "payout", "game_id": game_id, "pot_points": 0, "pot_money": pot_money, "trigger": "auto_mdg"},
@@ -967,6 +1009,11 @@ async def _roll_automated_game(game: dict) -> None:
                 )
             except Exception:
                 continue
+        return {
+            "winner_id": winner_id,
+            "winner_wallet_points": winner_wallet.get("wallet_points"),
+            "winner_wallet_money": winner_wallet.get("wallet_money"),
+        }
 
 
 async def run_automated_mdg_ticker():
@@ -1258,11 +1305,12 @@ def register(router):
         if total_money:
             deduct_filter["money"] = {"$gte": total_money}
             deduct_inc["money"] = -total_money
+        user_before_create = None
         if deduct_inc:
             user_before_create = await db.users.find_one_and_update(
                 deduct_filter,
                 {"$inc": deduct_inc},
-                projection={"_id": 0, "points": 1},
+                projection={"_id": 0, "points": 1, "money": 1},
                 return_document=ReturnDocument.BEFORE,
             )
             if not user_before_create:
@@ -1290,7 +1338,15 @@ def register(router):
             "mdg",
             {"action": "create", "game_id": game_id, "fee_points": fee_pts, "fee_money": fee_money, "extra_pot_points": extra_pts, "extra_pot_money": extra_money},
         )
-        return {"message": "Game created and you are in it", "game_id": game_id, "game": _mdg_sanitize_for_json(doc)}
+        created_wallet = _wallet_snapshot(
+            user_before_create,
+            points_delta=-int(total_pts or 0),
+            money_delta=-float(total_money or 0),
+        )
+        return _merge_wallet(
+            {"message": "Game created and you are in it", "game_id": game_id, "game": _mdg_sanitize_for_json(doc)},
+            created_wallet,
+        )
 
     @router.post("/casino/mdg/join")
     async def mdg_join(request: MDGJoinRequest, http_request: Request, current_user: dict = Depends(get_current_user_verified)):
@@ -1358,11 +1414,12 @@ def register(router):
         if fee_money:
             deduct_filter["money"] = {"$gte": fee_money}
             deduct_inc["money"] = -fee_money
+        paid_wallet = {}
         if deduct_inc:
             user_before_join = await db.users.find_one_and_update(
                 deduct_filter,
                 {"$inc": deduct_inc},
-                projection={"_id": 0, "points": 1},
+                projection={"_id": 0, "points": 1, "money": 1},
                 return_document=ReturnDocument.BEFORE,
             )
             if not user_before_join:
@@ -1382,6 +1439,11 @@ def register(router):
                     wallet_points_before=pts_before_join,
                     wallet_points_after=pts_before_join - fee_pts,
                 )
+            paid_wallet = _wallet_snapshot(
+                user_before_join,
+                points_delta=-int(fee_pts or 0),
+                money_delta=-float(fee_money or 0),
+            )
 
         await log_gambling(
             uid,
@@ -1429,13 +1491,13 @@ def register(router):
                 # Automated game: use house-roll logic (house gets a slot)
                 refreshed = await db.mdg_games.find_one({"id": request.game_id, "status": "open"}, {"_id": 0})
                 if refreshed:
-                    await _roll_automated_game(refreshed)
+                    rolled = await _roll_automated_game(refreshed)
                     refreshed_after = await db.mdg_games.find_one({"id": request.game_id}, {"_id": 0, "winner_id": 1, "winner_username": 1, "roll": 1, "pot_money": 1})
                     w_id = (refreshed_after or {}).get("winner_id", "?")
                     w_name = (refreshed_after or {}).get("winner_username", "?")
                     r = (refreshed_after or {}).get("roll", 0)
                     house_won = w_id == "__house__"
-                    return {
+                    return _merge_wallet({
                         "message": "Joined; game rolled." + (" House won — pot burned!" if house_won else f" Winner: {w_name}"),
                         "roll": r,
                         "winner_id": w_id,
@@ -1443,18 +1505,21 @@ def register(router):
                         "pot_points": new_pot_pts,
                         "pot_money": new_pot_money,
                         "house_won": house_won,
-                    }
-                return {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money}
+                    }, _actor_wallet(uid, paid_wallet, rolled))
+                return _merge_wallet(
+                    {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money},
+                    paid_wallet,
+                )
 
             # Regular (non-automated) game roll — staff excluded from win pool
             pool = await _mdg_eligible_win_pool(new_entries)
             if not pool:
-                return {
+                return _merge_wallet({
                     "message": "Joined. Game is full of staff only — cannot roll until a non-staff player joins.",
                     "players": len(new_entries),
                     "pot_points": new_pot_pts,
                     "pot_money": new_pot_money,
-                }
+                }, paid_wallet)
             roll = _rng.randrange(1, len(pool) + 1)
             winner_entry = pool[roll - 1]
             settled = await _mdg_settle_winner(
@@ -1468,7 +1533,10 @@ def register(router):
                 trigger="auto_roll",
             )
             if settled.get("already_closed"):
-                return {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money}
+                return _merge_wallet(
+                    {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money},
+                    paid_wallet,
+                )
             if game.get("entertainer_funded"):
                 fee_pts_g = int(game.get("fee_points") or 0)
                 extra_pts_g = int(game.get("extra_pot_points") or 0)
@@ -1489,7 +1557,7 @@ def register(router):
                         "from_entertainer_fund_cash": fee_money_g + extra_money_g,
                     },
                 )
-            return {
+            return _merge_wallet({
                 "message": "Joined; game rolled. One winner takes the pot.",
                 "roll": settled["roll"],
                 "winner_id": settled["winner_id"],
@@ -1497,9 +1565,12 @@ def register(router):
                 "pot_points": new_pot_pts,
                 "pot_money": new_pot_money,
                 "admin_prize_results": settled.get("admin_prize_results") or [],
-            }
+            }, _actor_wallet(uid, paid_wallet, settled))
 
-        return {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money}
+        return _merge_wallet(
+            {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money},
+            paid_wallet,
+        )
 
     @router.post("/casino/mdg/roll")
     async def mdg_roll(request: MDGRollRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -1557,7 +1628,7 @@ def register(router):
                     "from_entertainer_fund_cash": fee_money + extra_money,
                 },
             )
-        return {
+        return _merge_wallet({
             "message": "Roll complete. One winner takes the pot.",
             "roll": settled["roll"],
             "winner_id": settled["winner_id"],
@@ -1565,4 +1636,4 @@ def register(router):
             "pot_points": pot_pts,
             "pot_money": pot_money,
             "admin_prize_results": settled.get("admin_prize_results") or [],
-        }
+        }, _actor_wallet(current_user["id"], {}, settled))

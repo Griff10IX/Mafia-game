@@ -7,6 +7,22 @@ import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import { useEntJoinTurnstile } from '../../hooks/useEntJoinTurnstile';
 import styles from '../../styles/noir.module.css';
 
+/** Paint the acting player's balance from the MDG response. No extra /auth/me. */
+function paintMdgWallet(data) {
+  if (!data || typeof data !== 'object') return;
+  const detail = { skipFetch: true };
+  let has = false;
+  if (data.wallet_points != null && Number.isFinite(Number(data.wallet_points))) {
+    detail.points = Number(data.wallet_points);
+    has = true;
+  }
+  if (data.wallet_money != null && Number.isFinite(Number(data.wallet_money))) {
+    detail.money = Number(data.wallet_money);
+    has = true;
+  }
+  if (has) refreshUser(detail);
+}
+
 const MDG_STYLES = `
   @keyframes mdg-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .mdg-fade-in { animation: mdg-fade-in 0.4s ease-out both; }
@@ -376,7 +392,7 @@ export default function MDGPage() {
       });
       // Token was consumed on success — clear so the next list fetch issues/returns a fresh one.
       joinTokenRef.current = null;
-      await refreshUser();
+      paintMdgWallet(res.data);
       if (res.data?.winner_username != null) {
         toast.success(formatMdgResultToast(res.data));
       } else {
@@ -402,7 +418,7 @@ export default function MDGPage() {
     setRollingId(gameId);
     try {
       const res = await api.post('/casino/mdg/roll', { game_id: gameId });
-      await refreshUser();
+      paintMdgWallet(res.data);
       if (res.data?.winner_username != null) {
         toast.success(formatMdgResultToast(res.data));
       } else {
@@ -437,17 +453,24 @@ export default function MDGPage() {
     }
     setCreating(true);
     try {
-      await api.post('/casino/mdg/create', {
+      const extraMoney = parseFloat(createExtraPotMoney) || 0;
+      const res = await api.post('/casino/mdg/create', {
         fee_points: feePoints,
         fee_money: feeMoney,
         max_players: maxPlayers,
         auto_roll_at: createAutoRollAt.trim() ? Math.max(2, parseInt(createAutoRollAt, 10) || 2) : null,
         extra_pot_points: extraPts,
-        extra_pot_money: parseFloat(createExtraPotMoney) || 0,
+        extra_pot_money: extraMoney,
         ...(isAdmin && adminPrizes.length > 0 ? { admin_prizes: adminPrizes } : {}),
       });
-      await refreshUser();
-      refreshAuthMe();
+      paintMdgWallet(res.data);
+      if (usesEntFund) {
+        setEntFund((prev) => ({
+          ...prev,
+          points: prev.points - (feePoints + extraPts),
+          cash: prev.cash - (feeMoney + extraMoney),
+        }));
+      }
       toast.success('Game created — fee taken (you’re in the game)');
       setCreateOpen(false);
       setCreateFeePoints('');

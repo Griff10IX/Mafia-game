@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import { normalizeBodyguardSlotValue } from '../../utils/attackLogDisplay';
 import AdminSustainedRlEventsTable from './admin/AdminSustainedRlEventsTable';
+import AdminChickenCrossOdds from './admin/AdminChickenCrossOdds';
 import styles from '../../styles/noir.module.css';
 import {
   ADMIN_CATEGORIES,
@@ -227,8 +228,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, weedSellAudit: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, pointsCashLogs: true, mwTs: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, weedSellAudit: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, pointsCashLogs: true, mwTs: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, weedSellAudit: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, pointsCashLogs: true, mwTs: true, chickenCrossOdds: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, weedSellAudit: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, pointsCashLogs: true, mwTs: true, chickenCrossOdds: true }; }
 }
 
 function saveCollapsed(state) {
@@ -15839,6 +15840,21 @@ export default function Admin() {
             )}
           </div>
         )}
+        </div>
+        )}
+
+        {isAdmin && (
+        <div id="admin-chicken-cross-odds" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Dice5}
+          title="Chicken Cross odds"
+          badge={<span className="text-[10px] font-heading text-mutedForeground">hidden hop chance</span>}
+          toolAnchor="chickenCrossOdds"
+          isCollapsed={collapsed.chickenCrossOdds}
+          onToggle={() => toggleSection('chickenCrossOdds')}
+        />
+        {!collapsed.chickenCrossOdds && <AdminChickenCrossOdds />}
         </div>
         )}
 

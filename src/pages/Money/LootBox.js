@@ -9,6 +9,7 @@ import {
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import { maybeHalloweenScare } from '../../halloween/trigger';
 
 const LOOT_STATUS_CACHE_KEY = 'mafia_loot_box_status_v1';
 
@@ -1116,6 +1117,7 @@ export default function LootBox() {
         new Promise((r) => setTimeout(r, 900)),
       ]);
       apiData = res.data;
+      maybeHalloweenScare();
       const level = computeOpenAnimLevel(apiData?.rewards, selectedTier);
       setOpenAnimLevel(level);
       setPhase('exploding');
