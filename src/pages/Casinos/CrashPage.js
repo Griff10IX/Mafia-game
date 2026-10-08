@@ -33,6 +33,7 @@ function ready(img) {
   return img && img.complete && img.naturalWidth > 0;
 }
 [SKYLINE, ...Object.values(ROCKETS), ...EXPLODE, ...FLAMES].forEach(getImage);
+let crashAutoLeaveTimer = 0;
 
 const PAGE_STYLES = `
   .crash-page { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
@@ -541,6 +542,32 @@ function CrashGame() {
   const boomRef = useRef(null);
   const multRef = useRef(null);
   const subRef = useRef(null);
+  const autoOnRef = useRef(false);
+
+  useEffect(() => { autoOnRef.current = autoOn; }, [autoOn]);
+
+  useEffect(() => {
+    window.clearTimeout(crashAutoLeaveTimer);
+    const stopAuto = () => {
+      if (!autoOnRef.current) return;
+      autoOnRef.current = false;
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const base = String(api.defaults.baseURL || '/api').replace(/\/$/, '');
+      fetch(`${base}/casino/crash/auto`, {
+        method: 'POST',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ enabled: false, leave: true, stake: 0, currency: 'cash' }),
+      }).catch(() => {});
+    };
+    window.addEventListener('pagehide', stopAuto);
+    return () => {
+      window.removeEventListener('pagehide', stopAuto);
+      window.clearTimeout(crashAutoLeaveTimer);
+      crashAutoLeaveTimer = window.setTimeout(stopAuto, 500);
+    };
+  }, []);
 
   const applyState = useCallback((data) => {
     const server = Date.parse(data.server_now || '') || Date.now();
@@ -646,6 +673,7 @@ function CrashGame() {
   }
 
   function saveAuto(enabled) {
+    autoOnRef.current = enabled;
     const amount = parseInt(String(stake).replace(/\D/g, ''), 10) || 0;
     const cashout = parseFloat(autoCash);
     send('/casino/crash/auto', {
@@ -831,7 +859,7 @@ function CrashGame() {
             )}
             {tab === 'auto' && (
               <div className="space-y-2">
-                <p className="text-[10px] text-zinc-400 font-heading">Joins the next rocket with this stake. A bust lowers your running total. Stop amounts are optional.</p>
+                <p className="text-[10px] text-zinc-400 font-heading">Joins the next rocket with this stake. A bust lowers your running total. Stop amounts are optional. Leaving this page stops auto.</p>
                 <div className="grid grid-cols-2 gap-2">
                   <label className="text-[10px] text-zinc-400 font-heading">
                     Stop after up

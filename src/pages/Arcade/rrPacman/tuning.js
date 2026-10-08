@@ -6,8 +6,11 @@ export const FULL_SPEED_PX_PER_TICK = 75.75757625 / TICK_HZ;
 
 const SPEED_ROWS = [
   // [maxLevel, player, playerFright, enemy, enemyFright, enemyTunnel]
-  [1, 0.8, 0.9, 0.75, 0.5, 0.4],
-  [4, 0.9, 0.95, 0.85, 0.55, 0.45],
+  // Levels 1–2 are eased so a new run can clear the first maze. Later rows climb back to arcade speed.
+  [1, 0.9, 1.0, 0.55, 0.35, 0.3],
+  [2, 0.9, 0.95, 0.65, 0.4, 0.35],
+  [4, 0.9, 0.95, 0.75, 0.5, 0.4],
+  [8, 0.95, 0.95, 0.85, 0.55, 0.45],
   [20, 1.0, 1.0, 0.95, 0.6, 0.5],
   [Infinity, 0.9, 0.9, 0.95, 0.6, 0.5],
 ];
@@ -19,7 +22,7 @@ export function speedsFor(level) {
 
 const ELROY_ROWS = [
   // [maxLevel, dotsLeft1, dotsLeft2]
-  [1, 20, 10], [2, 30, 15], [5, 40, 20], [8, 50, 25], [11, 60, 30], [14, 80, 40], [18, 100, 50], [Infinity, 120, 60],
+  [1, 10, 5], [2, 18, 8], [5, 30, 15], [8, 40, 20], [11, 60, 30], [14, 80, 40], [18, 100, 50], [Infinity, 120, 60],
 ];
 
 export function elroyFor(level) {
@@ -28,7 +31,7 @@ export function elroyFor(level) {
   return { dots1: row[1], dots2: row[2], speed1: base + 0.05, speed2: base + 0.1 };
 }
 
-const FRIGHT_SECONDS = [6, 5, 4, 3, 2, 5, 2, 2, 1, 5, 2, 1, 1, 3, 1, 1, 0, 1];
+const FRIGHT_SECONDS = [10, 8, 7, 5, 4, 5, 2, 2, 1, 5, 2, 1, 1, 3, 1, 1, 0, 1];
 const FRIGHT_FLASHES = [5, 5, 5, 5, 5, 5, 5, 5, 3, 5, 5, 3, 3, 5, 3, 3, 0, 3];
 
 export function frightFor(level) {
@@ -38,24 +41,26 @@ export function frightFor(level) {
 
 // Scatter/chase waves in seconds (last chase is indefinite).
 export function wavesFor(level) {
-  if (level === 1) return [7, 20, 7, 20, 5, 20, 5, Infinity];
+  if (level === 1) return [10, 12, 8, 14, 7, 14, 6, Infinity];
+  if (level === 2) return [8, 16, 7, 18, 5, 20, 5, Infinity];
   if (level <= 4) return [7, 20, 7, 20, 5, 1033, 1 / 60, Infinity];
   return [5, 20, 5, 20, 5, 1037, 1 / 60, Infinity];
 }
 
 // Pen release dot limits per enemy index [coyote, cop, mobster, rocket].
 export function penDotLimits(level) {
-  if (level === 1) return [0, 0, 30, 60];
-  if (level === 2) return [0, 0, 0, 50];
+  if (level === 1) return [0, 25, 55, 90];
+  if (level === 2) return [0, 8, 30, 55];
+  if (level <= 4) return [0, 0, 15, 40];
   return [0, 0, 0, 0];
 }
 
-export const PEN_IDLE_SECONDS = (level) => (level <= 4 ? 4 : 3);
+export const PEN_IDLE_SECONDS = (level) => (level === 1 ? 8 : level <= 4 ? 5 : 3);
 export const GLOBAL_DOT_LIMITS = [0, 7, 17, 32];
 
 export const SCORE = { seed: 10, bag: 50, enemies: [200, 400, 800, 1600] };
 export const EXTRA_LIFE_AT = 10000;
-export const START_LIVES = 3;
+export const START_LIVES = 4;
 export const BONUS_AT_SEEDS = [70, 170];
 export const BONUS_SECONDS = 9.5;
 

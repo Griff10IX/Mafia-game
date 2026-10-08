@@ -6,6 +6,29 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-10-08[/color][/b] — [b]Crash (new casino game)[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]How it plays:[/b] One rocket for the whole casino. Bet, watch it climb, and cash out before it blows. If it crashes first, you lose the stake.[/color]
+[*][color=#888888][b]Cash:[/b] Max bet $2 billion. Max win $500 billion.[/color]
+[*][color=#888888][b]Points:[/b] Max bet 500 points. Max win 50,000 points.[/color]
+[*][color=#888888][b]Rounds:[/b] 30 seconds to get in, then the rocket flies. The next one starts when it lands.[/color]
+[*][color=#888888][b]Auto:[/b] Auto bet can cash out at a multiplier you set. It stops if you leave the page.[/color]
+[*][color=#888888][b]Where:[/b] Casino menu, under Chicken Cross.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-10-08[/color][/b] — [b]Road Runner Pac-Man[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Easier start:[/b] The first levels are slower and you start with an extra life, so reaching level 2 is no longer a wall.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-10-08[/color][/b] — [b]Mission prestige[/b][/size]
 [quote]
 [list]

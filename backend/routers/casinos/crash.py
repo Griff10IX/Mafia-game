@@ -22,11 +22,13 @@ logger = logging.getLogger(__name__)
 _rng = secrets.SystemRandom()
 
 # Admin-only while CRASH_ADMIN_ONLY is true (must match CRASH_ADMIN_ONLY in src/config/gameFeatures.js).
-CRASH_ADMIN_ONLY = True
+CRASH_ADMIN_ONLY = False
 _auth = require_admin_verified if CRASH_ADMIN_ONLY else get_current_user_verified
 
 STATE_ID = "current"
-BETTING_SECONDS = 10
+BETTING_SECONDS = 30
+# Auto only keeps betting while this page is open. A few missed polls means they left.
+AUTO_PAGE_SECONDS = 5
 GROWTH = 0.09
 CASH_MAX_BET = 2_000_000_000
 CASH_PAYOUT_CAP = 500_000_000_000
@@ -208,8 +210,42 @@ async def _bust_open(state: dict) -> None:
             await _settle_bet(bet, won=False, mult_cents=crash_cents, crash_cents=crash_cents)
 
 
+def _auto_page_open(doc: dict, now: Optional[datetime] = None) -> bool:
+    seen = _parse(doc.get("seen_at"))
+    if not seen:
+        return False
+    now = now or _now()
+    return (now - seen).total_seconds() <= AUTO_PAGE_SECONDS
+
+
+async def _drop_away_autos(now: datetime) -> None:
+    cutoff = (now - timedelta(seconds=AUTO_PAGE_SECONDS)).isoformat()
+    await db.crash_auto.update_many(
+        {
+            "enabled": True,
+            "$or": [
+                {"seen_at": {"$exists": False}},
+                {"seen_at": None},
+                {"seen_at": {"$lt": cutoff}},
+            ],
+        },
+        {"$set": {"enabled": False}},
+    )
+
+
+async def _note_auto_presence(user_id: str) -> None:
+    if not user_id:
+        return
+    await db.crash_auto.update_one(
+        {"user_id": user_id, "enabled": True},
+        {"$set": {"seen_at": _now().isoformat()}},
+    )
+
+
 def _auto_should_run(doc: dict) -> bool:
     if not doc or not doc.get("enabled"):
+        return False
+    if not _auto_page_open(doc):
         return False
     session = int(doc.get("session_net") or 0)
     stop_profit = int(doc.get("stop_profit") or 0)
@@ -317,6 +353,7 @@ async def _open_betting(now: datetime, last_crash: Optional[int], history: List[
 async def tick() -> dict:
     await _ensure_indexes()
     now = _now()
+    await _drop_away_autos(now)
     state = await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0})
     if not state:
         await _open_betting(now, None, [])
@@ -419,8 +456,9 @@ def _public_state(state: dict, user_id: str, bets: List[dict], auto_doc: Optiona
 
 
 async def _view(user: dict) -> dict:
-    state = await tick()
     user_id = user.get("id") or ""
+    await _note_auto_presence(user_id)
+    state = await tick()
     bets = await db.crash_bets.find(
         {"round_id": state.get("round_id")},
         {"_id": 0},
@@ -472,6 +510,7 @@ class AutoBody(BaseModel):
     auto_cashout: Optional[float] = None
     stop_profit: int = 0
     stop_loss: int = 0
+    leave: bool = False
 
     @field_validator("currency")
     @classmethod
@@ -523,6 +562,9 @@ def register(router):
     async def crash_auto(body: AutoBody, current_user: dict = Depends(_auth)):
         raise_if_gambling_self_banned(current_user)
         user_id = current_user["id"]
+        if body.leave:
+            await db.crash_auto.update_one({"user_id": user_id}, {"$set": {"enabled": False}})
+            return await _view(current_user)
         auto_cents = _cashout_cents(body.auto_cashout) if body.enabled and body.auto_cashout else (
             _cashout_cents(body.auto_cashout) if body.auto_cashout else None
         )
@@ -534,20 +576,19 @@ def register(router):
         session = 0 if not prev or not prev.get("enabled") else int(prev.get("session_net") or 0)
         if body.enabled and (not prev or not prev.get("enabled")):
             session = 0
-        await db.crash_auto.update_one(
-            {"user_id": user_id},
-            {"$set": {
-                "user_id": user_id,
-                "enabled": bool(body.enabled),
-                "currency": body.currency,
-                "stake": int(body.stake or 0),
-                "auto_cashout_cents": auto_cents,
-                "stop_profit": max(0, int(body.stop_profit or 0)),
-                "stop_loss": max(0, int(body.stop_loss or 0)),
-                "session_net": session,
-            }},
-            upsert=True,
-        )
+        saved = {
+            "user_id": user_id,
+            "enabled": bool(body.enabled),
+            "currency": body.currency,
+            "stake": int(body.stake or 0),
+            "auto_cashout_cents": auto_cents,
+            "stop_profit": max(0, int(body.stop_profit or 0)),
+            "stop_loss": max(0, int(body.stop_loss or 0)),
+            "session_net": session,
+        }
+        if body.enabled:
+            saved["seen_at"] = _now().isoformat()
+        await db.crash_auto.update_one({"user_id": user_id}, {"$set": saved}, upsert=True)
         state = await tick()
         if body.enabled and state.get("phase") == "betting":
             try:
