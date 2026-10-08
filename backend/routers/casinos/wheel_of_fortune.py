@@ -430,18 +430,30 @@ class WheelSpinRequest(BaseModel):
     pay_with: str = Field(..., description="free | points | respect")
 
 
+async def _extra_daily_free_spins(user: dict) -> int:
+    """Exclusive-car spins plus the 5 a day from a finished mission prestige."""
+    extra = 0
+    try:
+        from utils.loot_exclusive_540k import user_owns as _owns_540k, wheel_free_remaining
+
+        if await _owns_540k(db, (user or {}).get("id") or ""):
+            extra += wheel_free_remaining(user)
+    except Exception:
+        pass
+    try:
+        from utils.mission_prestige import wheel_free_remaining as prestige_wheel_remaining
+
+        extra += prestige_wheel_remaining(user)
+    except Exception:
+        pass
+    return extra
+
+
 def register(router):
     @router.get("/casino/wheel/config", dependencies=_casinos_rl_u)
     async def wheel_config(current_user: dict = Depends(get_current_user_verified)):
         user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0}) or current_user
-        extra_daily = 0
-        try:
-            from utils.loot_exclusive_540k import user_owns as _owns_540k, wheel_free_remaining
-
-            if await _owns_540k(db, user.get("id") or ""):
-                extra_daily = wheel_free_remaining(user)
-        except Exception:
-            extra_daily = 0
+        extra_daily = await _extra_daily_free_spins(user)
         wedges = [
             {
                 "id": s["id"],
@@ -498,6 +510,7 @@ def register(router):
             free_ok, free_next, _ = _free_available(user, now)
             extra_daily = 0
             owns_540k = False
+            prestige_daily = 0
             try:
                 from utils.loot_exclusive_540k import user_owns as _owns_540k, wheel_free_remaining, consume_wheel_free
 
@@ -507,6 +520,14 @@ def register(router):
             except Exception:
                 owns_540k = False
                 extra_daily = 0
+            try:
+                from utils.mission_prestige import consume_wheel_free as consume_prestige_wheel
+                from utils.mission_prestige import wheel_free_remaining as prestige_wheel_remaining
+
+                prestige_daily = prestige_wheel_remaining(user, now)
+            except Exception:
+                prestige_daily = 0
+                consume_prestige_wheel = None
             if admin:
                 # Admins: unlimited free spins; do not touch cooldown or bonus bank
                 pass
@@ -516,6 +537,12 @@ def register(router):
                 filt["wheel_bonus_free_spins"] = {"$gte": 1}
             elif extra_daily > 0 and owns_540k:
                 extra_set, extra_inc, extra_filt = consume_wheel_free(user, now)
+                set_doc.update(extra_set)
+                for k, v in extra_inc.items():
+                    inc[k] = int(inc.get(k) or 0) + int(v)
+                filt.update(extra_filt)
+            elif prestige_daily > 0 and consume_prestige_wheel:
+                extra_set, extra_inc, extra_filt = consume_prestige_wheel(user, now)
                 set_doc.update(extra_set)
                 for k, v in extra_inc.items():
                     inc[k] = int(inc.get(k) or 0) + int(v)
@@ -643,14 +670,7 @@ def register(router):
             )
 
         refreshed = await db.users.find_one({"id": uid}, {"_id": 0}) or user
-        extra_after = 0
-        try:
-            from utils.loot_exclusive_540k import user_owns as _owns_540k_after, wheel_free_remaining as _wheel_rem
-
-            if await _owns_540k_after(db, uid):
-                extra_after = _wheel_rem(refreshed)
-        except Exception:
-            extra_after = 0
+        extra_after = await _extra_daily_free_spins(refreshed)
         status = _spin_status(refreshed, extra_daily_free=extra_after)
         return {
             "segment_index": segment_index,

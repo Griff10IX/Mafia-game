@@ -143,6 +143,7 @@ export default function Bodyguards() {
   const [robotBgAutoSearchCost, setRobotBgAutoSearchCost] = useState(ROBOT_BG_AUTO_SEARCH_COST_DEFAULT);
   const [autoSearchBuying, setAutoSearchBuying] = useState(false);
   const [robotHireTokens, setRobotHireTokens] = useState(0);
+  const [robotHireCostMult, setRobotHireCostMult] = useState(1);
   const claimedSlotsRef = useRef(new Set());
   const pendingHiresRef = useRef(0);
   const hireCodePayloadRef = useRef({});
@@ -260,6 +261,7 @@ export default function Bodyguards() {
       setRobotBgAutoSearchActive(!!bgData?.robot_bg_auto_search_active);
       setRobotBgAutoSearchUntil(bgData?.robot_bg_auto_search_until ?? null);
       setRobotBgAutoSearchCost(Number(bgData?.robot_bg_auto_search_cost) || ROBOT_BG_AUTO_SEARCH_COST_DEFAULT);
+      setRobotHireCostMult(Number(bgData?.robot_hire_cost_mult) > 0 ? Number(bgData.robot_hire_cost_mult) : 1);
       if (typeof bgData?.robot_bodyguard_hire_tokens === 'number') {
         setRobotHireTokens(bgData.robot_bodyguard_hire_tokens);
       } else if (typeof userRes.data?.robot_bodyguard_hire_tokens === 'number') {
@@ -568,7 +570,7 @@ export default function Bodyguards() {
       if (short) return `Hire free (${robotHireTokens})`;
       return `${prefix}Hire robot — free token (${robotHireTokens})`;
     }
-    const pts = getHireCost(slotNumber).toLocaleString();
+    const pts = Math.max(1, Math.round(getHireCost(slotNumber) * robotHireCostMult)).toLocaleString();
     if (short) return `Hire (${pts})`;
     return `${prefix}Hire robot (${pts} pts)`;
   };

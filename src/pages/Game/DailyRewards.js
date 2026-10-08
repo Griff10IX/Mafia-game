@@ -149,6 +149,7 @@ function formatMoney(n) {
 
 function formatWinRewards(data) {
   const parts = [`You win! ${formatMoney(data.money_won)}`];
+  if (Number(data.points_won) > 0) parts.push(`${Number(data.points_won).toLocaleString()} points`);
   if (data.cars_won?.length) parts.push(data.cars_won.join(', '));
   if (Number(data.loot_box_pieces) > 0) {
     parts.push(`${Number(data.loot_box_pieces).toLocaleString()} loot pieces`);
@@ -359,7 +360,7 @@ export default function DailyRewards() {
           <div className="flex items-center gap-2 pt-2 border-t border-zinc-700/40">
             <DollarSign size={13} className="text-emerald-400" />
             <span className="text-[11px] text-zinc-500 font-heading">
-              Win = <span className="text-emerald-400">{formatMoney(info?.win_money ?? 10000000)}</span> cash, or {Math.round((info?.loot_pieces_chance ?? 0.25) * 100)}% chance for {info?.loot_pieces_options?.join('/') ?? '10/15'} loot pieces
+              Win = <span className="text-emerald-400">{formatMoney(info?.win_money ?? 50000000)}</span> cash, <span className="text-primary">{info?.win_points_min ?? 50}–{info?.win_points_max ?? 100} points</span>, plus a {Math.round((info?.loot_pieces_chance ?? 0.25) * 100)}% chance for {info?.loot_pieces_options?.join('/') ?? '10/15'} loot pieces
             </span>
           </div>
         </div>
@@ -490,6 +491,12 @@ export default function DailyRewards() {
                 {result.result === 'win' && (
                   <p className="text-xs font-heading text-primary">
                     <span className="shimmer-text font-bold text-sm">+{formatMoney(result.money_won)}</span>
+                    {Number(result.points_won) > 0 ? (
+                      <>
+                        <span className="text-zinc-400 mx-1">—</span>
+                        <span className="text-primary font-bold">+{Number(result.points_won).toLocaleString()} points</span>
+                      </>
+                    ) : null}
                     {result.cars_won?.length ? (
                       <span className="text-zinc-400 mx-1">—</span>
                     ) : null}
@@ -725,6 +732,12 @@ export default function DailyRewards() {
                 {tttResult.result === 'win' && (
                   <p className="text-xs font-heading text-center">
                     <span className="shimmer-text font-bold text-sm">+{formatMoney(tttResult.money_won)}</span>
+                    {Number(tttResult.points_won) > 0 ? (
+                      <>
+                        <span className="text-zinc-400 mx-1">—</span>
+                        <span className="text-primary font-bold">+{Number(tttResult.points_won).toLocaleString()} points</span>
+                      </>
+                    ) : null}
                     {tttResult.cars_won?.length ? (
                       <span className="text-zinc-400 mx-1">—</span>
                     ) : null}

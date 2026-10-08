@@ -1091,6 +1091,21 @@ export default function Missions() {
     return () => clearInterval(id);
   }, [load]);
 
+  const handlePrestige = async () => {
+    setCompleting(true);
+    try {
+      await api.post('/missions/prestige/start');
+      toast.success('Prestige started. Every mission is twice as hard and pays twice the rewards.');
+      refreshUser();
+      await load();
+      setSelected(null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not start prestige');
+    } finally {
+      setCompleting(false);
+    }
+  };
+
   const handleComplete = async (missionId) => {
     setCompleting(true);
     try {
@@ -1287,6 +1302,44 @@ export default function Missions() {
       <style>{MISSIONS_STYLES}</style>
 
       <p className="text-[10px] text-mutedForeground italic">Prove yourself: commit 15 crimes and bust 1 NPC from jail. Earn tribute and claim your reward.</p>
+
+      {data?.mission_prestige?.can_start && (
+        <div className={`${styles.panel} rounded-md border border-primary/30 p-3 space-y-2`}>
+          <div className="text-[11px] font-heading font-bold text-primary uppercase tracking-wide">Mission prestige</div>
+          <p className="text-[10px] text-mutedForeground">
+            Run the ladder again. Every target is doubled, and the cash, rank points, respect, bullets, and loot from each mission are doubled. Daily cash for a mission becomes 2x when you clear it again. Finish the run for permanent bonuses.
+          </p>
+          <button
+            type="button"
+            onClick={handlePrestige}
+            disabled={completing}
+            className="text-[11px] font-heading font-bold uppercase tracking-wide px-3 py-1.5 rounded border border-primary/40 text-primary hover:bg-primary/10 disabled:opacity-50"
+          >
+            Prestige
+          </button>
+        </div>
+      )}
+      {data?.mission_prestige?.active && (
+        <div className={`${styles.panel} rounded-md border border-amber-500/30 p-3`}>
+          <div className="text-[11px] font-heading font-bold text-amber-300 uppercase tracking-wide">
+            Prestige {data.mission_prestige.completed_count}/{data.mission_prestige.total}
+          </div>
+          <p className="text-[10px] text-mutedForeground mt-1">
+            Targets and rewards are doubled. A mission keeps its old daily cash until you clear the harder copy, then that daily cash is 2x.
+          </p>
+        </div>
+      )}
+      {data?.mission_prestige?.complete && (
+        <div className={`${styles.panel} rounded-md border border-green-500/30 p-3`}>
+          <div className="text-[11px] font-heading font-bold text-green-400 uppercase tracking-wide">Prestige complete</div>
+          <ul className="text-[10px] text-mutedForeground mt-1 space-y-0.5">
+            <li>It takes 25% more bullets to kill you.</li>
+            <li>Robot bodyguards cost 25% fewer points.</li>
+            <li>5 extra free Wheel of Fortune spins a day.</li>
+            <li>5,000 points a week, on top of any Commissioner's Pardon points.</li>
+          </ul>
+        </div>
+      )}
 
       <TributeBanner
         bank={tributeBank}

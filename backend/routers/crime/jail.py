@@ -382,8 +382,8 @@ async def _count_global_jail_npcs() -> int:
 
 _RANK_NAMES_FOR_JAIL_NPC = [r["name"] for r in RANKS]
 _RANK_WEIGHTS_FOR_JAIL_NPC = [30, 25, 20, 15, 10, 7, 5, 3, 2, 1, 1, 1, 1]
-JAIL_NPC_BUST_REWARD_FLOOR = 100_000
-JAIL_NPC_BUST_REWARD_CEILING = 500_000
+JAIL_NPC_BUST_REWARD_FLOOR = 125_000  # 100_000 × 1.25
+JAIL_NPC_BUST_REWARD_CEILING = 625_000  # 500_000 × 1.25
 
 
 def _jail_npc_bust_reward_for_rank(rank_index: int) -> int:

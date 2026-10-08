@@ -6,6 +6,58 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-10-08[/color][/b] — [b]Mission prestige[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Once:[/b] After all 100 missions are done, Prestige shows on the Missions page. You can start it once. Your first clear, the one-time ladder reward, and Completed It stay.[/color]
+[*][color=#888888][b]Harder ladder:[/b] Targets are doubled. Cash, rank points, respect, bullets, and loot from each mission are doubled. Cars, city unlocks, and one-off tokens are not given again. Progress already done does not count toward the harder copy.[/color]
+[*][color=#888888][b]Daily cash:[/b] A mission keeps its old daily cash until you clear the harder copy. After that, that mission pays 2x daily cash instead of the old amount. Daily bullets, respect, loot, and tokens stay at the first-clear amounts.[/color]
+[*][color=#888888][b]Finished:[/b] When the prestiged ladder is done, it takes 25% more bullets to kill you, robot bodyguards cost 25% fewer points, you get 5 extra free Wheel of Fortune spins a day, and 5,000 points a week. A Commissioner's Pardon still pays its own 3,500 on top.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-10-08[/color][/b] — [b]Cash payouts[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Crimes:[/b] Crime cash is 25% higher.[/color]
+[*][color=#888888][b]Jail:[/b] NPC bust cash is 25% higher.[/color]
+[*][color=#888888][b]Properties:[/b] Property income is 25% higher. Upkeep is unchanged.[/color]
+[*][color=#888888][b]Missions:[/b] Mission cash and daily mission cash are 25% higher. Rank points, respect, bullets, and loot from the normal ladder are unchanged by this lift.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-10-08[/color][/b] — [b]Daily rewards[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Win:[/b] A win at Rock Paper Scissors or Noughts and Crosses pays $50,000,000 and 50–100 points. The loot chance is unchanged.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-10-08[/color][/b] — [b]Booze runs[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Profit:[/b] A completed booze run keeps more of the city spread.[/color]
+[*][color=#888888][b]Jail:[/b] The chance of jail on a run is a little lower.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-10-08[/color][/b] — [b]Crew of the Fortnight[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Banner:[/b] The family page shows the full Crew of the Fortnight picture.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-10-05[/color][/b] — [b]Chicken Cross: bet with points[/b][/size]
 [quote]
 [list]

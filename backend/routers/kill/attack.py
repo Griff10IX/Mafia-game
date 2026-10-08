@@ -1846,6 +1846,7 @@ _BULLET_CALC_TARGET_PROJECTION = {
     "rank_points": 1,
     "armour_level": 1,
     "completed_it_armour_bonus": 1,
+    "mission_prestige_complete_at": 1,
     "is_bodyguard": 1,
     "created_at": 1,
     "civilian_protection_revoked_at": 1,
@@ -2491,11 +2492,17 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     # "Completed it" perk on target: 2x bullets required to attack them
     # Also applies to bodyguards if their owner has the perk
     target_armour_bonus = bool(target.get("completed_it_armour_bonus"))
-    if not target_armour_bonus and target.get("is_bodyguard"):
+    if target.get("is_bodyguard"):
         bg_owner_doc = await db.bodyguards.find_one({"bodyguard_user_id": target["id"]}, {"_id": 0, "user_id": 1})
         if bg_owner_doc:
-            owner_user = await db.users.find_one({"id": bg_owner_doc["user_id"]}, {"_id": 0, "completed_it_armour_bonus": 1})
-            target_armour_bonus = bool((owner_user or {}).get("completed_it_armour_bonus"))
+            owner_user = await db.users.find_one(
+                {"id": bg_owner_doc["user_id"]},
+                {"_id": 0, "completed_it_armour_bonus": 1, "mission_prestige_complete_at": 1},
+            )
+            if not target_armour_bonus:
+                target_armour_bonus = bool((owner_user or {}).get("completed_it_armour_bonus"))
+            if (owner_user or {}).get("mission_prestige_complete_at"):
+                target["mission_prestige_complete_at"] = (owner_user or {}).get("mission_prestige_complete_at")
     if target_armour_bonus:
         bullets_required = bullets_required * 2
     exclusive_car_bullet_mult = await _exclusive_car_bullet_defense_multiplier(target)
@@ -2518,6 +2525,10 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     if completed_it_discount:
         bullets_required = max(1, int(bullets_required * 0.35))
     bullets_required = max(1, int(round(bullets_required * bullets_needed_mult(current_user))))
+    if target.get("mission_prestige_complete_at"):
+        from utils.mission_prestige import KILL_BULLET_MULT
+
+        bullets_required = int(math.ceil(bullets_required * KILL_BULLET_MULT))
     bullets_required = _apply_bullet_caps(target, bullets_required)
     return {
         "calc_ok": True,
@@ -2693,11 +2704,17 @@ async def compute_bullets_required(current_user: dict, target: dict) -> int:
     discount = (mastery_pct / 100.0) * (MASTERY_MAX_BULLET_REDUCTION_PCT / 100.0)
     bullets_required = int(math.ceil(bullets_base * (1.0 + inflation) * (1.0 - discount)))
     target_has_armour_bonus = bool(target.get("completed_it_armour_bonus"))
-    if not target_has_armour_bonus and target.get("is_bodyguard"):
+    if target.get("is_bodyguard"):
         bg_owner_doc = await db.bodyguards.find_one({"bodyguard_user_id": target["id"]}, {"_id": 0, "user_id": 1})
         if bg_owner_doc:
-            owner_user = await db.users.find_one({"id": bg_owner_doc["user_id"]}, {"_id": 0, "completed_it_armour_bonus": 1})
-            target_has_armour_bonus = bool((owner_user or {}).get("completed_it_armour_bonus"))
+            owner_user = await db.users.find_one(
+                {"id": bg_owner_doc["user_id"]},
+                {"_id": 0, "completed_it_armour_bonus": 1, "mission_prestige_complete_at": 1},
+            )
+            if not target_has_armour_bonus:
+                target_has_armour_bonus = bool((owner_user or {}).get("completed_it_armour_bonus"))
+            if (owner_user or {}).get("mission_prestige_complete_at"):
+                target["mission_prestige_complete_at"] = (owner_user or {}).get("mission_prestige_complete_at")
     if target_has_armour_bonus:
         bullets_required = bullets_required * 2
     if exclusive_car_bullet_mult > 1.0:
@@ -2716,6 +2733,10 @@ async def compute_bullets_required(current_user: dict, target: dict) -> int:
     if current_user.get("completed_it_bullet_reduction"):
         bullets_required = max(1, int(bullets_required * 0.35))
     bullets_required = max(1, int(round(bullets_required * bullets_needed_mult(current_user))))
+    if target.get("mission_prestige_complete_at"):
+        from utils.mission_prestige import KILL_BULLET_MULT
+
+        bullets_required = int(math.ceil(bullets_required * KILL_BULLET_MULT))
     bullets_required = _apply_bullet_caps(target, bullets_required)
     return {
         "bullets_required": bullets_required,

@@ -702,6 +702,7 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
                 "_id": 0,
                 "robot_bg_auto_search_until": 1,
                 "robot_bodyguard_hire_tokens": 1,
+                "mission_prestige_complete_at": 1,
                 **_THEME_ROBOT_FREE_USER_FIELDS,
             },
         )
@@ -712,6 +713,9 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
         payload["robot_bg_auto_search_cost"] = ROBOT_BG_AUTO_SEARCH_COST
         payload["robot_bodyguard_hire_tokens"] = int((sub_doc or {}).get("robot_bodyguard_hire_tokens") or 0)
         payload["theme_robot_free_hires"] = int((sub_doc or {}).get("theme_robot_free_hires") or 0)
+        from utils.mission_prestige import ROBOT_COST_MULT, passives_on
+
+        payload["robot_hire_cost_mult"] = ROBOT_COST_MULT if passives_on(sub_doc) else 1
         # Cache slot payload without rvk; overlay fresh token on every response (incl. cache hits).
         _bodyguards_cache[uid] = (dict(payload), now + _BODYGUARDS_CACHE_TTL_SEC)
         try:
@@ -1034,6 +1038,7 @@ async def _do_hire_bodyguard_reserved(
             "bodyguard_inflation_until": 1,
             "bodyguard_inflation_level": 1,
             "slow_bodyguard_hire_inflation_until": 1,
+            "mission_prestige_complete_at": 1,
         },
     )
     user_for_inflation = user_inflation or {}
@@ -1046,6 +1051,10 @@ async def _do_hire_bodyguard_reserved(
     new_inflation_level = inflation_level + 1
     inflation_mult = 1.0 + _effective_bodyguard_inflation_percent(inflation_level, user_for_inflation)
     listed_cost = int(base_cost * event_cost_mult * inflation_mult)
+    if is_robot:
+        from utils.mission_prestige import robot_listed_cost
+
+        listed_cost = robot_listed_cost(listed_cost, user_inflation)
     use_hire_token = bool(is_robot and hire_tokens >= 1)
     use_theme_robot_free = bool(is_robot and not use_hire_token and theme_robot_free_hires >= 1)
     total_cost = 0 if (use_hire_token or use_theme_robot_free) else listed_cost

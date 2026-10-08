@@ -130,6 +130,8 @@ PROPERTY_TARGET_ROI_HOURS = 24
 
 # Stacking bonus: +25% per additional property of same type (after first)
 STACK_BONUS_PER_EXTRA = 0.25
+# Flat lift on collected and displayed property income. Weekly upkeep stays on the base rate.
+PROPERTY_INCOME_PAYOUT_MULT = 1.25
 # Max properties of same type that can stack (extras are auto-sold)
 MAX_STACK_COUNT = 3  # Max +50% bonus
 
@@ -888,6 +890,8 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
         if owned and kill_mult > 1.0:
             available_income *= kill_mult
             effective_income_per_hour = int(round(effective_income_per_hour * kill_mult))
+        available_income *= PROPERTY_INCOME_PAYOUT_MULT
+        effective_income_per_hour = int(round(effective_income_per_hour * PROPERTY_INCOME_PAYOUT_MULT))
         streak_bonus_mult = 1.0 + min(MAX_STREAK_DAYS, max(0, streak_days)) * STREAK_BONUS_PER_DAY if owned else 1.0
         cap_single = int(prop["max_level"])
         max_total_level = cap_single * max(1, owned_count)
@@ -1271,6 +1275,7 @@ async def collect_property_income_impl(property_id: str, current_user: dict, *, 
     from utils.profile_theme_bonuses import property_income_mult
 
     income *= property_income_mult(current_user)
+    income *= PROPERTY_INCOME_PAYOUT_MULT
     fraction = _clamp_float(income_fraction, 0.01, 1.0)
     last_collected_iso = now_iso
     if fraction < 1.0:

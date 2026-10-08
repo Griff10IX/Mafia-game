@@ -98,8 +98,8 @@ BOOZE_GODFATHER_TOTAL_CARGO_BY_PRESTIGE = (1600, 1800, 2000, 2300, 2500, 3000)
 # Backwards-compatible alias (same tuple).
 BOOZE_GODFATHER_CARGO_BY_PRESTIGE = BOOZE_GODFATHER_TOTAL_CARGO_BY_PRESTIGE
 BOOZE_RUN_HISTORY_MAX = 10
-BOOZE_RUN_JAIL_CHANCE_MIN = 0.05
-BOOZE_RUN_JAIL_CHANCE_MAX = 0.15
+BOOZE_RUN_JAIL_CHANCE_MIN = 0.04
+BOOZE_RUN_JAIL_CHANCE_MAX = 0.12
 BOOZE_RUN_JAIL_SECONDS = 20
 # Top 3 non-staff users by lifetime booze_run_profit_total (same ordering as admin leaders): small extra bust chance.
 # Not exposed to clients; cached briefly to limit DB reads.
@@ -108,7 +108,8 @@ BOOZE_TOP_PROFIT_LEADER_CACHE_SEC = 90.0
 BOOZE_TOP_LEADER_JAIL_BONUS = 0.035  # added to the rolled probability for that action (e.g. 10% -> 13.5%)
 BOOZE_TOP_LEADER_JAIL_CHANCE_CAP = 0.22  # ceiling after bonus
 # Multiplier on net profit for a completed run (buy city ≠ sell city); stats, cash, referrals, economy_events.
-BOOZE_RUN_PROFIT_MULT = 0.75
+# 0.85 keeps about 13% more of the city spread than 0.75. Buy prices and bust chance are unchanged.
+BOOZE_RUN_PROFIT_MULT = 0.85
 # Flat rank XP for a real trip (buy city ≠ sell city); once per cargo batch — see booze_run_rp_granted.
 BOOZE_RUN_TRIP_RANK_POINTS = 10
 

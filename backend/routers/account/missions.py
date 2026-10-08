@@ -63,7 +63,13 @@ CITY_ORDER = ["Start"]  # single "city" for list/map compatibility
 TRIBUTE_DEPOSIT_UTC_HOUR = int(os.environ.get("TRIBUTE_DEPOSIT_UTC_HOUR", "17"))  # 5 PM UTC default
 # Amount (cash) added to each user's tribute_bank once per day at that hour. Configurable via env.
 DAILY_TRIBUTE_AMOUNT = int(os.environ.get("DAILY_TRIBUTE_AMOUNT", "500"))
+# Completion cash and daily tribute cash. Points, respect, bullets, and loot are unchanged.
+MISSION_CASH_PAYOUT_MULT = 1.25
 TRIBUTE_DEPOSIT_CONFIG_ID = "tribute_deposit"
+
+
+def _mission_cash(amount, extra_mult: float = 1.0) -> int:
+    return int(round(int(amount or 0) * float(extra_mult) * MISSION_CASH_PAYOUT_MULT))
 
 
 def _next_tribute_deposit_utc(deposit_utc_hour: Optional[int] = None):
@@ -114,6 +120,68 @@ def _user_unlocked_cities(user: dict) -> List[str]:
 def _user_completed_mission_ids(user: dict) -> set:
     comp = user.get("mission_completions") or []
     return {x.get("mission_id") for x in comp if x.get("mission_id")}
+
+
+def _user_prestige_completed_ids(user: dict) -> set:
+    comp = user.get("mission_prestige_completions") or []
+    return {x.get("mission_id") for x in comp if x.get("mission_id")}
+
+
+def _prestige_started(user: dict) -> bool:
+    return bool(user.get("mission_prestige_started_at"))
+
+
+def _prestige_complete(user: dict) -> bool:
+    return bool(user.get("mission_prestige_complete_at"))
+
+
+def _prestige_run_active(user: dict) -> bool:
+    return _prestige_started(user) and not _prestige_complete(user)
+
+
+def _ladder_mission_ids() -> set:
+    return {m["id"] for m in MISSIONS}
+
+
+def _first_ladder_complete(user: dict) -> bool:
+    ids = _ladder_mission_ids()
+    return bool(ids) and ids.issubset(_user_completed_mission_ids(user))
+
+
+def _double_numeric_requirements(req: dict) -> dict:
+    from utils.mission_prestige import REQ_MULT
+
+    out = {}
+    for k, v in (req or {}).items():
+        if k in ("in_state", "complete_missions", "complete_missions_min_count") or isinstance(v, (str, list, bool)):
+            out[k] = v
+        elif isinstance(v, (int, float)):
+            out[k] = max(1, int(round(int(v) * REQ_MULT)))
+        else:
+            out[k] = v
+    return out
+
+
+def _prestige_status(user: dict) -> dict:
+    from utils.mission_prestige import KILL_BULLET_MULT, ROBOT_COST_MULT, WEEKLY_POINTS, WHEEL_FREE_PER_DAY
+
+    started = _prestige_started(user)
+    complete = _prestige_complete(user)
+    total = len(MISSIONS)
+    done = len(_user_prestige_completed_ids(user))
+    return {
+        "can_start": _first_ladder_complete(user) and not started,
+        "active": started and not complete,
+        "complete": complete,
+        "completed_count": total if complete else done,
+        "total": total,
+        "passives": {
+            "kill_bullets_mult": KILL_BULLET_MULT,
+            "robot_cost_mult": ROBOT_COST_MULT,
+            "wheel_free_spins_per_day": WHEEL_FREE_PER_DAY,
+            "weekly_points": WEEKLY_POINTS,
+        } if complete else None,
+    }
 
 
 def _previous_mission(mission: dict):
@@ -308,9 +376,9 @@ def _get_user_progress_value(user: dict, req_key: str) -> int:
     return 0
 
 
-def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[str, Any]]:
+def _check_mission_requirements(user: dict, mission: dict, *, prestige: bool = False) -> tuple[bool, Dict[str, Any]]:
     """Return (met: bool, progress: dict with current/target/description)."""
-    req = dict(mission.get("requirements") or {})
+    req = _double_numeric_requirements(mission.get("requirements") or {}) if prestige else dict(mission.get("requirements") or {})
     try:
         from utils.loot_reclaimable_passives import BUFF_MISSION_REQ, get_reclaimable_passive_mults_from_user
 
@@ -327,7 +395,7 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
             req = eased
     except Exception:
         pass
-    comp = _user_completed_mission_ids(user)
+    comp = _user_prestige_completed_ids(user) if prestige else _user_completed_mission_ids(user)
     progress = {}
 
     if "complete_missions" in req:
@@ -370,7 +438,14 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
                 unmet_keys.append("in_state")
             parts.append(f"Be in {target}: done" if met else f"Be in {target}: travel there")
             continue
-        if key == "crimes" and mission.get("id") == FIRST_MISSION_ID:
+        if prestige:
+            total = _get_user_progress_value(user, key)
+            baselines_m = (user.get("mission_prestige_baselines") or {}).get(mission.get("id")) or {}
+            b = baselines_m.get(key)
+            if b is None:
+                b = total
+            current = max(0, total - int(b))
+        elif key == "crimes" and mission.get("id") == FIRST_MISSION_ID:
             total = int(user.get("total_crimes") or 0)
             baseline = user.get("mission_1_crimes_baseline")
             if baseline is None:
@@ -440,7 +515,8 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
         met = current >= target
         # Commissioner's Pardon near-finish: count 75% of remaining toward this mission only
         if (
-            not met
+            not prestige
+            and not met
             and (user.get("pardon_near_finish_mission_id") or "") == (mission.get("id") or "")
             and isinstance(target, (int, float))
             and key not in ("in_state", "complete_missions", "rank_id")
@@ -580,6 +656,8 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
     await _ensure_extended_mission_baselines(current_user)
     current_user = await _maybe_mission_loot_backfill(current_user)
     current_user = await _maybe_mission_rp_backfill(current_user)
+    current_user = await _touch_mission_prestige(current_user)
+    prestige_done_ids = _user_prestige_completed_ids(current_user)
     missions_out = []
     for m in MISSIONS:
         if m["city"] not in unlocked:
@@ -589,6 +667,20 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
         met, progress = _check_mission_requirements(current_user, m)
         mission_unlocked = _mission_unlocked_by_previous(m, completed_ids)
         requirements_met_final = met and mission_unlocked
+        completed_flag = m["id"] in completed_ids
+        reward_mult = 1
+        if _prestige_complete(current_user):
+            mission_unlocked = True
+            requirements_met_final = True
+            completed_flag = True
+            progress = {"current": 1, "target": 1, "description": "Prestige complete", "unmet_keys": []}
+            reward_mult = 2
+        elif _prestige_run_active(current_user):
+            met, progress = _check_mission_requirements(current_user, m, prestige=True)
+            mission_unlocked = _mission_unlocked_by_previous(m, prestige_done_ids)
+            requirements_met_final = met and mission_unlocked
+            completed_flag = m["id"] in prestige_done_ids
+            reward_mult = 2
         prev = _previous_mission(m)
         tribute_cash_mult = 1.0
         try:
@@ -599,8 +691,8 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
             )
         except Exception:
             pass
-        reward_tribute_daily_out = int(round(int(m.get("reward_tribute_daily") or 0) * tribute_cash_mult))
-        reward_tribute_out = int(round(int(m.get("reward_tribute") or 0) * tribute_cash_mult))
+        reward_tribute_daily_out = _mission_cash(m.get("reward_tribute_daily"), tribute_cash_mult) * reward_mult
+        reward_tribute_out = _mission_cash(m.get("reward_tribute"), tribute_cash_mult) * reward_mult
         missions_out.append({
             "id": m["id"],
             "city": m["city"],
@@ -609,27 +701,27 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
             "type": m["type"],
             "title": m["title"],
             "description": m["description"],
-            "reward_money": m.get("reward_money", 0),
-            "reward_cash_immediate": m.get("reward_cash_immediate", 0),
+            "reward_money": _mission_cash(m.get("reward_money")) * reward_mult,
+            "reward_cash_immediate": _mission_cash(m.get("reward_cash_immediate")) * reward_mult,
             "reward_tribute_daily": reward_tribute_daily_out,
             "reward_respect_daily": m.get("reward_respect_daily", 0),
-            "reward_points": m.get("reward_points", 0),
-            "reward_respect": m.get("reward_respect", 0),
+            "reward_points": int(m.get("reward_points") or 0) * reward_mult,
+            "reward_respect": int(m.get("reward_respect") or 0) * reward_mult,
             "reward_tribute": reward_tribute_out,
             "reward_car_id": m.get("reward_car_id"),
             "reward_car_ids": m.get("reward_car_ids") or [],
             "reward_booze": m.get("reward_booze"),
-            "reward_bullets": m.get("reward_bullets", 0),
+            "reward_bullets": int(m.get("reward_bullets") or 0) * reward_mult,
             "reward_tribute_bullets_daily": m.get("reward_tribute_bullets_daily", 0),
             "reward_tribute_loot_box_pieces_daily": m.get("reward_tribute_loot_box_pieces_daily", 0),
             "reward_tribute_auto_rank_2h_daily": m.get("reward_tribute_auto_rank_2h_daily", 0),
-            "reward_loot_box_pieces": m.get("reward_loot_box_pieces", 0),
+            "reward_loot_box_pieces": int(m.get("reward_loot_box_pieces") or 0) * reward_mult,
             "reward_auto_rank_2h": m.get("reward_auto_rank_2h", 0),
             "unlocks_city": m.get("unlocks_city"),
             "character_id": m.get("character_id"),
             "difficulty": m.get("difficulty", 5),
             "is_boss": m.get("is_boss", False),
-            "completed": m["id"] in completed_ids,
+            "completed": completed_flag,
             "unlocked": mission_unlocked,
             "previous_mission_title": prev.get("title") if prev and not mission_unlocked else None,
             "requirements_met": requirements_met_final,
@@ -640,7 +732,7 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
     completed_ids = _user_completed_mission_ids(current_user)
     if FIRST_MISSION_ID not in completed_ids and not current_user.get("first_mission_notification_sent"):
         m_first = MISSION_BY_ID.get(FIRST_MISSION_ID) or {}
-        first_money = int(m_first.get("reward_money") or 0)
+        first_money = _mission_cash(m_first.get("reward_money"))
         first_rp = int(m_first.get("reward_points") or 0)
         await send_notification(
             current_user["id"],
@@ -658,7 +750,7 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
             {"id": current_user["id"]},
             {"$set": {"first_mission_notification_sent": True, "mission_1_crimes_baseline": baseline}},
         )
-    return {"missions": missions_out, "unlocked_cities": unlocked}
+    return {"missions": missions_out, "unlocked_cities": unlocked, "mission_prestige": _prestige_status(current_user)}
 
 
 async def get_missions_map(current_user: dict = Depends(get_current_user)):
@@ -729,6 +821,8 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
     await _ensure_extended_mission_baselines(current_user)
     current_user = await _maybe_mission_loot_backfill(current_user)
     current_user = await _maybe_mission_rp_backfill(current_user)
+    current_user = await _touch_mission_prestige(current_user)
+    prestige_done_ids = _user_prestige_completed_ids(current_user)
     by_city = {}
     for m in MISSIONS:
         if m["city"] not in unlocked:
@@ -741,6 +835,20 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         met, progress = _check_mission_requirements(current_user, m)
         mission_unlocked = _mission_unlocked_by_previous(m, completed_ids)
         requirements_met_final = met and mission_unlocked
+        completed_flag = m["id"] in completed_ids
+        reward_mult = 1
+        if _prestige_complete(current_user):
+            mission_unlocked = True
+            requirements_met_final = True
+            completed_flag = True
+            progress = {"current": 1, "target": 1, "description": "Prestige complete", "unmet_keys": []}
+            reward_mult = 2
+        elif _prestige_run_active(current_user):
+            met, progress = _check_mission_requirements(current_user, m, prestige=True)
+            mission_unlocked = _mission_unlocked_by_previous(m, prestige_done_ids)
+            requirements_met_final = met and mission_unlocked
+            completed_flag = m["id"] in prestige_done_ids
+            reward_mult = 2
         prev = _previous_mission(m)
         tribute_cash_mult = 1.0
         try:
@@ -758,27 +866,27 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
             "type": m["type"],
             "title": m["title"],
             "description": m["description"],
-            "reward_money": m.get("reward_money", 0),
-            "reward_cash_immediate": m.get("reward_cash_immediate", 0),
-            "reward_tribute_daily": int(round(int(m.get("reward_tribute_daily") or 0) * tribute_cash_mult)),
+            "reward_money": _mission_cash(m.get("reward_money")) * reward_mult,
+            "reward_cash_immediate": _mission_cash(m.get("reward_cash_immediate")) * reward_mult,
+            "reward_tribute_daily": _mission_cash(m.get("reward_tribute_daily"), tribute_cash_mult) * reward_mult,
             "reward_respect_daily": m.get("reward_respect_daily", 0),
-            "reward_points": m.get("reward_points", 0),
-            "reward_respect": m.get("reward_respect", 0),
-            "reward_tribute": int(round(int(m.get("reward_tribute") or 0) * tribute_cash_mult)),
+            "reward_points": int(m.get("reward_points") or 0) * reward_mult,
+            "reward_respect": int(m.get("reward_respect") or 0) * reward_mult,
+            "reward_tribute": _mission_cash(m.get("reward_tribute"), tribute_cash_mult) * reward_mult,
             "reward_car_id": m.get("reward_car_id"),
             "reward_car_ids": m.get("reward_car_ids") or [],
             "reward_booze": m.get("reward_booze"),
-            "reward_bullets": m.get("reward_bullets", 0),
+            "reward_bullets": int(m.get("reward_bullets") or 0) * reward_mult,
             "reward_tribute_bullets_daily": m.get("reward_tribute_bullets_daily", 0),
             "reward_tribute_loot_box_pieces_daily": m.get("reward_tribute_loot_box_pieces_daily", 0),
             "reward_tribute_auto_rank_2h_daily": m.get("reward_tribute_auto_rank_2h_daily", 0),
-            "reward_loot_box_pieces": m.get("reward_loot_box_pieces", 0),
+            "reward_loot_box_pieces": int(m.get("reward_loot_box_pieces") or 0) * reward_mult,
             "reward_auto_rank_2h": m.get("reward_auto_rank_2h", 0),
             "unlocks_city": m.get("unlocks_city"),
             "character_id": m.get("character_id"),
             "difficulty": m.get("difficulty", 5),
             "is_boss": m.get("is_boss", False),
-            "completed": m["id"] in completed_ids,
+            "completed": completed_flag,
             "unlocked": mission_unlocked,
             "previous_mission_title": prev.get("title") if prev and not mission_unlocked else None,
             "requirements_met": requirements_met_final,
@@ -803,7 +911,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
     # Totals mirror run_daily_tribute_deposit for this user (all completed missions, not just m1–m4).
     daily_tokens_total = 0
     daily_auto_rank_2h_tokens_total = 0
-    daily_cash_total = DAILY_TRIBUTE_AMOUNT
+    daily_cash_total = _mission_cash(DAILY_TRIBUTE_AMOUNT)
     daily_bullets_total = 0
     daily_respect_total = 0
     daily_loot_total = _daily_tribute_loot_for_completed(completed_ids)
@@ -813,7 +921,10 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
             continue
         daily_tokens_total += int(m.get("reward_tribute_tokens_daily") or 0)
         daily_auto_rank_2h_tokens_total += int(m.get("reward_tribute_auto_rank_2h_daily") or 0)
-        daily_cash_total += int(m.get("reward_tribute_daily") or 0)
+        mission_daily_cash = _mission_cash(m.get("reward_tribute_daily"))
+        if mid in prestige_done_ids:
+            mission_daily_cash *= 2
+        daily_cash_total += mission_daily_cash
         daily_bullets_total += int(m.get("reward_tribute_bullets_daily") or 0)
         daily_respect_total += int(m.get("reward_respect_daily") or 0)
     tribute_tokens = int(current_user.get("tribute_tokens") or 0)
@@ -831,7 +942,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         "tribute_tokens": tribute_tokens,
         "tribute_deposit_daily_at": deposit_time_label,
         "next_tribute_deposit_at": next_deposit_iso,
-        "daily_tribute_cash_base": DAILY_TRIBUTE_AMOUNT,
+        "daily_tribute_cash_base": _mission_cash(DAILY_TRIBUTE_AMOUNT),
         "daily_tribute_loot_box_pieces_base": DAILY_TRIBUTE_LOOT_BOX_PIECES,
         "daily_tribute_loot_box_pieces_ladder_max": TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY,
         "daily_tribute_cash_total": daily_cash_total,
@@ -842,22 +953,23 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         "daily_tribute_auto_rank_2h_tokens_total": daily_auto_rank_2h_tokens_total,
         "completed_it_daily_tokens_perk": bool(current_user.get("completed_it_daily_tokens")),
         "has_mission_1_bonus": has_mission_1,
-        "daily_tribute_cash_mission1": MISSION_1_DAILY_CASH,
+        "daily_tribute_cash_mission1": _mission_cash(MISSION_1_DAILY_CASH),
         "daily_tribute_bullets_mission1": MISSION_1_DAILY_BULLETS,
         "daily_respect_mission1": MISSION_1_DAILY_RESPECT,
         "has_mission_2_bonus": has_mission_2,
-        "daily_tribute_cash_mission2": MISSION_2_DAILY_CASH,
+        "daily_tribute_cash_mission2": _mission_cash(MISSION_2_DAILY_CASH),
         "daily_tribute_bullets_mission2": MISSION_2_DAILY_BULLETS,
         "daily_respect_mission2": MISSION_2_DAILY_RESPECT,
         "daily_tribute_loot_box_pieces_mission2": MISSION_2_DAILY_LOOT_BOX_PIECES,
         "has_mission_3_bonus": has_mission_3,
-        "daily_tribute_cash_mission3": MISSION_3_DAILY_CASH,
+        "daily_tribute_cash_mission3": _mission_cash(MISSION_3_DAILY_CASH),
         "daily_tribute_bullets_mission3": MISSION_3_DAILY_BULLETS,
         "daily_respect_mission3": MISSION_3_DAILY_RESPECT,
         "has_mission_4_bonus": has_mission_4,
-        "daily_tribute_cash_mission4": MISSION_4_DAILY_CASH,
+        "daily_tribute_cash_mission4": _mission_cash(MISSION_4_DAILY_CASH),
         "daily_tribute_bullets_mission4": MISSION_4_DAILY_BULLETS,
         "daily_respect_mission4": MISSION_4_DAILY_RESPECT,
+        "mission_prestige": _prestige_status(current_user),
     }
 
 
@@ -883,12 +995,17 @@ def _build_mission_completion_reward_update(
     *,
     include_mission_completion_push: bool,
     include_next_mission_baseline: bool,
+    prestige: bool = False,
 ) -> tuple[dict, dict]:
-    reward_money = int((mission.get("reward_money") or 0) * mult)
-    reward_cash_immediate = int((mission.get("reward_cash_immediate") or 0) * mult)
-    reward_points = apply_rank_points_bonus(current_user, int((mission.get("reward_points") or 0) * mult))
-    reward_respect = int((mission.get("reward_respect") or 0) * mult)
-    reward_tribute = int((mission.get("reward_tribute") or 0) * mult)
+    from utils.mission_prestige import REWARD_MULT
+
+    reward_scale = REWARD_MULT if prestige else 1
+    pay_mult = float(mult) * reward_scale
+    reward_money = _mission_cash(mission.get("reward_money"), pay_mult)
+    reward_cash_immediate = _mission_cash(mission.get("reward_cash_immediate"), pay_mult)
+    reward_points = apply_rank_points_bonus(current_user, int((mission.get("reward_points") or 0) * pay_mult))
+    reward_respect = int((mission.get("reward_respect") or 0) * pay_mult)
+    reward_tribute = _mission_cash(mission.get("reward_tribute"), pay_mult)
     try:
         from utils.loot_reclaimable_passives import BUFF_TRIBUTE_CASH, get_reclaimable_passive_mults_from_user
 
@@ -903,8 +1020,8 @@ def _build_mission_completion_reward_update(
     reward_car_id = (mission.get("reward_car_id") or "").strip() or None
     reward_car_ids = mission.get("reward_car_ids") or []
     reward_booze = mission.get("reward_booze")
-    reward_bullets = int((mission.get("reward_bullets") or 0) * mult)
-    reward_loot_box_pieces = int((mission.get("reward_loot_box_pieces") or 0) * mult)
+    reward_bullets = int((mission.get("reward_bullets") or 0) * pay_mult)
+    reward_loot_box_pieces = int((mission.get("reward_loot_box_pieces") or 0) * pay_mult)
     reward_auto_rank_2h = int(mission.get("reward_auto_rank_2h") or 0)
     reward_token = mission.get("reward_token")
     unlocks_city = mission.get("unlocks_city")
@@ -914,19 +1031,32 @@ def _build_mission_completion_reward_update(
     update: Dict[str, Any] = {}
     if include_mission_completion_push:
         completion_doc = {"mission_id": mission_id, "completed_at": datetime.now(timezone.utc).isoformat()}
-        update["$push"] = {"mission_completions": completion_doc}
+        push_field = "mission_prestige_completions" if prestige else "mission_completions"
+        update["$push"] = {push_field: completion_doc}
     if include_next_mission_baseline:
         nxt = _next_mission_same_city(mission)
-        if nxt and nxt["id"] not in (FIRST_MISSION_ID, SECOND_MISSION_ID, THIRD_MISSION_ID):
+        if nxt and (prestige or nxt["id"] not in (FIRST_MISSION_ID, SECOND_MISSION_ID, THIRD_MISSION_ID)):
             snap = _baseline_snapshot_for_mission(current_user, nxt)
             if snap:
-                update.setdefault("$set", {})[f"mission_baselines.{nxt['id']}"] = snap
-    if mission_id == FIRST_MISSION_ID:
+                baseline_field = "mission_prestige_baselines" if prestige else "mission_baselines"
+                update.setdefault("$set", {})[f"{baseline_field}.{nxt['id']}"] = snap
+    if prestige:
+        done = _user_prestige_completed_ids(current_user)
+        done.add(mission_id)
+        if _ladder_mission_ids().issubset(done):
+            update.setdefault("$set", {})["mission_prestige_complete_at"] = datetime.now(timezone.utc).isoformat()
+        reward_car_id = None
+        reward_car_ids = []
+        reward_booze = None
+        reward_auto_rank_2h = 0
+        reward_token = None
+        unlocks_city = None
+    if not prestige and mission_id == FIRST_MISSION_ID:
         update.setdefault("$set", {})["mission_2_crimes_baseline"] = int(current_user.get("total_crimes") or 0)
         update.setdefault("$set", {})["mission_2_jail_busts_baseline"] = int(current_user.get("jail_busts") or 0)
         update.setdefault("$set", {})["mission_2_cars_melted_baseline"] = int(current_user.get("cars_melted") or 0)
         update.setdefault("$set", {})["mission_2_cars_purchased_dealership_baseline"] = int(current_user.get("cars_purchased_from_dealership") or 0)
-    if mission_id == SECOND_MISSION_ID:
+    if not prestige and mission_id == SECOND_MISSION_ID:
         update.setdefault("$set", {})["mission_3_crimes_baseline"] = int(current_user.get("total_crimes") or 0)
         update.setdefault("$set", {})["mission_3_jail_busts_baseline"] = int(current_user.get("jail_busts") or 0)
         update.setdefault("$set", {})["mission_3_gta_baseline"] = int(current_user.get("total_gta") or 0)
@@ -1044,6 +1174,231 @@ async def _run_mission_completion_side_effects(
         logging.getLogger(__name__).exception("mission ladder complete reward check failed for %s", user_id)
 
 
+def _current_open_prestige_mission(user: dict) -> Optional[dict]:
+    completed = _user_prestige_completed_ids(user)
+    candidates: List[dict] = []
+    for m in MISSIONS:
+        if m["id"] in completed:
+            continue
+        if not _mission_unlocked_by_previous(m, completed):
+            continue
+        candidates.append(m)
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: int(x.get("order") or 0))
+    return candidates[0]
+
+
+async def _ensure_prestige_baselines(user: dict) -> None:
+    """Snapshot stats when a prestige mission unlocks so earlier progress does not count."""
+    if not _prestige_run_active(user):
+        return
+    uid = user.get("id")
+    if not uid:
+        return
+    completed = _user_prestige_completed_ids(user)
+    mb = user.get("mission_prestige_baselines") or {}
+    to_set: Dict[str, Dict[str, int]] = {}
+    for m in MISSIONS:
+        mid = m["id"]
+        if mid in completed or not _mission_unlocked_by_previous(m, completed):
+            continue
+        needed = _stat_requirement_keys(m)
+        if not needed:
+            continue
+        existing = mb.get(mid)
+        if not existing:
+            snap = _baseline_snapshot_for_mission(user, m)
+            if snap:
+                to_set[mid] = snap
+            continue
+        snap = dict(existing)
+        changed = False
+        for k in needed:
+            if k in snap:
+                continue
+            snap[k] = _get_user_progress_value(user, k)
+            changed = True
+        if changed:
+            to_set[mid] = snap
+    if not to_set:
+        return
+    await db.users.update_one(
+        {"id": uid},
+        {"$set": {f"mission_prestige_baselines.{mid}": snap for mid, snap in to_set.items()}},
+    )
+    user.setdefault("mission_prestige_baselines", {})
+    user["mission_prestige_baselines"].update(to_set)
+
+
+async def _maybe_grant_prestige_weekly_points(user: dict) -> dict:
+    """5,000 points once per UTC week after the prestiged ladder is finished. Stacks with Pardon."""
+    if not _prestige_complete(user) or not user.get("id"):
+        return user
+    from utils.commissioners_pardon import utc_week_key
+    from utils.mission_prestige import POINTS_WEEK_FIELD, WEEKLY_POINTS
+    from utils.point_provenance import log_points_event
+
+    week = utc_week_key()
+    if user.get(POINTS_WEEK_FIELD) == week:
+        return user
+    res = await db.users.update_one(
+        {
+            "id": user["id"],
+            "mission_prestige_complete_at": {"$exists": True},
+            "$or": [
+                {POINTS_WEEK_FIELD: {"$exists": False}},
+                {POINTS_WEEK_FIELD: None},
+                {POINTS_WEEK_FIELD: {"$ne": week}},
+            ],
+        },
+        {"$inc": {"points": WEEKLY_POINTS}, "$set": {POINTS_WEEK_FIELD: week}},
+    )
+    if res.modified_count:
+        user["points"] = int(user.get("points") or 0) + WEEKLY_POINTS
+        user[POINTS_WEEK_FIELD] = week
+        try:
+            await log_points_event(
+                db,
+                user_id=user["id"],
+                points=WEEKLY_POINTS,
+                event_type="mission_prestige_weekly",
+                event_ref=week,
+            )
+        except Exception:
+            logging.getLogger(__name__).exception("prestige weekly points log failed for %s", user.get("id"))
+    return user
+
+
+async def _touch_mission_prestige(user: dict) -> dict:
+    user = await _maybe_grant_prestige_weekly_points(user)
+    if _prestige_run_active(user):
+        await _ensure_prestige_baselines(user)
+    return user
+
+
+def _completion_response(mission: dict, meta: dict, *, skipped: bool = False, skip_tokens: Optional[int] = None) -> dict:
+    reward_car_names = [_car_display_name(cid) for cid in meta.get("granted_car_ids") or []]
+    out = {
+        "completed": True,
+        "mission_id": mission.get("id"),
+        "title": mission.get("title"),
+        "reward_money": meta["reward_money"],
+        "reward_cash_immediate": meta["reward_cash_immediate"],
+        "reward_points": meta["reward_points"],
+        "reward_respect": meta["reward_respect"],
+        "reward_tribute": meta["reward_tribute"],
+        "reward_car_id": meta["reward_car_id"],
+        "reward_car_ids": meta["reward_car_ids"],
+        "reward_car_names": reward_car_names,
+        "reward_booze": meta["reward_booze"],
+        "reward_bullets": meta["reward_bullets"],
+        "reward_loot_box_pieces": meta["reward_loot_box_pieces"],
+        "reward_auto_rank_2h": meta["reward_auto_rank_2h"],
+        "unlocked_city": meta["unlocks_city"],
+        "prestige": bool(meta.get("prestige")),
+    }
+    if skipped:
+        out["skipped"] = True
+        out["mission_skip_tokens"] = int(skip_tokens or 0)
+    return out
+
+
+async def _finish_prestige_mission(current_user: dict, mission: dict, *, force: bool = False) -> dict:
+    mission_id = mission["id"]
+    user_id = current_user["id"]
+    prestige_done = _user_prestige_completed_ids(current_user)
+    if mission_id in prestige_done:
+        raise HTTPException(status_code=400, detail="Mission already completed")
+    if not _mission_unlocked_by_previous(mission, prestige_done):
+        prev = _previous_mission(mission)
+        prev_title = prev.get("title", "the previous mission") if prev else "the previous mission"
+        raise HTTPException(status_code=400, detail=f"Complete {prev_title} first")
+    if not force:
+        met, _ = _check_mission_requirements(current_user, mission, prestige=True)
+        if not met:
+            raise HTTPException(status_code=400, detail="Requirements not met")
+    mult = _mission_completion_reward_mult(current_user)
+    update, meta = _build_mission_completion_reward_update(
+        current_user,
+        mission_id,
+        mission,
+        mult,
+        include_mission_completion_push=True,
+        include_next_mission_baseline=True,
+        prestige=True,
+    )
+    meta["prestige"] = True
+    mission_update = apply_season_rp_mirror_to_update(update, user=current_user)
+    result = await db.users.update_one(
+        {
+            "id": user_id,
+            "mission_prestige_started_at": {"$exists": True},
+            "mission_prestige_complete_at": {"$exists": False},
+            "mission_prestige_completions.mission_id": {"$nin": [mission_id]},
+        },
+        mission_update,
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Mission already completed")
+    if not current_user.get("mission_prestige_complete_at"):
+        fresh = await db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, "mission_prestige_completions": 1, "mission_prestige_complete_at": 1},
+        )
+        done_now = _user_prestige_completed_ids(fresh or {})
+        if not (fresh or {}).get("mission_prestige_complete_at") and _ladder_mission_ids().issubset(done_now):
+            await db.users.update_one(
+                {"id": user_id, "mission_prestige_complete_at": {"$exists": False}},
+                {"$set": {"mission_prestige_complete_at": datetime.now(timezone.utc).isoformat()}},
+            )
+    await _run_mission_completion_side_effects(
+        user_id,
+        current_user,
+        mission_id,
+        meta,
+        rp_awarded=rank_points_in_update(mission_update),
+    )
+    try:
+        from utils.daily_contests import record_contest_progress
+
+        await record_contest_progress(db, user_id, "mission", 1)
+    except Exception:
+        pass
+    return _completion_response(mission, meta)
+
+
+async def start_mission_prestige(current_user: dict = Depends(get_current_user)):
+    """Start the one prestige ladder after every mission is already complete."""
+    user_id = current_user.get("id") or ""
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if _prestige_started(current_user):
+        raise HTTPException(status_code=400, detail="Mission prestige has already been started")
+    if not _first_ladder_complete(current_user):
+        raise HTTPException(status_code=400, detail="Finish every mission before you can prestige")
+    first = next((m for m in MISSIONS if m.get("id") == FIRST_MISSION_ID), None)
+    baselines = {}
+    if first:
+        snap = _baseline_snapshot_for_mission(current_user, first)
+        if snap:
+            baselines[first["id"]] = snap
+    now_iso = datetime.now(timezone.utc).isoformat()
+    result = await db.users.update_one(
+        {"id": user_id, "mission_prestige_started_at": {"$exists": False}},
+        {
+            "$set": {
+                "mission_prestige_started_at": now_iso,
+                "mission_prestige_baselines": baselines,
+                "mission_prestige_completions": [],
+            }
+        },
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Mission prestige has already been started")
+    return {"started": True, "mission_prestige": {**_prestige_status({**current_user, "mission_prestige_started_at": now_iso, "mission_prestige_completions": []}), "active": True, "can_start": False}}
+
+
 async def complete_mission(
     request: CompleteMissionRequest = Body(...),
     current_user: dict = Depends(get_current_user),
@@ -1055,6 +1410,9 @@ async def complete_mission(
     mission = next((m for m in MISSIONS if m["id"] == mission_id), None)
     if not mission:
         raise HTTPException(status_code=404, detail="Mission not found")
+    if _prestige_run_active(current_user):
+        await _ensure_prestige_baselines(current_user)
+        return await _finish_prestige_mission(current_user, mission)
     unlocked = _user_unlocked_cities(current_user)
     if mission["city"] not in unlocked:
         raise HTTPException(status_code=403, detail="City not unlocked")
@@ -1129,7 +1487,11 @@ async def skip_current_mission(current_user: dict = Depends(get_current_user)):
     if int(current_user.get("mission_skip_tokens") or 0) < 1:
         raise HTTPException(status_code=400, detail="No Mission Skip tokens")
 
-    mission = _current_open_mission(current_user)
+    if _prestige_run_active(current_user):
+        await _ensure_prestige_baselines(current_user)
+        mission = _current_open_prestige_mission(current_user)
+    else:
+        mission = _current_open_mission(current_user)
     if not mission:
         raise HTTPException(status_code=400, detail="No open mission to skip")
     mission_id = mission["id"]
@@ -1144,32 +1506,39 @@ async def skip_current_mission(current_user: dict = Depends(get_current_user)):
     if consumed.modified_count != 1:
         raise HTTPException(status_code=400, detail="No Mission Skip tokens")
 
+    prestige_skip = _prestige_run_active(current_user)
     try:
-        mult = _mission_completion_reward_mult(current_user)
-        update, meta = _build_mission_completion_reward_update(
-            current_user,
-            mission_id,
-            mission,
-            mult,
-            include_mission_completion_push=True,
-            include_next_mission_baseline=True,
-        )
-        mission_update = apply_season_rp_mirror_to_update(update, user=current_user)
-        result = await db.users.update_one(
-            {"id": user_id, "mission_completions.mission_id": {"$ne": mission_id}},
-            mission_update,
-        )
-        if result.modified_count == 0:
-            await db.users.update_one({"id": user_id}, {"$inc": {"mission_skip_tokens": 1}})
-            raise HTTPException(status_code=400, detail="Mission already completed")
-        await _run_mission_completion_side_effects(
-            user_id,
-            current_user,
-            mission_id,
-            meta,
-            rp_awarded=rank_points_in_update(mission_update),
-        )
+        if prestige_skip:
+            out = await _finish_prestige_mission(current_user, mission, force=True)
+            meta = out
+        else:
+            mult = _mission_completion_reward_mult(current_user)
+            update, meta = _build_mission_completion_reward_update(
+                current_user,
+                mission_id,
+                mission,
+                mult,
+                include_mission_completion_push=True,
+                include_next_mission_baseline=True,
+            )
+            mission_update = apply_season_rp_mirror_to_update(update, user=current_user)
+            result = await db.users.update_one(
+                {"id": user_id, "mission_completions.mission_id": {"$ne": mission_id}},
+                mission_update,
+            )
+            if result.modified_count == 0:
+                await db.users.update_one({"id": user_id}, {"$inc": {"mission_skip_tokens": 1}})
+                raise HTTPException(status_code=400, detail="Mission already completed")
+            await _run_mission_completion_side_effects(
+                user_id,
+                current_user,
+                mission_id,
+                meta,
+                rp_awarded=rank_points_in_update(mission_update),
+            )
     except HTTPException:
+        if prestige_skip:
+            await db.users.update_one({"id": user_id}, {"$inc": {"mission_skip_tokens": 1}})
         raise
     except Exception:
         await db.users.update_one({"id": user_id}, {"$inc": {"mission_skip_tokens": 1}})
@@ -1180,13 +1549,18 @@ async def skip_current_mission(current_user: dict = Depends(get_current_user)):
             user_id,
             current_user.get("username") or "?",
             "mission_skip",
-            {"mission_id": mission_id, "title": mission.get("title")},
+            {"mission_id": mission_id, "title": mission.get("title"), "prestige": prestige_skip},
         )
     except Exception:
         pass
 
-    reward_car_names = [_car_display_name(cid) for cid in meta["granted_car_ids"]]
     refreshed = await db.users.find_one({"id": user_id}, {"_id": 0, "mission_skip_tokens": 1}) or {}
+    if prestige_skip:
+        meta["skipped"] = True
+        meta["mission_skip_tokens"] = int(refreshed.get("mission_skip_tokens") or 0)
+        return meta
+
+    reward_car_names = [_car_display_name(cid) for cid in meta["granted_car_ids"]]
     return {
         "completed": True,
         "skipped": True,
@@ -1369,12 +1743,12 @@ async def run_daily_tribute_deposit():
     # All daily rewards stack in tribute buckets until user collects (cash, bullets, respect, loot from missions).
     result = await db.users.update_many(
         {},
-        {"$inc": {"tribute_bank": DAILY_TRIBUTE_AMOUNT}},
+        {"$inc": {"tribute_bank": _mission_cash(DAILY_TRIBUTE_AMOUNT)}},
     )
     counts = {}
     for m in MISSIONS:
         mid = m.get("id")
-        cash = int(m.get("reward_tribute_daily") or 0)
+        cash = _mission_cash(m.get("reward_tribute_daily"))
         respect = int(m.get("reward_respect_daily") or 0)
         bullets = int(m.get("reward_tribute_bullets_daily") or 0)
         loot = int(m.get("reward_tribute_loot_box_pieces_daily") or 0)
@@ -1394,25 +1768,23 @@ async def run_daily_tribute_deposit():
         if not cash and not inc_shared:
             continue
         completed_filter = {"mission_completions": {"$elemMatch": {"mission_id": mid}}}
+        prestige_filter = {"mission_prestige_completions": {"$elemMatch": {"mission_id": mid}}}
+        not_prestige_filter = {"mission_prestige_completions.mission_id": {"$nin": [mid]}}
         modified = 0
         if cash:
-            # Tribute Medallion: +10% daily tribute cash for holders only
+            # Prestige clear replaces this mission's daily cash with 2x. It does not stack on the first clear.
+            cash_prestige = cash * 2
             cash_boosted = int(round(cash * 1.10))
-            r_plain = await db.users.update_many(
-                {
-                    **completed_filter,
-                    "loot_reclaimable_passive_ids": {"$nin": ["tribute_medallion"]},
-                },
-                {"$inc": {**inc_shared, "tribute_bank": cash}},
+            cash_prestige_boosted = int(round(cash_prestige * 1.10))
+            pay_groups = (
+                ({**completed_filter, **not_prestige_filter, "loot_reclaimable_passive_ids": {"$nin": ["tribute_medallion"]}}, cash),
+                ({**completed_filter, **not_prestige_filter, "loot_reclaimable_passive_ids": "tribute_medallion"}, cash_boosted),
+                ({**completed_filter, **prestige_filter, "loot_reclaimable_passive_ids": {"$nin": ["tribute_medallion"]}}, cash_prestige),
+                ({**completed_filter, **prestige_filter, "loot_reclaimable_passive_ids": "tribute_medallion"}, cash_prestige_boosted),
             )
-            r_medal = await db.users.update_many(
-                {
-                    **completed_filter,
-                    "loot_reclaimable_passive_ids": "tribute_medallion",
-                },
-                {"$inc": {**inc_shared, "tribute_bank": cash_boosted}},
-            )
-            modified = int(r_plain.modified_count or 0) + int(r_medal.modified_count or 0)
+            for pay_filter, pay_cash in pay_groups:
+                paid = await db.users.update_many(pay_filter, {"$inc": {**inc_shared, "tribute_bank": pay_cash}})
+                modified += int(paid.modified_count or 0)
         else:
             r = await db.users.update_many(completed_filter, {"$inc": inc_shared})
             modified = int(r.modified_count or 0)
@@ -1437,7 +1809,7 @@ async def run_daily_tribute_deposit():
     
     logging.getLogger(__name__).info(
         "Daily tribute deposit: %s cash to %d users; per-mission bonuses %s; completed_it tokens to %d users at %s UTC",
-        DAILY_TRIBUTE_AMOUNT,
+        _mission_cash(DAILY_TRIBUTE_AMOUNT),
         result.modified_count,
         counts,
         completed_it_result.modified_count,
@@ -1448,6 +1820,7 @@ async def run_daily_tribute_deposit():
 def register(router):
     router.add_api_route("/missions", get_missions, methods=["GET"], dependencies=_missions_rl_u)
     router.add_api_route("/missions/map", get_missions_map, methods=["GET"], dependencies=_missions_rl_u)
+    router.add_api_route("/missions/prestige/start", start_mission_prestige, methods=["POST"])
     router.add_api_route("/missions/complete", complete_mission, methods=["POST"])
     router.add_api_route("/missions/skip", skip_current_mission, methods=["POST"])
     router.add_api_route("/missions/collect-tribute", collect_tribute, methods=["POST"])
@@ -1617,7 +1990,7 @@ async def _admin_tribute_snapshot(user: dict, completed_ids: set) -> Dict[str, A
     has_mission_4 = FOURTH_MISSION_ID in completed_ids
     daily_tokens_total = 0
     daily_auto_rank_2h_tokens_total = 0
-    daily_cash_total = DAILY_TRIBUTE_AMOUNT
+    daily_cash_total = _mission_cash(DAILY_TRIBUTE_AMOUNT)
     daily_bullets_total = 0
     daily_respect_total = 0
     daily_loot_total = _daily_tribute_loot_for_completed(completed_ids)
@@ -1627,7 +2000,10 @@ async def _admin_tribute_snapshot(user: dict, completed_ids: set) -> Dict[str, A
             continue
         daily_tokens_total += int(m.get("reward_tribute_tokens_daily") or 0)
         daily_auto_rank_2h_tokens_total += int(m.get("reward_tribute_auto_rank_2h_daily") or 0)
-        daily_cash_total += int(m.get("reward_tribute_daily") or 0)
+        mission_daily_cash = _mission_cash(m.get("reward_tribute_daily"))
+        if mid in _user_prestige_completed_ids(user):
+            mission_daily_cash *= 2
+        daily_cash_total += mission_daily_cash
         daily_bullets_total += int(m.get("reward_tribute_bullets_daily") or 0)
         daily_respect_total += int(m.get("reward_respect_daily") or 0)
     return {
@@ -1638,7 +2014,7 @@ async def _admin_tribute_snapshot(user: dict, completed_ids: set) -> Dict[str, A
         "tribute_tokens": int(user.get("tribute_tokens") or 0),
         "tribute_deposit_daily_at": deposit_time_label,
         "next_tribute_deposit_at": next_deposit_iso,
-        "daily_tribute_cash_base": DAILY_TRIBUTE_AMOUNT,
+        "daily_tribute_cash_base": _mission_cash(DAILY_TRIBUTE_AMOUNT),
         "daily_tribute_loot_box_pieces_base": DAILY_TRIBUTE_LOOT_BOX_PIECES,
         "daily_tribute_loot_box_pieces_ladder_max": TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY,
         "daily_tribute_cash_total": daily_cash_total,

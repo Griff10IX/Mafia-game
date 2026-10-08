@@ -18,6 +18,7 @@ function formatMoney(n) {
 
 function formatWinRewards(data) {
   const parts = [`You win! ${formatMoney(data.money_won)}`];
+  if (Number(data.points_won) > 0) parts.push(`${Number(data.points_won).toLocaleString()} points`);
   if (data.cars_won?.length) parts.push(data.cars_won.join(', '));
   if (Number(data.loot_box_pieces) > 0) {
     parts.push(`${Number(data.loot_box_pieces).toLocaleString()} loot pieces`);

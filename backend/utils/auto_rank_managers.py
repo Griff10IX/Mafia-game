@@ -161,17 +161,32 @@ async def _run_mission(db, user: dict) -> bool:
         _car_display_name,
         _check_mission_requirements,
         _current_open_mission,
+        _current_open_prestige_mission,
+        _ensure_prestige_baselines,
+        _finish_prestige_mission,
         _mission_completion_reward_mult,
+        _prestige_run_active,
         _run_mission_completion_side_effects,
     )
     from server import send_notification
     from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0}) or user
-    mission = _current_open_mission(fresh)
+    prestige_run = _prestige_run_active(fresh)
+    if prestige_run:
+        await _ensure_prestige_baselines(fresh)
+        mission = _current_open_prestige_mission(fresh)
+    else:
+        mission = _current_open_mission(fresh)
     if not mission:
         return False
-    met, progress = _check_mission_requirements(fresh, mission)
+    met, progress = _check_mission_requirements(fresh, mission, prestige=prestige_run)
+    if met and prestige_run:
+        try:
+            await _finish_prestige_mission(fresh, mission)
+        except HTTPException:
+            return False
+        return True
     if met:
         return await _claim_mission(
             db, fresh, mission,
@@ -206,7 +221,7 @@ async def _run_mission(db, user: dict) -> bool:
             if action.startswith("buy_") and await _buy_rarity(fresh, action.replace("buy_", "")):
                 return True
             if action == "hitlist":
-                remaining = _hitlist_remaining(fresh, mission, key)
+                remaining = _hitlist_remaining(fresh, mission, key, prestige=prestige_run)
                 if await _hitlist_batch(db, fresh, remaining=remaining):
                     return True
             if action == "booze" and await _one_booze(db, fresh):
@@ -223,15 +238,18 @@ async def _run_mission(db, user: dict) -> bool:
     return False
 
 
-def _hitlist_remaining(user: dict, mission: dict, key: str) -> Optional[int]:
+def _hitlist_remaining(user: dict, mission: dict, key: str, *, prestige: bool = False) -> Optional[int]:
     from routers.account.missions import _get_user_progress_value
+    from utils.mission_prestige import REQ_MULT
 
     target = (mission.get("requirements") or {}).get(key)
     try:
         target_n = int(target)
     except (TypeError, ValueError):
         return None
-    baselines = (user.get("mission_baselines") or {}).get(mission.get("id")) or {}
+    if prestige:
+        target_n = max(1, int(round(target_n * REQ_MULT)))
+    baselines = ((user.get("mission_prestige_baselines") if prestige else user.get("mission_baselines")) or {}).get(mission.get("id")) or {}
     total = _get_user_progress_value(user, key if key != "attacks" else "hitlist_npc_kills")
     base = baselines.get("hitlist_npc_kills" if key == "attacks" else key)
     if base is None:

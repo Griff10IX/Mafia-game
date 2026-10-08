@@ -402,7 +402,6 @@ export default function FamilyProfilePage() {
                 src={family.fortnight_theme_image}
                 alt=""
                 className="w-full h-auto block"
-                style={{ maxHeight: 280, objectFit: 'cover', objectPosition: 'center top' }}
               />
               <div className="px-3 py-1 text-[8px] font-heading uppercase tracking-widest text-amber-300/80 bg-amber-500/10">
                 Crew of the Fortnight
