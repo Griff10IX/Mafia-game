@@ -71,4 +71,5 @@ export { default as Lightbulb } from 'lucide-react/dist/esm/icons/lightbulb';
 export { default as Leaf } from 'lucide-react/dist/esm/icons/leaf';
 export { default as Ban } from 'lucide-react/dist/esm/icons/ban';
 export { default as Bird } from 'lucide-react/dist/esm/icons/bird';
+export { default as Rocket } from 'lucide-react/dist/esm/icons/rocket';
 export { default as BookOpen } from 'lucide-react/dist/esm/icons/book-open';

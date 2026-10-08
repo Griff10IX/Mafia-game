@@ -14,7 +14,7 @@ const ROCKETS = {
 const SKYLINE = publicAsset('/images/crash/skyline.jpg');
 const EXPLODE = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => publicAsset(`/images/crash/explode-${n}.png`));
 const FLAMES = [1, 2, 3, 4].map((n) => publicAsset(`/images/crash/flame-${n}.png`));
-const FRAME_MS = 110;
+const FRAME_MS = 420;
 const GROWTH_FALLBACK = 0.09;
 
 const PAGE_STYLES = `
@@ -27,12 +27,37 @@ const PAGE_STYLES = `
     overflow: hidden;
     background: #05060a;
   }
+  .crash-axes {
+    position: absolute;
+    left: 40px;
+    right: 72px;
+    top: 38px;
+    bottom: 22px;
+    border-left: 1px solid rgba(255,255,255,0.45);
+    border-bottom: 1px solid rgba(255,255,255,0.45);
+  }
+  .crash-chart {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  .crash-tick {
+    position: absolute;
+    font-size: 9px;
+    line-height: 1;
+    color: rgba(255,255,255,0.72);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
   .crash-ship {
     position: absolute;
-    width: min(42vw, 168px);
-    transform: translate(-20%, -50%);
+    width: 64px;
+    transform: translate(0, 50%);
     pointer-events: none;
     user-select: none;
+    z-index: 2;
   }
   .crash-rocket {
     position: relative;
@@ -74,11 +99,11 @@ const PAGE_STYLES = `
   }
   .crash-explode {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
+    width: min(62vw, 240px);
+    height: auto;
+    transform: translate(-42%, 28%);
     pointer-events: none;
+    z-index: 3;
   }
   .crash-dock {
     position: sticky;
@@ -93,7 +118,8 @@ const PAGE_STYLES = `
   .crash-btn { min-height: 48px; touch-action: manipulation; }
   @media (max-height: 520px) and (orientation: landscape) {
     .crash-board { height: 168px; min-height: 150px; }
-    .crash-ship { width: 120px; }
+    .crash-axes { left: 34px; right: 58px; top: 28px; }
+    .crash-ship { width: 52px; }
     .crash-mult { font-size: 1.7rem; top: 8%; }
     .crash-dock { position: static; }
   }
@@ -109,7 +135,8 @@ const PAGE_STYLES = `
     .crash-dock { grid-area: dock; position: static; padding-bottom: 0; }
     .crash-side { grid-area: side; }
     .crash-board { height: min(42dvh, 380px); min-height: 260px; }
-    .crash-ship { width: min(28vw, 190px); }
+    .crash-ship { width: 78px; }
+    .crash-axes { right: 88px; }
   }
   @media (min-width: 1025px) {
     .crash-layout {
@@ -123,7 +150,8 @@ const PAGE_STYLES = `
     .crash-dock { grid-area: dock; position: static; padding-bottom: 0; }
     .crash-side { grid-area: side; }
     .crash-board { height: min(52dvh, 460px); min-height: 320px; }
-    .crash-ship { width: 210px; }
+    .crash-ship { width: 92px; }
+    .crash-axes { right: 108px; }
     .crash-input { font-size: 14px; }
   }
 `;
@@ -146,10 +174,37 @@ function fmtMult(cents) {
   return `${Math.floor(c / 100)}.${String(c % 100).padStart(2, '0')}x`;
 }
 
+function niceStep(span) {
+  const raw = Math.max(span, 0.01) / 4;
+  const pow = 10 ** Math.floor(Math.log10(raw));
+  const n = raw / pow;
+  const base = n < 1.5 ? 1 : n < 3.5 ? 2 : n < 7.5 ? 5 : 10;
+  return base * pow;
+}
+
+function axisTicks(min, max) {
+  const step = niceStep(max - min);
+  const out = [];
+  let v = Math.ceil((min + step * 0.2) / step) * step;
+  for (; v < max - step * 0.12 && out.length < 4; v += step) out.push(Math.round(v * 100) / 100);
+  return out;
+}
+
+function axisMult(m) {
+  if (m >= 100) return `${Math.round(m)}x`;
+  if (m >= 10) return `${m.toFixed(m >= 20 ? 0 : 1)}x`;
+  return `${m.toFixed(2)}x`;
+}
+
 function pillClass(cents) {
   if (cents >= 1000) return 'border-emerald-400/40 text-emerald-300';
   if (cents >= 200) return 'border-primary/40 text-primary';
   return 'border-rose-400/40 text-rose-300';
+}
+
+function runningPayout(stake, cents, cap) {
+  const raw = Math.floor((Number(stake) || 0) * Math.max(0, Math.floor(cents)) / 100);
+  return cap ? Math.min(cap, raw) : raw;
 }
 
 export default function CrashPage() {
@@ -266,7 +321,7 @@ function CrashGame() {
   useEffect(() => {
     if (boom == null) return undefined;
     if (boom >= EXPLODE.length) {
-      const done = window.setTimeout(() => setBoom(null), 280);
+      const done = window.setTimeout(() => setBoom(null), 900);
       return () => window.clearTimeout(done);
     }
     const step = window.setTimeout(() => setBoom((n) => (n == null ? null : n + 1)), FRAME_MS);
@@ -288,11 +343,37 @@ function CrashGame() {
     return Math.max(0, Math.ceil(left / 1000));
   }, [state, liveMult, phase]);
 
-  const rocketStyle = useMemo(() => {
-    if (!flying) return { left: '18%', top: '68%' };
-    const t = Math.min(1, Math.log(Math.max(100, liveMult) / 100) / Math.log(14));
-    return { left: `${12 + t * 68}%`, top: `${70 - t * 48}%` };
-  }, [flying, liveMult]);
+  const chart = useMemo(() => {
+    const growth = Number(state?.growth) || GROWTH_FALLBACK;
+    const crashed = boom != null;
+    const shownCents = crashed ? (state?.last_crash_cents || liveMult) : liveMult;
+    const mult = Math.max(1, (flying || crashed ? shownCents : 100) / 100);
+    const elapsed = Math.max(0, Math.log(mult) / growth);
+    const yMax = Math.max(2, mult / 0.72);
+    const xMax = Math.max(8, elapsed / 0.78);
+    const x = (elapsed / xMax) * 100;
+    const y = ((mult - 1) / (yMax - 1)) * 100;
+    const samples = 40;
+    const pts = [];
+    for (let i = 0; i <= samples; i += 1) {
+      const e = elapsed * (i / samples);
+      const m = Math.exp(growth * e);
+      const px = (e / xMax) * 100;
+      const py = 100 - ((m - 1) / (yMax - 1)) * 100;
+      pts.push(`${px.toFixed(2)},${py.toFixed(2)}`);
+    }
+    const yTicks = axisTicks(1, yMax).map((v) => ({
+      v,
+      label: axisMult(v),
+      bottom: `${((v - 1) / (yMax - 1)) * 100}%`,
+    }));
+    const xTicks = axisTicks(0, xMax).map((v) => ({
+      v,
+      label: `${Math.round(v)}s`,
+      left: `${(v / xMax) * 100}%`,
+    }));
+    return { x, y, pts: pts.join(' '), yTicks, xTicks, showLine: elapsed > 0.05 };
+  }, [state, liveMult, flying, boom]);
 
   async function send(path, body) {
     setBusy(true);
@@ -335,6 +416,9 @@ function CrashGame() {
   const mine = state?.my_bet;
   const canBet = phase === 'betting' && !mine && boom == null;
   const canCash = flying && mine?.status === 'open';
+  const onAmount = canCash
+    ? runningPayout(mine.stake, liveMult, state?.limits?.[mine.currency]?.payout_cap)
+    : 0;
   return (
     <div className={`crash-page space-y-2 ${styles.pageContent} mobile-page-root pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-4`} data-testid="crash-page">
       <style>{PAGE_STYLES}</style>
@@ -373,24 +457,49 @@ function CrashGame() {
             {!state?.history?.length && <span className="text-[10px] text-zinc-500 font-heading">Waiting for the first flight</span>}
           </div>
           <div className={`crash-board ${boom != null ? 'animate-[crash-shake_0.45s_linear]' : ''}`}>
-            <img src={SKYLINE} alt="" className="absolute inset-0 w-full h-full object-cover opacity-80" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
-            {boom != null && boom < EXPLODE.length && rocket === 'vintage' ? (
-              <img src={EXPLODE[boom]} alt="" className="crash-explode" />
-            ) : (
-              <div className={`crash-ship ${flying ? `heat-${liveMult >= 800 ? 3 : liveMult >= 300 ? 2 : liveMult >= 160 ? 1 : 0}` : ''}`} style={rocketStyle}>
-                {flying && <img src={flameSrc[liveMult >= 800 ? 3 : liveMult >= 300 ? 2 : liveMult >= 160 ? 1 : 0]} alt="" className="crash-flame" />}
-                <img src={rocketSrc} alt="" className="crash-rocket" />
-              </div>
-            )}
-            {boom != null && rocket !== 'vintage' && (
-              <div className="absolute inset-0 bg-[radial-gradient(circle,rgba(255,170,40,0.85),rgba(80,0,0,0.2)_55%,transparent_70%)]" />
-            )}
+            <img src={SKYLINE} alt="" className="absolute inset-0 w-full h-full object-cover opacity-55" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/45" />
+            <div className="crash-axes">
+              <span className="crash-tick" style={{ left: 2, bottom: 2 }}>1.00x</span>
+              {chart.yTicks.map((tick) => (
+                <span key={`y-${tick.v}`} className="crash-tick" style={{ right: 'calc(100% + 4px)', bottom: tick.bottom, transform: 'translateY(50%)' }}>{tick.label}</span>
+              ))}
+              {chart.xTicks.map((tick) => (
+                <span key={`x-${tick.v}`} className="crash-tick" style={{ left: tick.left, top: 'calc(100% + 5px)', transform: 'translateX(-50%)' }}>{tick.label}</span>
+              ))}
+              <svg className="crash-chart" viewBox="0 0 100 100" preserveAspectRatio="none">
+                {chart.yTicks.map((tick) => (
+                  <line key={`g-${tick.v}`} x1="0" x2="100" y1={100 - parseFloat(tick.bottom)} y2={100 - parseFloat(tick.bottom)} stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" vectorEffect="non-scaling-stroke" />
+                ))}
+                {chart.showLine && (
+                  <>
+                    <polygon points={`0,100 ${chart.pts} ${chart.x.toFixed(2)},100`} fill="rgba(245,193,90,0.16)" />
+                    <polyline points={chart.pts} fill="none" stroke="#f5c15a" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+                  </>
+                )}
+              </svg>
+              {boom != null && boom < EXPLODE.length && rocket === 'vintage' ? (
+                <img src={EXPLODE[boom]} alt="" className="crash-explode" style={{ left: `${chart.x}%`, bottom: `${chart.y}%` }} />
+              ) : (
+                <div className={`crash-ship ${flying ? `heat-${liveMult >= 800 ? 3 : liveMult >= 300 ? 2 : liveMult >= 160 ? 1 : 0}` : ''}`} style={{ left: `${chart.x}%`, bottom: `${chart.y}%` }}>
+                  {flying && <img src={flameSrc[liveMult >= 800 ? 3 : liveMult >= 300 ? 2 : liveMult >= 160 ? 1 : 0]} alt="" className="crash-flame" />}
+                  <img src={rocketSrc} alt="" className="crash-rocket" />
+                </div>
+              )}
+              {boom != null && rocket !== 'vintage' && (
+                <div className="absolute inset-0 bg-[radial-gradient(circle,rgba(255,170,40,0.85),rgba(80,0,0,0.2)_55%,transparent_70%)]" />
+              )}
+            </div>
             <div className={`crash-mult font-heading font-black ${boom != null ? 'text-rose-400' : flying ? 'text-amber-200' : 'text-zinc-100'}`}>
               {boom != null && state?.last_crash_cents ? fmtMult(state.last_crash_cents) : fmtMult(flying ? liveMult : 100)}
             </div>
+            {canCash && (
+              <div className="absolute left-1/2 top-[26%] -translate-x-1/2 text-sm sm:text-base font-heading font-bold text-emerald-300 tabular-nums">
+                {fmtFull(onAmount, mine.currency)}
+              </div>
+            )}
             {phase === 'betting' && boom == null && (
-              <div className="absolute bottom-3 left-0 right-0 text-center text-[11px] font-heading uppercase tracking-widest text-zinc-200">
+              <div className="absolute top-[26%] left-0 right-0 text-center text-[11px] font-heading uppercase tracking-widest text-zinc-200">
                 Next rocket in {countdown}s
               </div>
             )}
@@ -446,7 +555,7 @@ function CrashGame() {
               onClick={canCash ? () => send('/casino/crash/cashout') : placeBet}
               className="crash-btn mt-4 flex-1 rounded-md bg-primary text-primary-foreground font-heading font-black uppercase tracking-wide disabled:opacity-40"
             >
-              {canCash ? `Cash out ${fmtMult(liveMult)}` : mine ? (mine.status === 'open' ? 'In' : mine.status === 'cashed' ? 'Cashed' : 'Bust') : 'Place bet'}
+              {canCash ? `Cash out ${fmtAmount(onAmount, mine.currency)}` : mine ? (mine.status === 'open' ? 'In' : mine.status === 'cashed' ? 'Cashed' : 'Bust') : 'Place bet'}
             </button>
           </div>
         </section>
@@ -476,7 +585,13 @@ function CrashGame() {
                     <span className={bet.mine ? 'text-primary' : 'text-zinc-200'}>{bet.username}</span>
                     <span className="text-zinc-400">{fmtAmount(bet.stake, bet.currency)}</span>
                     <span className={bet.status === 'cashed' ? 'text-emerald-300' : bet.status === 'lost' ? 'text-rose-300' : 'text-amber-200'}>
-                      {bet.status === 'cashed' ? fmtMult(bet.cashout_cents) : bet.status === 'lost' ? 'Bust' : 'In'}
+                      {bet.status === 'cashed'
+                        ? `${fmtMult(bet.cashout_cents)} · ${fmtAmount(bet.payout, bet.currency)}`
+                        : bet.status === 'lost'
+                          ? 'Bust'
+                          : flying
+                            ? fmtAmount(runningPayout(bet.stake, liveMult, state?.limits?.[bet.currency]?.payout_cap), bet.currency)
+                            : 'In'}
                     </span>
                   </li>
                 ))}

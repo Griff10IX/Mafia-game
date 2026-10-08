@@ -42,20 +42,12 @@ _loop_started = False
 
 
 def roll_crash_cents() -> int:
-    """About 55% of flights reach 2.00x. Above that, a normal crash tail."""
-    u = _rng.random()
-    if u < 0.04:
+    """Roobet's crash point. 1 in 20 flights die at 1.00x. The rest use their 1/x curve."""
+    if _rng.randrange(20) == 0:
         return 100
-    if u < 0.45:
-        t = (u - 0.04) / 0.41
-        value = 1.01 + 0.98 * (t ** 0.55)
-        return max(101, min(199, int(round(value * 100))))
-    q = (u - 0.45) / 0.55
-    if q < 0.03:
-        return 200
-    s = max((1.0 - q) / 0.97, 1e-6)
-    cents = int(math.floor((2.0 / s) * 100))
-    return max(200, min(cents, 1_000_000))
+    e = 1 << 52
+    h = _rng.randrange(e)
+    return (100 * e - h) // (e - h)
 
 
 def multiplier_cents(elapsed: float) -> int:
@@ -198,7 +190,7 @@ async def _pay_due_autos(state: dict, now: datetime) -> None:
     ).to_list(400)
     for bet in bets:
         auto = int(bet.get("auto_cashout_cents") or 0)
-        if auto >= 101 and auto < crash_cents and current >= auto:
+        if auto >= 101 and auto <= crash_cents and current >= auto:
             await _settle_bet(bet, won=True, mult_cents=auto, crash_cents=crash_cents)
 
 
@@ -210,7 +202,7 @@ async def _bust_open(state: dict) -> None:
     ).to_list(400)
     for bet in bets:
         auto = bet.get("auto_cashout_cents")
-        if auto is not None and int(auto) >= 101 and int(auto) < crash_cents:
+        if auto is not None and int(auto) >= 101 and int(auto) <= crash_cents:
             await _settle_bet(bet, won=True, mult_cents=int(auto), crash_cents=crash_cents)
         else:
             await _settle_bet(bet, won=False, mult_cents=crash_cents, crash_cents=crash_cents)
