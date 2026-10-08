@@ -177,7 +177,7 @@ class MDGCreateRequest(BaseModel):
     fee_points: int = 0
     fee_money: float = 0
     max_players: int = 10
-    auto_roll_at: Optional[int] = None  # when this many spots filled, auto roll; null = manual only (or when max_players)
+    auto_roll_at: Optional[int] = None  # when this many spots filled, auto roll; null = host rolls, even if the table is full
     extra_pot_points: int = 0
     extra_pot_money: float = 0
     admin_prizes: Optional[List[MDGAdminPrize]] = None
@@ -1421,7 +1421,7 @@ def register(router):
 
         # Auto-roll if threshold reached
         auto_roll_at = game.get("auto_roll_at")
-        should_roll = (auto_roll_at is not None and len(new_entries) >= auto_roll_at) or len(new_entries) >= max_players
+        should_roll = auto_roll_at is not None and len(new_entries) >= int(auto_roll_at)
         if should_roll and len(new_entries) >= MDG_MIN_PLAYERS:
             is_auto_game = game.get("is_automated")
 

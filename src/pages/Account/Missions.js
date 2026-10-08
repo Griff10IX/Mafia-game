@@ -1445,7 +1445,9 @@ export default function Missions() {
           {(authUser?.has_commissioners_pardon || data?.has_commissioners_pardon) ? (
             <div className={`relative p-2.5 ${styles.panel} border border-amber-500/30 rounded-md bg-amber-500/5 mobile-panel`}>
               <p className="text-[11px] font-heading text-amber-200/95">
-                Commissioner&apos;s Pardon active — 75-mission path · auto-rewards on skipped steps · +5 mission skips each month · +3,500 points weekly.
+                {data?.mission_prestige?.active
+                  ? "Commissioner's Pardon active — prestige ends at 75. Targets and rewards stay doubled, and the steps after 75 pay out on their own. +5 mission skips each month and +3,500 points weekly."
+                  : "Commissioner's Pardon active — 75-mission path · auto-rewards on skipped steps · +5 mission skips each month · +3,500 points weekly."}
               </p>
             </div>
           ) : null}
@@ -1454,7 +1456,7 @@ export default function Missions() {
           currentMission={currentMission}
           nextMission={nextMission}
           missionStoryStep={missionStoryStep}
-          orderedTotal={(authUser?.has_commissioners_pardon || data?.has_commissioners_pardon) ? 75 : totalMissions}
+          orderedTotal={(authUser?.has_commissioners_pardon || data?.has_commissioners_pardon) && !data?.mission_prestige?.complete ? 75 : totalMissions}
           completedCount={completedCount}
           onOpen={setSelected}
           skipTokens={skipTokens}

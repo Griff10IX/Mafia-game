@@ -169,12 +169,17 @@ def _prestige_status(user: dict) -> dict:
     complete = _prestige_complete(user)
     total = len(MISSIONS)
     done = len(_user_prestige_completed_ids(user))
+    shown_total = total
+    if user.get("has_commissioners_pardon") and not complete:
+        from utils.commissioners_pardon import PARDON_LADDER_MANUAL_TARGET
+
+        shown_total = PARDON_LADDER_MANUAL_TARGET
     return {
         "can_start": _first_ladder_complete(user) and not started,
         "active": started and not complete,
         "complete": complete,
         "completed_count": total if complete else done,
-        "total": total,
+        "total": shown_total,
         "passives": {
             "kill_bullets_mult": KILL_BULLET_MULT,
             "robot_cost_mult": ROBOT_COST_MULT,
@@ -1270,7 +1275,60 @@ async def _maybe_grant_prestige_weekly_points(user: dict) -> dict:
     return user
 
 
+async def _grant_prestige_finish_reward(user_id: str) -> None:
+    if not user_id:
+        return
+    try:
+        from utils.mission_ladder_complete_reward import maybe_grant_prestige_ladder_complete_reward
+
+        await maybe_grant_prestige_ladder_complete_reward(db, user_id)
+    except Exception:
+        logging.getLogger(__name__).exception("prestige ladder reward check failed for %s", user_id)
+
+
+async def _maybe_close_pardon_prestige(user: dict) -> dict:
+    """Pardon ends the prestiged ladder at 75. Later steps pay their doubled rewards."""
+    uid = user.get("id") or ""
+    if not uid:
+        return user
+    if _prestige_complete(user):
+        await _grant_prestige_finish_reward(uid)
+        return user
+    if not user.get("has_commissioners_pardon") or not _prestige_run_active(user):
+        return user
+    from utils.commissioners_pardon import PARDON_LADDER_MANUAL_TARGET
+
+    if len(_user_prestige_completed_ids(user)) < PARDON_LADDER_MANUAL_TARGET:
+        return user
+    fresh = user
+    for _ in range(len(MISSIONS) + 2):
+        fresh = await db.users.find_one({"id": uid}, {"_id": 0}) or fresh
+        if not _prestige_run_active(fresh):
+            break
+        if len(_user_prestige_completed_ids(fresh)) < PARDON_LADDER_MANUAL_TARGET:
+            break
+        mission = _current_open_prestige_mission(fresh)
+        if not mission:
+            break
+        await _finish_prestige_mission(fresh, mission, force=True, cascade_pardon=False)
+    fresh = await db.users.find_one({"id": uid}, {"_id": 0}) or fresh
+    if _prestige_complete(fresh):
+        await _grant_prestige_finish_reward(uid)
+        try:
+            await log_activity(
+                uid,
+                fresh.get("username") or "",
+                "pardon_prestige_close",
+                {"completed_count": len(_user_prestige_completed_ids(fresh))},
+            )
+        except Exception:
+            logging.getLogger(__name__).exception("pardon prestige close log failed for %s", uid)
+        fresh = await db.users.find_one({"id": uid}, {"_id": 0}) or fresh
+    return fresh
+
+
 async def _touch_mission_prestige(user: dict) -> dict:
+    user = await _maybe_close_pardon_prestige(user)
     user = await _maybe_grant_prestige_weekly_points(user)
     if _prestige_run_active(user):
         await _ensure_prestige_baselines(user)
@@ -1304,7 +1362,7 @@ def _completion_response(mission: dict, meta: dict, *, skipped: bool = False, sk
     return out
 
 
-async def _finish_prestige_mission(current_user: dict, mission: dict, *, force: bool = False) -> dict:
+async def _finish_prestige_mission(current_user: dict, mission: dict, *, force: bool = False, cascade_pardon: bool = True) -> dict:
     mission_id = mission["id"]
     user_id = current_user["id"]
     prestige_done = _user_prestige_completed_ids(current_user)
@@ -1365,6 +1423,14 @@ async def _finish_prestige_mission(current_user: dict, mission: dict, *, force: 
         await record_contest_progress(db, user_id, "mission", 1)
     except Exception:
         pass
+    fresh = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if fresh and _prestige_complete(fresh):
+        await _grant_prestige_finish_reward(user_id)
+    elif cascade_pardon and fresh and fresh.get("has_commissioners_pardon") and _prestige_run_active(fresh):
+        from utils.commissioners_pardon import PARDON_LADDER_MANUAL_TARGET
+
+        if len(_user_prestige_completed_ids(fresh)) >= PARDON_LADDER_MANUAL_TARGET:
+            await _maybe_close_pardon_prestige(fresh)
     return _completion_response(mission, meta)
 
 

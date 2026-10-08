@@ -116,7 +116,7 @@ function formatRollMode(game) {
   }
   return {
     label: 'Manual roll',
-    detail: `Host rolls when ready — or when the table fills (${n}/${maxP}).`,
+    detail: `Host presses Roll. A full table stays open (${n}/${maxP}).`,
   };
 }
 
