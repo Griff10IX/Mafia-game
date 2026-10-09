@@ -33,6 +33,7 @@ import {
   isCivilianProtectionConfirmCancelled,
 } from '../../utils/civilianProtectionConfirm';
 import { toast } from 'sonner';
+import { carDropNotificationsEnabled } from '../../utils/carDropNotifications';
 import { CosmeticDropToastPreview } from '../../components/CosmeticPreview';
 import styles from '../../styles/noir.module.css';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
@@ -691,10 +692,12 @@ export default function GTA() {
         const rarityKey = String(car?.rarity || 'common').toLowerCase();
         const glowHex = RARITY_GLOW_HEX[rarityKey] || RARITY_GLOW_HEX.common;
         const rarityLabel = rarityKey.replace(/_/g, ' ');
-        toast.success(data.message, {
-          description: (
-            <div className="space-y-1.5">
-              {car ? (
+        const showCarDrop = carDropNotificationsEnabled();
+        if (showCarDrop || data.cosmetic_drop?.id) {
+          toast.success(data.message, {
+            description: (
+              <div className="space-y-1.5">
+                {showCarDrop && car ? (
                 <div className="flex items-center gap-3">
                   {img ? (
                     <div
@@ -717,11 +720,12 @@ export default function GTA() {
                     ) : null}
                   </div>
                 </div>
-              ) : null}
-              {data.cosmetic_drop?.id ? <CosmeticDropToastPreview drop={data.cosmetic_drop} /> : null}
-            </div>
-          ),
-        });
+                ) : null}
+                {data.cosmetic_drop?.id ? <CosmeticDropToastPreview drop={data.cosmetic_drop} /> : null}
+              </div>
+            ),
+          });
+        }
         const profit = Number(car?.value) || 0;
         setGtaStats((prev) => ({
           ...prev,

@@ -37,6 +37,7 @@ DEFAULT_NOTIFICATION_PREFS = {
     "forum_mention": True,
     "game_chat_mention": True,
     "designer_comp": True,
+    "car_drops": True,
 }
 
 # Pages players can mute in-app (Sonner) toasts for. Keep in sync with src/utils/toastPageMutes.js
@@ -90,6 +91,7 @@ class NotificationPreferencesRequest(BaseModel):
     forum_mention: Optional[bool] = None
     game_chat_mention: Optional[bool] = None
     designer_comp: Optional[bool] = None
+    car_drops: Optional[bool] = None
 
 
 class ToastPagePrefsRequest(BaseModel):

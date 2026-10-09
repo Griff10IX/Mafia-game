@@ -378,6 +378,7 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
         onFocus={prefetchFullProfile}
         title={nameTitle}
         {...extraRest}
+        data-halloween-nav="1"
         onClick={(e) => {
           // iOS: own the tap so profile never opens as a new Safari tab.
           if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && (e.button == null || e.button === 0)) {

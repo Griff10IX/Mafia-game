@@ -1076,6 +1076,7 @@ class UserResponse(BaseModel):
     slow_bodyguard_hire_inflation_active: bool = False
     censor_profanity: bool = False  # when true, chat/forum show swear words as ***
     toast_muted_pages: List[str] = Field(default_factory=list)  # page ids with Sonner toasts muted
+    car_drop_notifications: bool = True  # stolen-car pop-ups and worn-out car inbox notes
     referred_by: Optional[str] = None  # first referrer id (legacy); see referred_by_ids for full list
     referred_by_username: Optional[str] = None  # comma-separated referrer usernames for display
     referred_by_ids: List[str] = Field(default_factory=list)  # all referrer user ids
@@ -4195,6 +4196,9 @@ async def startup_db():
     # Automated MDG: 3 house-vs-player games every 3 hours
     from routers.casinos import mdg as mdg_mod
     asyncio.create_task(mdg_mod.run_automated_mdg_ticker())
+    from utils.casino_loss_relics import run_casino_loss_relic_ticker
+
+    asyncio.create_task(run_casino_loss_relic_ticker(db))
     # Auto Rank: when AUTO_RANK_USE_CRON=1, all Auto Rank (main + bust + OC) is driven by cron only
     from routers.account import auto_rank
     auto_rank_use_cron = (os.environ.get("AUTO_RANK_USE_CRON") or "").strip().lower() in ("1", "true", "yes")

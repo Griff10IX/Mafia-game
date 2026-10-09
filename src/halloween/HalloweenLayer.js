@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTheme } from '../context/ThemeContext';
 import { isHalloweenActive, setHalloweenAccount, subscribeHalloween } from './active';
 import {
@@ -7,10 +8,11 @@ import {
   KillerLurk,
   KillerStalk,
   SpiderRunner,
+  pickKiller,
   preloadHalloweenSprites,
 } from './Decor';
 import { halloweenRoll, prefersReducedMotion } from './roll';
-import { ScareFrame, scareDuration } from './Scares';
+import { ScareFrame, pickScareKind, scareDuration } from './Scares';
 import { maybeHalloweenScare, showButtonWeb } from './trigger';
 import './halloween.css';
 
@@ -19,11 +21,14 @@ const LURK_MS = 7800;
 const STALK_MS = 13500;
 const KILL_MS = 7900;
 
-// ambient "now and again" gaps, in ms
-const RUNNER_GAP = [28_000, 75_000];
-const LURK_GAP = [70_000, 170_000];
-const STALK_GAP = [90_000, 220_000];
-const KILL_GAP = [240_000, 540_000];
+// one ambient event, then a pause, so they never pile up
+const AMBIENT_GAP = [22_000, 70_000];
+
+let eventSeq = 0;
+function nextId() {
+  eventSeq += 1;
+  return eventSeq;
+}
 
 function randomBetween([lo, hi]) {
   return lo + Math.random() * (hi - lo);
@@ -31,6 +36,14 @@ function randomBetween([lo, hi]) {
 
 function coin(a, b) {
   return Math.random() < 0.5 ? a : b;
+}
+
+function pickAmbientType() {
+  const roll = Math.random();
+  if (roll < 0.42) return 'runner';
+  if (roll < 0.7) return 'lurk';
+  if (roll < 0.9) return 'stalk';
+  return 'kill';
 }
 
 // Buttons players hit over and over. Menu links are handled separately.
@@ -44,24 +57,23 @@ function isFrequentAction(btn) {
   return FREQUENT_LABEL.has(label);
 }
 
-function useTimedState(ms) {
-  const [value, setValue] = useState(null);
+function useOneEvent() {
+  const [event, setEvent] = useState(null);
   useEffect(() => {
-    if (!value) return undefined;
-    const timer = window.setTimeout(() => setValue(null), typeof ms === 'function' ? ms(value) : ms);
+    if (!event) return undefined;
+    const id = event.id;
+    const timer = window.setTimeout(() => {
+      setEvent((cur) => (cur && cur.id === id ? null : cur));
+    }, event.ms);
     return () => window.clearTimeout(timer);
-  }, [value, ms]);
-  return [value, setValue];
+  }, [event]);
+  return [event, setEvent];
 }
 
 export default function HalloweenLayer() {
   const { halloweenOn } = useTheme();
   const [active, setActive] = useState(() => isHalloweenActive());
-  const [scare, setScare] = useTimedState((s) => scareDuration(s.kind));
-  const [runner, setRunner] = useTimedState(RUNNER_MS);
-  const [lurk, setLurk] = useTimedState(LURK_MS);
-  const [stalk, setStalk] = useTimedState(STALK_MS);
-  const [kill, setKill] = useTimedState(KILL_MS);
+  const [event, setEvent] = useOneEvent();
 
   useEffect(() => {
     setHalloweenAccount(!!halloweenOn);
@@ -70,17 +82,21 @@ export default function HalloweenLayer() {
   useEffect(() => subscribeHalloween(() => setActive(isHalloweenActive())), []);
 
   useEffect(() => {
+    if (!active) setEvent(null);
+  }, [active, setEvent]);
+
+  useEffect(() => {
     if (active) preloadHalloweenSprites();
   }, [active]);
 
-  // 1 in 20: a button grows a web, a menu link (Crimes, GTA, and the rest) flashes a scare.
+  // 1 in 20: a menu link or a frequent button flashes one scare. Any button can grow a web, on its own roll.
   useEffect(() => {
     if (!active) return undefined;
-    const onClick = (event) => {
+    const onClick = (clickEvent) => {
       if (!isHalloweenActive() || prefersReducedMotion()) return;
-      if (event.target?.closest?.('[data-halloween-scare]')) return;
-      const nav = event.target?.closest?.('[data-halloween-nav]');
-      const btn = event.target?.closest?.('button, [role="button"]');
+      if (clickEvent.target?.closest?.('[data-halloween-scare]')) return;
+      const nav = clickEvent.target?.closest?.('[data-halloween-nav]');
+      const btn = clickEvent.target?.closest?.('button, [role="button"]');
       if (nav || (btn && isFrequentAction(btn))) maybeHalloweenScare();
       if (!btn || !halloweenRoll()) return;
       showButtonWeb(btn);
@@ -89,17 +105,63 @@ export default function HalloweenLayer() {
     return () => document.removeEventListener('click', onClick, true);
   }, [active]);
 
-  // forced / rolled events
   useEffect(() => {
-    const guard = (fn) => (event) => {
-      if (prefersReducedMotion()) return;
-      fn(event.detail || {});
+    const place = (next, force) => {
+      setEvent((cur) => {
+        if (force) return next;
+        if (cur && cur.type === 'scare') return cur;
+        if (next.type !== 'scare' && cur) return cur;
+        return next;
+      });
     };
-    const onScare = guard((d) => setScare({ id: Date.now(), kind: d.kind || null }));
-    const onRunner = guard((d) => setRunner({ id: Date.now(), dir: d.dir || coin('left', 'right') }));
-    const onLurk = guard((d) => setLurk({ id: Date.now(), killer: d.killer || null, side: d.side || coin('left', 'right') }));
-    const onStalk = guard((d) => setStalk({ id: Date.now(), killer: d.killer || null, dir: d.dir || coin('left', 'right') }));
-    const onKill = guard((d) => setKill({ id: Date.now(), killer: d.killer || null }));
+    const onScare = (e) => {
+      if (prefersReducedMotion()) return;
+      const d = e.detail || {};
+      const kind = pickScareKind(d.kind);
+      place({ id: nextId(), type: 'scare', kind, ms: scareDuration(kind) }, !!d.kind);
+    };
+    const onRunner = (e) => {
+      if (prefersReducedMotion()) return;
+      const d = e.detail || {};
+      place({
+        id: nextId(),
+        type: 'runner',
+        dir: d.dir || coin('left', 'right'),
+        ms: RUNNER_MS,
+      }, !!d.dir);
+    };
+    const onLurk = (e) => {
+      if (prefersReducedMotion()) return;
+      const d = e.detail || {};
+      place({
+        id: nextId(),
+        type: 'lurk',
+        killer: pickKiller(d.killer).id,
+        side: d.side || coin('left', 'right'),
+        ms: LURK_MS,
+      }, !!d.killer);
+    };
+    const onStalk = (e) => {
+      if (prefersReducedMotion()) return;
+      const d = e.detail || {};
+      place({
+        id: nextId(),
+        type: 'stalk',
+        killer: pickKiller(d.killer).id,
+        dir: d.dir || coin('left', 'right'),
+        ms: STALK_MS,
+      }, !!d.killer);
+    };
+    const onKill = (e) => {
+      if (prefersReducedMotion()) return;
+      const d = e.detail || {};
+      place({
+        id: nextId(),
+        type: 'kill',
+        killer: pickKiller(d.killer).id,
+        ms: KILL_MS,
+      }, !!d.killer);
+    };
     window.addEventListener('halloween-scare', onScare);
     window.addEventListener('halloween-runner', onRunner);
     window.addEventListener('halloween-lurk', onLurk);
@@ -112,36 +174,48 @@ export default function HalloweenLayer() {
       window.removeEventListener('halloween-stalk', onStalk);
       window.removeEventListener('halloween-kill', onKill);
     };
-  }, [setScare, setRunner, setLurk, setStalk, setKill]);
+  }, [setEvent]);
 
-  // ambient events while the overlay is on
   useEffect(() => {
     if (!active || prefersReducedMotion()) return undefined;
-    const timers = [];
-    const schedule = (gap, fire) => {
-      const tick = () => {
-        timers.push(window.setTimeout(() => {
-          if (isHalloweenActive() && document.visibilityState === 'visible') fire();
-          tick();
-        }, randomBetween(gap)));
-      };
-      tick();
+    let timer = 0;
+    let stopped = false;
+    const loop = () => {
+      timer = window.setTimeout(() => {
+        if (stopped) return;
+        if (isHalloweenActive() && document.visibilityState === 'visible') {
+          const type = pickAmbientType();
+          if (type === 'runner') {
+            window.dispatchEvent(new CustomEvent('halloween-runner', { detail: {} }));
+          } else if (type === 'lurk') {
+            window.dispatchEvent(new CustomEvent('halloween-lurk', { detail: {} }));
+          } else if (type === 'stalk') {
+            window.dispatchEvent(new CustomEvent('halloween-stalk', { detail: {} }));
+          } else {
+            window.dispatchEvent(new CustomEvent('halloween-kill', { detail: {} }));
+          }
+        }
+        loop();
+      }, randomBetween(AMBIENT_GAP));
     };
-    schedule(RUNNER_GAP, () => setRunner({ id: Date.now(), dir: coin('left', 'right') }));
-    schedule(LURK_GAP, () => setLurk({ id: Date.now(), killer: null, side: coin('left', 'right') }));
-    schedule(STALK_GAP, () => setStalk({ id: Date.now(), killer: null, dir: coin('left', 'right') }));
-    schedule(KILL_GAP, () => setKill({ id: Date.now(), killer: null }));
-    return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [active, setRunner, setLurk, setStalk, setKill]);
+    loop();
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [active]);
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <>
       {active ? <HalloweenDecor /> : null}
-      {active && runner ? <SpiderRunner key={runner.id} dir={runner.dir} /> : null}
-      {active && lurk ? <KillerLurk key={lurk.id} killer={lurk.killer} side={lurk.side} /> : null}
-      {active && stalk ? <KillerStalk key={stalk.id} killer={stalk.killer} dir={stalk.dir} /> : null}
-      {active && kill ? <KillScene key={kill.id} killer={kill.killer} /> : null}
-      {scare ? <ScareFrame key={scare.id} kind={scare.kind} /> : null}
-    </>
+      {active && event?.type === 'runner' ? <SpiderRunner key={event.id} dir={event.dir} /> : null}
+      {active && event?.type === 'lurk' ? <KillerLurk key={event.id} killer={event.killer} side={event.side} /> : null}
+      {active && event?.type === 'stalk' ? <KillerStalk key={event.id} killer={event.killer} dir={event.dir} /> : null}
+      {active && event?.type === 'kill' ? <KillScene key={event.id} killer={event.killer} /> : null}
+      {event?.type === 'scare' ? <ScareFrame key={event.id} kind={event.kind} /> : null}
+    </>,
+    document.body,
   );
 }

@@ -6,6 +6,20 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-10-09[/color][/b] — [b]Casino loss relics[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Loot boxes:[/b] Two world-unique relics. You can hold only one.[/color]
+[*][color=#888888][b]Henhouse Slip:[/b] 2.5% of all Chicken Cross losses.[/color]
+[*][color=#888888][b]Black Box:[/b] 2.5% of all Crash losses.[/color]
+[*][color=#888888][b]Cash or points:[/b] Pick when you get it. My Inventory can switch it later. A switch only covers losses after the switch. Money already waiting stays in the currency it was earned in.[/color]
+[*][color=#888888][b]Friday:[/b] Every Friday at 6pm UK it adds 2.5% of that week's losses on that game to a stack. Collect it in My Inventory, or leave it and let the next week stack on top. If the game paid out more than it took in that week, nothing is added.[/color]
+[*][color=#888888][b]Death:[/b] The relic goes back into the loot boxes. Anything still waiting is wiped. It is not paid out and it is not given to the killer.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-10-08[/color][/b] — [b]Crash (new casino game)[/b][/size]
 [quote]
 [list]

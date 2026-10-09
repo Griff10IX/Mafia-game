@@ -468,7 +468,7 @@ html[data-halloween="on"] body {
   --hw-dur: 1.3s;
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 10050;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -680,7 +680,7 @@ html[data-halloween="on"] body {
   .hw-pumpkin-top { display: none; }
   .hw-pumpkin-side { width: 46px; left: 6px; bottom: 66px; }
   .hw-moon { display: none; }
-  .hw-fog { height: 26vh; filter: blur(10px); }
+  .hw-fog { height: 26vh; filter: none; }
   .hw-bats { top: 70px; height: 90px; }
   .hw-bat { filter: none; width: 36px; height: 24px; --hw-sheet: 108px; }
   .hw-bat:nth-child(2) { width: 28px; height: 18px; --hw-sheet: 84px; top: 26px; }

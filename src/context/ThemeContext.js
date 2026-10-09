@@ -28,6 +28,7 @@ import {
   storedThemeNeedsExpandedCatalog,
 } from '../constants/themes';
 import api from '../utils/api';
+import { setHalloweenAccount } from '../halloween/active';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { GAME_CHAT_VISIBLE_KEY, GAME_CHAT_VISIBILITY_EVENT } from '../utils/gameChatVisibility';
 
@@ -60,6 +61,75 @@ const STORAGE_KEY_LEFT_MENU = 'app_theme_left_menu';
 const STORAGE_KEY_RIGHT_MENU = 'app_theme_right_menu';
 const STORAGE_KEY_MODERN_VISUAL_QUALITY = 'app_theme_modern_visual_quality';
 const STORAGE_KEY_BOOT = 'app_theme_boot';
+function withSharedHalloween(prefs, other) {
+  const base = (prefs && typeof prefs === 'object') ? { ...prefs } : {};
+  const here = typeof base.halloweenOn === 'boolean' ? base.halloweenOn : null;
+  const there = (other && typeof other.halloweenOn === 'boolean') ? other.halloweenOn : null;
+  if (here === null && there === null) return base;
+  const on = here === true || there === true;
+  let snap = (base.halloweenSnapshot && typeof base.halloweenSnapshot === 'object')
+    ? base.halloweenSnapshot
+    : null;
+  if (on && !snap && base.colourId && base.colourId !== HALLOWEEN_THEME.colourId) {
+    snap = {
+      colourId: base.colourId,
+      textureId: base.textureId,
+      buttonColourId: base.buttonColourId,
+      accentLineColourId: base.accentLineColourId,
+      fontId: base.fontId,
+      buttonStyleId: base.buttonStyleId,
+      writingColourId: base.writingColourId,
+      mutedWritingColourId: base.mutedWritingColourId,
+      toastTextColourId: base.toastTextColourId,
+      textStyleId: base.textStyleId,
+      themeVariant: base.themeVariant,
+      buttonShapeId: base.buttonShapeId,
+    };
+  }
+  base.halloweenOn = on;
+  if (snap) base.halloweenSnapshot = snap;
+  if (on) {
+    base.colourId = HALLOWEEN_THEME.colourId;
+    base.buttonColourId = HALLOWEEN_THEME.buttonColourId;
+    base.accentLineColourId = HALLOWEEN_THEME.accentLineColourId;
+    base.writingColourId = HALLOWEEN_THEME.writingColourId;
+    base.mutedWritingColourId = HALLOWEEN_THEME.mutedWritingColourId;
+    base.toastTextColourId = HALLOWEEN_THEME.toastTextColourId;
+  } else if (snap && base.colourId === HALLOWEEN_THEME.colourId) {
+    if (snap.colourId) base.colourId = snap.colourId;
+    if (snap.buttonColourId !== undefined) base.buttonColourId = snap.buttonColourId;
+    if (snap.accentLineColourId !== undefined) base.accentLineColourId = snap.accentLineColourId;
+    if (snap.writingColourId) base.writingColourId = snap.writingColourId;
+    if (snap.mutedWritingColourId !== undefined) base.mutedWritingColourId = snap.mutedWritingColourId;
+    if (snap.toastTextColourId !== undefined) base.toastTextColourId = snap.toastTextColourId;
+  }
+  return base;
+}
+
+function paintStoredHalloween() {
+  try {
+    if (localStorage.getItem(STORAGE_KEY_HALLOWEEN) !== '1') {
+      setHalloweenAccount(false);
+      return;
+    }
+  } catch (_) {
+    return;
+  }
+  setHalloweenAccount(true);
+  const colour = getResolvedColour(HALLOWEEN_THEME.colourId, []);
+  applyColourToDocument(colour);
+  applyAtmosphereToDocument(HALLOWEEN_THEME.colourId);
+  applyButtonColourToDocument(getResolvedColour(HALLOWEEN_THEME.buttonColourId, []));
+  applyAccentLineToDocument(getResolvedColour(HALLOWEEN_THEME.accentLineColourId, []));
+  const writing = getThemeWritingColour(HALLOWEEN_THEME.writingColourId);
+  const muted = getThemeWritingColour(HALLOWEEN_THEME.mutedWritingColourId);
+  applyWritingColourToDocument(writing.foreground, muted.foreground);
+  document.documentElement.style.setProperty(
+    '--noir-toast-foreground',
+    getThemeWritingColour(HALLOWEEN_THEME.toastTextColourId).foreground,
+  );
+}
+
 const STORAGE_KEY_HALLOWEEN = 'app_theme_halloween';
 const STORAGE_KEY_HALLOWEEN_SNAPSHOT = 'app_theme_halloween_snapshot';
 
@@ -677,10 +747,12 @@ export function applyThemeFromLocalStorage() {
         .then(() => {
           try {
             applyStoredThemeState(readStoredThemeState());
+            paintStoredHalloween();
           } catch (_) { /* ignore */ }
         })
         .catch(() => {});
     }
+    paintStoredHalloween();
   } catch (_) {}
 }
 
@@ -861,16 +933,20 @@ export function ThemeProvider({ children }) {
     return 'performance';
   });
   useEffect(() => {
-    const colour = getResolvedColour(colourId, customThemes);
+    setHalloweenAccount(!!halloweenOn);
+    const useColourId = halloweenOn ? HALLOWEEN_THEME.colourId : colourId;
+    const useButtonId = halloweenOn ? HALLOWEEN_THEME.buttonColourId : buttonColourId;
+    const useAccentId = halloweenOn ? HALLOWEEN_THEME.accentLineColourId : accentLineColourId;
+    const colour = getResolvedColour(useColourId, customThemes);
     applyColourToDocument(colour);
-    applyAtmosphereToDocument(colourId);
-    const buttonColour = buttonColourId
-      ? getResolvedColour(buttonColourId, customThemes)
+    applyAtmosphereToDocument(useColourId);
+    const buttonColour = useButtonId
+      ? getResolvedColour(useButtonId, customThemes)
       : { ...colour, stops: [colour.primary, colour.primary, colour.primary, colour.primary] };
     applyButtonColourToDocument(buttonColour);
-    const accentLineColour = accentLineColourId ? getResolvedColour(accentLineColourId, customThemes) : colour;
+    const accentLineColour = useAccentId ? getResolvedColour(useAccentId, customThemes) : colour;
     applyAccentLineToDocument(accentLineColour);
-  }, [colourId, buttonColourId, accentLineColourId, customThemes]);
+  }, [colourId, buttonColourId, accentLineColourId, customThemes, halloweenOn]);
 
   useEffect(() => {
     const font = getThemeFont(fontId);
@@ -886,17 +962,20 @@ export function ThemeProvider({ children }) {
   }, [buttonShapeId]);
 
   useEffect(() => {
-    const w = getThemeWritingColour(writingColourId);
-    const mutedHex = mutedWritingColourId
-      ? getThemeWritingColour(mutedWritingColourId).foreground
+    const writingId = halloweenOn ? HALLOWEEN_THEME.writingColourId : writingColourId;
+    const mutedId = halloweenOn ? HALLOWEEN_THEME.mutedWritingColourId : mutedWritingColourId;
+    const w = getThemeWritingColour(writingId);
+    const mutedHex = mutedId
+      ? getThemeWritingColour(mutedId).foreground
       : w.muted;
     applyWritingColourToDocument(w.foreground, mutedHex);
-  }, [writingColourId, mutedWritingColourId]);
+  }, [writingColourId, mutedWritingColourId, halloweenOn]);
 
   useEffect(() => {
-    const toastW = getThemeWritingColour(toastTextColourId || writingColourId);
+    const toastId = halloweenOn ? HALLOWEEN_THEME.toastTextColourId : (toastTextColourId || writingColourId);
+    const toastW = getThemeWritingColour(toastId);
     document.documentElement.style.setProperty('--noir-toast-foreground', toastW.foreground);
-  }, [toastTextColourId, writingColourId]);
+  }, [toastTextColourId, writingColourId, halloweenOn]);
 
   useEffect(() => {
     const style = getThemeTextStyle(textStyleId);
@@ -967,6 +1046,7 @@ export function ThemeProvider({ children }) {
   }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, leftMenuTheme, rightMenuTheme, modernVisualQuality, mobileLayoutId, buttonShapeId]);
 
   const themeLoadedRef = useRef(false);
+  const themeFetchedOkRef = useRef(false);
   const serverThemePcRef = useRef(null);
   const serverThemeMobileRef = useRef(null);
   const themeViewportBucketRef = useRef(null);
@@ -1082,13 +1162,25 @@ export function ThemeProvider({ children }) {
       serverThemePcRef.current = pc;
       serverThemeMobileRef.current = mobile;
       themeViewportBucketRef.current = getThemeUiPlatform();
-      const prefs = getThemeUiPlatform() === 'mobile' ? mobile : pc;
-      applyThemePreferencesFromServer(prefs);
+      const platform = getThemeUiPlatform();
+      const prefs = platform === 'mobile' ? mobile : pc;
+      const other = platform === 'mobile' ? pc : mobile;
+      applyThemePreferencesFromServer(withSharedHalloween(prefs, other));
+      themeFetchedOkRef.current = true;
     }).catch(() => {}).finally(() => {
       themeLoadedRef.current = true;
       setThemeServerHydrated(true);
     });
   }, [applyThemePreferencesFromServer]);
+
+  // Phone and desktop keep separate themes, but the Halloween switch is one setting.
+  useEffect(() => {
+    if (!themeServerHydrated || !themeFetchedOkRef.current) return undefined;
+    ['pc', 'mobile'].forEach((platform) => {
+      api.patch('/profile/theme', { theme_platform: platform, halloween_on: !!halloweenOn }).catch(() => {});
+    });
+    return undefined;
+  }, [themeServerHydrated, halloweenOn]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -1110,7 +1202,8 @@ export function ThemeProvider({ children }) {
         serverThemePcRef.current = npc;
         serverThemeMobileRef.current = nmo;
         const toApply = next === 'mobile' ? nmo : npc;
-        applyThemePreferencesFromServer(toApply);
+        const other = next === 'mobile' ? npc : nmo;
+        applyThemePreferencesFromServer(withSharedHalloween(toApply, other));
       } catch (_) {}
     };
     mq.addEventListener('change', onViewportThemeBucketChange);

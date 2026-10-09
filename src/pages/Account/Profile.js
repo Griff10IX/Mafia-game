@@ -30,6 +30,7 @@ import {
 import { getProfileEditWarm } from '../../utils/profilePageWarm';
 import { prefetchViewCarPage } from '../../utils/viewCarWarm';
 import { TOAST_MUTEABLE_PAGES, setToastMutedPages, normalizeToastMutedPages, getToastMutedPages } from '../../utils/toastPageMutes';
+import { setCarDropNotifications } from '../../utils/carDropNotifications';
 import { fileToAvatarDataUrl, fileToCustomBadgeDataUrl, validateSafeImageFile, AVATAR_RAW_UPLOAD_MAX_BYTES } from '../../utils/fileToCompressedDataUrl';
 import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 import { robotBodyguardAvatarUrl } from '../../utils/robotBodyguardAvatar';
@@ -66,6 +67,7 @@ const DEFAULT_NOTIFICATION_PREFERENCES = {
   forum_mention: true,
   game_chat_mention: true,
   designer_comp: true,
+  car_drops: true,
 };
 const readStoredProfileEditTab = () => {
   try {
@@ -2287,7 +2289,9 @@ export default function Profile() {
   const fetchPrefs = async () => {
     try {
       const res = await api.get('/profile/preferences');
-      setPrefs({ ...DEFAULT_NOTIFICATION_PREFERENCES, ...(res.data?.notification_preferences || {}) });
+      const merged = { ...DEFAULT_NOTIFICATION_PREFERENCES, ...(res.data?.notification_preferences || {}) };
+      setPrefs(merged);
+      setCarDropNotifications(merged.car_drops);
     } catch (_) {
       setPrefs(DEFAULT_NOTIFICATION_PREFERENCES);
     }
@@ -2326,7 +2330,9 @@ export default function Profile() {
       const warm = getProfileEditWarm(me?.id);
       if (warm) {
         if (warm.notification_preferences && typeof warm.notification_preferences === 'object') {
-          setPrefs({ ...DEFAULT_NOTIFICATION_PREFERENCES, ...warm.notification_preferences });
+          const merged = { ...DEFAULT_NOTIFICATION_PREFERENCES, ...warm.notification_preferences };
+          setPrefs(merged);
+          setCarDropNotifications(merged.car_drops);
         }
         setTelegramChatId(warm.telegram_chat_id ?? '');
         setTelegramBotToken(warm.telegram_bot_token ?? '');
@@ -2450,6 +2456,7 @@ export default function Profile() {
   const updatePref = (key, value) => {
     const next = { ...prefs, [key]: value };
     setPrefs(next);
+    if (key === 'car_drops') setCarDropNotifications(value);
     setSavingPrefs(true);
     api.patch('/profile/preferences', next).then(() => {
       toast.success('Notification preferences saved');
@@ -3582,7 +3589,7 @@ export default function Profile() {
               </div>
               <div className="p-3 space-y-2">
                 <p className="text-xs text-mutedForeground mb-2">
-                  Choose which inbox notifications you receive.{' '}
+                  Choose which notifications you receive.{' '}
                   <span className="text-[11px] text-foreground/90">
                     Witness statements (when you observe a kill) are always delivered to your inbox and cannot be disabled here.
                   </span>
@@ -3598,6 +3605,7 @@ export default function Profile() {
                   { key: 'forum_comment_reply', label: 'Forum: replies to your comments' },
                   { key: 'forum_mention', label: 'Forum: when someone @mentions you' },
                   { key: 'designer_comp', label: 'Designer competition (when a new comp starts)' },
+                  { key: 'car_drops', label: 'Car dropping (stolen-car pop-ups, and when worn-out cars leave your garage)' },
                 ].map(({ key, label }) => (
                   <div key={key} className="flex items-center justify-between gap-3 py-1">
                     <span className="text-sm text-foreground">{label}</span>

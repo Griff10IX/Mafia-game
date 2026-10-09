@@ -331,6 +331,17 @@ async def reclaim_on_kill(
     """
     if not victim_id:
         return []
+    try:
+        from utils.casino_loss_relics import release_on_death
+
+        await release_on_death(
+            db,
+            victim_id=victim_id,
+            victim_username=victim_username,
+            send_notification=send_notification,
+        )
+    except Exception:
+        logger.exception("casino loss relic release on death failed")
     owned = await user_owned_item_ids(db, victim_id)
     if not owned:
         return []

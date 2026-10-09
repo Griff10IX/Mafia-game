@@ -13,6 +13,7 @@ import api, {
   APP_NAVIGATE_EVENT,
 } from '../utils/api';
 import { setToastMutedPages } from '../utils/toastPageMutes';
+import { setCarDropNotifications } from '../utils/carDropNotifications';
 import { clearStaffPortalSession, isStaffPortalTokenValid, setStaffPortalToken, getOrCreateStaffPortalDeviceId } from '../utils/staffPortalSession';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readDashboardSessionCache, writeDashboardSessionUserProgress, clearDashboardSessionCache } from '../utils/dashboardSessionCache';
@@ -1816,6 +1817,7 @@ export default function Layout({ children }) {
       } catch (_) { /* ignore */ }
       try {
         setToastMutedPages(userRes.data?.toast_muted_pages);
+        setCarDropNotifications(userRes.data?.car_drop_notifications);
       } catch (_) { /* ignore */ }
     } catch (error) {
       const status = error?.response?.status;

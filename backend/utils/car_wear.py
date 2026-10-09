@@ -163,7 +163,7 @@ async def _delete_and_notify(db, doomed: List[dict]) -> int:
         if not message:
             continue
         try:
-            await send_notification(uid, "Cars lost", message, "system", always_deliver=True)
+            await send_notification(uid, "Cars lost", message, "system", category="car_drops")
         except Exception:
             logger.exception("car wear notify failed user=%s", uid)
     try:

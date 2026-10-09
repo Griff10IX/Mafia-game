@@ -2582,6 +2582,7 @@ def register(router):
                 slow_bodyguard_hire_inflation_active=_timed_perk_active(u.get("slow_bodyguard_hire_inflation_until")),
                 censor_profanity=bool(u.get("censor_profanity", False)),
                 toast_muted_pages=normalize_toast_muted_pages(u.get("toast_muted_pages")),
+                car_drop_notifications=(u.get("notification_preferences") or {}).get("car_drops") is not False,
                 referred_by=referred_by_legacy,
                 referred_by_username=referred_by_username,
                 referred_by_ids=list(ref_ids),

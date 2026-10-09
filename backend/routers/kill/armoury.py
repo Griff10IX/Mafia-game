@@ -637,6 +637,10 @@ class PlayerRedeemCancelRequest(BaseModel):
     code: str
 
 
+class CasinoLossCurrencyRequest(BaseModel):
+    currency: str
+
+
 
 def _normalize_state(state: str) -> str:
     if not state or not (state or "").strip():
@@ -3302,6 +3306,22 @@ async def cancel_player_redeem_code_route(
     }
 
 
+async def set_casino_loss_relic_currency(
+    body: CasinoLossCurrencyRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    from utils.casino_loss_relics import set_payout_currency
+
+    return await set_payout_currency(db, current_user["id"], body.currency)
+
+
+async def collect_casino_loss_relic(current_user: dict = Depends(get_current_user)):
+    from server import log_points_event
+    from utils.casino_loss_relics import collect_unclaimed
+
+    return await collect_unclaimed(db, current_user, log_points_event=log_points_event)
+
+
 async def get_inventory(request: Request, current_user: dict = Depends(get_current_user)):
     """Aggregate weapons, armour, loot exclusives, and consumable tokens for the My Inventory page."""
     uid = current_user["id"]
@@ -3364,6 +3384,13 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
         safehouse_info = await safehouse_inventory_info(db, uid)
     except Exception:
         logger.exception("inventory safehouse failed")
+    casino_loss_relic = None
+    try:
+        from utils.casino_loss_relics import owner_view as casino_loss_relic_view
+
+        casino_loss_relic = await casino_loss_relic_view(db, uid)
+    except Exception:
+        logger.exception("inventory casino loss relic failed")
     fresh_user = await db.users.find_one({"id": uid}, {"_id": 0})
     udoc = fresh_user or current_user
     # Commissioner's Pardon: weekly points / monthly skips while owned
@@ -3423,6 +3450,7 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
             "has_safehouse": safehouse_info is not None,
             "safehouse": safehouse_info,
             "commissioners_pardon": pardon_info,
+            "casino_loss_relic": casino_loss_relic,
         },
         "tokens": tokens,
         "auto_collect": auto_collect_info,
@@ -3487,3 +3515,5 @@ def register(router):
     )
     router.add_api_route("/inventory/redeem-codes", create_player_redeem_code_route, methods=["POST"])
     router.add_api_route("/inventory/redeem-codes/cancel", cancel_player_redeem_code_route, methods=["POST"])
+    router.add_api_route("/inventory/casino-loss-relic/currency", set_casino_loss_relic_currency, methods=["POST"])
+    router.add_api_route("/inventory/casino-loss-relic/collect", collect_casino_loss_relic, methods=["POST"])

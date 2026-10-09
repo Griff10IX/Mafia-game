@@ -196,6 +196,7 @@ export default function MyInventory() {
   const [redeemTokenType, setRedeemTokenType] = useState('');
   const [redeemTokenAmount, setRedeemTokenAmount] = useState('1');
   const [redeemTokenRows, setRedeemTokenRows] = useState([]);
+  const [relicBusy, setRelicBusy] = useState('');
 
   const fetchInventory = (silent = false) => {
     api
@@ -632,6 +633,55 @@ export default function MyInventory() {
   const hasSafehouse = loot.has_safehouse === true;
   const safehouseInfo = loot.safehouse || null;
   const commissionersPardon = loot.commissioners_pardon || null;
+  const casinoLossRelic = loot.casino_loss_relic || null;
+
+  const saveRelicCurrency = async (currency) => {
+    if (!casinoLossRelic || relicBusy) return;
+    setRelicBusy(currency);
+    try {
+      const res = await api.post('/inventory/casino-loss-relic/currency', { currency });
+      const relic = res?.data?.relic;
+      if (relic) {
+        setData((d) => (d ? { ...d, loot_exclusives: { ...(d.loot_exclusives || {}), casino_loss_relic: relic } } : d));
+        _cachedInventory = _cachedInventory
+          ? { ..._cachedInventory, loot_exclusives: { ...(_cachedInventory.loot_exclusives || {}), casino_loss_relic: relic } }
+          : _cachedInventory;
+      }
+      toast.success(currency === 'points' ? 'Weekly rebate set to points' : 'Weekly rebate set to cash');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not change that');
+    } finally {
+      setRelicBusy('');
+    }
+  };
+
+  const collectRelic = async () => {
+    if (!casinoLossRelic || relicBusy) return;
+    setRelicBusy('collect');
+    try {
+      const res = await api.post('/inventory/casino-loss-relic/collect');
+      const relic = res?.data?.relic;
+      if (relic) {
+        setData((d) => (d ? { ...d, loot_exclusives: { ...(d.loot_exclusives || {}), casino_loss_relic: relic } } : d));
+      }
+      const cash = Number(res?.data?.collected_cash || 0);
+      const points = Number(res?.data?.collected_points || 0);
+      const bits = [];
+      if (cash > 0) bits.push(`$${cash.toLocaleString()}`);
+      if (points > 0) bits.push(`${points.toLocaleString()} points`);
+      toast.success(bits.length ? `Collected ${bits.join(' and ')}` : 'Collected');
+      refreshUser({
+        money: res?.data?.money,
+        points: res?.data?.points,
+        skipFetch: true,
+      });
+      fetchInventory(true);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not collect');
+    } finally {
+      setRelicBusy('');
+    }
+  };
   const isAdmin = data?.is_admin === true;
   const tokens = data?.tokens || {};
 
@@ -723,7 +773,7 @@ export default function MyInventory() {
     const until = tokens[key]?.active_until;
     return until && new Date(until) > nowDate;
   });
-  const hasExclusives = exclusiveCars.length > 0 || hasSpeakeasy || hasSafehouse || !!commissionersPardon;
+  const hasExclusives = exclusiveCars.length > 0 || hasSpeakeasy || hasSafehouse || !!commissionersPardon || !!casinoLossRelic;
 
   const tabs = [
     { id: 'weapons', label: 'Weapons', icon: Swords, count: weapons.length },
@@ -731,7 +781,7 @@ export default function MyInventory() {
     { id: 'tokens', label: 'Tokens', icon: Zap, count: heldTokenKeys.length },
     { id: 'active', label: 'In use', icon: Clock, count: activeTokenKeys.length },
     ...(hasExclusives
-      ? [{ id: 'exclusives', label: 'Exclusives', icon: Gift, count: exclusiveCars.length + (hasSpeakeasy ? 1 : 0) + (hasSafehouse ? 1 : 0) + (commissionersPardon ? 1 : 0) }]
+      ? [{ id: 'exclusives', label: 'Exclusives', icon: Gift, count: exclusiveCars.length + (hasSpeakeasy ? 1 : 0) + (hasSafehouse ? 1 : 0) + (commissionersPardon ? 1 : 0) + (casinoLossRelic ? 1 : 0) }]
       : []),
   ];
   const currentTab = tabs.some((t) => t.id === activeTab) ? activeTab : 'weapons';
@@ -1362,6 +1412,52 @@ export default function MyInventory() {
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Loot Exclusives</h2>
             </div>
             <div className="p-2.5 space-y-2">
+              {casinoLossRelic && (
+                <div className="inv-item relative overflow-hidden rounded-lg border border-primary/30 bg-primary/5 p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Gift size={14} className="text-primary shrink-0" />
+                    <span className="text-[12px] font-heading font-bold text-primary tracking-wide">
+                      {casinoLossRelic.name}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-mutedForeground font-heading leading-snug">
+                    {casinoLossRelic.buff_label}
+                  </p>
+                  <p className="text-[9px] text-mutedForeground font-heading mt-1">
+                    Collect on Friday, or leave it and let the next week stack on top.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {['cash', 'points'].map((currency) => (
+                      <button
+                        key={currency}
+                        type="button"
+                        disabled={!!relicBusy}
+                        onClick={() => saveRelicCurrency(currency)}
+                        className={`px-2 py-1 rounded border text-[9px] font-heading uppercase tracking-wider disabled:opacity-50 ${
+                          casinoLossRelic.payout_currency === currency
+                            ? 'border-primary/50 bg-primary/20 text-primary'
+                            : 'border-zinc-600/50 bg-zinc-800/40 text-zinc-300'
+                        }`}
+                      >
+                        {relicBusy === currency ? '…' : currency}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                    <span className="text-mutedForeground">Waiting</span>
+                    <span className="text-emerald-300">${Number(casinoLossRelic.unclaimed_cash || 0).toLocaleString()}</span>
+                    <span className="text-primary">{Number(casinoLossRelic.unclaimed_points || 0).toLocaleString()} pts</span>
+                    <button
+                      type="button"
+                      disabled={!!relicBusy || (Number(casinoLossRelic.unclaimed_cash || 0) <= 0 && Number(casinoLossRelic.unclaimed_points || 0) <= 0)}
+                      onClick={collectRelic}
+                      className="ml-auto px-2 py-1 rounded border border-primary/50 bg-primary/15 text-[9px] font-heading font-bold uppercase tracking-wider text-primary disabled:opacity-50"
+                    >
+                      {relicBusy === 'collect' ? '…' : 'Collect'}
+                    </button>
+                  </div>
+                </div>
+              )}
               {exclusiveCars.map((c) => (
                 <div key={c.id || c.car_id || c.name} className="inv-item flex items-center gap-2 py-2">
                   <Car size={12} className="text-amber-400 shrink-0" />

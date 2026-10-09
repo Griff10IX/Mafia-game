@@ -353,7 +353,7 @@ function RewardIcon({ type, rarity, animLevel = 0 }) {
     property: Building2, cash: Coins,
     points: Zap, rank_points: Zap, perk: Zap,
     bullets: Package, cars: Car, token: Gift, loot_pieces: Puzzle,
-    weed_strain: Leaf, reclaimable_passive: Gem,
+    weed_strain: Leaf, reclaimable_passive: Gem, casino_loss_relic: Gem,
   };
   const Icon = iconMap[type] || Gift;
   let wrap = 'bg-primary/10 border-primary/30';
@@ -395,6 +395,10 @@ function rewardLabel(reward) {
     case 'reclaimable_passive': {
       const buff = reward.buff_label ? ` — ${reward.buff_label}` : '';
       return `${reward.name || 'Vault relic'}${buff}`;
+    }
+    case 'casino_loss_relic': {
+      const buff = reward.buff_label ? ` — ${reward.buff_label}` : '';
+      return `${reward.name || 'Relic'}${buff}`;
     }
     case 'points': {
       const amt = reward.amount ?? reward.points ?? reward.value;
@@ -797,6 +801,22 @@ function ResultModal({ result, onClose, openAnimLevel = 0 }) {
   const paidTier = result.paid_tier || result.box_quality || 'common';
   const theme = LOOT_TIER_THEME[paidTier] || LOOT_TIER_THEME.common;
   const sorted = sortRewardsForReveal(rewards, paidTier);
+  const [relicChoice, setRelicChoice] = useState({});
+  const [relicSaving, setRelicSaving] = useState(false);
+
+  const chooseRelicCurrency = async (currency) => {
+    if (relicSaving) return;
+    setRelicSaving(true);
+    try {
+      await api.post('/inventory/casino-loss-relic/currency', { currency });
+      setRelicChoice((prev) => ({ ...prev, picked: currency }));
+      toast.success(currency === 'points' ? 'Weekly rebate set to points' : 'Weekly rebate set to cash');
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Could not save that choice');
+    } finally {
+      setRelicSaving(false);
+    }
+  };
 
   return (
     <div
@@ -878,6 +898,31 @@ function ResultModal({ result, onClose, openAnimLevel = 0 }) {
                     </span>
                   )}
                 </div>
+                {r.type === 'casino_loss_relic' && !r.payout_currency && !relicChoice.picked && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    <button
+                      type="button"
+                      disabled={relicSaving}
+                      onClick={() => chooseRelicCurrency('cash')}
+                      className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-[9px] font-heading uppercase tracking-wider text-primary disabled:opacity-50"
+                    >
+                      Cash
+                    </button>
+                    <button
+                      type="button"
+                      disabled={relicSaving}
+                      onClick={() => chooseRelicCurrency('points')}
+                      className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-[9px] font-heading uppercase tracking-wider text-primary disabled:opacity-50"
+                    >
+                      Points
+                    </button>
+                  </div>
+                )}
+                {r.type === 'casino_loss_relic' && (r.payout_currency || relicChoice.picked) && (
+                  <p className="mt-1 text-[9px] font-heading text-mutedForeground">
+                    Paying in {r.payout_currency || relicChoice.picked}. Change it in My Inventory.
+                  </p>
+                )}
               </div>
             </li>
             );
