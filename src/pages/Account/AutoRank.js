@@ -162,7 +162,7 @@ function formatRewardBits(rewards) {
 
 const ManagerBuyCard = ({ prefs, pointBalance, buying, onBuy }) => {
   const owned = !!prefs?.auto_rank_events_unlocked;
-  if (owned) return null;
+  if (owned || prefs?.auto_events_maintenance) return null;
   const cost = prefs?.auto_rank_events_cost || 2000;
   const points = Number(pointBalance ?? prefs?.points ?? 0);
   const can = !!prefs?.auto_rank_has_access && points >= cost;
@@ -200,7 +200,53 @@ const ManagerToggleRow = ({ label, checked, disabled, onChange }) => (
 const BUY_BULLETS_AMOUNT_MIN = 1;
 const BUY_BULLETS_AMOUNT_MAX = 250000;
 
-const ManagerBuyBulletsAmount = ({ prefs, disabled, onSave }) => {
+const SPEND_ALLOWANCE_MAX = 50000000;
+
+const ManagerSpendAllowance = ({ label, saved, disabled, onSave }) => {
+  const shown = Math.max(0, Math.min(SPEND_ALLOWANCE_MAX, Number(saved) || 0));
+  const [draft, setDraft] = useState(String(shown));
+  useEffect(() => {
+    setDraft(String(shown));
+  }, [shown]);
+  const commit = () => {
+    const n = Math.max(0, Math.min(SPEND_ALLOWANCE_MAX, parseInt(String(draft).replace(/,/g, ''), 10) || 0));
+    setDraft(String(n));
+    if (n !== shown) onSave(n);
+  };
+  return (
+    <label className="block space-y-1">
+      <span className="text-[11px] sm:text-xs font-heading text-foreground">{label}</span>
+      <div className="flex gap-2 items-center">
+        <input
+          type="number"
+          min={0}
+          max={SPEND_ALLOWANCE_MAX}
+          value={draft}
+          disabled={disabled}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commit();
+            }
+          }}
+          className="flex-1 min-w-0 px-2.5 py-1.5 rounded bg-zinc-800/80 border border-zinc-700/50 text-foreground font-heading text-[10px] sm:text-xs focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 disabled:opacity-50"
+        />
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={commit}
+          className="shrink-0 min-h-[36px] px-3 rounded-lg bg-primary/20 border border-primary/50 text-primary font-heading text-[10px] font-bold uppercase tracking-wide disabled:opacity-50 touch-manipulation"
+        >
+          Save
+        </button>
+      </div>
+    </label>
+  );
+};
+
+const ManagerBuyBulletsAmount = ({ prefs, disabled, onSave, onSaveAllowance }) => {
   const saved = Math.min(
     BUY_BULLETS_AMOUNT_MAX,
     Math.max(BUY_BULLETS_AMOUNT_MIN, Number(prefs?.auto_rank_events_buy_bullets_amount) || 5000)
@@ -249,7 +295,22 @@ const ManagerBuyBulletsAmount = ({ prefs, disabled, onSave }) => {
         </button>
       </div>
       <p className="text-[9px] text-zinc-500 font-heading">
-        When short for hitlist kills, buys this many from the Points Store at a time until there are enough (costs points).
+        When short for hitlist kills, buys this many from the Points Store at a time. It spends only the points and respect you allow below.
+      </p>
+      <ManagerSpendAllowance
+        label="Points it may spend"
+        saved={prefs?.auto_rank_events_points_allowance}
+        disabled={disabled}
+        onSave={(n) => onSaveAllowance('auto_rank_events_points_allowance', n)}
+      />
+      <ManagerSpendAllowance
+        label="Respect it may spend"
+        saved={prefs?.auto_rank_events_respect_allowance}
+        disabled={disabled}
+        onSave={(n) => onSaveAllowance('auto_rank_events_respect_allowance', n)}
+      />
+      <p className="text-[9px] text-zinc-500 font-heading">
+        Nothing is spent until you set an amount. Respect is used first, then points, and only up to these. The numbers fall as it spends. Set them again to allow more. 0 blocks that one.
       </p>
     </div>
   );
@@ -348,6 +409,8 @@ const AdminDiagnosticsPanel = ({ inspectData, inspectLoading, inspectError, insp
                 <div><span className="text-zinc-500">Missions:</span> {inspectData.preferences?.auto_rank_missions_enabled ? 'on' : 'off'}</div>
                 <div><span className="text-zinc-500">Buy bullets:</span> {inspectData.preferences?.auto_rank_events_buy_bullets ? 'on' : 'off'}</div>
                 <div><span className="text-zinc-500">Buy amount:</span> {(inspectData.preferences?.auto_rank_events_buy_bullets_amount || 5000).toLocaleString()}</div>
+                <div><span className="text-zinc-500">Points left to spend:</span> {Number(inspectData.preferences?.auto_rank_events_points_allowance || 0).toLocaleString()}</div>
+                <div><span className="text-zinc-500">Respect left to spend:</span> {Number(inspectData.preferences?.auto_rank_events_respect_allowance || 0).toLocaleString()}</div>
                 <div><span className="text-zinc-500">Events:</span> {(inspectData.preferences?.auto_rank_event_ids || []).join(', ') || 'none'}</div>
                 <div><span className="text-zinc-500">Working:</span> {inspectData.preferences?.auto_rank_current_mission || '—'}</div>
                 <div><span className="text-zinc-500">Last mission:</span> {inspectData.preferences?.auto_rank_mission_rewards?.[0]?.mission_name || '—'}{inspectData.preferences?.auto_rank_mission_rewards?.[0] ? ` — ${formatRewardBits(inspectData.preferences.auto_rank_mission_rewards[0].rewards)}` : ''}</div>
@@ -2231,6 +2294,8 @@ export default function AutoRank() {
             auto_rank_missions_enabled: !!meRes.data.auto_rank_missions_enabled,
             auto_rank_events_buy_bullets: !!meRes.data.auto_rank_events_buy_bullets,
             auto_rank_events_buy_bullets_amount: Math.min(250000, Math.max(1, Number(meRes.data.auto_rank_events_buy_bullets_amount) || 5000)),
+            auto_rank_events_points_allowance: Math.max(0, Number(meRes.data.auto_rank_events_points_allowance) || 0),
+            auto_rank_events_respect_allowance: Math.max(0, Number(meRes.data.auto_rank_events_respect_allowance) || 0),
             auto_rank_events_cost: meRes.data.auto_rank_events_cost || 2000,
             auto_rank_live_event_name: meRes.data.auto_rank_live_event_name || '',
             auto_rank_live_event_id: meRes.data.auto_rank_live_event_id || '',
@@ -2424,6 +2489,8 @@ export default function AutoRank() {
         auto_rank_missions_enabled: res.data?.auto_rank_missions_enabled ?? p?.auto_rank_missions_enabled,
         auto_rank_events_buy_bullets: res.data?.auto_rank_events_buy_bullets ?? p?.auto_rank_events_buy_bullets,
         auto_rank_events_buy_bullets_amount: res.data?.auto_rank_events_buy_bullets_amount ?? p?.auto_rank_events_buy_bullets_amount,
+        auto_rank_events_points_allowance: res.data?.auto_rank_events_points_allowance ?? p?.auto_rank_events_points_allowance,
+        auto_rank_events_respect_allowance: res.data?.auto_rank_events_respect_allowance ?? p?.auto_rank_events_respect_allowance,
         auto_rank_event_rewards: res.data?.auto_rank_event_rewards ?? p?.auto_rank_event_rewards,
         auto_rank_mission_rewards: res.data?.auto_rank_mission_rewards ?? p?.auto_rank_mission_rewards,
         auto_rank_live_event_name: res.data?.auto_rank_live_event_name ?? p?.auto_rank_live_event_name,
@@ -2920,6 +2987,11 @@ export default function AutoRank() {
       {/* ─── Admin ─── */}
       {(currentTab === 'events' || currentTab === 'missions') && (
         <div className="space-y-3 ar-fade-in">
+          {prefs?.auto_events_maintenance ? (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] font-heading text-amber-100">
+              Auto events is down for maintenance. Events and missions have to be done by hand. Normal Auto Rank is still on.
+            </div>
+          ) : null}
           <ManagerBuyCard
             prefs={prefs}
             pointBalance={authUser?.points != null ? authUser.points : prefs?.points}
@@ -2939,20 +3011,21 @@ export default function AutoRank() {
                   key={ev.id}
                   label={ev.name}
                   checked={(prefs?.auto_rank_event_ids || []).includes(ev.id)}
-                  disabled={savingPrefs}
+                  disabled={savingPrefs || !!prefs?.auto_events_maintenance}
                   onChange={() => toggleEventId(ev.id)}
                 />
               ))}
               <ManagerToggleRow
                 label="Buy store bullets when hitlist kills are short (Hitlist Hunt + Auto missions)"
                 checked={!!prefs?.auto_rank_events_buy_bullets}
-                disabled={savingPrefs}
+                disabled={savingPrefs || !!prefs?.auto_events_maintenance}
                 onChange={(v) => updatePref('auto_rank_events_buy_bullets', v)}
               />
               <ManagerBuyBulletsAmount
                 prefs={prefs}
-                disabled={savingPrefs}
+                disabled={savingPrefs || !!prefs?.auto_events_maintenance}
                 onSave={(n) => updatePref('auto_rank_events_buy_bullets_amount', n)}
+                onSaveAllowance={(key, n) => updatePref(key, n)}
               />
               <div className="space-y-2">
                 <h2 className="text-[10px] font-heading font-bold uppercase tracking-wider text-primary">Past event rewards</h2>
@@ -2972,19 +3045,20 @@ export default function AutoRank() {
               <ManagerToggleRow
                 label="Auto missions"
                 checked={!!prefs?.auto_rank_missions_enabled}
-                disabled={savingPrefs}
+                disabled={savingPrefs || !!prefs?.auto_events_maintenance}
                 onChange={(v) => updatePref('auto_rank_missions_enabled', v)}
               />
               <ManagerToggleRow
                 label="Buy store bullets when mission hitlist kills are short"
                 checked={!!prefs?.auto_rank_events_buy_bullets}
-                disabled={savingPrefs}
+                disabled={savingPrefs || !!prefs?.auto_events_maintenance}
                 onChange={(v) => updatePref('auto_rank_events_buy_bullets', v)}
               />
               <ManagerBuyBulletsAmount
                 prefs={prefs}
-                disabled={savingPrefs}
+                disabled={savingPrefs || !!prefs?.auto_events_maintenance}
                 onSave={(n) => updatePref('auto_rank_events_buy_bullets_amount', n)}
+                onSaveAllowance={(key, n) => updatePref(key, n)}
               />
               <p className="text-[10px] text-zinc-500 font-heading">
                 Same buy setting as Auto events. When on, Auto missions tops up Points Store bullets before shooting found hitlist NPCs.

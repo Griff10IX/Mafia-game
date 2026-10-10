@@ -266,7 +266,7 @@ BANK_INTEREST_OPTIONS = [
     {"hours": 12, "rate": 0.0125},  # 1.25%
     {"hours": 24, "rate": 0.025},   # 2.5%
     {"hours": 48, "rate": 0.06},    # 6%
-    {"hours": 72, "rate": 0.10},    # 10%
+    {"hours": 120, "rate": 0.10},   # 10% over 5 days
 ]
 
 # Health & armour: health 0-100, armour 0-7. Bullets to kill clamped to [MIN_BULLETS_TO_KILL, MAX_BULLETS_TO_KILL]

@@ -187,7 +187,7 @@ const InterestBankCard = ({
 }) => {
   const limit = Number(overview?.interest_limit ?? meta?.interest_max_unclaimed_principal ?? 0);
   const principal = Number(overview?.interest_principal ?? 0);
-  const hardMax = Number(overview?.interest_limit_max ?? meta?.interest_limit_max ?? 50_000_000_000);
+  const hardMax = Number(overview?.interest_limit_max ?? meta?.interest_limit_max ?? 200_000_000_000);
   const step = Number(overview?.interest_limit_step ?? meta?.interest_limit_step ?? 2_500_000_000);
   const cost = Number(overview?.interest_limit_upgrade_cost ?? meta?.interest_limit_upgrade_cost ?? 1000);
   const atMax = !!overview?.interest_limit_at_max || (limit > 0 && limit >= hardMax);

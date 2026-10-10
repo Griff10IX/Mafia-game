@@ -1889,28 +1889,29 @@ async def open_loot_box(
             except Exception:
                 logger.exception("BJ card back loot grant failed user=%s", user_id)
 
-        try:
-            from utils.casino_loss_relics import note_open_and_maybe_grant
+            # Henhouse Slip and Black Box roll on Ultra Rare opens only.
+            try:
+                from utils.casino_loss_relics import note_open_and_maybe_grant
 
-            relic_reward = await note_open_and_maybe_grant(
-                db,
-                user_id=user_id,
-                username=current_user.get("username") if current_user else None,
-                rng=_rng,
-            )
-            if relic_reward:
-                rewards.append(relic_reward)
-                try:
-                    await send_notification(
-                        user_id,
-                        "Loot box",
-                        f"You claimed {relic_reward.get('name')}. Choose cash or points. It pays every Friday at 6pm UK.",
-                        "reward",
-                    )
-                except Exception:
-                    pass
-        except Exception:
-            logger.exception("casino loss relic loot grant failed user=%s", user_id)
+                relic_reward = await note_open_and_maybe_grant(
+                    db,
+                    user_id=user_id,
+                    username=current_user.get("username") if current_user else None,
+                    rng=_rng,
+                )
+                if relic_reward:
+                    rewards.append(relic_reward)
+                    try:
+                        await send_notification(
+                            user_id,
+                            "Loot box",
+                            f"You claimed {relic_reward.get('name')}. Choose cash or points. It pays every Friday at 6pm UK.",
+                            "reward",
+                        )
+                    except Exception:
+                        pass
+            except Exception:
+                logger.exception("casino loss relic loot grant failed user=%s", user_id)
 
         if merged_inc or merged_set:
             update = {}

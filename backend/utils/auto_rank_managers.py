@@ -11,6 +11,8 @@ from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 
 AUTO_EVENTS_COST_POINTS = 2000
+AUTO_EVENTS_MAINTENANCE_KEY = "auto_events_maintenance"
+AUTO_EVENTS_MAINTENANCE_DETAIL = "Auto events is down for maintenance. Do events and missions yourself."
 BUY_BULLETS_AMOUNT_MIN = 1
 BUY_BULLETS_AMOUNT_MAX = 250_000  # Points Store max per purchase
 BUY_BULLETS_AMOUNT_DEFAULT = 5000
@@ -46,6 +48,11 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+async def auto_events_in_maintenance(db) -> bool:
+    doc = await db.game_settings.find_one({"key": AUTO_EVENTS_MAINTENANCE_KEY}, {"_id": 0, "value": 1})
+    return bool((doc or {}).get("value"))
+
+
 async def cached_live_contest(db) -> Dict[str, str]:
     now = time.monotonic()
     if _CONTEST_CACHE["type_id"] and (now - float(_CONTEST_CACHE["at"])) < _CACHE_SECONDS:
@@ -66,6 +73,23 @@ def _event_ids(user: dict) -> List[str]:
     if not isinstance(raw, list):
         return []
     return [str(x) for x in raw if str(x).strip()]
+
+
+EVENTS_SPEND_ALLOWANCE_MAX = 50_000_000
+_SPEND_ALLOWANCE_FIELDS = {
+    "points": "auto_rank_events_points_allowance",
+    "respect": "auto_rank_events_respect_allowance",
+}
+
+
+def spend_allowance(user: dict, kind: str) -> int:
+    """Remaining points or respect Auto events may still spend. Unset means none."""
+    raw = (user or {}).get(_SPEND_ALLOWANCE_FIELDS[kind])
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(EVENTS_SPEND_ALLOWANCE_MAX, n))
 
 
 def buy_bullets_amount_for_user(user: dict) -> int:
@@ -92,6 +116,8 @@ def managers_enabled(user: dict, live_type: str) -> tuple[bool, bool]:
 async def consume_manager_wake(db, user: dict) -> bool:
     """True when this wake was used by a manager and the normal cycle should not also run."""
     if not user or not user.get("id"):
+        return False
+    if await auto_events_in_maintenance(db):
         return False
     try:
         live = await cached_live_contest(db)
@@ -401,20 +427,69 @@ async def _one_gta(db, user: dict) -> bool:
 
 
 async def _one_melt(db, user: dict) -> bool:
-    return await _melt_one(db, user, action="bullets", rarity=None)
+    """One melt or scrap, using the same Auto Rank melt actions and rarity ticks.
+
+    Bullets uses the melt rarities. Cash uses the scrap rarities. Both ticked rotates
+    one car per wake so neither option is skipped while the other still has cars.
+    """
+    from routers.account.auto_rank import selected_garage_rarities
+
+    raw = user.get("auto_rank_melt_action_ids") or []
+    if not isinstance(raw, list):
+        return False
+    actions = [a for a in raw if a in ("bullets", "cash")]
+    if not actions:
+        return False
+    if len(actions) == 2:
+        slot = int(user.get("auto_rank_event_melt_step") or 0) % 2
+        await db.users.update_one({"id": user["id"]}, {"$set": {"auto_rank_event_melt_step": (slot + 1) % 2}})
+        actions = actions[slot:] + actions[:slot]
+    for action in actions:
+        allowed = selected_garage_rarities(user, scrap=(action == "cash"))
+        if not allowed:
+            continue
+        if await _melt_one(db, user, action=action, allowed_rarities=allowed):
+            return True
+    return False
 
 
 async def _one_scrap_uncommon(db, user: dict) -> bool:
     return await _melt_one(db, user, action="cash", rarity="uncommon")
 
 
-async def _melt_one(db, user: dict, *, action: str, rarity: Optional[str]) -> bool:
-    from routers.cars.gta import CARS, _MARKET_EXCLUSIVE_RARITIES, melt_cars_locked
+async def _melt_one(
+    db,
+    user: dict,
+    *,
+    action: str,
+    rarity: Optional[str] = None,
+    allowed_rarities: Optional[set] = None,
+) -> bool:
+    from routers.cars.gta import CARS, _MARKET_EXCLUSIVE_RARITIES, _catalog_car_ids_for_rarities, melt_cars_locked
 
-    rows = await db.user_cars.find({"user_id": user["id"]}, {"_id": 0, "id": 1, "car_id": 1, "rarity": 1, "listed_for_sale": 1}).to_list(200)
+    query: Dict[str, Any] = {"user_id": user["id"], "listed_for_sale": {"$ne": True}}
+    if allowed_rarities is not None:
+        catalog_ids = _catalog_car_ids_for_rarities(allowed_rarities)
+        if not catalog_ids:
+            return False
+        query["car_id"] = {"$in": catalog_ids}
+        rows = await db.user_cars.find(query, {"_id": 0, "id": 1}).to_list(20)
+        for uc in rows:
+            if not uc.get("id"):
+                continue
+            result = await melt_cars_locked(
+                user, [uc["id"]], action, manual_garage=False, allowed_rarities=set(allowed_rarities)
+            )
+            if result.get("cooldown") or result.get("exclusive_war_lock"):
+                return False
+            if result.get("success"):
+                return True
+        return False
+
+    rows = await db.user_cars.find(query, {"_id": 0, "id": 1, "car_id": 1, "rarity": 1}).to_list(200)
     catalog = {c.get("id"): c for c in (CARS or [])}
     for uc in rows:
-        if uc.get("listed_for_sale") or not uc.get("id"):
+        if not uc.get("id"):
             continue
         info = catalog.get(uc.get("car_id")) or {}
         car_rarity = str(info.get("rarity") or uc.get("rarity") or "common").strip().lower()
@@ -548,11 +623,83 @@ async def _buy_rarity(user: dict, rarity: str) -> bool:
     return True
 
 
+def _events_bullet_spend(user: dict, points_cost: int) -> Optional[tuple]:
+    """Respect and points this bullet buy may use. None when the allowances cannot cover it.
+
+    Respect is used first, and only up to the respect allowance. The rest must fit
+    in the points allowance. Either allowance at 0 blocks that currency.
+    """
+    from routers.game.store import _store_max_points_coverable_by_respect, _store_respect_cost_for_points
+
+    points_cost = int(points_cost)
+    if points_cost <= 0:
+        return None
+    respect_budget = min(int(user.get("respect_points") or 0), spend_allowance(user, "respect"))
+    points_budget = min(int(user.get("points") or 0), spend_allowance(user, "points"))
+    covered_by_respect = _store_max_points_coverable_by_respect(respect_budget, points_cost)
+    respect_spent = _store_respect_cost_for_points(covered_by_respect)
+    points_spent = points_cost - covered_by_respect
+    if points_spent > points_budget:
+        return None
+    if respect_spent <= 0 and points_spent <= 0:
+        return None
+    return respect_spent, points_spent
+
+
+async def _bullet_store_cost(bullets: int) -> int:
+    from routers.game.store import BULLET_PACKS, _bullet_cost
+
+    cost = BULLET_PACKS.get(int(bullets))
+    if cost is None:
+        cost = _bullet_cost(int(bullets))
+    try:
+        from server import get_effective_event
+
+        mult = float((await get_effective_event()).get("armour_weapon_cost", 1.0) or 1.0)
+    except Exception:
+        mult = 1.0
+    full = int(cost)
+    if mult > 0 and mult != 1.0:
+        return max(1, int(full * mult))
+    return full
+
+
 async def _buy_bullets(user: dict, amount: int) -> bool:
-    """Buy bullets from the Points Store (not the city armoury factory)."""
+    """Buy bullets from the Points Store, capped by the player's spend allowances."""
+    import server as srv
     from routers.game.store import store_buy_bullets
 
-    await store_buy_bullets(bullets=int(amount), pay_with="auto", current_user=user)
+    bullets = int(amount)
+    split = _events_bullet_spend(user, await _bullet_store_cost(bullets))
+    if not split:
+        return False
+    respect_spent, points_spent = split
+    uid = user["id"]
+    query: Dict[str, Any] = {"id": uid}
+    inc: Dict[str, int] = {}
+    if respect_spent > 0:
+        query["auto_rank_events_respect_allowance"] = {"$gte": respect_spent}
+        inc["auto_rank_events_respect_allowance"] = -respect_spent
+    if points_spent > 0:
+        query["auto_rank_events_points_allowance"] = {"$gte": points_spent}
+        inc["auto_rank_events_points_allowance"] = -points_spent
+    reserved = await srv.db.users.update_one(query, {"$inc": inc})
+    if reserved.modified_count != 1:
+        return False
+    capped = {
+        **user,
+        "respect_points": min(int(user.get("respect_points") or 0), spend_allowance(user, "respect")),
+        "points": min(int(user.get("points") or 0), spend_allowance(user, "points")),
+    }
+    try:
+        await store_buy_bullets(bullets=bullets, pay_with="auto", current_user=capped)
+    except Exception:
+        await srv.db.users.update_one({"id": uid}, {"$inc": {key: -val for key, val in inc.items()}})
+        raise
+    if respect_spent > 0:
+        user["auto_rank_events_respect_allowance"] = spend_allowance(user, "respect") - respect_spent
+    if points_spent > 0:
+        user["auto_rank_events_points_allowance"] = spend_allowance(user, "points") - points_spent
     return True
 
 
@@ -745,6 +892,8 @@ def public_manager_fields(user: dict, live: Optional[Dict[str, str]] = None) -> 
         "auto_rank_missions_enabled": bool(user.get("auto_rank_missions_enabled")),
         "auto_rank_events_buy_bullets": bool(user.get("auto_rank_events_buy_bullets")),
         "auto_rank_events_buy_bullets_amount": buy_bullets_amount_for_user(user),
+        "auto_rank_events_points_allowance": spend_allowance(user, "points"),
+        "auto_rank_events_respect_allowance": spend_allowance(user, "respect"),
         "auto_rank_events_cost": AUTO_EVENTS_COST_POINTS,
         "auto_rank_live_event_id": live_type,
         "auto_rank_live_event_name": live.get("name") or "",

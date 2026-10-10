@@ -19,6 +19,7 @@ from utils.bank_economy_settings import (
     interest_limit_public,
     apply_interest_limit_upgrade,
     INTEREST_LIMIT_START,
+    INTEREST_LIMIT_HARD_MAX,
     INTEREST_LIMIT_UPGRADE_COST,
     INTEREST_LIMIT_UPGRADES_FIELD,
 )
@@ -205,7 +206,7 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
             detail=(
                 f"Maximum ${MAX_INTEREST_DEPOSITS:,} in active interest deposits allowed. "
                 f"You have ${current_total:,} deposited. You can deposit up to ${remaining:,} more. "
-                f"Raise the limit with points (1,000 pts per $2.5B, max $50,000,000,000)."
+                f"Raise the limit with points (1,000 pts per $2.5B, max ${INTEREST_LIMIT_HARD_MAX:,})."
             ),
         )
 
@@ -288,7 +289,7 @@ async def bank_interest_claim(request: BankDepositClaimRequest, current_user: di
 
 
 async def bank_interest_upgrade_limit(current_user: dict = Depends(get_current_user_verified)):
-    """Spend 1,000 points to raise the interest deposit cap by $2.5B, up to $50B."""
+    """Spend 1,000 points to raise the interest deposit cap by $2.5B, up to $200B."""
     from utils.point_provenance import log_points_event
 
     uid = current_user.get("id") or ""

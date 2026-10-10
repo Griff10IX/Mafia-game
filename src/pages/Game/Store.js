@@ -815,11 +815,11 @@ const UPGRADES = [
     ownedKey: null,
     stackWhileActive: true,
     needsConfirm: true,
-    disabledWhen: (u) => Number(u?.interest_limit ?? 0) >= 50_000_000_000,
-    desc: '+$2,500,000,000 interest deposit cap. Starts at $5,000,000,000; 1,000 points per step; max $50,000,000,000.',
+    disabledWhen: (u) => Number(u?.interest_limit ?? 0) >= 200_000_000_000,
+    desc: '+$2,500,000,000 interest deposit cap. Starts at $5,000,000,000; 1,000 points per step; max $200,000,000,000.',
     extra: (u) => {
       const cap = Number(u?.interest_limit) || (5_000_000_000 + Math.max(0, Number(u?.interest_limit_upgrades) || 0) * 2_500_000_000);
-      return { line: 'Cap', value: `$${Math.min(50_000_000_000, cap).toLocaleString()} / $50,000,000,000` };
+      return { line: 'Cap', value: `$${Math.min(200_000_000_000, cap).toLocaleString()} / $200,000,000,000` };
     },
   },
   {
@@ -1758,7 +1758,7 @@ export default function Store() {
     }
     if (u.id === 'garage' && (user?.garage_batch_limit ?? 0) >= 100) return false;
     if (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) return false;
-    if (u.id === 'interest-limit' && Number(user?.interest_limit ?? 0) >= 50_000_000_000) return false;
+    if (u.id === 'interest-limit' && Number(user?.interest_limit ?? 0) >= 200_000_000_000) return false;
     if (u.id === 'hitlist-npc-cap' && (Number(user?.hitlist_npc_bonus_slots) || 0) >= 3) return false;
     if (u.id === 'weed-daily-cap' && weedEmpireSummary?.at_max_sell_cap) return false;
     if (u.id === 'family-safe-deposit-tier' && familySafeDepositSummary?.at_max) return false;

@@ -6,10 +6,41 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-10-10[/color][/b] — [b]Interest bank[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Cap:[/b] The interest deposit cap can now go up to $200 billion.[/color]
+[*][color=#888888][b]5 days:[/b] The 10% term is 5 days, not 3. A full $200 billion deposit pays $20 billion interest.[/color]
+[*][color=#888888][b]Shorter terms:[/b] The 1 hour through 2 day rates are unchanged.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-10-10[/color][/b] — [b]Auto events[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Maintenance:[/b] Auto events is down for maintenance. Do events and missions yourself. Normal Auto Rank is still on.[/color]
+[*][color=#888888][b]Melt:[/b] Meltdown, and a mission that needs a melt, uses the same melt options as Auto Rank. Only the rarities you tick are melted or scrapped. A custom car stays unless Custom is ticked.[/color]
+[*][color=#888888][b]Spend limit:[/b] Auto events will not spend points or respect until you set how much of each it may use. Respect is used first, then points, and only up to those amounts. The numbers fall as it spends. Set them again to allow more. 0 blocks that one.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-10-10[/color][/b] — [b]Custom cars[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Refund:[/b] If Auto events melted a custom car you had not allowed, that car was refunded at 500 points. The note is in your inbox.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-10-09[/color][/b] — [b]Casino loss relics[/b][/size]
 [quote]
 [list]
-[*][color=#888888][b]Loot boxes:[/b] Two world-unique relics. You can hold only one.[/color]
+[*][color=#888888][b]Loot boxes:[/b] Two world-unique relics. Ultra Rare boxes only. You can hold only one.[/color]
 [*][color=#888888][b]Henhouse Slip:[/b] 2.5% of all Chicken Cross losses.[/color]
 [*][color=#888888][b]Black Box:[/b] 2.5% of all Crash losses.[/color]
 [*][color=#888888][b]Cash or points:[/b] Pick when you get it. My Inventory can switch it later. A switch only covers losses after the switch. Money already waiting stays in the currency it was earned in.[/color]

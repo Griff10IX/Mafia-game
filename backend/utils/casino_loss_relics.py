@@ -1,8 +1,9 @@
 """
 Two world-unique loot relics. Drop rules stay server-side.
 
-A player can hold only one. Opens 1–100 never roll. Later opens have a flat
-chance when a relic is free. Death clears the owner and the unclaimed stack.
+A player can hold only one. Only Ultra Rare opens can roll them. The first
+100 Ultra Rare opens never roll. Later Ultra Rare opens have a flat chance
+when a relic is free. Death clears the owner and the unclaimed stack.
 Friday 18:00 Europe/London adds 2.5% of that game's net loss to the stack.
 """
 from __future__ import annotations
@@ -249,7 +250,7 @@ async def note_open_and_maybe_grant(
     username: Optional[str],
     rng,
 ) -> Optional[Dict[str, Any]]:
-    """Count this open. Roll only after the gate, and only when a relic is free."""
+    """Count this Ultra Rare open. Roll only after the gate, and only when a relic is free."""
     if not user_id:
         return None
     updated = await db.users.find_one_and_update(

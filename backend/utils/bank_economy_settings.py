@@ -7,10 +7,10 @@ KEY_SWISS_DEFAULT = "bank_swiss_default_limit"
 KEY_INTEREST_MAX = "bank_interest_max_unclaimed_principal"
 KEY_INTEREST_OPTIONS = "bank_interest_options"
 
-# Personal interest cap: start $5B, 1000 points per +$2.5B, hard max $50B.
+# Personal interest cap: start $5B, 1000 points per +$2.5B, hard max $200B.
 INTEREST_LIMIT_START = 5_000_000_000
 INTEREST_LIMIT_STEP = 2_500_000_000
-INTEREST_LIMIT_HARD_MAX = 50_000_000_000
+INTEREST_LIMIT_HARD_MAX = 200_000_000_000
 INTEREST_LIMIT_UPGRADE_COST = 1000
 INTEREST_LIMIT_UPGRADES_FIELD = "interest_limit_upgrades"
 _LEGACY_INTEREST_MAX = 50_000_000
@@ -124,13 +124,13 @@ async def apply_interest_limit_upgrade(db, uid: str, *, inc: Dict[str, Any], gte
     start = int(cfg["interest_max_unclaimed_principal"])
     max_upgrades = interest_limit_max_upgrades(start)
     if max_upgrades <= 0:
-        raise HTTPException(status_code=400, detail="Interest limit is already at the $50,000,000,000 maximum")
+        raise HTTPException(status_code=400, detail=f"Interest limit is already at the ${INTEREST_LIMIT_HARD_MAX:,} maximum")
 
     user = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1, INTEREST_LIMIT_UPGRADES_FIELD: 1})
     current_limit = personal_interest_limit(user, start)
     add = interest_limit_upgrade_add(current_limit)
     if add <= 0:
-        raise HTTPException(status_code=400, detail="Interest limit is already at the $50,000,000,000 maximum")
+        raise HTTPException(status_code=400, detail=f"Interest limit is already at the ${INTEREST_LIMIT_HARD_MAX:,} maximum")
 
     merged_inc = {**dict(inc or {}), INTEREST_LIMIT_UPGRADES_FIELD: 1}
     after = await db.users.find_one_and_update(

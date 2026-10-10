@@ -1644,14 +1644,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     used_in_melt = 0  # shared cap across melt + timed scrap
     if _auto_rank_task_enabled(user, "auto_rank_melt"):
         melt_action_ids = user.get("auto_rank_melt_action_ids") or []
-        melt_rarity_ids = user.get("auto_rank_melt_rarity_ids") or []
         if isinstance(melt_action_ids, list) and len(melt_action_ids) > 0:
             # No rarities selected = don't melt/scrap any cars (ids must match CARS[].rarity, same as garage)
-            allowed_melt_rarities = set(melt_rarity_ids) if isinstance(melt_rarity_ids, list) and len(melt_rarity_ids) > 0 else set()
-            allowed_melt_rarities = {r for r in allowed_melt_rarities if r in MELT_RARITIES}
-            scrap_rarity_ids = user.get("auto_rank_scrap_rarity_ids") or []
-            allowed_scrap_rarities = set(scrap_rarity_ids) if isinstance(scrap_rarity_ids, list) and len(scrap_rarity_ids) > 0 else set()
-            allowed_scrap_rarities = {r for r in allowed_scrap_rarities if r in SCRAP_RARITIES}
+            allowed_melt_rarities = selected_garage_rarities(user)
+            allowed_scrap_rarities = selected_garage_rarities(user, scrap=True)
             batch_limit = total_batch_limit
             booze_protected = await _get_booze_protected_car_ids(db, user_id) if user.get("auto_rank_booze") else set()
 
@@ -1794,9 +1790,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     if user.get("in_jail"):
         return
     if _auto_rank_task_enabled(user, "auto_rank_scrap"):
-        scrap_rarity_ids = user.get("auto_rank_scrap_rarity_ids") or []
-        allowed_scrap_rarities = set(scrap_rarity_ids) if isinstance(scrap_rarity_ids, list) and len(scrap_rarity_ids) > 0 else set()
-        allowed_scrap_rarities = {r for r in allowed_scrap_rarities if r in SCRAP_RARITIES}
+        allowed_scrap_rarities = selected_garage_rarities(user, scrap=True)
         if allowed_scrap_rarities:
             next_scrap_at = _parse_iso(user.get("auto_rank_next_scrap_at"))
             if next_scrap_at is None or now >= next_scrap_at:
@@ -2597,6 +2591,16 @@ SCRAP_RARITIES = list(MELT_RARITIES)
 SCRAP_INTERVAL_SECONDS = 120  # Scrap (when run separately) runs once every 2 minutes
 
 
+def selected_garage_rarities(user: Optional[dict], *, scrap: bool = False) -> set:
+    """Rarities ticked on Auto Rank. Empty means do not melt or scrap any cars."""
+    field = "auto_rank_scrap_rarity_ids" if scrap else "auto_rank_melt_rarity_ids"
+    valid = SCRAP_RARITIES if scrap else MELT_RARITIES
+    raw = (user or {}).get(field) or []
+    if not isinstance(raw, list):
+        return set()
+    return {r for r in raw if r in valid}
+
+
 async def _manager_prefs(user: dict) -> dict:
     from utils.auto_rank_managers import cached_live_contest, public_manager_fields
     import server as srv
@@ -2608,6 +2612,12 @@ async def _manager_prefs(user: dict) -> dict:
         live = {}
     out = public_manager_fields(user or {}, live)
     out["points"] = int((user or {}).get("points") or 0)
+    try:
+        from utils.auto_rank_managers import auto_events_in_maintenance
+
+        out["auto_events_maintenance"] = await auto_events_in_maintenance(srv.db)
+    except Exception:
+        out["auto_events_maintenance"] = False
     return out
 
 
@@ -3103,6 +3113,8 @@ def register(router):
         auto_rank_missions_enabled: Optional[bool] = None
         auto_rank_events_buy_bullets: Optional[bool] = None
         auto_rank_events_buy_bullets_amount: Optional[int] = None
+        auto_rank_events_points_allowance: Optional[int] = None
+        auto_rank_events_respect_allowance: Optional[int] = None
 
     from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_AUTO_RANK
 
@@ -3171,6 +3183,10 @@ def register(router):
             raise HTTPException(status_code=400, detail="Buy Auto Rank first.")
         if user.get("auto_rank_events_unlocked"):
             raise HTTPException(status_code=400, detail="You already own Auto events.")
+        from utils.auto_rank_managers import AUTO_EVENTS_MAINTENANCE_DETAIL, auto_events_in_maintenance
+
+        if await auto_events_in_maintenance(db):
+            raise HTTPException(status_code=503, detail=AUTO_EVENTS_MAINTENANCE_DETAIL)
         from routers.game.store import _record_store_points_spend, _store_cost_inc
         from utils.auto_rank_managers import AUTO_EVENTS_COST_POINTS
 
@@ -3667,6 +3683,11 @@ def register(router):
         )
         if manager_touch and not user_row.get("auto_rank_events_unlocked"):
             raise HTTPException(status_code=400, detail="Buy Auto events first.")
+        if manager_touch:
+            from utils.auto_rank_managers import AUTO_EVENTS_MAINTENANCE_DETAIL, auto_events_in_maintenance
+
+            if await auto_events_in_maintenance(db):
+                raise HTTPException(status_code=503, detail=AUTO_EVENTS_MAINTENANCE_DETAIL)
         if body.auto_rank_event_ids is not None:
             from utils.daily_contests import CONTEST_TYPE_IDS
 
@@ -3691,6 +3712,31 @@ def register(router):
             updates["auto_rank_events_buy_bullets_amount"] = buy_bullets_amount_for_user(
                 {"auto_rank_events_buy_bullets_amount": amt}
             )
+        allowance_touch = (
+            body.auto_rank_events_points_allowance is not None
+            or body.auto_rank_events_respect_allowance is not None
+        )
+        if allowance_touch and not user_row.get("auto_rank_events_unlocked"):
+            raise HTTPException(status_code=400, detail="Buy Auto events first.")
+        if allowance_touch:
+            from utils.auto_rank_managers import EVENTS_SPEND_ALLOWANCE_MAX
+
+            for field, raw in (
+                ("auto_rank_events_points_allowance", body.auto_rank_events_points_allowance),
+                ("auto_rank_events_respect_allowance", body.auto_rank_events_respect_allowance),
+            ):
+                if raw is None:
+                    continue
+                try:
+                    amt = int(raw)
+                except (TypeError, ValueError):
+                    raise HTTPException(status_code=400, detail="Spend allowance must be a whole number")
+                if amt < 0 or amt > EVENTS_SPEND_ALLOWANCE_MAX:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Spend allowance must be between 0 and {EVENTS_SPEND_ALLOWANCE_MAX:,}",
+                    )
+                updates[field] = amt
         if body.robot_bg_auto_search_enabled is not None:
             from utils.robot_bg_auto_search import robot_bg_auto_search_active
 
@@ -3708,7 +3754,7 @@ def register(router):
         await db.users.update_one({"id": user_id}, op)
         updated = await db.users.find_one(
             {"id": user_id},
-            {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1, "auto_rank_melt_action_ids": 1, "auto_rank_melt_rarity_ids": 1, "auto_rank_scrap_rarity_ids": 1, "passive_booze_paused": 1, "robot_bg_auto_search_enabled": 1, "robot_bg_auto_search_until": 1, "auto_rank_events_unlocked": 1, "auto_rank_event_ids": 1, "auto_rank_missions_enabled": 1, "auto_rank_events_buy_bullets": 1, "auto_rank_events_buy_bullets_amount": 1, "auto_rank_event_rewards": 1, "auto_rank_mission_rewards": 1, "points": 1},
+            {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1, "auto_rank_melt_action_ids": 1, "auto_rank_melt_rarity_ids": 1, "auto_rank_scrap_rarity_ids": 1, "passive_booze_paused": 1, "robot_bg_auto_search_enabled": 1, "robot_bg_auto_search_until": 1, "auto_rank_events_unlocked": 1, "auto_rank_event_ids": 1, "auto_rank_missions_enabled": 1, "auto_rank_events_buy_bullets": 1, "auto_rank_events_buy_bullets_amount": 1, "auto_rank_events_points_allowance": 1, "auto_rank_events_respect_allowance": 1, "auto_rank_event_rewards": 1, "auto_rank_mission_rewards": 1, "points": 1},
         )
         out = {"message": "Preferences saved", **_extract_preferences(updated)}
         out["auto_rank_has_access"] = _user_has_auto_rank_access(updated or {})
@@ -3883,6 +3929,8 @@ def register(router):
             "auto_rank_missions_enabled": 1,
             "auto_rank_events_buy_bullets": 1,
             "auto_rank_events_buy_bullets_amount": 1,
+            "auto_rank_events_points_allowance": 1,
+            "auto_rank_events_respect_allowance": 1,
             "auto_rank_mission_rewards": 1,
             "mission_completions": 1,
             "points": 1,
