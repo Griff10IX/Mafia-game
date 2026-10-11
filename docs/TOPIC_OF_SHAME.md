@@ -6,6 +6,24 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-10-11[/color][/b] — [b]Schizophrenic, Damaged[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Action:[/b] Modkill (wipe).[/color]
+[*][color=#888888][b]What happened:[/b] Schizophrenic was caught selling in-game points for real money. That is against the game rules. He admitted Damaged was his second account.[/color]
+[*][color=#888888][b]Proof:[/b] Matching logs are in the game. They are not posted on this topic.[/color]
+[*][color=#888888]Relinquished: Dice — Las Vegas.[/color]
+[*][color=#888888]Loot returned to the game: Chop-Shop Seal, Silent Partner.[/color]
+[*][color=#888888]Exclusive weed strains returned: Critical Mass, Godfather OG, Super Silver Haze.[/color]
+[*][color=#888888]Removed as boss of The Devils Rejects. Rabbit is now boss.[/color]
+[*][color=#888888]Linked accounts also wiped and blocked from revive: AM, Chaos, FFS, Bruno, Time, V, X, Tag, Kill, Ambush, TNT, Oblivion, Vendetta, Glum, Omen, Dread.[/color]
+[*][color=#888888][b]Refunds:[/b] Every player whose robot bodyguards these accounts killed has been refunded, plus 50% on top.[/color]
+[*][color=#888888][b]Effect:[/b] Rank reset to Rat (prestige 0) on both. Honours, leaderboards, cash, points, and Game Pass stripped. Loot and exclusives returned to the game. Modkilled badge added. £10 Dead > Alive revive blocked.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-10-11[/color][/b] — [b]Wanker[/b][/size]
 [quote]
 [list]
