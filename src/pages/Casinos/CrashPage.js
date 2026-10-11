@@ -470,6 +470,8 @@ const CrashBoard = memo(function CrashBoard({ stateRef, offsetRef, rocketKey, bo
           } else if (!out.booming && data?.phase === 'betting' && data.betting_ends_at) {
             const left = Date.parse(data.betting_ends_at) - (now + offsetRef.current);
             text = `NEXT ROCKET IN ${Math.max(0, Math.ceil(left / 1000))}S`;
+          } else if (!out.booming && (data?.waiting || data?.phase === 'idle')) {
+            text = 'WAITING';
           } else if (out.booming) {
             text = 'CRASHED';
             color = '#fb7185';

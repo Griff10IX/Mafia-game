@@ -149,7 +149,7 @@ const ATTACK_LIST_POLL_SEARCHING_MS = 3000;
 /** Coalesce bursts (focus + events + poll) so we don't stack GETs. */
 const ATTACK_LIST_MIN_GAP_MS = 1500;
 /** JWT-only pulse: target travel shows on My Searches within ~this delay while tab visible. */
-const FOUND_LOCATION_PULSE_MS = 100;
+const FOUND_LOCATION_PULSE_MS = 250;
 /** Hidden tab: no need for sub-second hops — ease API load until they come back. */
 const FOUND_LOCATION_PULSE_HIDDEN_MS = 2000;
 const ATTACK_LIST_REFRESH_AFTER_FOCUS_MS = 1500;

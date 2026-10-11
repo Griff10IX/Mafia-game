@@ -6,6 +6,7 @@ import asyncio
 import logging
 import math
 import secrets
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -29,6 +30,9 @@ STATE_ID = "current"
 BETTING_SECONDS = 30
 # Auto only keeps betting while this page is open. A few missed polls means they left.
 AUTO_PAGE_SECONDS = 5
+# Same idea for the rocket itself. Hidden tabs poll about every 1.5s, so a few
+# missed polls means the page is empty and the 30s cycle should stop.
+PRESENCE_SECONDS = 8
 GROWTH = 0.09
 CASH_MAX_BET = 2_000_000_000
 CASH_PAYOUT_CAP = 500_000_000_000
@@ -41,6 +45,9 @@ CURRENCIES = {
 
 _indexes_ready = False
 _loop_started = False
+_tick_lock = asyncio.Lock()
+_board_cache: Dict[str, Any] = {"at": 0.0, "cash": [], "points": []}
+_BOARD_CACHE_SECONDS = 2.0
 
 
 def roll_crash_cents() -> int:
@@ -94,6 +101,7 @@ async def _ensure_indexes() -> None:
     await db.crash_leaders.create_index([("user_id", 1), ("currency", 1)], unique=True)
     await db.crash_leaders.create_index([("currency", 1), ("net", -1)])
     await db.crash_auto.create_index("user_id", unique=True)
+    await db.crash_presence.create_index("user_id", unique=True)
     _indexes_ready = True
 
 
@@ -144,7 +152,7 @@ async def _touch_auto_session(user_id: str, profit: int) -> None:
     )
 
 
-async def _settle_bet(bet: dict, *, won: bool, mult_cents: int, crash_cents: int) -> None:
+async def _settle_bet(bet: dict, *, won: bool, mult_cents: int, crash_cents: int) -> bool:
     payout = _payout(bet["currency"], int(bet["stake"]), mult_cents) if won else 0
     status = "cashed" if won else "lost"
     updated = await db.crash_bets.find_one_and_update(
@@ -157,7 +165,7 @@ async def _settle_bet(bet: dict, *, won: bool, mult_cents: int, crash_cents: int
         return_document=ReturnDocument.AFTER,
     )
     if not updated:
-        return
+        return False
     user_id = updated["user_id"]
     if won and payout:
         field = CURRENCIES[updated["currency"]]["field"]
@@ -176,6 +184,7 @@ async def _settle_bet(bet: dict, *, won: bool, mult_cents: int, crash_cents: int
         })
     except Exception:
         logger.exception("crash log failed")
+    return True
 
 
 async def _pay_due_autos(state: dict, now: datetime) -> None:
@@ -240,6 +249,81 @@ async def _note_auto_presence(user_id: str) -> None:
         {"user_id": user_id, "enabled": True},
         {"$set": {"seen_at": _now().isoformat()}},
     )
+
+
+async def _note_presence(user_id: str) -> None:
+    if not user_id:
+        return
+    await db.crash_presence.update_one(
+        {"user_id": user_id},
+        {"$set": {"seen_at": _now().isoformat()}},
+        upsert=True,
+    )
+
+
+async def _ready_autos() -> List[dict]:
+    autos = await db.crash_auto.find(
+        {"enabled": True},
+        {"_id": 0, "enabled": 1, "seen_at": 1, "session_net": 1, "stop_profit": 1, "stop_loss": 1},
+    ).to_list(50)
+    return [doc for doc in autos if _auto_should_run(doc)]
+
+
+async def _anyone_here(now: datetime) -> bool:
+    """True when a player has the Crash page open, or auto is still allowed to bet."""
+    cutoff = (now - timedelta(seconds=PRESENCE_SECONDS)).isoformat()
+    watcher = await db.crash_presence.find_one({"seen_at": {"$gte": cutoff}}, {"_id": 1})
+    if watcher:
+        return True
+    return bool(await _ready_autos())
+
+
+async def _has_open_bets(round_id: Optional[str]) -> bool:
+    if not round_id:
+        return False
+    found = await db.crash_bets.find_one({"round_id": round_id, "status": "open"}, {"_id": 1})
+    return bool(found)
+
+
+def _idle_fields(state: dict) -> dict:
+    return {
+        "id": STATE_ID,
+        "phase": "idle",
+        "round_id": None,
+        "crash_cents": None,
+        "betting_ends_at": None,
+        "flight_started_at": None,
+        "last_crash_cents": state.get("last_crash_cents"),
+        "history": list(state.get("history") or [])[-15:],
+    }
+
+
+async def _try_idle(state: dict) -> dict:
+    """Stop an empty round. If a bet landed in the gap, put that round back."""
+    round_id = state.get("round_id")
+    phase = state.get("phase")
+    claimed = await db.crash_state.update_one(
+        {"id": STATE_ID, "phase": phase, "round_id": round_id},
+        {"$set": _idle_fields(state)},
+    )
+    fresh = await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0})
+    if claimed.modified_count != 1:
+        return fresh or state
+    if round_id and await _has_open_bets(round_id):
+        await db.crash_state.update_one(
+            {"id": STATE_ID, "phase": "idle"},
+            {"$set": {
+                "phase": phase,
+                "round_id": round_id,
+                "crash_cents": state.get("crash_cents"),
+                "betting_ends_at": state.get("betting_ends_at"),
+                "flight_started_at": state.get("flight_started_at"),
+                "last_crash_cents": state.get("last_crash_cents"),
+                "history": list(state.get("history") or [])[-15:],
+            }},
+        )
+        return await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0}) or state
+    return fresh or {}
 
 
 def _auto_should_run(doc: dict) -> bool:
@@ -330,38 +414,96 @@ async def _place_auto_bets(round_id: str) -> None:
             logger.exception("crash auto bet failed for %s", doc.get("user_id"))
 
 
-async def _open_betting(now: datetime, last_crash: Optional[int], history: List[int]) -> None:
+async def _open_betting(now: datetime, last_crash: Optional[int], history: List[int]) -> bool:
+    """Open the next 30s window only from idle or a settle. A live round is left alone."""
     round_id = str(uuid.uuid4())
     ends = now + timedelta(seconds=BETTING_SECONDS)
-    await db.crash_state.update_one(
-        {"id": STATE_ID},
-        {"$set": {
-            "id": STATE_ID,
-            "round_id": round_id,
-            "phase": "betting",
-            "crash_cents": roll_crash_cents(),
-            "betting_ends_at": ends.isoformat(),
-            "flight_started_at": None,
-            "last_crash_cents": last_crash,
-            "history": (history or [])[-15:],
-        }},
-        upsert=True,
+    payload = {
+        "id": STATE_ID,
+        "round_id": round_id,
+        "phase": "betting",
+        "crash_cents": roll_crash_cents(),
+        "betting_ends_at": ends.isoformat(),
+        "flight_started_at": None,
+        "last_crash_cents": last_crash,
+        "history": (history or [])[-15:],
+    }
+    claimed = await db.crash_state.update_one(
+        {"id": STATE_ID, "phase": {"$in": ["idle", "settling"]}},
+        {"$set": payload},
     )
+    if claimed.modified_count != 1:
+        existing = await db.crash_state.find_one({"id": STATE_ID}, {"_id": 1})
+        if existing:
+            return False
+        try:
+            await db.crash_state.insert_one(payload)
+        except DuplicateKeyError:
+            return False
     await _place_auto_bets(round_id)
+    return True
+
+
+async def _park_until_someone(now: datetime, state: Optional[dict]) -> dict:
+    """Watching is not enough. A new 30s window starts when auto is in, or someone places a bet."""
+    del now
+    if await _ready_autos():
+        await _open_betting(_now(), (state or {}).get("last_crash_cents"), list((state or {}).get("history") or []))
+        return await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0}) or {}
+    if state and state.get("phase") == "idle":
+        return state
+    if state:
+        await db.crash_state.update_one(
+            {"id": STATE_ID, "phase": state.get("phase")},
+            {"$set": _idle_fields(state)},
+        )
+    else:
+        try:
+            await db.crash_state.insert_one(_idle_fields({}))
+        except DuplicateKeyError:
+            pass
+    return await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0}) or {}
+
+
+async def _leaderboards() -> Dict[str, list]:
+    """Polls hit this a few times a second. The board only needs to be a couple of seconds fresh."""
+    now = time.monotonic()
+    if now - float(_board_cache.get("at") or 0) < _BOARD_CACHE_SECONDS:
+        return {"cash": list(_board_cache.get("cash") or []), "points": list(_board_cache.get("points") or [])}
+    cash = await _leaderboard("cash")
+    points = await _leaderboard("points")
+    _board_cache["at"] = now
+    _board_cache["cash"] = cash
+    _board_cache["points"] = points
+    return {"cash": cash, "points": points}
 
 
 async def tick() -> dict:
+    """Advance the round. Only the background loop should call this.
+    A cash-out or a state poll must not wait on every other auto cash-out.
+    """
+    if _tick_lock.locked():
+        return await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0}) or {}
+    async with _tick_lock:
+        return await _tick_locked()
+
+
+async def _tick_locked() -> dict:
     await _ensure_indexes()
     now = _now()
     await _drop_away_autos(now)
     state = await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0})
-    if not state:
-        await _open_betting(now, None, [])
-        return await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0}) or {}
+    phase = (state or {}).get("phase")
+    if phase not in ("betting", "flying"):
+        return await _park_until_someone(now, state)
 
-    phase = state.get("phase")
+    if not await _has_open_bets(state.get("round_id")) and not await _anyone_here(now):
+        return await _try_idle(state)
+
     if phase == "betting":
         ends = _parse(state.get("betting_ends_at"))
+        if ends and now >= ends and not await _has_open_bets(state.get("round_id")):
+            return await _try_idle(state)
         if ends and now >= ends:
             claimed = await db.crash_state.update_one(
                 {"id": STATE_ID, "phase": "betting", "round_id": state["round_id"]},
@@ -374,15 +516,12 @@ async def tick() -> dict:
                 return state
         return await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0}) or state
 
-    if phase == "flying":
-        await _pay_due_autos(state, now)
-        started = _parse(state.get("flight_started_at"))
-        elapsed = (now - started).total_seconds() if started else 0
-        if elapsed >= seconds_until(int(state.get("crash_cents") or 100)):
-            return await _crash_now(state, now)
-        return await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0}) or state
-
-    return state
+    await _pay_due_autos(state, now)
+    started = _parse(state.get("flight_started_at"))
+    elapsed = (now - started).total_seconds() if started else 0
+    if elapsed >= seconds_until(int(state.get("crash_cents") or 100)):
+        return await _crash_now(state, now)
+    return await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0}) or state
 
 
 async def _crash_now(state: dict, now: datetime) -> dict:
@@ -392,19 +531,27 @@ async def _crash_now(state: dict, now: datetime) -> dict:
     )
     if claimed.modified_count != 1:
         fresh = await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0})
-        if fresh and fresh.get("phase") == "flying":
-            return await tick()
         return fresh or state
     await _bust_open(state)
     crash_cents = int(state["crash_cents"])
     history = list(state.get("history") or [])
     history.append(crash_cents)
-    await _open_betting(now, crash_cents, history)
+    done = {**state, "last_crash_cents": crash_cents, "history": history}
+    if await _ready_autos():
+        await _open_betting(now, crash_cents, history)
+    else:
+        await db.crash_state.update_one(
+            {"id": STATE_ID, "phase": "settling", "round_id": state["round_id"]},
+            {"$set": _idle_fields(done)},
+        )
     return await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0}) or {}
 
 
 def _public_state(state: dict, user_id: str, bets: List[dict], auto_doc: Optional[dict], boards: Dict[str, list]) -> dict:
-    phase = "betting" if state.get("phase") != "flying" else "flying"
+    raw_phase = state.get("phase")
+    waiting = raw_phase not in ("betting", "flying")
+    # Idle stays "betting" so the current Place bet button still starts a round.
+    phase = "flying" if raw_phase == "flying" else "betting"
     started = _parse(state.get("flight_started_at")) if phase == "flying" else None
     current = multiplier_cents((_now() - started).total_seconds()) if started else 100
     public_bets = []
@@ -436,8 +583,9 @@ def _public_state(state: dict, user_id: str, bets: List[dict], auto_doc: Optiona
     return {
         "round_id": state.get("round_id"),
         "phase": phase,
+        "waiting": waiting,
         "server_now": _now().isoformat(),
-        "betting_ends_at": state.get("betting_ends_at"),
+        "betting_ends_at": None if waiting else state.get("betting_ends_at"),
         "flight_started_at": state.get("flight_started_at") if phase == "flying" else None,
         "multiplier_cents": current if phase == "flying" else 100,
         "growth": GROWTH,
@@ -456,19 +604,21 @@ def _public_state(state: dict, user_id: str, bets: List[dict], auto_doc: Optiona
 
 
 async def _view(user: dict) -> dict:
+    """Read the round. The background loop is what advances it.
+    Polls used to call tick(), so every open Crash page waited on every auto cash-out.
+    """
     user_id = user.get("id") or ""
+    await _note_presence(user_id)
     await _note_auto_presence(user_id)
-    state = await tick()
-    bets = await db.crash_bets.find(
-        {"round_id": state.get("round_id")},
-        {"_id": 0},
-    ).sort("created_at", 1).to_list(120)
+    state = await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0}) or {}
+    bets = []
+    if state.get("round_id"):
+        bets = await db.crash_bets.find(
+            {"round_id": state.get("round_id")},
+            {"_id": 0},
+        ).sort("created_at", 1).to_list(120)
     auto_doc = await db.crash_auto.find_one({"user_id": user_id}, {"_id": 0})
-    boards = {
-        "cash": await _leaderboard("cash"),
-        "points": await _leaderboard("points"),
-    }
-    return _public_state(state, user_id, bets, auto_doc, boards)
+    return _public_state(state, user_id, bets, auto_doc, await _leaderboards())
 
 
 def _cashout_cents(raw: Optional[float]) -> Optional[int]:
@@ -530,7 +680,11 @@ def register(router):
     @router.post("/casino/crash/bet")
     async def crash_bet(body: BetBody, current_user: dict = Depends(_auth)):
         raise_if_gambling_self_banned(current_user)
+        await _note_presence(current_user.get("id") or "")
         state = await tick()
+        if state.get("phase") == "idle":
+            await _open_betting(_now(), state.get("last_crash_cents"), list(state.get("history") or []))
+            state = await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0}) or {}
         if state.get("phase") != "betting":
             raise HTTPException(status_code=400, detail="Betting is closed. Wait for the next rocket.")
         auto_cents = _cashout_cents(body.auto_cashout)
@@ -540,14 +694,15 @@ def register(router):
     @router.post("/casino/crash/cashout")
     async def crash_cashout(current_user: dict = Depends(_auth)):
         raise_if_gambling_self_banned(current_user)
-        state = await tick()
-        if state.get("phase") != "flying":
+        clicked = _now()
+        state = await db.crash_state.find_one({"id": STATE_ID}, {"_id": 0})
+        if not state or state.get("phase") != "flying":
             raise HTTPException(status_code=400, detail="The rocket is not in the air")
         started = _parse(state.get("flight_started_at"))
-        elapsed = (_now() - started).total_seconds() if started else 0
+        elapsed = (clicked - started).total_seconds() if started else 0
+        crash_cents = int(state.get("crash_cents") or 100)
         current = multiplier_cents(elapsed)
-        crash_cents = int(state["crash_cents"])
-        if current >= crash_cents:
+        if not started or elapsed >= seconds_until(crash_cents) or current >= crash_cents:
             raise HTTPException(status_code=400, detail="Too late. The rocket crashed.")
         bet = await db.crash_bets.find_one(
             {"round_id": state["round_id"], "user_id": current_user["id"], "status": "open"},
@@ -555,7 +710,14 @@ def register(router):
         )
         if not bet:
             raise HTTPException(status_code=400, detail="You are not in this round")
-        await _settle_bet(bet, won=True, mult_cents=current, crash_cents=crash_cents)
+        settled = await _settle_bet(bet, won=True, mult_cents=current, crash_cents=crash_cents)
+        if not settled:
+            fresh = await db.crash_bets.find_one(
+                {"id": bet["id"]},
+                {"_id": 0, "status": 1},
+            )
+            if not fresh or fresh.get("status") != "cashed":
+                raise HTTPException(status_code=400, detail="Too late. The rocket crashed.")
         return await _view(current_user)
 
     @router.post("/casino/crash/auto")
@@ -589,6 +751,7 @@ def register(router):
         if body.enabled:
             saved["seen_at"] = _now().isoformat()
         await db.crash_auto.update_one({"user_id": user_id}, {"$set": saved}, upsert=True)
+        await _note_presence(user_id)
         state = await tick()
         if body.enabled and state.get("phase") == "betting":
             try:
@@ -607,11 +770,13 @@ def register(router):
 
 async def run_crash_loop() -> None:
     while True:
+        idle = False
         try:
-            await tick()
+            state = await tick()
+            idle = (state or {}).get("phase") == "idle"
         except Exception:
             logger.exception("crash ticker failed")
-        await asyncio.sleep(0.25)
+        await asyncio.sleep(2.0 if idle else 0.25)
 
 
 def start_crash_loop() -> None:
