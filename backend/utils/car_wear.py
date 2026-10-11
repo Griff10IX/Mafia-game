@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+
+from pymongo import ReturnDocument
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,7 @@ _RARITY_LABEL = {
 
 _rarity_by_car_id: Optional[Dict[str, str]] = None
 _SWEEP_INTERVAL_SEC = 120
+_LOSS_GROUP_SEC = 3600
 
 
 def normalize_rarity(raw: Any) -> str:
@@ -130,6 +133,38 @@ def loss_message(counts: Dict[str, int]) -> str:
     return "You lost " + ", ".join(parts[:-1]) + f", and {parts[-1]}."
 
 
+async def _notify_grouped(db, uid: str, bucket: Dict[str, int]) -> None:
+    """Merge into this user's open Cars lost notice (started within the group window), else send a new one."""
+    if not any(int(n or 0) > 0 for n in bucket.values()):
+        return
+    now = datetime.now(timezone.utc)
+    since = (now - timedelta(seconds=_LOSS_GROUP_SEC)).isoformat()
+    inc = {f"car_loss_counts.{r}": int(n) for r, n in bucket.items() if int(n or 0) > 0}
+    merged = await db.notifications.find_one_and_update(
+        {"user_id": uid, "title": "Cars lost", "car_loss_group_started_at": {"$gte": since}},
+        {"$inc": inc, "$set": {"read": False, "created_at": now.isoformat()}},
+        sort=[("car_loss_group_started_at", -1)],
+        projection={"_id": 1, "car_loss_counts": 1},
+        return_document=ReturnDocument.AFTER,
+    )
+    if merged:
+        message = loss_message(merged.get("car_loss_counts") or {})
+        if message:
+            await db.notifications.update_one({"_id": merged["_id"]}, {"$set": {"message": message}})
+        return
+    from server import send_notification
+
+    await send_notification(
+        uid,
+        "Cars lost",
+        loss_message(bucket),
+        "system",
+        category="car_drops",
+        car_loss_counts={r: int(n) for r, n in bucket.items() if int(n or 0) > 0},
+        car_loss_group_started_at=now.isoformat(),
+    )
+
+
 async def _delete_and_notify(db, doomed: List[dict]) -> int:
     if not doomed:
         return 0
@@ -156,14 +191,9 @@ async def _delete_and_notify(db, doomed: List[dict]) -> int:
         bucket[rarity] = bucket.get(rarity, 0) + 1
     if not counts:
         return deleted
-    from server import send_notification
-
     for uid, bucket in counts.items():
-        message = loss_message(bucket)
-        if not message:
-            continue
         try:
-            await send_notification(uid, "Cars lost", message, "system", category="car_drops")
+            await _notify_grouped(db, uid, bucket)
         except Exception:
             logger.exception("car wear notify failed user=%s", uid)
     try:
