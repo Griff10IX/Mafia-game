@@ -1091,6 +1091,7 @@ const SearchesCard = ({
         {attacks.length > 0 && (
           <p className="text-[9px] text-mutedForeground font-heading italic pt-1">
             💡 Searches complete automatically. Typical find time ~2h 15m–2h 45m; the timer above is the 24h row expiry from search start.
+            <span className="block mt-1">Find times are per searcher. The same bodyguard might take you 2h 35m and someone else 2h 25m.</span>
             {bodyguardFindTimeActive ? (
               <span className="block mt-1 text-cyan-400/90">Find Clock is active — searching rows show the exact find time.</span>
             ) : null}
