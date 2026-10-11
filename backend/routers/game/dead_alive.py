@@ -1245,19 +1245,60 @@ def register(router):
                 "revive_used": False,
                 "dead_accounts_same_email": [],
             }
+        dead_proj = {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "email": 1,
+            "email_before_freed": 1,
+            "account_locked": 1,
+            "modkill_wipe": 1,
+            "dead_alive_revive_allowed": 1,
+            "registration_freed_email_from_user_id": 1,
+        }
         dead_same_email = await db.users.find(
             {"email": email, "is_dead": True},
-            {"_id": 0, "id": 1, "username": 1, "email": 1, "email_before_freed": 1, "account_locked": 1, "modkill_wipe": 1, "registration_freed_email_from_user_id": 1},
+            dead_proj,
         ).to_list(50)
-        from utils.modkill_wipe import account_blocks_dead_alive_revive, lineage_blocks_dead_alive_revive
+        released_dead = await db.users.find(
+            {
+                "is_dead": True,
+                "dead_alive_revive_allowed": True,
+                "email_before_freed": email,
+                "is_npc": {"$ne": True},
+            },
+            dead_proj,
+        ).to_list(10)
+        seen_ids = {u.get("id") for u in dead_same_email}
+        for u in released_dead:
+            if u.get("id") and u.get("id") not in seen_ids:
+                dead_same_email.append(u)
+                seen_ids.add(u.get("id"))
+        from utils.modkill_wipe import (
+            account_blocks_dead_alive_revive,
+            dead_alive_revive_explicitly_allowed,
+            lineage_blocks_dead_alive_revive,
+        )
 
         if await lineage_blocks_dead_alive_revive(db, current_user):
+            released = [
+                u for u in dead_same_email
+                if u.get("username") and dead_alive_revive_explicitly_allowed(u)
+            ]
+            if not released:
+                return {
+                    **base,
+                    "can_revive": False,
+                    "reason": "That account cannot be revived with Dead > Alive (£10).",
+                    "revive_used": False,
+                    "dead_accounts_same_email": [],
+                }
             return {
                 **base,
-                "can_revive": False,
-                "reason": "That account cannot be revived with Dead > Alive (£10).",
+                "can_revive": True,
+                "reason": None,
                 "revive_used": False,
-                "dead_accounts_same_email": [],
+                "dead_accounts_same_email": [{"username": u.get("username")} for u in released],
             }
 
         eligible_dead = []

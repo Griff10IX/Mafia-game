@@ -33,8 +33,20 @@ def sanitize_modkill_wipe_reason(raw: Any) -> str:
     return s
 
 
+def dead_alive_revive_explicitly_allowed(user: Optional[dict]) -> bool:
+    """Staff release for one account. A modkill on this character still wins."""
+    return bool(
+        user
+        and user.get("dead_alive_revive_allowed")
+        and not user.get("modkill_wipe")
+        and not user.get("account_locked")
+    )
+
+
 def account_blocks_dead_alive_revive(user: Optional[dict]) -> bool:
     """True if this character cannot be brought back via £10 Dead > Alive."""
+    if dead_alive_revive_explicitly_allowed(user):
+        return False
     return bool(user and user.get("modkill_wipe"))
 
 
@@ -62,6 +74,8 @@ def email_lineage_dead_wipe_targets(
 
 async def lineage_blocks_dead_alive_revive(db, user: Optional[dict]) -> bool:
     """True if this account or any email-lineage account has modkill_wipe."""
+    if dead_alive_revive_explicitly_allowed(user):
+        return False
     if account_blocks_dead_alive_revive(user):
         return True
     if not user or not user.get("id"):
