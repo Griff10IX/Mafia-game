@@ -1360,6 +1360,15 @@ Having problems with a purchase?
 [*][color=#888888]Contact support with order details[/color]
 [*][color=#888888]We will investigate and resolve[/color]
 [/list]
+
+[size=1.4][color=#FF4444][b]Selling Points for Real Money[/b][/color][/size]
+Selling in-game points for real-life money will not be tolerated. It results in an [b]IP ban[/b].
+
+[list]
+[*][b][color=#FF6B6B]NO WARNINGS[/color][/b]
+[*][b][color=#FF6B6B]NO CHANCES[/color][/b]
+[*][b][color=#FF6B6B]BANNED FOREVER[/color][/b]
+[/list]
 [/quote]
 
 [hr]
