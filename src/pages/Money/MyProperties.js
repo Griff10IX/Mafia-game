@@ -169,7 +169,7 @@ function CasinoBlock({ casino, points, onRefresh, videoPokerConfig }) {
   const handleCasinoSetMaxBet = async () => {
     if (!casino || saving) return;
     const val = parseInt(String(casinoMaxBet).replace(/\D/g, ''), 10);
-    if (!val || val < 50_000) { toast.error('Min $50,000'); return; }
+    if (!val || val < 5_000_000) { toast.error('Min $5,000,000'); return; }
     setSaving(true);
     try {
       await api.post(`/casino/${casino.type}/set-max-bet`, { city: casino.city, max_bet: val });

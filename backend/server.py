@@ -2512,7 +2512,7 @@ def mongodb_lifetime_rank_points_expr() -> dict:
 
 
 # Floor for owner-set max bet across casino routers (matches set-max-bet handlers).
-CASINO_MIN_OWNER_MAX_BET = 50_000
+CASINO_MIN_OWNER_MAX_BET = 5_000_000
 
 
 def effective_public_casino_max_bet(owner_id, stored_max_bet, *, default_when_owned_positive: int) -> int:
@@ -4199,6 +4199,9 @@ async def startup_db():
     from utils.casino_loss_relics import run_casino_loss_relic_ticker
 
     asyncio.create_task(run_casino_loss_relic_ticker(db))
+    from utils.casino_min_max_bet_notice import run_casino_min_max_bet_ticker
+
+    asyncio.create_task(run_casino_min_max_bet_ticker(db))
     # Auto Rank: when AUTO_RANK_USE_CRON=1, all Auto Rank (main + bust + OC) is driven by cron only
     from routers.account import auto_rank
     auto_rank_use_cron = (os.environ.get("AUTO_RANK_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
