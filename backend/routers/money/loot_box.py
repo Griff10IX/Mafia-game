@@ -805,6 +805,12 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
     new_ex_live = await new_exclusives_live(db)
     reclaimable = await claimed_counts_live(db)
     owned_relics = sorted(await user_owned_item_ids(db, current_user.get("id") or ""))
+    try:
+        from utils.casino_loss_relics import scarcity_public
+
+        casino_loss_relics = await scarcity_public(db, current_user.get("id") or "")
+    except Exception:
+        casino_loss_relics = []
     active_rewards = _active_rewards_from_user(current_user)
     last_10_wins = list(current_user.get("loot_box_recent") or [])[-10:]
     last_10_wins.reverse()  # newest first for display
@@ -849,6 +855,7 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
         "reclaimable_passives": list(reclaimable.values()),
         "reclaimable_passives_catalog": catalog_public(),
         "owned_reclaimable_passive_ids": owned_relics,
+        "casino_loss_relics": casino_loss_relics,
         "active_rewards": active_rewards,
         "last_10_wins": last_10_wins,
         "reward_info": _loot_public_reward_info(),

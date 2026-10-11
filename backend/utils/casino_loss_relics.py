@@ -158,6 +158,57 @@ def _public(doc: dict) -> Dict[str, Any]:
     }
 
 
+async def scarcity_public(db, viewer_id: str = "") -> List[Dict[str, Any]]:
+    """Who holds each relic. No balances, currency, or drop rules."""
+    await _seed(db)
+    rows = await db[COLLECTION].find(
+        {"item_id": {"$in": ALL_ITEM_IDS}},
+        {"_id": 0, "item_id": 1, "owner_id": 1, "owner_username": 1},
+    ).to_list(5)
+    by_id = {r.get("item_id"): r for r in rows}
+    missing = [
+        str(r.get("owner_id") or "").strip()
+        for r in rows
+        if str(r.get("owner_id") or "").strip() and not str(r.get("owner_username") or "").strip()
+    ]
+    names: Dict[str, str] = {}
+    if missing:
+        try:
+            users = await db.users.find(
+                {"id": {"$in": list(dict.fromkeys(missing))}},
+                {"_id": 0, "id": 1, "username": 1},
+            ).to_list(5)
+            for u in users:
+                uid = str(u.get("id") or "")
+                uname = str(u.get("username") or "").strip()
+                if uid and uname:
+                    names[uid] = uname
+        except Exception:
+            logger.exception("casino loss relic owner names failed")
+    viewer = str(viewer_id or "").strip()
+    short = {
+        "henhouse_slip": "2.5% of all Chicken Cross losses",
+        "black_box": "2.5% of all Crash losses",
+    }
+    out: List[Dict[str, Any]] = []
+    for item_id, cfg in RELICS.items():
+        doc = by_id.get(item_id) or {}
+        owner_id = str(doc.get("owner_id") or "").strip()
+        owner_username = None
+        if owner_id:
+            owner_username = str(doc.get("owner_username") or "").strip() or names.get(owner_id) or None
+        out.append({
+            "id": item_id,
+            "name": cfg.get("name") or item_id,
+            "buff_label": short.get(item_id) or cfg.get("buff_label") or "",
+            "claimed": 1 if owner_id else 0,
+            "cap": 1,
+            "owner_username": owner_username,
+            "yours": bool(viewer and owner_id == viewer),
+        })
+    return out
+
+
 async def owner_view(db, user_id: str) -> Optional[Dict[str, Any]]:
     if not user_id:
         return None

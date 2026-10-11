@@ -746,7 +746,7 @@ function ChestIcon({ shaking, exploding, ready, tier = 'common', openAnimLevel =
 }
 
 /* ─── Scarcity row ─── */
-function ScarcityRow({ icon: Icon, label, claimed, cap, holder, info }) {
+function ScarcityRow({ icon: Icon, label, claimed, cap, holder, info, emptyLabel }) {
   const [infoOpen, setInfoOpen] = useState(false);
   const full = claimed >= cap;
   const holderLabel = String(holder || '').trim();
@@ -760,6 +760,10 @@ function ScarcityRow({ icon: Icon, label, claimed, cap, holder, info }) {
           {holderLabel ? (
             <span className={`block text-[8px] font-heading truncate mt-0.5 ${full ? 'text-red-300/90' : 'text-mutedForeground'}`}>
               Held by {holderLabel}
+            </span>
+          ) : emptyLabel ? (
+            <span className="block text-[8px] font-heading truncate mt-0.5 text-emerald-300/90">
+              {emptyLabel}
             </span>
           ) : null}
         </div>
@@ -1227,7 +1231,11 @@ export default function LootBox() {
     (Array.isArray(reclaimableLive) ? reclaimableLive : []).map((r) => [r.id, r]),
   );
   const ownedRelicIds = new Set(status?.owned_reclaimable_passive_ids || []);
-  const ownedRelics = reclaimableCatalog.filter((r) => ownedRelicIds.has(r.id));
+  const casinoLossRelics = Array.isArray(status?.casino_loss_relics) ? status.casino_loss_relics : [];
+  const ownedRelics = [
+    ...reclaimableCatalog.filter((r) => ownedRelicIds.has(r.id)),
+    ...casinoLossRelics.filter((r) => r.yours),
+  ];
   const canUseFreeRare = selectedTier === 'rare' && freeRareOpens > 0;
   const canUseFreeUltra = selectedTier === 'ultra_rare' && freeUltraOpens > 0;
   const canUseFree = canUseFreeRare || canUseFreeUltra;
@@ -1473,7 +1481,7 @@ export default function LootBox() {
                   />
                 </ul>
                 )}
-                {statusReady && reclaimableCatalog.length > 0 && (
+                {statusReady && (reclaimableCatalog.length > 0 || casinoLossRelics.length > 0) && (
                   <div className="mt-1.5 pt-1.5 border-t border-primary/15">
                     <p className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em] text-center mb-0.5">
                       Vault Relics
@@ -1497,6 +1505,24 @@ export default function LootBox() {
                             cap={Number(live.cap ?? item.cap ?? 1)}
                             holder={claimedN > 0 ? (live.owner_username || null) : null}
                             info={`${item.buff_label || 'Passive bonus'}. Globally unique — returns to vaults if the holder is killed (not transferred).`}
+                          />
+                        );
+                      })}
+                      {casinoLossRelics.map((item) => {
+                        const label = item.buff_label
+                          ? `${item.name} (${item.buff_label})`
+                          : item.name;
+                        const claimedN = Number(item.claimed ?? 0);
+                        return (
+                          <ScarcityRow
+                            key={item.id}
+                            icon={Gem}
+                            label={label}
+                            claimed={claimedN}
+                            cap={Number(item.cap ?? 1)}
+                            holder={claimedN > 0 ? (item.owner_username || null) : null}
+                            emptyLabel="Available"
+                            info={`${item.buff_label || 'Casino loss cut'}. Paid every Friday at 6pm UK. Only one exists.`}
                           />
                         );
                       })}
