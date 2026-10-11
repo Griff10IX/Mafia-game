@@ -72,6 +72,26 @@ def email_lineage_dead_wipe_targets(
     return out
 
 
+async def email_held_by_ip_banned_account(db, email: str) -> bool:
+    """True if any account that has used this email is the source of an active IP ban."""
+    em = (email or "").strip()
+    if not em:
+        return False
+    pat = re.compile("^" + re.escape(em) + "$", re.IGNORECASE)
+    ids = [
+        u["id"]
+        async for u in db.users.find(
+            {"$or": [{"email": pat}, {"email_before_freed": pat}]},
+            {"_id": 0, "id": 1},
+        )
+        if u.get("id")
+    ]
+    if not ids:
+        return False
+    hit = await db.ip_bans.find_one({"source_user_id": {"$in": ids}, "active": True}, {"_id": 1})
+    return bool(hit)
+
+
 async def lineage_blocks_dead_alive_revive(db, user: Optional[dict]) -> bool:
     """True if this account or any email-lineage account has modkill_wipe."""
     if dead_alive_revive_explicitly_allowed(user):

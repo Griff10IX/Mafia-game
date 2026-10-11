@@ -687,6 +687,10 @@ def register(router):
             if existing_username:
                 raise HTTPException(status_code=400, detail="Username already registered.")
             # Email: block if taken by an alive account; if taken only by a dead account, free it so this registration can use it
+            from utils.modkill_wipe import email_held_by_ip_banned_account
+
+            if await email_held_by_ip_banned_account(db, user_data.email):
+                raise HTTPException(status_code=403, detail="This email cannot be used to register.")
             freed_email_from_dead_user_id = None
             existing_email = await db.users.find_one({"email": email_pattern}, {"_id": 0, "id": 1, "is_dead": 1, "email": 1})
             if existing_email:
