@@ -10,7 +10,7 @@
 [quote]
 [list]
 [*][color=#888888][b]Action:[/b] Modkill (wipe). Permanent IP ban.[/color]
-[*][color=#888888][b]What happened:[/b] Schizophrenic was caught selling in-game points for real money. That is against the game rules. He admitted Damaged was his second account.[/color]
+[*][color=#888888][b]What happened:[/b] Schizophrenic was caught selling in-game points for real money and duping. That is against the game rules. He admitted Damaged was his second account.[/color]
 [*][color=#888888][b]Proof:[/b] Matching logs are in the game. They are not posted on this topic.[/color]
 [*][color=#888888]Relinquished: Dice — Las Vegas.[/color]
 [*][color=#888888]Loot returned to the game: Chop-Shop Seal, Silent Partner.[/color]
