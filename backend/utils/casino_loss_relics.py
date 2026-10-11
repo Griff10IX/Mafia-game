@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 COLLECTION = "casino_loss_relics"
 OPEN_FIELD = "casino_loss_relic_opens"
 OPENS_BEFORE_ROLL = 100
-DROP_CHANCE = 0.01
+DROP_CHANCE = 0.02
 REBATE_RATE = 0.025
 LONDON = ZoneInfo("Europe/London")
 

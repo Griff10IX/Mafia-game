@@ -74,9 +74,9 @@ LOOT_REWARD_TIER_WEIGHTS: Dict[str, Dict[str, float]] = {
     "common": {"common": 0.78, "uncommon": 0.18, "rare": 0.035, "ultra_rare": 0.005},
     "uncommon": {"common": 0.12, "uncommon": 0.72, "rare": 0.13, "ultra_rare": 0.03},
 }
-EXCLUSIVE_CHANCE = 0.1
+EXCLUSIVE_CHANCE = 0.15
 # Ultra Rare dossier themes — separate quiet rate (not admin exclusive_chance, not public).
-UR_THEME_DROP_CHANCE = 0.01
+UR_THEME_DROP_CHANCE = 0.02
 # Game-wide max loot-exclusive claims per type (car remains 1; weapon, armour, Speakeasy allow one extra each).
 EXCLUSIVE_CAP_BY_TYPE: Dict[str, int] = {
     "weapon": 2,
@@ -239,7 +239,7 @@ GAME_SETTINGS_SJ_UR_GUARANTEE_KEY = "loot_sj_ur_guarantee"
 
 # Default rarity config (admin can override via game_settings)
 DEFAULT_RARITY_CONFIG = {
-    "exclusive_chance": 0.1,
+    "exclusive_chance": 0.15,
     "common_pct": 55,
     "uncommon_pct": 32,
     "rare_pct": 13,
