@@ -46,6 +46,17 @@ function parseListItems(body) {
   return items;
 }
 
+function parseImages(chunk) {
+  const urls = [];
+  const re = /\[(?:img|gif)\]([\s\S]*?)\[\/(?:img|gif)\]/gi;
+  let m;
+  while ((m = re.exec(chunk))) {
+    const url = String(m[1] || '').trim();
+    if (/^https?:\/\//i.test(url) && !urls.includes(url)) urls.push(url);
+  }
+  return urls;
+}
+
 function parseShameContent(raw) {
   const chunks = String(raw || '')
     .split(/\[hr\]/i)
@@ -67,7 +78,7 @@ function parseShameContent(raw) {
         const text = tidyText(quoteMatch ? quoteMatch[1] : chunk);
         if (text) items.push({ label: '', text });
       }
-      entries.push({ date: dateMatch[1], names, items });
+      entries.push({ date: dateMatch[1], names, items, images: parseImages(body) });
     } else if (quoteMatch) {
       intro = tidyText(quoteMatch[1]);
     }
@@ -121,6 +132,14 @@ export default function TopicOfShameBody({ content }) {
                   {item.text}
                 </p>
               </div>
+            ))}
+            {(entry.images || []).map((url) => (
+              <img
+                key={url}
+                src={url}
+                alt=""
+                className="block w-full max-w-xl rounded-md border border-amber-500/25"
+              />
             ))}
           </div>
         </SystemAiInboxMessage>

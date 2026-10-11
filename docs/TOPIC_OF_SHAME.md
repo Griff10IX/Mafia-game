@@ -6,6 +6,19 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-10-11[/color][/b] — [b]Wanker[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Action:[/b] Account locked. Permanent IP ban. Not modkilled.[/color]
+[*][color=#888888][b]What happened:[/b] Wanker was caught selling in-game points for real money. That is against the game rules.[/color]
+[*][color=#888888][b]Proof:[/b] The picture below. Matching logs are in the game. They are not posted on this topic.[/color]
+[*][color=#888888][b]Effect:[/b] Locked and IP banned. Anyone caught playing with him will be modkilled (wipe).[/color]
+[/list]
+[img]https://mafiawars.co.uk/api/image-host/i/wankerrmt01[/img]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-31[/color][/b] — [b]5Fingers, Scratat1[/b][/size]
 [quote]
 [list]
