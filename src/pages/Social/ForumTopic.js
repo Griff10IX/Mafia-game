@@ -1449,6 +1449,18 @@ export default function ForumTopic() {
           >
             <Pencil size={10} /> Edit topic
           </button>
+          {isAuthor && !(isAdmin || isModerator || isHdo) && (!topic.is_locked || topic.locked_by_author) && (
+            <button
+              type="button"
+              onClick={() => updateTopicFlags({ is_locked: !topic.is_locked })}
+              disabled={adminBusy}
+              className={`flex items-center gap-1 px-2.5 py-1.5 min-h-8 rounded text-[10px] font-heading border transition-all touch-manipulation ${
+                topic.is_locked ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'border-zinc-700/50 text-mutedForeground hover:border-red-500/50'
+              }`}
+            >
+              <Lock size={10} /> {topic.is_locked ? 'Unlock topic' : 'Lock topic'}
+            </button>
+          )}
         </div>
       )}
 

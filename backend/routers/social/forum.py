@@ -1326,8 +1326,17 @@ async def update_topic(
             updates["is_sticky"] = request.is_sticky
         if request.is_important is not None:
             updates["is_important"] = request.is_important
-    if can_lock and request.is_locked is not None:
-        updates["is_locked"] = request.is_locked
+    if request.is_locked is not None:
+        if can_lock:
+            updates["is_locked"] = request.is_locked
+            updates["locked_by_author"] = False
+        elif is_author:
+            if active_auction:
+                raise HTTPException(status_code=400, detail="Active designer auction topics can only be locked by staff")
+            if topic.get("is_locked") and not topic.get("locked_by_author"):
+                raise HTTPException(status_code=403, detail="Staff locked this topic. Only staff can unlock it.")
+            updates["is_locked"] = request.is_locked
+            updates["locked_by_author"] = bool(request.is_locked)
     if can_edit_content:
         if active_auction and not (is_admin or is_mod):
             if request.title is not None or request.content is not None or request.gif_url is not None:
