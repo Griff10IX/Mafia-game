@@ -718,6 +718,15 @@ async def _hitlist_batch(db, user: dict, remaining: Optional[int]) -> bool:
         return False
     uid = user["id"]
     now = datetime.now(timezone.utc)
+    # Searches expire after 24h but practice NPCs stay 48h; restart the search so the slot is not stuck.
+    from routers.kill.attack import insert_attack_search_row
+
+    async for hit in db.hitlist.find({"placer_id": uid, "target_type": "npc"}, {"_id": 0, "target_id": 1}):
+        if await db.attacks.find_one({"attacker_id": uid, "target_id": hit["target_id"]}, {"_id": 1}):
+            continue
+        npc = await db.users.find_one({"id": hit["target_id"], "is_npc": True, "is_dead": {"$ne": True}}, {"_id": 0})
+        if npc:
+            await insert_attack_search_row(db, attacker=user, target=npc, note="Automatic search for hitlist npc", source="hitlist_npc")
     rows = await db.attacks.find(
         {"attacker_id": uid, "status": {"$in": ["searching", "found"]}, "search_source": "hitlist_npc"},
         {"_id": 0},
