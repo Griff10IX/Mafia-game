@@ -726,7 +726,9 @@ async def _hitlist_batch(db, user: dict, remaining: Optional[int]) -> bool:
             continue
         npc = await db.users.find_one({"id": hit["target_id"], "is_npc": True, "is_dead": {"$ne": True}}, {"_id": 0})
         if npc:
-            await insert_attack_search_row(db, attacker=user, target=npc, note="Automatic search for hitlist npc", source="hitlist_npc")
+            row = await insert_attack_search_row(db, attacker=user, target=npc, note="Automatic search for hitlist npc", source="hitlist_npc")
+            if row:
+                await db.attacks.update_one({"id": row["id"]}, {"$set": {"found_at": now.isoformat()}})
     rows = await db.attacks.find(
         {"attacker_id": uid, "status": {"$in": ["searching", "found"]}, "search_source": "hitlist_npc"},
         {"_id": 0},
