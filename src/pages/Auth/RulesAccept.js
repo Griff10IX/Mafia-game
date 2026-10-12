@@ -12,6 +12,7 @@ const RULES_PREVIEW = [
   'Do not assist users who are BOS/site banned in returning to the game.',
   'Do not trade, loan, hold, or move assets on behalf of BOS/site banned users.',
   'No ban evasion by using another account, device, VPN/proxy setup, or third party.',
+  'Purchases are digital items delivered instantly and are non-refundable once delivered. Bans for rule breaking are not refunded.',
   'Fraudulent or chargeback-linked assets can be removed, including indirect transfers (e.g. Quick Trade).',
   'Even if you received those assets in good faith, staff may still reverse/remove them to protect the economy.',
   'If we determine activity is fraudulent or abusive (including chargebacks), we reserve the right to reverse related game effects.',

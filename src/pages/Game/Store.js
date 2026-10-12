@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package, Copy, Swords, Award, Gauge, Coins, Sparkles, Search, Landmark, Gift, Tag } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
+import { startCheckout } from '../../utils/purchaseTerms';
 import { copyTextToClipboard } from '../../utils/copyToClipboard';
 import { toast } from 'sonner';
 import { containsProfanity } from '../../utils/profanityFilter';
@@ -1556,10 +1557,14 @@ export default function Store() {
     setAutoRankStripeLoading(true);
     try {
       const origin = `${window.location.origin}/game/store?tab=upgrades`;
-      const res = await api.post('/payments/checkout', {
+      const res = await startCheckout({
         package_id: AUTO_RANK_STRIPE_PACKAGE_ID,
         origin_url: origin,
       });
+      if (!res) {
+        setAutoRankStripeLoading(false);
+        return;
+      }
       window.location.href = res.data.url;
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Checkout failed');
@@ -1576,10 +1581,14 @@ export default function Store() {
     setLootStripePackageId(packageId);
     try {
       const origin = `${window.location.origin}/game/store`;
-      const res = await api.post('/payments/checkout', {
+      const res = await startCheckout({
         package_id: packageId,
         origin_url: origin,
       });
+      if (!res) {
+        setLootStripePackageId(null);
+        return;
+      }
       window.location.href = res.data.url;
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Checkout failed');
@@ -1641,7 +1650,11 @@ export default function Store() {
         customPurchaseMode === 'points'
           ? { package_id: CUSTOM_POINTS_PACKAGE, origin_url: origin, custom_points: customQuote.base_points || customQuote.points }
           : { package_id: CUSTOM_POINTS_PACKAGE, origin_url: origin, custom_gbp: parseFloat(String(customGbpInput).replace(/[^0-9.]/g, '')) || 0 };
-      const res = await api.post('/payments/checkout', body);
+      const res = await startCheckout(body);
+      if (!res) {
+        setLoading(false);
+        return;
+      }
       window.location.href = res.data.url;
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Checkout failed');

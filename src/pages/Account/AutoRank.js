@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Unlock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame, CircleDot, Search, AlertTriangle, CheckCircle2, Info, PauseCircle, Zap, Trophy, ScrollText } from 'lucide-react';
 import api from '../../utils/api';
+import { startCheckout } from '../../utils/purchaseTerms';
 import { useAuthUser } from '../../context/AuthContext';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -2453,10 +2454,14 @@ export default function AutoRank() {
     if (autoRankStripeLoading) return;
     setAutoRankStripeLoading(true);
     try {
-      const res = await api.post('/payments/checkout', {
+      const res = await startCheckout({
         package_id: AUTO_RANK_STRIPE_PACKAGE_ID,
         origin_url: `${window.location.origin}/account/autorank`,
       });
+      if (!res) {
+        setAutoRankStripeLoading(false);
+        return;
+      }
       window.location.href = res.data.url;
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Checkout failed');

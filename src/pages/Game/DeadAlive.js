@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { KeyRound, AlertCircle, Skull, DollarSign, Info, Zap, Users } from 'lucide-react';
 import api from '../../utils/api';
+import { startCheckout } from '../../utils/purchaseTerms';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import { GAME_PASS_DEAD_ALIVE_FINE_PRINT } from '../../constants/gamePassPricing';
@@ -154,12 +155,16 @@ export default function DeadAlive() {
     setReviveLoading(true);
     setReviveSuccess(null);
     try {
-      const response = await api.post('/payments/checkout', {
+      const response = await startCheckout({
         package_id: packageId,
         origin_url: `${window.location.origin}/game/dead-alive`,
         revive_dead_username: toRevive,
         revive_dead_password: revivePassword ? revivePassword : undefined,
       });
+      if (!response) {
+        setReviveLoading(false);
+        return;
+      }
       if (!response.data?.url) {
         toast.error('Checkout failed');
         return;

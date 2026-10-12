@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Package, ShoppingBag, Clock, Settings, Sparkles } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
+import { startCheckout } from '../../utils/purchaseTerms';
 
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -863,10 +864,11 @@ export default function GamePass() {
     if (!user) return;
     setLoading(true);
     try {
-      const res = await api.post('/payments/checkout', {
+      const res = await startCheckout({
         package_id: GAME_PASS_PACKAGE_ID,
         origin_url: window.location.origin + '/game-pass',
       });
+      if (!res) return;
       window.location.href = res.data.url;
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
@@ -879,10 +881,11 @@ export default function GamePass() {
     if (!user) return;
     setPrestigeLoading(true);
     try {
-      const res = await api.post('/payments/checkout', {
+      const res = await startCheckout({
         package_id: GAME_PASS_PRESTIGE_PACKAGE_ID,
         origin_url: window.location.origin + '/game-pass',
       });
+      if (!res) return;
       window.location.href = res.data.url;
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');

@@ -128,6 +128,16 @@ def _add_months(dt: datetime, months: int) -> datetime:
     return dt.replace(year=y, month=m, day=d)
 
 
+PURCHASE_TERMS_VERSION = "2026-10-13"
+PURCHASE_TERMS_SHORT = "Digital in-game item, delivered instantly to your account. Non-refundable once delivered."
+PURCHASE_TERMS_CHECKOUT = (
+    "You are buying a digital in-game item for Mafia Wars. It is delivered to your account straight away "
+    "and is non-refundable once delivered. You agreed to the game rules when you joined: breaking them "
+    "(including selling points or items for real money) can lead to a ban without refund, and chargebacks "
+    "lead to the purchased items being removed."
+)
+
+
 class CheckoutRequest(BaseModel):
     package_id: str
     origin_url: str
@@ -137,6 +147,8 @@ class CheckoutRequest(BaseModel):
     # Dead > Alive revive (£10): dead account to bring back (+ password if email was freed).
     revive_dead_username: Optional[str] = None
     revive_dead_password: Optional[str] = None
+    # Buyer ticked the purchase terms (digital, non-refundable, game rules) before checkout.
+    accept_terms: bool = False
 
 
 class BuyGamePassWithPointsRequest(BaseModel):
@@ -1723,11 +1735,15 @@ def register(router):
             if is_locked:
                 raise HTTPException(status_code=503, detail=msg)
 
+        if not request.accept_terms:
+            raise HTTPException(status_code=400, detail="You must agree to the purchase terms before checking out.")
+
         api_key = _get_stripe_key()
         if not api_key:
             raise HTTPException(status_code=503, detail="Payments not configured (set STRIPE_SECRET_KEY)")
 
         now = datetime.now(timezone.utc)
+        terms_accepted_at = now.isoformat()
         package_id = (request.package_id or "").strip()
         points = 0
         base_points = 0
@@ -1894,8 +1910,12 @@ def register(router):
                 product_name = loot_piece_stripe_product_name(package_id)
             md = {
                 "user_id": current_user["id"],
+                "username": current_user.get("username") or "",
                 "package_id": package_id,
                 "points": str(points),
+                "purchase_terms_version": PURCHASE_TERMS_VERSION,
+                "purchase_terms_accepted_at": terms_accepted_at,
+                "rules_accepted_at": str(current_user.get("rules_accepted_at") or ""),
             }
             if revive_intent_id:
                 md["revive_intent_id"] = revive_intent_id
@@ -1914,6 +1934,7 @@ def register(router):
                         "unit_amount": int(unit_amount_minor),
                         "product_data": {
                             "name": product_name,
+                            "description": PURCHASE_TERMS_SHORT,
                             "metadata": {"package_id": package_id},
                         },
                     },
@@ -1923,6 +1944,8 @@ def register(router):
                 success_url=success_url,
                 cancel_url=cancel_url,
                 metadata=md,
+                payment_intent_data={"metadata": md, "description": f"Mafia Wars: {product_name} for {current_user.get('username') or '?'}"},
+                custom_text={"submit": {"message": PURCHASE_TERMS_CHECKOUT}},
             )
             return session
 
@@ -1948,6 +1971,8 @@ def register(router):
             "points": points,
             "payment_status": "pending",
             "created_at": datetime.now(timezone.utc).isoformat(),
+            "purchase_terms_version": PURCHASE_TERMS_VERSION,
+            "purchase_terms_accepted_at": terms_accepted_at,
         }
         if revive_intent_id:
             txn_doc["revive_intent_id"] = revive_intent_id
