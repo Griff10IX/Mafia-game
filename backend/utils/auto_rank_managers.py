@@ -230,8 +230,11 @@ async def _run_mission(db, user: dict) -> bool:
         return False
     start = int(fresh.get("auto_rank_mission_line") or 0) % len(actionable)
     await db.users.update_one({"id": fresh["id"]}, {"$set": {"auto_rank_mission_line": start + 1}})
-    for offset in range(len(actionable)):
-        key = actionable[(start + offset) % len(actionable)]
+    order = [actionable[(start + offset) % len(actionable)] for offset in range(len(actionable))]
+    hitlist_keys = [k for k in order if _ACTION_FOR_KEY[k] == "hitlist"]
+    if hitlist_keys and await _hitlist_npc_found(db, fresh["id"]):
+        order = hitlist_keys + [k for k in order if k not in hitlist_keys]
+    for key in order:
         action = _ACTION_FOR_KEY[key]
         try:
             if action == "crime" and await _one_crime(db, fresh):
@@ -262,6 +265,20 @@ async def _run_mission(db, user: dict) -> bool:
             logger.exception("auto mission line %s for %s", key, fresh.get("id"))
             continue
     return False
+
+
+async def _hitlist_npc_found(db, uid: str) -> bool:
+    """True when a hitlist NPC search has found its target (or its timer has run out)."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    hit = await db.attacks.find_one(
+        {
+            "attacker_id": uid,
+            "search_source": "hitlist_npc",
+            "$or": [{"status": "found"}, {"status": "searching", "found_at": {"$lte": now_iso}}],
+        },
+        {"_id": 1},
+    )
+    return bool(hit)
 
 
 def _hitlist_remaining(user: dict, mission: dict, key: str, *, prestige: bool = False) -> Optional[int]:
@@ -712,7 +729,6 @@ async def _hitlist_batch(db, user: dict, remaining: Optional[int]) -> bool:
         compute_bullets_required,
         execute_attack,
     )
-    from routers.kill.hitlist import _hitlist_npc_active_on_board_count, _hitlist_npc_max_per_window_for_user, hitlist_add_npc
 
     if remaining is not None and remaining <= 0:
         return False
@@ -813,12 +829,31 @@ async def _hitlist_batch(db, user: dict, remaining: Optional[int]) -> bool:
                     user["bullets"] = int(user.get("bullets") or 0) - cost
         finally:
             _AUTO_RANK_ATTACK.reset(token)
-        return shot_any
+        if shot_any:
+            await _hitlist_fill_slots(db, user, remaining=remaining)
+            return True
+    added = await _hitlist_fill_slots(db, user, remaining=remaining)
+    # Found NPCs are elsewhere: go where the most of them are so one trip clears the most.
+    by_city: Dict[str, int] = {}
+    for row in rows:
+        city = row.get("location_state") or ""
+        if row.get("status") == "found" and city and city != user.get("current_state"):
+            by_city[city] = by_city.get(city, 0) + 1
+    if by_city and await _travel_to(user, max(by_city, key=by_city.get)):
+        return True
+    return bool(added)
+
+
+async def _hitlist_fill_slots(db, user: dict, *, remaining: Optional[int]) -> int:
+    """Add practice NPCs to every free hitlist slot (each starts its own search)."""
+    from routers.kill.hitlist import _hitlist_npc_active_on_board_count, _hitlist_npc_max_per_window_for_user, hitlist_add_npc
+
+    uid = user["id"]
     cap = await _hitlist_npc_max_per_window_for_user(user)
     active = await _hitlist_npc_active_on_board_count(uid)
     free = max(0, cap - active)
     if remaining is not None:
-        free = min(free, max(0, remaining - len(rows)))
+        free = min(free, max(0, remaining - active))
     added = 0
     for _ in range(free):
         try:
@@ -826,17 +861,7 @@ async def _hitlist_batch(db, user: dict, remaining: Optional[int]) -> bool:
             added += 1
         except HTTPException:
             break
-    if added:
-        return True
-    # Found NPCs are elsewhere: go where the most of them are so one trip clears the most.
-    by_city: Dict[str, int] = {}
-    for row in rows:
-        city = row.get("location_state") or ""
-        if row.get("status") == "found" and city and city != user.get("current_state"):
-            by_city[city] = by_city.get(city, 0) + 1
-    if by_city:
-        return await _travel_to(user, max(by_city, key=by_city.get))
-    return False
+    return added
 
 
 def _internal_request():
