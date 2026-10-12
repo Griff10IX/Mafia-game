@@ -1688,7 +1688,7 @@ async def buy_vip_pass_car(
     }
 
 
-async def send_points(request: SendPointsRequest, current_user: dict = Depends(get_current_user_verified)):
+async def send_points(request: SendPointsRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
     """Send points to another player. Logged in points_transfers (last 10 visible to user, 500 to admin)."""
     to_username = (str(request.to_username) if request.to_username is not None else "").strip()
     if not to_username:
@@ -1711,6 +1711,10 @@ async def send_points(request: SendPointsRequest, current_user: dict = Depends(g
         raise HTTPException(status_code=400, detail="Cannot send points to a dead account")
     if recipient["id"] == sender_id:
         raise HTTPException(status_code=400, detail="You cannot send points to yourself")
+    from utils.ip_ban_check import client_ip_from_request
+    from utils.transfer_cap import enforce_transfer_cap
+
+    await enforce_transfer_cap(db, sender_id, amount, kind="points", client_ip=client_ip_from_request(req))
     # Atomic deduct: only succeeds if sender still has enough points
     sender_before_doc = await db.users.find_one_and_update(
         {"id": sender_id, "points": {"$gte": amount}},

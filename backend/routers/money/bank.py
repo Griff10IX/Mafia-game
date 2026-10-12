@@ -394,6 +394,11 @@ async def bank_transfer(request: MoneyTransferRequest, req: Request, current_use
     if recipient.get("is_dead"):
         raise HTTPException(status_code=400, detail="Recipient is dead")
 
+    from utils.ip_ban_check import client_ip_from_request
+    from utils.transfer_cap import enforce_transfer_cap
+
+    await enforce_transfer_cap(db, current_user.get("id") or "", amount, kind="cash", client_ip=client_ip_from_request(req))
+
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
     transfer_id = str(uuid.uuid4())

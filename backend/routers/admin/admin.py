@@ -8508,6 +8508,22 @@ def register(router):
             "email": email,
         }
 
+    @router.post("/admin/transfer-cap")
+    async def admin_set_transfer_cap(
+        target_username: str = Query(..., min_length=1),
+        enabled: bool = Query(...),
+        current_user: dict = Depends(require_admin),
+    ):
+        """Turn the weekly bank cash / store points send cap on or off for one account (admins only)."""
+        target = await db.users.find_one({"username": _username_pattern(target_username)}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        from utils.transfer_cap import set_transfer_cap
+
+        await set_transfer_cap(db, target["id"], enabled, staff_username=current_user.get("username"))
+        state = "on" if enabled else "off"
+        return {"message": f"Weekly send cap {state} for {target.get('username')}.", "transfer_capped": enabled}
+
     @router.post("/admin/grant-dead-alive-inheritance")
     async def admin_grant_dead_alive_inheritance(
         target_username: str = Query(..., min_length=1),
