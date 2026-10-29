@@ -1227,6 +1227,17 @@ def register(router):
 
     db = srv.db
 
+    async def _find_user_brief_or_404(ref: str) -> dict:
+        """Find a user by id or username (case-insensitive); 404 if missing. Returns id + username."""
+        key = (ref or "").strip()
+        proj = {"_id": 0, "id": 1, "username": 1}
+        user = await db.users.find_one({"id": key}, proj) or await db.users.find_one({"username": key}, proj)
+        if not user:
+            user = await db.users.find_one({"username": re.compile("^" + re.escape(key) + "$", re.IGNORECASE)}, proj)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return user
+
     def _casino_coll_map():
         return {g: (db[c], loc) for g, (c, loc) in CASINO_OWNERSHIP_COLLS.items()}
     log_respect_delta = srv.log_respect_delta
@@ -16741,15 +16752,7 @@ def register(router):
         """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin or moderator access required")
-        key = (username or "").strip()
-        user = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1})
-        if not user:
-            user = await db.users.find_one({"username": key}, {"_id": 0, "id": 1, "username": 1})
-        if not user:
-            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
-            user = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        user = await _find_user_brief_or_404(username)
         uid = user["id"]
 
         attacks = (
@@ -16838,19 +16841,7 @@ def register(router):
         """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        key = (username or "").strip()
-        user = await db.users.find_one(
-            {"id": key},
-            {"_id": 0, "id": 1, "username": 1},
-        )
-        if not user:
-            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
-            user = await db.users.find_one(
-                {"username": pattern},
-                {"_id": 0, "id": 1, "username": 1},
-            )
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        user = await _find_user_brief_or_404(username)
         uid = user["id"]
         docs = (
             await db.crime_events.find(
@@ -16873,13 +16864,7 @@ def register(router):
         """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        key = (username or "").strip()
-        user = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1})
-        if not user:
-            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
-            user = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        user = await _find_user_brief_or_404(username)
         uid = user["id"]
         cursor = db.gta_events.find({"user_id": uid}, {"_id": 0}).sort("at", -1).limit(limit)
         docs = await cursor.to_list(limit)
@@ -16899,13 +16884,7 @@ def register(router):
         """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        key = (username or "").strip()
-        user = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1})
-        if not user:
-            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
-            user = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        user = await _find_user_brief_or_404(username)
         uid = user["id"]
         cursor = db.bust_events.find({"user_id": uid}, {"_id": 0}).sort("at", -1).limit(limit)
         docs = await cursor.to_list(limit)
@@ -16925,13 +16904,7 @@ def register(router):
         """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        key = (username or "").strip()
-        user = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1})
-        if not user:
-            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
-            user = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        user = await _find_user_brief_or_404(username)
         uid = user["id"]
         transfers_cursor = db.money_transfers.find(
             {"$or": [{"from_user_id": uid}, {"to_user_id": uid}]},
@@ -17299,13 +17272,7 @@ def register(router):
         """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        key = (username or "").strip()
-        user = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1})
-        if not user:
-            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
-            user = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        user = await _find_user_brief_or_404(username)
         uid = user["id"]
         cursor = db.stock_transactions.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).limit(limit)
         docs = await cursor.to_list(limit)

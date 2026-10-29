@@ -31,6 +31,8 @@ import {
   PoundSterling,
   UserRound,
   ShieldCheck,
+  ScrollText,
+  Settings2,
 } from 'lucide-react';
 
 export const ADMIN_CATEGORIES = [
@@ -144,7 +146,9 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'property-transfer', label: 'Armoury / airport', categoryId: 'admin-world-systems', kind: 'standalone', icon: Landmark, description: 'Transfer or release armoury and airport ownership between players.' },
   { id: 'locked', label: 'Locked accounts', categoryId: 'admin-world-systems', kind: 'standalone', icon: LockKeyhole, description: 'Investigation locks on player accounts.' },
   { id: 'analytics', label: 'Analytics', categoryId: 'admin-analytics-monitoring', kind: 'hub', hubSection: 'analytics', anchorId: 'admin-analytics', icon: BarChart3, description: 'KPI dashboards and trend monitors.' },
-  { id: 'logs', label: 'Logs', categoryId: 'admin-analytics-monitoring', kind: 'hub', hubSection: 'logs', anchorId: 'admin-logs', icon: Layers, description: 'Audit trails and event logs.' },
+  { id: 'log-explorer', label: 'Logs', categoryId: 'admin-analytics-monitoring', kind: 'standalone', icon: ScrollText, description: 'Every game log in one place, plus a full timeline for any player.' },
+  { id: 'site-settings', label: 'Settings', categoryId: 'admin-world-systems', kind: 'standalone', icon: Settings2, description: 'Game-wide switches and limits: bot checks, pacing, economy, store, features.' },
+  { id: 'logs', label: 'Logs (classic)', categoryId: 'admin-analytics-monitoring', kind: 'hub', hubSection: 'logs', anchorId: 'admin-logs', icon: Layers, description: 'Audit trails and event logs.' },
   { id: 'users-online', label: 'Online dupe screen', categoryId: 'admin-analytics-monitoring', kind: 'standalone', icon: Radio, description: 'Who is online now — dupe/proxy screen, shared IPs, fingerprints.' },
   { id: 'attack-logs', label: 'Attack logs', categoryId: 'admin-analytics-monitoring', kind: 'standalone', icon: Crosshair, description: 'PVP attack log console and analytics.' },
   { id: 'bodyguard-hire-logs', label: 'BG hire logs', categoryId: 'admin-analytics-monitoring', kind: 'standalone', icon: Shield, description: 'Robot bodyguard hire attempts — rvk gate fails and legacy bot fingerprints.' },
@@ -198,7 +202,9 @@ const ROUTE_NAV_SECTION = {
   'distillery-progress': 'nav-systems',
   'weed-sell-audit': 'nav-systems',
   analytics: 'nav-insights',
+  'log-explorer': 'nav-insights',
   logs: 'nav-insights',
+  'site-settings': 'nav-staff',
   staff: 'nav-staff',
   engineering: 'nav-staff',
 };
@@ -241,7 +247,9 @@ export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
   'safety-center': 'Safety',
   safety: 'Security',
   analytics: 'Stats',
-  logs: 'Logs',
+  'log-explorer': 'Logs',
+  logs: 'Logs+',
+  'site-settings': 'Settings',
   staff: 'Staff',
   engineering: 'Eng',
   'users-online': 'Live',

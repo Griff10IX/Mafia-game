@@ -378,6 +378,7 @@ function ActionsTab({ d, run }) {
           <Link to={`/tjjeujr3wa/moderation?target=${encodeURIComponent(name)}`}><Button size="sm" icon={ExternalLink}>Modkill, revive</Button></Link>
           <Link to="/tjjeujr3wa/safety-center?tab=bans"><Button size="sm" icon={ExternalLink}>Bans (Safety centre)</Button></Link>
           <Link to={`/profile/${encodeURIComponent(name)}`}><Button size="sm" icon={ExternalLink}>Player dossier</Button></Link>
+          <Link to={`/tjjeujr3wa/log-explorer?u=${encodeURIComponent(name)}`}><Button size="sm" icon={ExternalLink}>Full log timeline</Button></Link>
         </div>
       </Card>
     </div>
