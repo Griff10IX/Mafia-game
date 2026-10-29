@@ -74,10 +74,10 @@ def _weekly_agg_candidate_limit(limit: int) -> int:
 
 
 def _weekly_agg_hint(collection: str, extra_match: dict = None) -> Optional[list]:
-    """Prefer compound indexes that match weekly $match order (at / type+at / at+success)."""
+    """Prefer compound indexes that match weekly $match order (success+at / type+at / at)."""
     em = extra_match or {}
     if collection in ("bust_events", "gta_events", "crime_events") and "success" in em:
-        return [("at", 1), ("success", 1), ("user_id", 1)]
+        return [("success", 1), ("at", 1), ("user_id", 1)]
     if collection == "economy_events" and "type" in em:
         return [("type", 1), ("at", -1)]
     if collection in ("melt_events", "respect_events", "stock_transactions"):

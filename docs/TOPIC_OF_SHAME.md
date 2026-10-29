@@ -6,6 +6,18 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-10-20[/color][/b] — [b]Omerta33[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Action:[/b] Modkill (wipe) for rule breaking.[/color]
+[*][color=#888888][b]What happened:[/b] advertising[/color]
+[*][color=#888888]Taken: no casino, airport, or armoury on this account.[/color]
+[*][color=#888888][b]Effect:[/b] Rank reset to Rat (prestige 0). Honours, leaderboards, cash, points, and Game Pass stripped. Modkilled badge added. £10 Dead > Alive revive blocked.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-10-11[/color][/b] — [b]Schizophrenic, Damaged[/b][/size]
 [quote]
 [list]

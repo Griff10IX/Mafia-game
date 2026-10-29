@@ -136,7 +136,6 @@ async def ensure_profile_indexes(db):
         for coll_name in ("dice_ownership", "roulette_ownership", "blackjack_ownership", "horseracing_ownership", "videopoker_ownership", "slots_ownership"):
             await db[coll_name].create_index("owner_id")
         # notifications: count by user_id + type (profile inbox/sent aggregation)
-        await db.notifications.create_index("user_id")
         await db.notifications.create_index([("user_id", 1), ("notification_type", 1)])
         logger.info("Profile indexes ensured.")
     except Exception as e:

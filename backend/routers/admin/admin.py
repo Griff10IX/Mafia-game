@@ -13858,6 +13858,103 @@ def register(router):
             return now - timedelta(days=31 * p)
         raise HTTPException(status_code=400, detail="Invalid bucket")
 
+    def _analytics_truthy(path: str) -> dict:
+        v = {"$ifNull": [path, None]}
+        return {"$and": [{"$ne": [v, None]}, {"$ne": [v, 0]}, {"$ne": [v, ""]}, {"$ne": [v, False]}]}
+
+    def _analytics_num(path: str) -> dict:
+        return {"$convert": {"input": path, "to": "double", "onError": 0.0, "onNull": 0.0}}
+
+    def _analytics_first_truthy(paths: List[str], default: float) -> dict:
+        expr: Any = default
+        for p in reversed(paths):
+            expr = {"$cond": [_analytics_truthy(p), _analytics_num(p), expr]}
+        return expr
+
+    def _analytics_bucket_expr(bucket: str) -> dict:
+        """Same boundaries as utils.analytics_events.bucket_iso (5m UTC; day/week/month Europe/London)."""
+        if bucket == "realtime_5m":
+            trunc = {"$dateTrunc": {"date": "$created_at", "unit": "minute", "binSize": 5}}
+        elif bucket == "weekly":
+            trunc = {"$dateTrunc": {"date": "$created_at", "unit": "week", "timezone": "Europe/London", "startOfWeek": "monday"}}
+        else:
+            unit = "day" if bucket == "daily" else "month"
+            trunc = {"$dateTrunc": {"date": "$created_at", "unit": unit, "timezone": "Europe/London"}}
+        return {"$dateToString": {"date": trunc, "format": "%Y-%m-%dT%H:%M:%SZ"}}
+
+    def _analytics_events_pipeline(since: datetime, bucket: Optional[str] = None) -> List[dict]:
+        """Rows shaped like the old analytics_events docs, built from activity_log, gambling_log and minigame_play_payouts."""
+        match = {"$match": {"created_at": {"$gte": since}}}
+        action = {"$toLower": {"$trim": {"input": {"$ifNull": ["$action", ""]}}}}
+
+        def _action_has(regex: str) -> dict:
+            return {"$regexMatch": {"input": "$$a", "regex": regex}}
+
+        activity_domain_value = {
+            "$let": {
+                "vars": {"a": action},
+                "in": {
+                    "$switch": {
+                        "branches": [
+                            {"case": _action_has("booze"), "then": ["booze_run", _analytics_first_truthy(["$details.profit", "$details.cash"], 1.0)]},
+                            {"case": _action_has("^(crime|oc_|gta)|jail"), "then": ["crime_suite", _analytics_first_truthy(["$details.profit", "$details.cash"], 1.0)]},
+                            {"case": _action_has("minigame"), "then": ["minigames", _analytics_first_truthy(["$details.score"], 1.0)]},
+                            {"case": _action_has("^(attack|family_)|racket|war"), "then": ["combat_family", 1.0]},
+                            {"case": _action_has("^store_|token|buy_"), "then": ["store", _analytics_first_truthy(["$details.points_spent", "$details.cost"], 1.0)]},
+                            {"case": _action_has("transfer|economy|bank"), "then": ["economy", _analytics_first_truthy(["$details.amount", "$details.profit"], 1.0)]},
+                        ],
+                        "default": ["other", 1.0],
+                    }
+                },
+            }
+        }
+        reward_total = {
+            "$add": [
+                _analytics_num({"$ifNull": ["$rewards.money", 0]}),
+                _analytics_num({"$ifNull": ["$rewards.respect_points", 0]}),
+                _analytics_num({"$ifNull": ["$rewards.bullets", 0]}),
+                _analytics_num({"$ifNull": ["$rewards.loot_box_pieces", 0]}),
+            ]
+        }
+        casino_profit = {
+            "$subtract": [
+                _analytics_first_truthy(["$details.payout", "$details.winnings"], 0.0),
+                _analytics_first_truthy(["$details.stake", "$details.bet", "$details.buy_in"], 0.0),
+            ]
+        }
+        keep = {"_id": 0, "user_id": 1, "username": 1, "created_at": 1, "domain": 1, "value": 1}
+        pipeline: List[dict] = [
+            match,
+            {"$addFields": {"_dv": activity_domain_value}},
+            {"$addFields": {"domain": {"$arrayElemAt": ["$_dv", 0]}, "value": {"$arrayElemAt": ["$_dv", 1]}}},
+            {"$project": keep},
+            {
+                "$unionWith": {
+                    "coll": "gambling_log",
+                    "pipeline": [
+                        match,
+                        {"$addFields": {"_p": casino_profit}},
+                        {"$addFields": {"domain": "casino", "value": {"$cond": [{"$ne": ["$_p", 0]}, "$_p", 1.0]}}},
+                        {"$project": keep},
+                    ],
+                }
+            },
+            {
+                "$unionWith": {
+                    "coll": "minigame_play_payouts",
+                    "pipeline": [
+                        match,
+                        {"$addFields": {"_r": reward_total}},
+                        {"$addFields": {"domain": "minigames", "value": {"$cond": [{"$gt": ["$_r", 0]}, "$_r", 1.0]}}},
+                        {"$project": keep},
+                    ],
+                }
+            },
+        ]
+        if bucket:
+            pipeline.append({"$addFields": {"bucket_start": _analytics_bucket_expr(bucket)}})
+        return pipeline
+
     @router.get("/admin/analytics/v2/overview")
     async def admin_analytics_v2_overview(
         bucket: str = Query("daily"),
@@ -13870,9 +13967,7 @@ def register(router):
         if b not in VALID_BUCKETS:
             raise HTTPException(status_code=400, detail=f"bucket must be one of {', '.join(VALID_BUCKETS)}")
         now = datetime.now(timezone.utc)
-        since_iso = _analytics_since(now, b, periods).isoformat()
-        pipeline = [
-            {"$match": {"created_at": {"$gte": since_iso}}},
+        pipeline = _analytics_events_pipeline(_analytics_since(now, b, periods)) + [
             {
                 "$group": {
                     "_id": "$domain",
@@ -13883,7 +13978,7 @@ def register(router):
             },
             {"$sort": {"events": -1}},
         ]
-        rows = await db.analytics_events.aggregate(pipeline).to_list(200)
+        rows = await db.activity_log.aggregate(pipeline, allowDiskUse=True).to_list(200)
         items = [
             {
                 "domain": r.get("_id") or "unknown",
@@ -13917,22 +14012,20 @@ def register(router):
         if b not in VALID_BUCKETS:
             raise HTTPException(status_code=400, detail=f"bucket must be one of {', '.join(VALID_BUCKETS)}")
         now = datetime.now(timezone.utc)
-        since_iso = _analytics_since(now, b, periods).isoformat()
-        match: Dict[str, Any] = {"created_at": {"$gte": since_iso}}
+        pipeline = _analytics_events_pipeline(_analytics_since(now, b, periods), b)
         if domain and domain.strip():
-            match["domain"] = domain.strip()
-        pipeline = [
-            {"$match": match},
+            pipeline.append({"$match": {"domain": domain.strip()}})
+        pipeline += [
             {
                 "$group": {
-                    "_id": {"bucket": f"$buckets.{b}", "domain": "$domain"},
+                    "_id": {"bucket": "$bucket_start", "domain": "$domain"},
                     "events": {"$sum": 1},
                     "total_value": {"$sum": "$value"},
                 }
             },
             {"$sort": {"_id.bucket": 1, "_id.domain": 1}},
         ]
-        rows = await db.analytics_events.aggregate(pipeline).to_list(5000)
+        rows = await db.activity_log.aggregate(pipeline, allowDiskUse=True).to_list(5000)
         series = [
             {
                 "bucket_start": (r.get("_id") or {}).get("bucket"),
@@ -13961,9 +14054,8 @@ def register(router):
         if not d:
             raise HTTPException(status_code=400, detail="domain required")
         now = datetime.now(timezone.utc)
-        since_iso = _analytics_since(now, b, periods).isoformat()
-        pipeline = [
-            {"$match": {"created_at": {"$gte": since_iso}, "domain": d}},
+        pipeline = _analytics_events_pipeline(_analytics_since(now, b, periods)) + [
+            {"$match": {"domain": d}},
             {
                 "$group": {
                     "_id": "$user_id",
@@ -13975,7 +14067,7 @@ def register(router):
             {"$sort": {"total_value": -1, "events": -1}},
             {"$limit": int(limit)},
         ]
-        rows = await db.analytics_events.aggregate(pipeline).to_list(int(limit))
+        rows = await db.activity_log.aggregate(pipeline, allowDiskUse=True).to_list(int(limit))
         leaders = [
             {
                 "user_id": r.get("_id"),
@@ -13996,26 +14088,32 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
         now = datetime.now(timezone.utc)
         since = now - timedelta(days=int(days_back))
-        docs = await db.analytics_events.find(
-            {"created_at": {"$gte": since.isoformat()}},
-            {"_id": 0, "domain": 1, "value": 1, "user_id": 1, "buckets": 1},
-        ).limit(500000).to_list(500000)
         aggregates: Dict[tuple, dict] = {}
-        for d in docs:
-            domain = (d.get("domain") or "unknown").strip() or "unknown"
-            val = float(d.get("value") or 0)
-            uid = d.get("user_id")
-            bmap = d.get("buckets") or {}
-            for b in ("realtime_5m", "daily", "weekly", "monthly"):
-                start = (bmap.get(b) or "").strip()
+        source_events_scanned = 0
+        for b in ("realtime_5m", "daily", "weekly", "monthly"):
+            pipeline = _analytics_events_pipeline(since, b) + [
+                {
+                    "$group": {
+                        "_id": {"start": "$bucket_start", "domain": "$domain"},
+                        "events": {"$sum": 1},
+                        "total_value": {"$sum": "$value"},
+                        "users": {"$addToSet": "$user_id"},
+                    }
+                },
+            ]
+            async for r in db.activity_log.aggregate(pipeline, allowDiskUse=True):
+                key_doc = r.get("_id") or {}
+                start = (key_doc.get("start") or "").strip()
                 if not start:
                     continue
-                key = (b, start, domain)
-                row = aggregates.setdefault(key, {"events": 0, "total_value": 0.0, "users": set()})
-                row["events"] += 1
-                row["total_value"] += val
-                if uid:
-                    row["users"].add(uid)
+                domain = (key_doc.get("domain") or "unknown").strip() or "unknown"
+                aggregates[(b, start, domain)] = {
+                    "events": int(r.get("events") or 0),
+                    "total_value": float(r.get("total_value") or 0),
+                    "users": [u for u in (r.get("users") or []) if u],
+                }
+                if b == "monthly":
+                    source_events_scanned += int(r.get("events") or 0)
         upserts = 0
         for (b, start, domain), row in aggregates.items():
             await db.analytics_rollups.update_one(
@@ -14037,7 +14135,7 @@ def register(router):
         return {
             "generated_at": now.isoformat(),
             "days_back": int(days_back),
-            "source_events_scanned": len(docs),
+            "source_events_scanned": source_events_scanned,
             "rollup_rows_upserted": upserts,
         }
 
