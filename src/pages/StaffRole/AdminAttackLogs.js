@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Crosshair, RefreshCw, Shield } from 'lucide-react';
+import { Crosshair, RefreshCw } from 'lucide-react';
 import api from '../../utils/api';
 import { formatAdminDateTime } from '../../utils/adminDateTime';
 import { toast } from 'sonner';
-import styles from '../../styles/noir.module.css';
 import AttackLogsPanel from '../../components/staff/AttackLogsPanel';
 import { formatBodyguardHireDetail } from '../../utils/attackLogDisplay';
+import {
+  AdminPage, Button, Card, DataTable, ErrorBlock, KpiGrid, KpiTile, LoadingBlock, fmtNum, touchClass,
+} from './kit/AdminKit';
 
 function formatAuditTimelineRow(row) {
   if (!row || typeof row !== 'object') return '—';
@@ -33,6 +35,8 @@ function formatAuditTimelineRow(row) {
   }
   return { at, src, kind, detail: detail || '—' };
 }
+
+const pretty = (s) => String(s || '—').replace(/_/g, ' ');
 
 export default function AdminAttackLogs() {
   const navigate = useNavigate();
@@ -108,19 +112,14 @@ export default function AdminAttackLogs() {
     }
   }, []);
 
+  const pageProps = {
+    title: 'Attack logs',
+    subtitle: 'Raw attack attempts per player, their bodyguard roster, and the merged hire, kill and payout timeline.',
+    icon: Crosshair,
+  };
+
   if (!accessChecked || (analyticsLoading && !analytics && !analyticsError)) {
-    return (
-      <div
-        className={`space-y-3 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden`}
-        style={{ padding: '12px 14px', maxWidth: 1400, margin: '0 auto' }}
-        data-testid="admin-attack-logs-page"
-      >
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-          <Crosshair className="w-10 h-10 text-primary/60" />
-          <p className="text-sm text-mutedForeground font-heading">Loading attack tools…</p>
-        </div>
-      </div>
-    );
+    return <div data-testid="admin-attack-logs-page"><AdminPage {...pageProps}><LoadingBlock label="Loading attack tools…" /></AdminPage></div>;
   }
 
   const g = analytics?.global;
@@ -130,170 +129,81 @@ export default function AdminAttackLogs() {
   const merged = Array.isArray(bodyguardData?.merged_timeline) ? bodyguardData.merged_timeline : [];
 
   return (
-    <div
-      className={`space-y-4 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden`}
-      style={{ padding: '12px 14px', maxWidth: 1400, margin: '0 auto' }}
-      data-testid="admin-attack-logs-page"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <Crosshair className="w-6 h-6 text-primary shrink-0" />
-          <div className="min-w-0">
-            <h1 className="text-lg font-heading font-bold text-foreground truncate">Attack logs</h1>
-            <p className="text-[10px] text-mutedForeground font-heading">
-              Per-user raw attack attempts, bodyguard roster and merged hire/kill/payout timeline. Game-wide KPIs below are from the last 7 days. For{' '}
-              <span className="text-amber-200/80">execute_token</span> failure correlation and search header audits, use main{' '}
-              <strong className="text-foreground">Admin → Cheat Detection</strong> → Kill / attack — UA spoof telemetry → Load spoof report.
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => fetchAnalytics()}
-          disabled={analyticsLoading}
-          className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded border border-border bg-secondary hover:bg-secondary/80 text-[10px] font-heading uppercase tracking-wider disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${analyticsLoading ? 'animate-spin' : ''}`} />
-          Refresh stats
-        </button>
-      </div>
+    <div data-testid="admin-attack-logs-page">
+      <AdminPage
+        {...pageProps}
+        actions={<Button icon={RefreshCw} loading={analyticsLoading} onClick={() => fetchAnalytics()} className={touchClass}>Refresh stats</Button>}
+      >
+        {analyticsError && <ErrorBlock message={analyticsError} onRetry={fetchAnalytics} />}
 
-      {analyticsError && (
-        <div className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100 font-heading">{analyticsError}</div>
-      )}
+        <KpiGrid cols={4}>
+          <KpiTile label="Attempts (7 days)" value={fmtNum(g?.attempts)} hint="Sample" />
+          <KpiTile label="Kills (7 days)" value={fmtNum(g?.kills)} hint="Sample" />
+          <KpiTile label="Kill rate" value={g?.kill_rate != null ? `${(Number(g.kill_rate) * 100).toFixed(1)}%` : '—'} />
+          <KpiTile label="Avg bullets per attempt" value={g?.avg_bullets_per_attempt != null ? Number(g.avg_bullets_per_attempt).toFixed(1) : '—'} />
+        </KpiGrid>
+        <p className="text-xs leading-relaxed text-zinc-500">
+          Analytics snapshot: {formatAdminDateTime(analytics?.generated_at)}. For <span className="font-mono text-zinc-400">execute_token</span> failure
+          correlation and search header audits, use <span className="text-zinc-300">Admin → Cheat detection → Kill / attack, UA spoof telemetry → Load spoof report</span>.
+        </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-        <div className="rounded border border-border bg-card/40 px-3 py-2">
-          <div className="text-[9px] uppercase tracking-wider text-mutedForeground font-heading">Attempts (7d, sample)</div>
-          <div className="text-xl font-heading font-bold text-primary tabular-nums">{(g?.attempts ?? 0).toLocaleString()}</div>
-        </div>
-        <div className="rounded border border-border bg-card/40 px-3 py-2">
-          <div className="text-[9px] uppercase tracking-wider text-mutedForeground font-heading">Kills (7d, sample)</div>
-          <div className="text-xl font-heading font-bold text-foreground tabular-nums">{(g?.kills ?? 0).toLocaleString()}</div>
-        </div>
-        <div className="rounded border border-border bg-card/40 px-3 py-2">
-          <div className="text-[9px] uppercase tracking-wider text-mutedForeground font-heading">Kill rate</div>
-          <div className="text-xl font-heading font-bold text-foreground tabular-nums">
-            {g?.kill_rate != null ? `${(Number(g.kill_rate) * 100).toFixed(1)}%` : '—'}
+        <Card title="Attack attempts" subtitle="Search a player or target, filter by bodyguard activity and day range.">
+          <div className="admin-skin min-w-0">
+            <AttackLogsPanel
+              introText="Filters: bodyguard blocks/kills, protectee, target victim, guard name, day range. Enter a username or target victim — Attack narrative shows guard kills, blocks, failed hits, then the kill (e.g. Moey). Group duplicate rows to collapse spam."
+              tableMaxHeightClass="max-h-[min(70vh,560px)]"
+              onLogsLoaded={onAttackLogsLoaded}
+              showGlobalIntel
+            />
           </div>
-        </div>
-        <div className="rounded border border-border bg-card/40 px-3 py-2">
-          <div className="text-[9px] uppercase tracking-wider text-mutedForeground font-heading">Avg bullets / attempt</div>
-          <div className="text-xl font-heading font-bold text-foreground tabular-nums">
-            {g?.avg_bullets_per_attempt != null ? Number(g.avg_bullets_per_attempt).toFixed(1) : '—'}
-          </div>
-        </div>
-      </div>
-      <p className="text-[9px] text-mutedForeground font-heading">
-        Analytics snapshot: {formatAdminDateTime(analytics?.generated_at)}
-      </p>
+        </Card>
 
-      <section className="rounded border border-border overflow-hidden">
-        <div className="px-2 py-1.5 bg-primary/10 border-b border-border text-[10px] font-heading font-bold uppercase tracking-wider text-primary flex items-center gap-2">
-          <Crosshair className="w-3.5 h-3.5" />
-          Attack attempts (post data)
-        </div>
-        <div className="p-3">
-          <AttackLogsPanel
-            introText="Filters: bodyguard blocks/kills, protectee, target victim, guard name, day range. Enter a username or target victim — Attack narrative shows guard kills, blocks, failed hits, then the kill (e.g. Moey). Group duplicate rows to collapse spam."
-            tableMaxHeightClass="max-h-[min(70vh,560px)]"
-            onLogsLoaded={onAttackLogsLoaded}
-            showGlobalIntel
-          />
-        </div>
-      </section>
-
-      {(bodyguardLoading || bodyguardError || bodyguardData) && (
-        <section className="rounded border border-border overflow-hidden">
-          <div className="px-2 py-1.5 bg-primary/10 border-b border-border text-[10px] font-heading font-bold uppercase tracking-wider text-primary flex items-center gap-2">
-            <Shield className="w-3.5 h-3.5" />
-            Bodyguard snapshot and timeline
-          </div>
-          <div className="p-3 space-y-3 text-[10px] font-heading">
-            {bodyguardLoading && <p className="text-mutedForeground">Loading bodyguard audit…</p>}
-            {bodyguardError && !bodyguardLoading && (
-              <div className="rounded border border-red-500/40 bg-red-500/10 px-2 py-1.5 text-red-200">{bodyguardError}</div>
-            )}
+        {(bodyguardLoading || bodyguardError || bodyguardData) && (
+          <Card title="Bodyguard snapshot and timeline" subtitle={u.username ? `For ${u.username}` : undefined}>
+            {bodyguardLoading && <LoadingBlock label="Loading bodyguard audit…" />}
+            {bodyguardError && !bodyguardLoading && <ErrorBlock message={bodyguardError} />}
             {bodyguardData && !bodyguardLoading && (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                  <div className="rounded border border-border bg-card/30 px-2 py-1.5">
-                    <div className="text-[9px] uppercase text-mutedForeground">User</div>
-                    <div className="text-foreground font-bold truncate">{u.username ?? '—'}</div>
-                  </div>
-                  <div className="rounded border border-border bg-card/30 px-2 py-1.5">
-                    <div className="text-[9px] uppercase text-mutedForeground">Filled / slots</div>
-                    <div className="text-foreground tabular-nums">
-                      {filledSlots} / {u.bodyguard_slots != null ? Number(u.bodyguard_slots) : owned.length || '—'}
-                    </div>
-                  </div>
-                  <div className="rounded border border-border bg-card/30 px-2 py-1.5">
-                    <div className="text-[9px] uppercase text-mutedForeground">Inflation level</div>
-                    <div className="text-foreground tabular-nums">{u.bodyguard_inflation_level ?? '—'}</div>
-                  </div>
-                  <div className="rounded border border-border bg-card/30 px-2 py-1.5">
-                    <div className="text-[9px] uppercase text-mutedForeground">Merged timeline rows</div>
-                    <div className="text-foreground tabular-nums">{merged.length.toLocaleString()}</div>
-                  </div>
-                </div>
+              <div className="space-y-4">
+                <KpiGrid cols={4}>
+                  <KpiTile label="Player" value={u.username ?? '—'} />
+                  <KpiTile label="Filled / slots" value={`${filledSlots} / ${u.bodyguard_slots != null ? Number(u.bodyguard_slots) : owned.length || '—'}`} />
+                  <KpiTile label="Inflation level" value={u.bodyguard_inflation_level ?? '—'} />
+                  <KpiTile label="Merged timeline rows" value={fmtNum(merged.length)} />
+                </KpiGrid>
                 {u.is_bodyguard && (
-                  <p className="text-amber-400">
+                  <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-200">
                     This account is flagged as a bodyguard NPC/player
                     {u.bodyguard_owner_id ? ` (owner id: ${u.bodyguard_owner_id})` : ''}.
                   </p>
                 )}
                 {bodyguardData.employed_as_guard && (
-                  <p className="text-mutedForeground">
-                    Employed as guard for another player (slot data in audit payload).
-                  </p>
+                  <p className="text-sm text-zinc-400">Employed as guard for another player (slot data in audit payload).</p>
                 )}
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => setTimelineOpen((v) => !v)}
-                    className="text-[10px] uppercase tracking-wider text-primary border border-primary/40 rounded px-2 py-1 hover:bg-primary/10"
-                  >
+                <div className="space-y-3">
+                  <Button onClick={() => setTimelineOpen((v) => !v)} className={touchClass}>
                     {timelineOpen ? 'Hide' : 'Show'} merged timeline (first 40)
-                  </button>
+                  </Button>
                   {timelineOpen && (
-                    <div className="mt-2 max-h-[360px] overflow-y-auto border border-border rounded p-2 bg-muted/20">
-                      {merged.length === 0 ? (
-                        <p className="text-mutedForeground">No merged rows.</p>
-                      ) : (
-                        <table className="w-full text-[9px] font-heading">
-                          <thead>
-                            <tr className="text-mutedForeground border-b border-border/60">
-                              <th className="text-left py-1 pr-2">Time</th>
-                              <th className="text-left py-1 pr-2">Source</th>
-                              <th className="text-left py-1 pr-2">Kind</th>
-                              <th className="text-left py-1">Detail</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {merged.slice(0, 40).map((row, idx) => {
-                              const f = formatAuditTimelineRow(row);
-                              return (
-                                <tr key={idx} className="border-b border-border/40">
-                                  <td className="py-1 pr-2 text-mutedForeground font-mono whitespace-nowrap">
-                                    {formatAdminDateTime(f.at)}
-                                  </td>
-                                  <td className="py-1 pr-2 text-mutedForeground">{f.src}</td>
-                                  <td className="py-1 pr-2">{f.kind}</td>
-                                  <td className="py-1 text-foreground break-words">{f.detail}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      )}
+                    <div className="max-h-[420px] overflow-y-auto rounded-lg border border-zinc-800">
+                      <DataTable
+                        rows={merged.slice(0, 40).map(formatAuditTimelineRow)}
+                        pageSize={40}
+                        empty="No merged rows."
+                        columns={[
+                          { key: 'at', label: 'Time', render: (r) => <span className="whitespace-nowrap font-mono text-xs text-zinc-400">{formatAdminDateTime(r.at)}</span> },
+                          { key: 'src', label: 'Source', render: (r) => <span className="text-zinc-400">{pretty(r.src)}</span> },
+                          { key: 'kind', label: 'Kind', render: (r) => pretty(r.kind) },
+                          { key: 'detail', label: 'Detail', sortable: false, render: (r) => <span className="whitespace-normal break-words">{r.detail}</span> },
+                        ]}
+                      />
                     </div>
                   )}
                 </div>
-              </>
+              </div>
             )}
-          </div>
-        </section>
-      )}
+          </Card>
+        )}
+      </AdminPage>
     </div>
   );
 }

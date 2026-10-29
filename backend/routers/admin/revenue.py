@@ -77,10 +77,14 @@ def _bucket_key(dt: datetime, bucket: str) -> str:
     if bucket == "week":
         monday = (dt - timedelta(days=dt.weekday())).date()
         return monday.isoformat()
+    if bucket == "hour":
+        return dt.strftime("%Y-%m-%dT%H:00")
     return dt.date().isoformat()
 
 
 def _bucket_for_days(days: int) -> str:
+    if days == 1:
+        return "hour"
     if days <= 0 or days > 180:
         return "month"
     if days > 60:

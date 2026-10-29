@@ -4,7 +4,16 @@ import { FileText, RefreshCw } from 'lucide-react';
 import api from '../../utils/api';
 import { formatAdminDateTime } from '../../utils/adminDateTime';
 import { toast } from 'sonner';
-import styles from '../../styles/noir.module.css';
+import {
+  AdminPage, Badge, Button, Card, DataTable, ErrorBlock, Field, KpiGrid, KpiTile, LoadingBlock, TextInput,
+  fmtCash, fmtNum, touchClass,
+} from './kit/AdminKit';
+
+function ProfileLink({ name }) {
+  return <Link to={`/profile/${encodeURIComponent(name)}`} className="font-medium text-zinc-50 hover:underline">{name}</Link>;
+}
+
+const when = (iso) => <span className="whitespace-nowrap tabular-nums text-zinc-400">{formatAdminDateTime(iso)}</span>;
 
 export default function AdminWitnessStatements() {
   const navigate = useNavigate();
@@ -88,236 +97,133 @@ export default function AdminWitnessStatements() {
     }
   };
 
+  const pageProps = {
+    title: 'Witness statements',
+    subtitle: 'Circulating balances, Quick Trade listings and recent inbox deliveries. New statements only go to players who are online (last 5 minutes or forced online).',
+    icon: FileText,
+  };
+
   if (!accessChecked || (loading && !data)) {
-    return (
-      <div
-        className={`space-y-3 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden`}
-        style={{ padding: '12px 14px', maxWidth: 1400, margin: '0 auto' }}
-        data-testid="admin-witness-statements-page"
-      >
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-          <FileText className="w-10 h-10 text-primary/60" />
-          <p className="text-sm text-mutedForeground font-heading">Loading witness statement data…</p>
-        </div>
-      </div>
-    );
+    return <div data-testid="admin-witness-statements-page"><AdminPage {...pageProps}><LoadingBlock label="Loading witness statement data…" /></AdminPage></div>;
   }
 
   const top = Array.isArray(data?.top_holders) ? data.top_holders : [];
   const listings = Array.isArray(data?.active_listings) ? data.active_listings : [];
   const recent = Array.isArray(data?.recent_witness_notifications) ? data.recent_witness_notifications : [];
+  const r = reconcileResult;
+  const applyDisabled = reconcileBusy
+    || !r
+    || !r.dry_run
+    || (r.delta === 0 && r.witness_nav_red_before === r.witness_nav_red_after);
 
   return (
-    <div
-      className={`space-y-4 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden`}
-      style={{ padding: '12px 14px', maxWidth: 1400, margin: '0 auto' }}
-      data-testid="admin-witness-statements-page"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <FileText className="w-6 h-6 text-primary shrink-0" />
-          <div className="min-w-0">
-            <h1 className="text-lg font-heading font-bold text-foreground truncate">Witness statements</h1>
-            <p className="text-[10px] text-mutedForeground font-heading">
-              Circulating balances, Quick Trade listings, and recent inbox deliveries. New statements are only sent to players online (last 5 min or forced online).
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => fetchOverview()}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded border border-border bg-secondary hover:bg-secondary/80 text-[10px] font-heading uppercase tracking-wider disabled:opacity-50"
+    <div data-testid="admin-witness-statements-page">
+      <AdminPage
+        {...pageProps}
+        actions={<Button icon={RefreshCw} loading={loading} onClick={() => fetchOverview()} className={touchClass}>Refresh</Button>}
+      >
+        {error && <ErrorBlock message={error} onRetry={fetchOverview} />}
+
+        <KpiGrid cols={3}>
+          <KpiTile label="Circulating (players)" value={fmtNum(data?.circulating_total)} hint={`Snapshot ${formatAdminDateTime(data?.generated_at)}`} />
+          <KpiTile label="Holders with a balance" value={fmtNum(data?.holders_with_balance)} />
+          <KpiTile label="Active listings" value={fmtNum(data?.active_listings_count)} />
+        </KpiGrid>
+
+        <Card
+          title="Reconcile stored balance"
+          subtitle="Preview first, then apply."
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
-      </div>
-
-      {error && (
-        <div className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200 font-heading">{error}</div>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <div className="rounded border border-border bg-card/40 px-3 py-2">
-          <div className="text-[9px] uppercase tracking-wider text-mutedForeground font-heading">Circulating (players)</div>
-          <div className="text-xl font-heading font-bold text-primary tabular-nums">{(data?.circulating_total ?? 0).toLocaleString()}</div>
-        </div>
-        <div className="rounded border border-border bg-card/40 px-3 py-2">
-          <div className="text-[9px] uppercase tracking-wider text-mutedForeground font-heading">Holders (&gt; 0)</div>
-          <div className="text-xl font-heading font-bold text-foreground tabular-nums">{(data?.holders_with_balance ?? 0).toLocaleString()}</div>
-        </div>
-        <div className="rounded border border-border bg-card/40 px-3 py-2">
-          <div className="text-[9px] uppercase tracking-wider text-mutedForeground font-heading">Active listings</div>
-          <div className="text-xl font-heading font-bold text-foreground tabular-nums">{(data?.active_listings_count ?? 0).toLocaleString()}</div>
-        </div>
-      </div>
-
-      <p className="text-[9px] text-mutedForeground font-heading">Snapshot: {formatAdminDateTime(data?.generated_at)}</p>
-
-      <section className="rounded border border-amber-500/30 bg-amber-500/5 overflow-hidden">
-        <div className="px-2 py-1.5 bg-amber-500/10 border-b border-border text-[10px] font-heading font-bold uppercase tracking-wider text-amber-200">
-          Reconcile stored balance
-        </div>
-        <div className="px-2 py-2 space-y-2 text-[11px] font-heading text-mutedForeground">
-          <p>
-            Sets <span className="text-foreground">witness_statements</span> to match witness inbox rows minus lines
-            held in <strong className="text-foreground">active</strong> listings (escrow). Use when the UI shows a balance
-            but the witness log is empty (e.g. historical attack-mute bug or deleted inbox rows). Preview first, then apply.
-          </p>
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-0.5 min-w-[160px] flex-1">
-              <span className="text-[9px] uppercase tracking-wider text-mutedForeground">Username</span>
-              <input
-                type="text"
-                value={reconcileUsername}
-                onChange={(e) => setReconcileUsername(e.target.value)}
-                placeholder="Player username"
-                className="w-full rounded border border-border bg-background px-2 py-1.5 text-foreground text-sm"
-                autoComplete="off"
-              />
-            </label>
-            <button
-              type="button"
-              disabled={reconcileBusy}
-              onClick={() => runReconcile(true)}
-              className="px-3 py-1.5 rounded border border-border bg-secondary hover:bg-secondary/80 text-[10px] uppercase tracking-wider disabled:opacity-50"
-            >
-              Preview
-            </button>
-            <button
-              type="button"
-              disabled={
-                reconcileBusy
-                || !reconcileResult
-                || !reconcileResult.dry_run
-                || (reconcileResult.delta === 0
-                  && reconcileResult.witness_nav_red_before === reconcileResult.witness_nav_red_after)
-              }
-              onClick={() => runReconcile(false)}
-              className="px-3 py-1.5 rounded border border-amber-600/50 bg-amber-600/20 hover:bg-amber-600/30 text-[10px] uppercase tracking-wider text-amber-100 disabled:opacity-40"
-            >
-              Apply fix
-            </button>
-          </div>
-          {reconcileResult && (
-            <div className="rounded border border-border bg-card/40 px-2 py-2 text-[10px] space-y-1 text-foreground">
-              <div className="font-mono text-[9px] text-mutedForeground">{reconcileResult.user_id}</div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 tabular-nums">
-                <div>
-                  <span className="text-mutedForeground block">Stored → new</span>
-                  {reconcileResult.witness_statements_before} → {reconcileResult.witness_statements_after}
-                </div>
-                <div>
-                  <span className="text-mutedForeground block">Inbox total</span>
-                  {reconcileResult.witness_notifications_total}
-                </div>
-                <div>
-                  <span className="text-mutedForeground block">In escrow</span>
-                  {reconcileResult.witness_notifications_in_escrow}
-                </div>
-                <div>
-                  <span className="text-mutedForeground block">Nav red before → after</span>
-                  {reconcileResult.witness_nav_red_before} → {reconcileResult.witness_nav_red_after}
-                </div>
+          <div className="space-y-3">
+            <p className="text-sm leading-relaxed text-zinc-400">
+              Sets <span className="font-mono text-zinc-200">witness_statements</span> to match witness inbox rows minus lines held in
+              {' '}<strong className="text-zinc-200">active</strong> listings (escrow). Use it when the UI shows a balance but the witness log is
+              empty (for example the old attack-mute bug, or deleted inbox rows).
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <Field label="Username" className="flex-1">
+                <TextInput value={reconcileUsername} onChange={setReconcileUsername} placeholder="Player username" autoComplete="off" />
+              </Field>
+              <div className="grid grid-cols-2 gap-2 sm:flex">
+                <Button disabled={reconcileBusy} onClick={() => runReconcile(true)} className={touchClass}>Preview</Button>
+                <Button variant="danger" disabled={applyDisabled} onClick={() => runReconcile(false)} className={touchClass}>Apply fix</Button>
               </div>
-              <p className="text-mutedForeground pt-1 border-t border-border">{reconcileResult.message}</p>
             </div>
-          )}
-        </div>
-      </section>
-
-      <section className="rounded border border-border overflow-hidden">
-        <div className="px-2 py-1.5 bg-primary/10 border-b border-border text-[10px] font-heading font-bold uppercase tracking-wider text-primary">
-          Top balances
-        </div>
-        <div className="hidden md:grid grid-cols-12 gap-1 px-2 py-1 bg-muted/30 text-[8px] font-heading uppercase text-mutedForeground border-b border-border">
-          <div className="col-span-4">User</div>
-          <div className="col-span-2 text-right">Balance</div>
-          <div className="col-span-2">Dead</div>
-          <div className="col-span-4">Last seen</div>
-        </div>
-        <div className="divide-y divide-border max-h-[280px] overflow-y-auto">
-          {top.length === 0 ? (
-            <div className="px-2 py-4 text-sm text-mutedForeground font-heading text-center">No player holds witness statements.</div>
-          ) : (
-            top.map((row) => (
-              <div
-                key={row.user_id}
-                className="grid grid-cols-1 md:grid-cols-12 gap-1 px-2 py-2 text-[11px] font-heading items-center"
-              >
-                <div className="md:col-span-4 truncate">
-                  <Link to={`/profile/${encodeURIComponent(row.username)}`} className="text-primary hover:underline font-bold truncate">
-                    {row.username}
-                  </Link>
+            {reconcileBusy && <LoadingBlock label="Working…" />}
+            {r && (
+              <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone={r.dry_run ? 'info' : r.applied ? 'good' : 'neutral'}>{r.dry_run ? 'Preview' : r.applied ? 'Applied' : 'No change'}</Badge>
+                  <span className="break-all font-mono text-xs text-zinc-500">{r.user_id}</span>
                 </div>
-                <div className="md:col-span-2 md:text-right tabular-nums text-foreground">{row.balance.toLocaleString()}</div>
-                <div className="md:col-span-2 text-mutedForeground">{row.is_dead ? 'Yes' : 'No'}</div>
-                <div className="md:col-span-4 text-mutedForeground tabular-nums text-[10px]">{formatAdminDateTime(row.last_seen)}</div>
+                <dl className="grid grid-cols-2 gap-3 tabular-nums sm:grid-cols-4">
+                  <div><dt className="text-xs text-zinc-500">Stored → new</dt><dd className="text-zinc-100">{r.witness_statements_before} → {r.witness_statements_after}</dd></div>
+                  <div><dt className="text-xs text-zinc-500">Inbox total</dt><dd className="text-zinc-100">{r.witness_notifications_total}</dd></div>
+                  <div><dt className="text-xs text-zinc-500">In escrow</dt><dd className="text-zinc-100">{r.witness_notifications_in_escrow}</dd></div>
+                  <div><dt className="text-xs text-zinc-500">Nav badge before → after</dt><dd className="text-zinc-100">{r.witness_nav_red_before} → {r.witness_nav_red_after}</dd></div>
+                </dl>
+                {r.message && <p className="border-t border-zinc-800 pt-2 text-zinc-400">{r.message}</p>}
               </div>
-            ))
-          )}
-        </div>
-      </section>
+            )}
+          </div>
+        </Card>
 
-      <section className="rounded border border-border overflow-hidden">
-        <div className="px-2 py-1.5 bg-primary/10 border-b border-border text-[10px] font-heading font-bold uppercase tracking-wider text-primary">
-          Quick Trade listings (witness statements)
-        </div>
-        <div className="hidden md:grid grid-cols-12 gap-1 px-2 py-1 bg-muted/30 text-[8px] font-heading uppercase text-mutedForeground border-b border-border">
-          <div className="col-span-3">Seller</div>
-          <div className="col-span-2 text-right">Qty</div>
-          <div className="col-span-3 text-right">Price</div>
-          <div className="col-span-4">Listed</div>
-        </div>
-        <div className="divide-y divide-border max-h-[240px] overflow-y-auto">
-          {listings.length === 0 ? (
-            <div className="px-2 py-4 text-sm text-mutedForeground font-heading text-center">No active listings.</div>
-          ) : (
-            listings.map((L) => (
-              <div key={L.id} className="grid grid-cols-1 md:grid-cols-12 gap-1 px-2 py-2 text-[11px] font-heading items-center">
-                <div className="md:col-span-3 truncate">
-                  <Link to={`/profile/${encodeURIComponent(L.seller_username)}`} className="text-primary hover:underline truncate block">
-                    {L.seller_username}
-                  </Link>
-                  <span className="text-[9px] text-mutedForeground block truncate font-mono">{L.seller_id}</span>
-                </div>
-                <div className="md:col-span-2 md:text-right tabular-nums">{L.quantity.toLocaleString()}</div>
-                <div className="md:col-span-3 md:text-right tabular-nums">${L.price_cash.toLocaleString()}</div>
-                <div className="md:col-span-4 text-mutedForeground tabular-nums text-[10px]">{formatAdminDateTime(L.created_at)}</div>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Card title="Top balances" padded={false}>
+            <DataTable
+              rows={top}
+              rowKey={(row) => row.user_id}
+              pageSize={15}
+              empty="No player holds witness statements."
+              initialSort={{ key: 'balance', dir: 'desc' }}
+              columns={[
+                { key: 'username', label: 'Player', render: (row) => <ProfileLink name={row.username} /> },
+                { key: 'balance', label: 'Balance', align: 'right', render: (row) => fmtNum(row.balance) },
+                { key: 'is_dead', label: 'Status', render: (row) => (row.is_dead ? <Badge tone="bad">Dead</Badge> : <Badge tone="good">Alive</Badge>) },
+                { key: 'last_seen', label: 'Last seen', render: (row) => when(row.last_seen), sortValue: (row) => row.last_seen || '' },
+              ]}
+            />
+          </Card>
 
-      <section className="rounded border border-border overflow-hidden">
-        <div className="px-2 py-1.5 bg-primary/10 border-b border-border text-[10px] font-heading font-bold uppercase tracking-wider text-primary">
-          Recent witness inbox deliveries
+          <Card title="Quick Trade listings" subtitle="Witness statements for sale" padded={false}>
+            <DataTable
+              rows={listings}
+              rowKey={(row) => row.id}
+              pageSize={15}
+              empty="No active listings."
+              columns={[
+                {
+                  key: 'seller_username',
+                  label: 'Seller',
+                  render: (row) => (
+                    <div>
+                      <ProfileLink name={row.seller_username} />
+                      <div className="font-mono text-xs text-zinc-500">{row.seller_id}</div>
+                    </div>
+                  ),
+                },
+                { key: 'quantity', label: 'Qty', align: 'right', render: (row) => fmtNum(row.quantity) },
+                { key: 'price_cash', label: 'Price', align: 'right', render: (row) => fmtCash(row.price_cash, { compact: false }) },
+                { key: 'created_at', label: 'Listed', render: (row) => when(row.created_at), sortValue: (row) => row.created_at || '' },
+              ]}
+            />
+          </Card>
         </div>
-        <div className="hidden md:grid grid-cols-12 gap-1 px-2 py-1 bg-muted/30 text-[8px] font-heading uppercase text-mutedForeground border-b border-border">
-          <div className="col-span-3">Recipient</div>
-          <div className="col-span-2">Time</div>
-          <div className="col-span-7">Preview</div>
-        </div>
-        <div className="divide-y divide-border max-h-[320px] overflow-y-auto">
-          {recent.length === 0 ? (
-            <div className="px-2 py-4 text-sm text-mutedForeground font-heading text-center">No witness notifications in history (or collection empty).</div>
-          ) : (
-            recent.map((r) => (
-              <div key={r.id} className="grid grid-cols-1 md:grid-cols-12 gap-1 px-2 py-2 text-[10px] font-heading items-start">
-                <div className="md:col-span-3 truncate">
-                  <Link to={`/profile/${encodeURIComponent(r.username)}`} className="text-primary hover:underline font-bold truncate block">
-                    {r.username}
-                  </Link>
-                </div>
-                <div className="md:col-span-2 text-mutedForeground tabular-nums whitespace-nowrap">{formatAdminDateTime(r.created_at)}</div>
-                <div className="md:col-span-7 text-mutedForeground break-words">{r.message_preview}</div>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
+
+        <Card title="Recent witness inbox deliveries" padded={false}>
+          <DataTable
+            rows={recent}
+            rowKey={(row) => row.id}
+            pageSize={20}
+            empty="No witness notifications in history (or collection empty)."
+            columns={[
+              { key: 'username', label: 'Recipient', render: (row) => <ProfileLink name={row.username} /> },
+              { key: 'created_at', label: 'Time', render: (row) => when(row.created_at), sortValue: (row) => row.created_at || '' },
+              { key: 'message_preview', label: 'Preview', sortable: false, render: (row) => <span className="block min-w-[260px] max-w-xl whitespace-normal break-words text-zinc-400">{row.message_preview}</span> },
+            ]}
+          />
+        </Card>
+      </AdminPage>
     </div>
   );
 }

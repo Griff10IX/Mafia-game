@@ -1,19 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Globe, RefreshCw, Search, User, ShieldAlert, Smartphone, AlertTriangle, CheckCircle2, Info, EyeOff } from 'lucide-react';
+import { Search, ShieldAlert, AlertTriangle, CheckCircle2, Info, EyeOff } from 'lucide-react';
 import api from '../../utils/api';
 import { formatAdminDateTime } from '../../utils/adminDateTime';
 import { toast } from 'sonner';
-import styles from '../../styles/noir.module.css';
 import StaffIpReputationCard, { maskIp } from '../../components/StaffIpReputationCard';
+import {
+  AdminPage, Badge, Button, Card, DataTable, EmptyState, Field, KpiGrid, KpiTile, LoadingBlock, TextInput, ToggleButton,
+  fmtNum, inputClass, touchClass,
+} from './kit/AdminKit';
 
-const TAG_STYLES = {
-  registration_ip: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200',
-  new_ip: 'border-amber-500/40 bg-amber-500/10 text-amber-200',
-  shared_ip: 'border-red-500/40 bg-red-500/10 text-red-200',
-  hosting: 'border-violet-500/40 bg-violet-500/10 text-violet-200',
-  proxy: 'border-violet-500/40 bg-violet-500/10 text-violet-200',
-  mobile: 'border-sky-500/40 bg-sky-500/10 text-sky-200',
+const TAG_TONES = {
+  registration_ip: 'good',
+  new_ip: 'warn',
+  shared_ip: 'bad',
+  hosting: 'warn',
+  proxy: 'warn',
+  mobile: 'info',
 };
 
 const SEV_ICON = {
@@ -23,23 +26,22 @@ const SEV_ICON = {
 };
 
 const SEV_BORDER = {
-  critical: 'border-red-500/50 bg-red-500/10',
-  warn: 'border-amber-500/50 bg-amber-500/10',
-  info: 'border-zinc-600/50 bg-zinc-800/40',
+  critical: 'border-rose-500/40 bg-rose-500/5',
+  warn: 'border-amber-500/40 bg-amber-500/5',
+  info: 'border-zinc-800 bg-zinc-950/40',
+};
+
+const SEV_ICON_COLOR = {
+  critical: 'text-rose-300',
+  warn: 'text-amber-300',
+  info: 'text-zinc-400',
 };
 
 function TagBadges({ tags }) {
-  if (!tags?.length) return <span className="text-mutedForeground">—</span>;
+  if (!tags?.length) return <span className="text-zinc-500">—</span>;
   return (
-    <span className="flex flex-wrap gap-0.5">
-      {tags.map((t) => (
-        <span
-          key={t}
-          className={`rounded px-1 py-0.5 text-[8px] font-heading uppercase tracking-wide border ${TAG_STYLES[t] || 'border-zinc-600 text-zinc-400'}`}
-        >
-          {t.replace(/_/g, ' ')}
-        </span>
-      ))}
+    <span className="flex flex-wrap gap-1">
+      {tags.map((t) => <Badge key={t} tone={TAG_TONES[t] || 'neutral'}>{t.replace(/_/g, ' ')}</Badge>)}
     </span>
   );
 }
@@ -47,67 +49,60 @@ function TagBadges({ tags }) {
 function FindingsPanel({ findings }) {
   if (!findings?.length) return null;
   return (
-    <div className="space-y-1.5">
-      <div className="text-[9px] font-heading text-primary uppercase tracking-wider flex items-center gap-1">
-        <ShieldAlert className="w-3.5 h-3.5" />
-        Findings & recommendations
-      </div>
-      {findings.map((f, i) => {
-        const Icon = SEV_ICON[f.severity] || Info;
-        return (
-          <div
-            key={`${f.code}-${i}`}
-            className={`rounded border px-2 py-1.5 text-[10px] font-heading ${SEV_BORDER[f.severity] || SEV_BORDER.info}`}
-          >
-            <div className="flex items-start gap-1.5">
-              <Icon className="w-3.5 h-3.5 shrink-0 mt-0.5 opacity-80" />
+    <Card title="Findings and recommendations">
+      <div className="space-y-2">
+        {findings.map((f, i) => {
+          const Icon = SEV_ICON[f.severity] || Info;
+          return (
+            <div key={`${f.code}-${i}`} className={`flex items-start gap-2.5 rounded-lg border p-3 text-sm ${SEV_BORDER[f.severity] || SEV_BORDER.info}`}>
+              <Icon size={16} className={`mt-0.5 shrink-0 ${SEV_ICON_COLOR[f.severity] || SEV_ICON_COLOR.info}`} />
               <div className="min-w-0">
-                <div className="font-bold text-foreground">{f.title}</div>
-                <div className="text-mutedForeground leading-snug mt-0.5">{f.detail}</div>
-                {f.suggested_action ? (
-                  <div className="text-[9px] text-primary/90 mt-1 leading-snug">→ {f.suggested_action}</div>
-                ) : null}
+                <div className="font-medium text-zinc-100">{f.title}</div>
+                <div className="mt-0.5 leading-snug text-zinc-400">{f.detail}</div>
+                {f.suggested_action ? <div className="mt-1 text-xs leading-snug text-sky-300">→ {f.suggested_action}</div> : null}
               </div>
             </div>
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }
 
+const yesNo = (v) => (v ? <Badge tone="warn">Yes</Badge> : <span className="text-zinc-500">No</span>);
+const mono = (v) => <span className="break-all font-mono text-xs">{v}</span>;
+
 function IpSummaryTable({ rows, blurIps }) {
-  if (!rows?.length) {
-    return <p className="text-[10px] text-mutedForeground font-heading">No IPs recorded.</p>;
-  }
   return (
-    <div className="max-h-56 overflow-auto border border-zinc-700/50 rounded">
-      <table className="w-full text-[9px] font-mono">
-        <thead className="sticky top-0 bg-zinc-900/95">
-          <tr className="text-left text-mutedForeground border-b border-zinc-700/50">
-            <th className="p-1">IP</th>
-            <th className="p-1">Network / ISP</th>
-            <th className="p-1">CC</th>
-            <th className="p-1">Mob</th>
-            <th className="p-1">Host</th>
-            <th className="p-1">Proxy</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={i} className="border-b border-zinc-800/80">
-              <td className="p-1 align-top break-all text-primary">{blurIps ? maskIp(row.ip) : row.ip}</td>
-              <td className="p-1 align-top break-words text-foreground">
-                {row.network || row.isp || row.org || row.lookup || '—'}
-              </td>
-              <td className="p-1 align-top">{row.countryCode || '—'}</td>
-              <td className="p-1 align-top">{row.lookup ? '—' : row.mobile ? 'Y' : 'N'}</td>
-              <td className="p-1 align-top">{row.hosting ? 'Y' : 'N'}</td>
-              <td className="p-1 align-top">{row.proxy ? 'Y' : 'N'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <DataTable
+      rows={rows || []}
+      pageSize={15}
+      empty="No IPs recorded."
+      columns={[
+        { key: 'ip', label: 'IP', render: (r) => mono(blurIps ? maskIp(r.ip) : r.ip) },
+        { key: 'network', label: 'Network / ISP', sortValue: (r) => r.network || r.isp || r.org || r.lookup || '', render: (r) => <span className="text-zinc-300">{r.network || r.isp || r.org || r.lookup || '—'}</span> },
+        { key: 'countryCode', label: 'Country', render: (r) => r.countryCode || '—' },
+        { key: 'mobile', label: 'Mobile', render: (r) => (r.lookup ? '—' : yesNo(r.mobile)) },
+        { key: 'hosting', label: 'Hosting', render: (r) => yesNo(r.hosting) },
+        { key: 'proxy', label: 'Proxy', render: (r) => yesNo(r.proxy) },
+      ]}
+    />
+  );
+}
+
+function AccountButton({ name, onPick }) {
+  return (
+    <button type="button" className="inline-flex items-center py-1 font-medium text-sky-300 hover:underline max-sm:min-h-[40px]" onClick={() => onPick(name)}>
+      {name}
+    </button>
+  );
+}
+
+function AddressTile({ label, value, small }) {
+  return (
+    <div className="min-w-0 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
+      <div className="text-xs text-zinc-500">{label}</div>
+      <div className={`mt-0.5 break-all font-mono text-zinc-100 ${small ? 'text-xs' : 'text-sm'}`}>{value || '—'}</div>
     </div>
   );
 }
@@ -230,18 +225,14 @@ export default function AdminIpHistory() {
     void loadAccessReport(u);
   }, [accessChecked, searchParams, report, userLoading, loadAccessReport]);
 
+  const pageProps = {
+    title: 'Account access check',
+    subtitle: 'For reports of unauthorised logins or a hacked account: every IP and device, what matches other accounts, suspicious attempts, and next steps for staff.',
+    icon: ShieldAlert,
+  };
+
   if (!accessChecked) {
-    return (
-      <div
-        className={`space-y-3 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden`}
-        style={{ padding: '12px 14px', maxWidth: 1400, margin: '0 auto' }}
-      >
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-          <Globe className="w-10 h-10 text-primary/60" />
-          <p className="text-sm text-mutedForeground font-heading">Loading…</p>
-        </div>
-      </div>
-    );
+    return <div data-testid="admin-ip-history-page"><AdminPage {...pageProps}><LoadingBlock /></AdminPage></div>;
   }
 
   const userData = report?.ip;
@@ -249,488 +240,264 @@ export default function AdminIpHistory() {
   const sources = userData?.sources || {};
   const attack = userData?.attack_activity;
   const account = access?.account;
+  const showIp = (ip) => (blurIps ? maskIp(ip) : (ip || '—'));
+  const pickAccount = (name) => {
+    setUserQuery(name);
+    void loadAccessReport(name);
+  };
 
   return (
-    <div
-      className={`space-y-4 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden`}
-      style={{ padding: '12px 14px', maxWidth: 1400, margin: '0 auto' }}
-      data-testid="admin-ip-history-page"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <ShieldAlert className="w-6 h-6 text-primary shrink-0" />
-          <div>
-            <h1 className="text-lg font-heading font-bold text-foreground">Account access check</h1>
-            <p className="text-[10px] text-mutedForeground font-heading max-w-2xl">
-              Use when a player reports unauthorized logins or a hacked account: all IPs, devices, what matches other
-              accounts, suspicious attempts, and staff next steps.
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => setBlurIps((v) => !v)}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border font-heading font-bold text-[10px] uppercase tracking-wide ${
-            blurIps
-              ? 'border-sky-500/60 bg-sky-500/25 text-sky-200 hover:bg-sky-500/35'
-              : 'border-zinc-600/50 bg-zinc-800/40 text-mutedForeground hover:bg-zinc-700/40'
-          }`}
-          title="Mask IPs for screenshots shown to players"
-        >
-          <EyeOff size={12} />
-          {blurIps ? 'IPs blurred' : 'Blur IPs'}
-        </button>
-      </div>
-
-      <section className="rounded border border-border overflow-hidden">
-        <div className="px-2 py-1.5 bg-primary/10 border-b border-border text-[10px] font-heading font-bold uppercase tracking-wider text-primary flex items-center gap-2">
-          <User className="w-3.5 h-3.5" />
-          Player investigation
-        </div>
-        <div className="p-3 space-y-3">
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-0.5 min-w-[200px] flex-1">
-              <span className="text-[9px] uppercase text-mutedForeground font-heading">Username or user id</span>
-              <input
-                type="text"
-                value={userQuery}
-                onChange={(e) => setUserQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && loadAccessReport()}
-                placeholder="GhostFace or user id"
-                className="px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-heading"
-                autoComplete="off"
-              />
-            </label>
-            <label className="flex flex-col gap-0.5 w-28">
-              <span className="text-[9px] uppercase text-mutedForeground font-heading">Attack IPs (days)</span>
+    <div data-testid="admin-ip-history-page">
+      <AdminPage
+        {...pageProps}
+        actions={(
+          <ToggleButton on={blurIps} icon={EyeOff} title="Mask IPs for screenshots shown to players" onClick={() => setBlurIps((v) => !v)}>
+            {blurIps ? 'IPs blurred' : 'Blur IPs'}
+          </ToggleButton>
+        )}
+      >
+        <Card title="Player investigation">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <Field label="Username or user id" className="flex-1">
+              <TextInput value={userQuery} onChange={setUserQuery} onEnter={() => loadAccessReport()} placeholder="GhostFace or user id" autoComplete="off" />
+            </Field>
+            <Field label="Attack IPs (days)" className="sm:w-36">
               <input
                 type="number"
                 min={1}
                 max={365}
                 value={attackDays}
                 onChange={(e) => setAttackDays(Math.max(1, Math.min(365, parseInt(e.target.value, 10) || 90)))}
-                className="px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono"
+                className={`${inputClass} tabular-nums`}
               />
-            </label>
-            <button
-              type="button"
-              onClick={() => void loadAccessReport()}
-              disabled={userLoading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-primary/40 bg-primary/15 text-primary text-[10px] font-heading uppercase tracking-wider hover:bg-primary/25 disabled:opacity-50"
-            >
-              {userLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+            </Field>
+            <Button variant="primary" icon={Search} loading={userLoading} onClick={() => void loadAccessReport()} className={touchClass}>
               {userLoading ? 'Loading…' : 'Run check'}
-            </button>
+            </Button>
           </div>
-
           {userLoadError && !userLoading && (
-            <div className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[10px] font-heading text-amber-200">
-              {userLoadError}
-            </div>
+            <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-200">{userLoadError}</p>
           )}
+        </Card>
 
-          {access && userData && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2 text-[10px] font-heading">
-                <span className="rounded border border-zinc-700/50 px-2 py-1">
-                  <strong className="text-foreground">{account?.username}</strong>
-                  <span className="text-mutedForeground"> · {account?.id}</span>
-                </span>
-                <span className="rounded border border-zinc-700/50 px-2 py-1 tabular-nums">
-                  {userData.meta?.unique_ip_count_including_attacks ?? userData.meta?.unique_ip_count ?? 0} unique IPs
-                </span>
-                <span className="rounded border border-zinc-700/50 px-2 py-1">
-                  {access.device_count ?? 0} device profile(s)
-                </span>
-                <span className="rounded border border-zinc-700/50 px-2 py-1 text-mutedForeground">
-                  token v{account?.token_version ?? 0}
-                </span>
-                {account?.last_seen ? (
-                  <span className="rounded border border-zinc-700/50 px-2 py-1 text-mutedForeground">
-                    last seen {formatAdminDateTime(account.last_seen)}
-                  </span>
-                ) : null}
-              </div>
+        {userLoading && <LoadingBlock label="Building access report…" />}
 
-              <FindingsPanel findings={access.findings} />
+        {access && userData && (
+          <>
+            <KpiGrid cols={4}>
+              <KpiTile label="Account" value={account?.username || '—'} hint={account?.id} />
+              <KpiTile label="Unique IPs" value={fmtNum(userData.meta?.unique_ip_count_including_attacks ?? userData.meta?.unique_ip_count ?? 0)} hint="Including attack logs" />
+              <KpiTile label="Device profiles" value={fmtNum(access.device_count ?? 0)} />
+              <KpiTile label="Last seen" value={<span className="block whitespace-normal text-sm leading-snug sm:text-base">{formatAdminDateTime(account?.last_seen)}</span>} hint={`Token v${account?.token_version ?? 0}`} />
+            </KpiGrid>
 
-              {access.staff_checklist?.length > 0 && (
-                <div className="rounded border border-zinc-700/40 bg-zinc-900/30 p-2">
-                  <div className="text-[9px] font-heading text-primary uppercase mb-1.5 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" />
-                    Staff checklist
-                  </div>
-                  <ul className="text-[9px] text-mutedForeground font-heading space-y-1 list-disc pl-4">
-                    {access.staff_checklist.map((item) => (
-                      <li key={item.id}>{item.label}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+            <FindingsPanel findings={access.findings} />
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 text-[10px] font-heading">
-                <div className="rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5">
-                  <div className="text-[9px] uppercase text-mutedForeground">Registration IP</div>
-                  <div className="font-mono text-foreground break-all">{blurIps ? maskIp(account?.registration_ip || sources.registration_ip) : (account?.registration_ip || sources.registration_ip || '—')}</div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card title="Key addresses">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <AddressTile label="Registration IP" value={showIp(account?.registration_ip || sources.registration_ip)} />
+                  <AddressTile label="Last login IP" value={showIp(account?.last_login_ip || sources.last_login_ip)} />
+                  <AddressTile label="Last request IP" value={showIp(account?.last_request_ip || sources.last_request_ip)} />
+                  <AddressTile label="Device fingerprint" value={account?.device_fingerprint} small />
                 </div>
-                <div className="rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5">
-                  <div className="text-[9px] uppercase text-mutedForeground">Last login IP</div>
-                  <div className="font-mono text-foreground break-all">{blurIps ? maskIp(account?.last_login_ip || sources.last_login_ip) : (account?.last_login_ip || sources.last_login_ip || '—')}</div>
-                </div>
-                <div className="rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5">
-                  <div className="text-[9px] uppercase text-mutedForeground">Last request IP</div>
-                  <div className="font-mono text-foreground break-all">{blurIps ? maskIp(account?.last_request_ip || sources.last_request_ip) : (account?.last_request_ip || sources.last_request_ip || '—')}</div>
-                </div>
-                <div className="rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5">
-                  <div className="text-[9px] uppercase text-mutedForeground">Device fingerprint</div>
-                  <div className="font-mono text-[9px] text-foreground break-all">{account?.device_fingerprint || '—'}</div>
-                </div>
-              </div>
-
-              {(access.devices?.length ?? 0) > 0 && (
-                <div>
-                  <div className="text-[9px] font-heading text-primary uppercase mb-1 flex items-center gap-1">
-                    <Smartphone className="w-3 h-3" />
-                    Devices (from login history & sessions)
-                  </div>
-                  <div className="max-h-48 overflow-auto border border-zinc-700/50 rounded">
-                    <table className="w-full text-[9px] font-mono">
-                      <thead className="sticky top-0 bg-zinc-900/95">
-                        <tr className="text-mutedForeground border-b border-zinc-700/50">
-                          <th className="p-1 text-left">Type</th>
-                          <th className="p-1 text-left">UA / label</th>
-                          <th className="p-1 text-left">IPs</th>
-                          <th className="p-1 text-left">Logins</th>
-                          <th className="p-1 text-left">Last seen</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {access.devices.map((d, i) => (
-                          <tr key={i} className="border-b border-zinc-800/80">
-                            <td className="p-1">{d.device_type}</td>
-                            <td className="p-1 break-all max-w-[140px]">{d.ua_short || '—'}</td>
-                            <td className="p-1 break-all">
-                              {blurIps ? (d.ips || []).map(maskIp).join(', ') : ((d.ips || []).join(', ') || '—')}
-                            </td>
-                            <td className="p-1 tabular-nums">{d.login_count}</td>
-                            <td className="p-1 whitespace-nowrap">{formatAdminDateTime(d.last_at)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {(access.ip_sharing?.length ?? 0) > 0 && (
-                <div className="space-y-2 rounded border border-red-500/20 bg-red-500/5 p-2">
-                  <div className="text-[9px] font-heading text-red-200 uppercase">IPs shared with other accounts</div>
-                  {access.ip_sharing.map((block) => (
-                    <div key={block.ip} className="text-[9px] font-heading">
-                      <div className="font-mono text-foreground">
-                        {blurIps ? maskIp(block.ip) : block.ip}{' '}
-                        <span className="text-mutedForeground">
-                          — {block.other_alive_count} alive / {block.other_account_count} total other account(s)
-                        </span>
-                      </div>
-                      <ul className="mt-0.5 pl-3 text-mutedForeground font-mono space-y-0.5">
-                        {(block.accounts || []).slice(0, 8).map((a) => (
-                          <li key={a.id}>
-                            <button
-                              type="button"
-                              className="text-primary hover:underline"
-                              onClick={() => {
-                                const name = a.username || a.id;
-                                setUserQuery(name);
-                                void loadAccessReport(name);
-                              }}
-                            >
-                              {a.username || a.id}
-                            </button>
-                            {a.is_dead ? ' (dead)' : ''} · {(a.roles || []).join(', ')}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {(access.fingerprint_matches?.length ?? 0) > 0 && (
-                <div className="text-[9px] font-heading">
-                  <div className="text-primary uppercase mb-1">Same device fingerprint as</div>
-                  <ul className="font-mono text-mutedForeground space-y-0.5">
-                    {access.fingerprint_matches.map((m) => (
-                      <li key={m.id}>
-                        <button
-                          type="button"
-                          className="text-primary hover:underline"
-                          onClick={() => {
-                            setUserQuery(m.username || m.id);
-                            void loadAccessReport(m.username || m.id);
-                          }}
-                        >
-                          {m.username || m.id}
-                        </button>
-                        {m.is_dead ? ' (dead)' : ''} · {blurIps ? maskIp(m.last_login_ip) : (m.last_login_ip || '—')}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <div>
-                <div className="text-[9px] font-heading text-primary uppercase mb-1">IP reputation proof cards</div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-                  {(userData.ip_summary || []).slice(0, 8).map((row) => (
-                    <StaffIpReputationCard
-                      key={row.ip}
-                      ip={row.ip}
-                      geo={row}
-                      blurIp={blurIps}
-                      compact
-                    />
-                  ))}
-                </div>
-                {(userData.ip_summary || []).length > 8 ? (
-                  <p className="mt-1 text-[9px] text-mutedForeground font-heading">
-                    Showing first 8 proof cards. Full IP table below still contains all known IPs.
+                {account?.last_user_agent ? (
+                  <p className="mt-3 break-all font-mono text-xs text-zinc-500" title={account.last_user_agent}>
+                    Last UA: {account.last_user_agent.slice(0, 220)}
+                    {account.last_user_agent.length > 220 ? '…' : ''}
                   </p>
                 ) : null}
-              </div>
-
-              <div>
-                <div className="text-[9px] font-heading text-primary uppercase mb-1">All known IPs (geo)</div>
-                <IpSummaryTable rows={userData.ip_summary} blurIps={blurIps} />
-              </div>
-
-              <div>
-                <div className="text-[9px] font-heading text-primary uppercase mb-1">
-                  Login timeline (tags: reg / new / shared / hosting)
-                </div>
-                <div className="max-h-64 overflow-auto border border-zinc-700/50 rounded">
-                  <table className="w-full text-[9px] font-mono">
-                    <thead className="sticky top-0 bg-zinc-900/95">
-                      <tr className="text-left text-mutedForeground border-b border-zinc-700/50">
-                        <th className="p-1">When</th>
-                        <th className="p-1">IP</th>
-                        <th className="p-1">ISP</th>
-                        <th className="p-1">Device</th>
-                        <th className="p-1">Tags</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(access.login_timeline_tagged || userData.login_timeline || []).map((row, i) => (
-                        <tr key={i} className="border-b border-zinc-800/80">
-                          <td className="p-1 whitespace-nowrap">{formatAdminDateTime(row.at)}</td>
-                          <td className="p-1 break-all">{blurIps ? maskIp(row.ip) : (row.ip || '—')}</td>
-                          <td className="p-1 break-words">{row.isp || row.org || '—'}</td>
-                          <td className="p-1">{row.device_type || '—'}</td>
-                          <td className="p-1">
-                            <TagBadges tags={row.tags} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {(access.suspicious_logins?.recent?.length ?? 0) > 0 && (
-                <div>
-                  <div className="text-[9px] font-heading text-amber-200 uppercase mb-1">
-                    Suspicious logins ({access.suspicious_logins.count_30d} in 30d)
-                  </div>
-                  <div className="max-h-36 overflow-auto border border-amber-500/20 rounded">
-                    <table className="w-full text-[9px] font-mono">
-                      <thead>
-                        <tr className="text-mutedForeground">
-                          <th className="p-1 text-left">When</th>
-                          <th className="p-1 text-left">IP</th>
-                          <th className="p-1 text-left">Reason</th>
-                          <th className="p-1 text-left">Input</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {access.suspicious_logins.recent.map((r, i) => (
-                          <tr key={i} className="border-t border-zinc-800/60">
-                            <td className="p-1 whitespace-nowrap">{formatAdminDateTime(r.at)}</td>
-                            <td className="p-1">{blurIps ? maskIp(r.ip) : (r.ip || '—')}</td>
-                            <td className="p-1">{r.reason || '—'}</td>
-                            <td className="p-1 break-all">{r.login_input || '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+              </Card>
+              {access.staff_checklist?.length > 0 && (
+                <Card title={<span className="inline-flex items-center gap-1.5"><CheckCircle2 size={14} className="text-emerald-400" />Staff checklist</span>}>
+                  <ul className="list-disc space-y-1.5 pl-5 text-sm text-zinc-300">
+                    {access.staff_checklist.map((item) => <li key={item.id}>{item.label}</li>)}
+                  </ul>
+                </Card>
               )}
-
-              {(userData.sessions?.length ?? 0) > 0 && (
-                <div>
-                  <div className="text-[9px] font-heading text-primary uppercase mb-1">Active sessions (sample)</div>
-                  <div className="max-h-40 overflow-auto border border-zinc-700/50 rounded">
-                    <table className="w-full text-[9px] font-mono">
-                      <thead>
-                        <tr className="text-mutedForeground border-b border-zinc-700/50">
-                          <th className="p-1 text-left">IP</th>
-                          <th className="p-1 text-left">Device</th>
-                          <th className="p-1 text-left">Last used</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {userData.sessions.map((s, i) => (
-                          <tr key={i} className="border-b border-zinc-800/80">
-                            <td className="p-1 break-all">{blurIps ? maskIp(s.ip) : (s.ip || '—')}</td>
-                            <td className="p-1">{s.device_type || '—'}</td>
-                            <td className="p-1 whitespace-nowrap">{formatAdminDateTime(s.last_used_at)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {attack && (
-                <div className="space-y-2 rounded border border-sky-500/25 bg-sky-500/5 p-2">
-                  <div className="text-[9px] font-heading text-sky-200 uppercase">
-                    Attack log IPs (last {attack.days}d)
-                  </div>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    <div>
-                      <div className="text-[9px] text-mutedForeground mb-1">As attacker</div>
-                      {(attack.as_attacker || []).length === 0 ? (
-                        <p className="text-[9px] text-mutedForeground">None</p>
-                      ) : (
-                        <ul className="text-[9px] font-mono space-y-0.5">
-                          {attack.as_attacker.map((r, i) => (
-                            <li key={i}>
-                              {blurIps ? maskIp(r.ip) : r.ip} · {r.count}× · last {formatAdminDateTime(r.last_at)}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                    <div>
-                      <div className="text-[9px] text-mutedForeground mb-1">As target</div>
-                      {(attack.as_target || []).length === 0 ? (
-                        <p className="text-[9px] text-mutedForeground">None</p>
-                      ) : (
-                        <ul className="text-[9px] font-mono space-y-0.5">
-                          {attack.as_target.map((r, i) => (
-                            <li key={i}>
-                              {blurIps ? maskIp(r.ip) : r.ip} · {r.count}× · last {formatAdminDateTime(r.last_at)}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {account?.last_user_agent ? (
-                <p className="text-[9px] text-mutedForeground font-mono break-all" title={account.last_user_agent}>
-                  Last UA: {account.last_user_agent.slice(0, 220)}
-                  {account.last_user_agent.length > 220 ? '…' : ''}
-                </p>
-              ) : null}
             </div>
-          )}
-        </div>
-      </section>
 
-      <section className="rounded border border-border overflow-hidden">
-        <div className="px-2 py-1.5 bg-violet-500/10 border-b border-border text-[10px] font-heading font-bold uppercase tracking-wider text-violet-200 flex items-center gap-2">
-          <Search className="w-3.5 h-3.5" />
-          Reverse IP — who else uses this address?
-        </div>
-        <div className="p-3 space-y-3">
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-0.5 min-w-[200px] flex-1">
-              <span className="text-[9px] uppercase text-mutedForeground font-heading">IP address</span>
-              <input
-                type="text"
-                value={ipQuery}
-                onChange={(e) => setIpQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && loadAccountsByIp()}
-                placeholder="151.245.84.178"
-                className="px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono"
-                autoComplete="off"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => void loadAccountsByIp()}
-              disabled={ipLoading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-violet-500/40 bg-violet-500/15 text-violet-200 text-[10px] font-heading uppercase tracking-wider hover:bg-violet-500/25 disabled:opacity-50"
+            {((access.ip_sharing?.length ?? 0) > 0 || (access.fingerprint_matches?.length ?? 0) > 0) && (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {(access.ip_sharing?.length ?? 0) > 0 && (
+                  <Card title="IPs shared with other accounts" subtitle="Tap a name to run the check on that account">
+                    <div className="space-y-3">
+                      {access.ip_sharing.map((block) => (
+                        <div key={block.ip} className="rounded-lg border border-rose-500/25 bg-rose-500/5 p-3 text-sm">
+                          <div className="flex flex-wrap items-baseline gap-x-2">
+                            <span className="font-mono text-zinc-100">{blurIps ? maskIp(block.ip) : block.ip}</span>
+                            <span className="text-xs text-zinc-400">{block.other_alive_count} alive / {block.other_account_count} total other account(s)</span>
+                          </div>
+                          <ul className="mt-2 space-y-1">
+                            {(block.accounts || []).slice(0, 8).map((a) => (
+                              <li key={a.id} className="text-zinc-400">
+                                <AccountButton name={a.username || a.id} onPick={pickAccount} />
+                                {a.is_dead ? ' (dead)' : ''} · <span className="text-xs">{(a.roles || []).join(', ')}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+                {(access.fingerprint_matches?.length ?? 0) > 0 && (
+                  <Card title="Same device fingerprint as">
+                    <ul className="space-y-1.5 text-sm text-zinc-400">
+                      {access.fingerprint_matches.map((m) => (
+                        <li key={m.id}>
+                          <AccountButton name={m.username || m.id} onPick={pickAccount} />
+                          {m.is_dead ? ' (dead)' : ''} · <span className="font-mono text-xs">{blurIps ? maskIp(m.last_login_ip) : (m.last_login_ip || '—')}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </Card>
+                )}
+              </div>
+            )}
+
+            {(access.devices?.length ?? 0) > 0 && (
+              <Card title="Devices" subtitle="From login history and sessions" padded={false}>
+                <DataTable
+                  rows={access.devices}
+                  pageSize={10}
+                  columns={[
+                    { key: 'device_type', label: 'Type' },
+                    { key: 'ua_short', label: 'Browser / label', render: (r) => <span className="text-xs text-zinc-300">{r.ua_short || '—'}</span> },
+                    { key: 'ips', label: 'IPs', sortable: false, render: (r) => mono(blurIps ? (r.ips || []).map(maskIp).join(', ') : ((r.ips || []).join(', ') || '—')) },
+                    { key: 'login_count', label: 'Logins', align: 'right', render: (r) => fmtNum(r.login_count) },
+                    { key: 'last_at', label: 'Last seen', render: (r) => <span className="whitespace-nowrap">{formatAdminDateTime(r.last_at)}</span> },
+                  ]}
+                />
+              </Card>
+            )}
+
+            <Card
+              title="IP reputation proof cards"
+              subtitle={(userData.ip_summary || []).length > 8 ? 'Showing the first 8. The full IP table below has every known IP.' : undefined}
             >
-              {ipLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+              {(userData.ip_summary || []).length === 0 ? <EmptyState>No IPs recorded.</EmptyState> : (
+                <div className="grid gap-2 lg:grid-cols-2">
+                  {(userData.ip_summary || []).slice(0, 8).map((row) => (
+                    <StaffIpReputationCard key={row.ip} ip={row.ip} geo={row} blurIp={blurIps} compact />
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            <Card title="All known IPs" padded={false}>
+              <IpSummaryTable rows={userData.ip_summary} blurIps={blurIps} />
+            </Card>
+
+            <Card title="Login timeline" subtitle="Tags: registration, new, shared, hosting" padded={false}>
+              <DataTable
+                rows={access.login_timeline_tagged || userData.login_timeline || []}
+                pageSize={25}
+                empty="No logins recorded."
+                columns={[
+                  { key: 'at', label: 'When', render: (r) => <span className="whitespace-nowrap">{formatAdminDateTime(r.at)}</span>, sortValue: (r) => r.at || '' },
+                  { key: 'ip', label: 'IP', render: (r) => mono(showIp(r.ip)) },
+                  { key: 'isp', label: 'ISP', render: (r) => <span className="text-zinc-300">{r.isp || r.org || '—'}</span> },
+                  { key: 'device_type', label: 'Device', render: (r) => r.device_type || '—' },
+                  { key: 'tags', label: 'Tags', sortable: false, render: (r) => <TagBadges tags={r.tags} /> },
+                ]}
+              />
+            </Card>
+
+            {(access.suspicious_logins?.recent?.length ?? 0) > 0 && (
+              <Card title={`Suspicious logins (${fmtNum(access.suspicious_logins.count_30d)} in 30 days)`} padded={false}>
+                <DataTable
+                  rows={access.suspicious_logins.recent}
+                  pageSize={10}
+                  columns={[
+                    { key: 'at', label: 'When', render: (r) => <span className="whitespace-nowrap">{formatAdminDateTime(r.at)}</span>, sortValue: (r) => r.at || '' },
+                    { key: 'ip', label: 'IP', render: (r) => mono(showIp(r.ip)) },
+                    { key: 'reason', label: 'Reason', render: (r) => <span className="text-zinc-300">{r.reason || '—'}</span> },
+                    { key: 'login_input', label: 'Tried', render: (r) => <span className="break-all">{r.login_input || '—'}</span> },
+                  ]}
+                />
+              </Card>
+            )}
+
+            {(userData.sessions?.length ?? 0) > 0 && (
+              <Card title="Active sessions" subtitle="Sample" padded={false}>
+                <DataTable
+                  rows={userData.sessions}
+                  pageSize={10}
+                  columns={[
+                    { key: 'ip', label: 'IP', render: (r) => mono(showIp(r.ip)) },
+                    { key: 'device_type', label: 'Device', render: (r) => r.device_type || '—' },
+                    { key: 'last_used_at', label: 'Last used', render: (r) => <span className="whitespace-nowrap">{formatAdminDateTime(r.last_used_at)}</span>, sortValue: (r) => r.last_used_at || '' },
+                  ]}
+                />
+              </Card>
+            )}
+
+            {attack && (
+              <Card title={`Attack log IPs (last ${attack.days} days)`}>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {[['As attacker', attack.as_attacker], ['As target', attack.as_target]].map(([label, list]) => (
+                    <div key={label}>
+                      <div className="mb-1.5 text-xs font-medium text-zinc-400">{label}</div>
+                      {(list || []).length === 0 ? <p className="text-sm text-zinc-500">None</p> : (
+                        <ul className="space-y-1 text-sm">
+                          {list.map((r, i) => (
+                            <li key={i} className="text-zinc-300">
+                              <span className="font-mono text-xs">{blurIps ? maskIp(r.ip) : r.ip}</span>
+                              <span className="text-zinc-500"> · {r.count}× · last {formatAdminDateTime(r.last_at)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+          </>
+        )}
+
+        <Card title="Reverse IP lookup" subtitle="Who else uses this address?">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <Field label="IP address" className="flex-1">
+              <TextInput value={ipQuery} onChange={setIpQuery} onEnter={() => loadAccountsByIp()} placeholder="151.245.84.178" autoComplete="off" className="font-mono" />
+            </Field>
+            <Button variant="primary" icon={Search} loading={ipLoading} onClick={() => void loadAccountsByIp()} className={touchClass}>
               {ipLoading ? 'Searching…' : 'Find accounts'}
-            </button>
+            </Button>
           </div>
 
           {ipData && (
-            <div className="space-y-2">
-              <StaffIpReputationCard
-                ip={ipData.ip}
-                geo={ipData.geo}
-                accountCount={ipData.account_count}
-                blurIp={blurIps}
-              />
-              <div className="flex flex-wrap gap-2 text-[10px] font-heading items-center">
-                <span className="font-mono text-foreground text-sm">{blurIps ? maskIp(ipData.ip) : ipData.ip}</span>
+            <div className="mt-4 space-y-3">
+              <StaffIpReputationCard ip={ipData.ip} geo={ipData.geo} accountCount={ipData.account_count} blurIp={blurIps} />
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-mono text-zinc-100">{blurIps ? maskIp(ipData.ip) : ipData.ip}</span>
                 {ipData.geo?.isp ? (
-                  <span className="text-mutedForeground">
+                  <span className="text-zinc-400">
                     {ipData.geo.network || ipData.geo.isp}
                     {ipData.geo.countryCode ? ` · ${ipData.geo.countryCode}` : ''}
                   </span>
                 ) : null}
-                <span className="rounded border border-zinc-700/50 px-2 py-0.5 tabular-nums">
-                  {ipData.account_count} account(s)
-                </span>
+                <Badge>{ipData.account_count} account(s)</Badge>
               </div>
-              <div className="max-h-72 overflow-auto border border-zinc-700/50 rounded">
-                <table className="w-full text-[9px] font-heading">
-                  <thead className="sticky top-0 bg-zinc-900/95">
-                    <tr className="text-mutedForeground border-b border-zinc-700/50">
-                      <th className="p-1 text-left">Username</th>
-                      <th className="p-1 text-left">Roles at IP</th>
-                      <th className="p-1 text-left">Created</th>
-                      <th className="p-1 text-left">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(ipData.accounts || []).map((a) => (
-                      <tr key={a.id} className="border-b border-zinc-800/80">
-                        <td className="p-1">
-                          <button
-                            type="button"
-                            className="text-primary hover:underline font-medium"
-                            onClick={() => {
-                              const name = a.username || a.id;
-                              setUserQuery(name);
-                              void loadAccessReport(name);
-                            }}
-                          >
-                            {a.username || a.id}
-                          </button>
-                        </td>
-                        <td className="p-1 text-mutedForeground">{(a.roles || []).join(', ') || '—'}</td>
-                        <td className="p-1 text-mutedForeground whitespace-nowrap">
-                          {formatAdminDateTime(a.created_at)}
-                        </td>
-                        <td className="p-1">{a.is_dead ? <span className="text-red-400">Dead</span> : 'Alive'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="rounded-lg border border-zinc-800">
+                <DataTable
+                  rows={ipData.accounts || []}
+                  rowKey={(a) => a.id}
+                  pageSize={20}
+                  empty="No accounts have used this IP."
+                  columns={[
+                    { key: 'username', label: 'Player', render: (a) => <AccountButton name={a.username || a.id} onPick={pickAccount} /> },
+                    { key: 'roles', label: 'Roles at IP', sortable: false, render: (a) => <span className="text-zinc-400">{(a.roles || []).join(', ') || '—'}</span> },
+                    { key: 'created_at', label: 'Created', render: (a) => <span className="whitespace-nowrap text-zinc-400">{formatAdminDateTime(a.created_at)}</span>, sortValue: (a) => a.created_at || '' },
+                    { key: 'is_dead', label: 'Status', render: (a) => (a.is_dead ? <Badge tone="bad">Dead</Badge> : <Badge tone="good">Alive</Badge>) },
+                  ]}
+                />
               </div>
             </div>
           )}
-        </div>
-      </section>
+        </Card>
+      </AdminPage>
     </div>
   );
 }

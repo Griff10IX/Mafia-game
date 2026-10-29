@@ -27,10 +27,10 @@ function locationLine(geo = {}) {
 
 function riskBadges(geo = {}) {
   const badges = [];
-  if (geo.proxy) badges.push({ label: 'Proxy/VPN', cls: 'border-red-500/50 bg-red-500/20 text-red-200' });
-  if (geo.hosting) badges.push({ label: 'Hosting', cls: 'border-violet-500/50 bg-violet-500/20 text-violet-200' });
-  if (geo.mobile) badges.push({ label: 'Mobile', cls: 'border-sky-500/50 bg-sky-500/20 text-sky-200' });
-  if (!badges.length && geo.geo_ok !== false) badges.push({ label: 'Residential/ISP', cls: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200' });
+  if (geo.proxy) badges.push({ label: 'Proxy/VPN', cls: 'border-rose-500/40 bg-rose-500/10 text-rose-300' });
+  if (geo.hosting) badges.push({ label: 'Hosting', cls: 'border-violet-500/40 bg-violet-500/10 text-violet-300' });
+  if (geo.mobile) badges.push({ label: 'Mobile', cls: 'border-sky-500/40 bg-sky-500/10 text-sky-300' });
+  if (!badges.length && geo.geo_ok !== false) badges.push({ label: 'Residential/ISP', cls: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' });
   return badges;
 }
 
@@ -48,31 +48,31 @@ export default function StaffIpReputationCard({
   const asValue = valueOrDash(g.as_field || g.asname);
 
   return (
-    <div className={`rounded border border-zinc-700/50 bg-zinc-950/55 p-2 font-heading ${className}`}>
+    <div className={`rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 ${className}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-mono text-[11px] text-foreground break-all">{shownIp}</span>
+            <span className="break-all font-mono text-sm text-zinc-100">{shownIp}</span>
             {badges.map((b) => (
-              <span key={b.label} className={`rounded px-1.5 py-0.5 border text-[8px] font-bold uppercase tracking-wide ${b.cls}`}>
+              <span key={b.label} className={`rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${b.cls}`}>
                 {b.label}
               </span>
             ))}
           </div>
           {g.geo_ok === false ? (
-            <div className="mt-1 text-[9px] text-amber-300">Lookup failed: {valueOrDash(g.geo_error)}</div>
+            <div className="mt-1 text-xs text-amber-300">Lookup failed: {valueOrDash(g.geo_error)}</div>
           ) : (
-            <div className={`${compact ? 'mt-1' : 'mt-2'} grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] text-mutedForeground`}>
-              <div><span className="text-foreground">Location:</span> {locationLine(g)}</div>
-              <div><span className="text-foreground">Region:</span> {valueOrDash(g.regionName)}</div>
-              <div><span className="text-foreground">ISP:</span> {valueOrDash(g.isp || g.network)}</div>
-              <div><span className="text-foreground">AS:</span> {asValue}</div>
+            <div className={`${compact ? 'mt-1.5' : 'mt-2'} grid grid-cols-1 gap-x-4 gap-y-0.5 text-xs text-zinc-400 sm:grid-cols-2`}>
+              <div><span className="text-zinc-500">Location:</span> <span className="text-zinc-300">{locationLine(g)}</span></div>
+              <div><span className="text-zinc-500">Region:</span> <span className="text-zinc-300">{valueOrDash(g.regionName)}</span></div>
+              <div><span className="text-zinc-500">ISP:</span> <span className="text-zinc-300">{valueOrDash(g.isp || g.network)}</span></div>
+              <div className="break-words"><span className="text-zinc-500">AS:</span> <span className="text-zinc-300">{asValue}</span></div>
             </div>
           )}
         </div>
         {accountCount != null ? (
-          <div className="inline-flex items-center gap-1 rounded border border-amber-500/35 bg-amber-500/10 px-2 py-1 text-[9px] text-amber-200">
-            <ShieldAlert size={11} />
+          <div className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-200">
+            <ShieldAlert size={12} />
             {accountCount} account(s)
           </div>
         ) : null}

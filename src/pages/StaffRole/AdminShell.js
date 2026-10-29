@@ -71,7 +71,7 @@ function AdminLazyFallback() {
 }
 
 /** Pages built on the AdminKit design; everything else gets the classic restyle (.admin-skin). */
-const KIT_PAGES = new Set(['revenue', 'player', 'safety-center', 'live-ops', 'log-explorer', 'site-settings']);
+const KIT_PAGES = new Set(['revenue', 'player', 'safety-center', 'live-ops', 'log-explorer', 'site-settings', 'users-online', 'attack-logs', 'ip-history', 'account-compare', 'locked', 'witness-statements']);
 
 const STANDALONE_PAGE = {
   'users-online': AdminUsersOnline,

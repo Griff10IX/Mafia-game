@@ -132,6 +132,41 @@ export function Button({ variant = 'secondary', size = 'md', loading = false, ic
   );
 }
 
+/** Append to a Button's className for ~44px touch targets on phones. */
+export const touchClass = 'max-sm:h-11 max-sm:px-4 max-sm:text-sm';
+
+export function ToggleButton({ on, children, className = '', ...rest }) {
+  return (
+    <Button variant={on ? 'primary' : 'secondary'} aria-pressed={on} className={`${touchClass} ${className}`} {...rest}>
+      {children}
+    </Button>
+  );
+}
+
+/** 16px text on phones stops iOS zooming into the field. */
+export const inputClass = 'h-11 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-base text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none disabled:opacity-50 sm:h-9 sm:text-sm';
+
+export function TextInput({ value, onChange, onEnter, className = '', ...rest }) {
+  return (
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => { if (e.key === 'Enter' && onEnter) onEnter(); }}
+      className={`${inputClass} ${className}`}
+      {...rest}
+    />
+  );
+}
+
+export function Field({ label, children, className = '' }) {
+  return (
+    <label className={`grid min-w-0 gap-1 text-sm ${className}`}>
+      <span className="text-zinc-400">{label}</span>
+      {children}
+    </label>
+  );
+}
+
 export function Badge({ tone = 'neutral', children }) {
   const toneClass = {
     neutral: 'border-zinc-700 bg-zinc-800/80 text-zinc-300',
@@ -162,6 +197,7 @@ export function Segmented({ options, value, onChange, size = 'md' }) {
 }
 
 export const RANGE_OPTIONS = [
+  { value: 1, label: '24h' },
   { value: 7, label: '7d' },
   { value: 30, label: '30d' },
   { value: 90, label: '90d' },

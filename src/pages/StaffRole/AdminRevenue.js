@@ -15,7 +15,16 @@ const AXIS = { stroke: '#52525b', fontSize: 11, tickLine: false, axisLine: false
 const TOOLTIP_STYLE = { background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8, fontSize: 12, color: '#e4e4e7' };
 
 function rangeLabel(days) {
-  return days === 0 ? 'all time' : `last ${days === 365 ? 'year' : `${days} days`}`;
+  if (days === 0) return 'all time';
+  if (days === 1) return 'last 24 hours';
+  return `last ${days === 365 ? 'year' : `${days} days`}`;
+}
+
+/** Hourly buckets come back as UTC "YYYY-MM-DDTHH:00"; show them as local hours. */
+function periodLabel(period, bucket) {
+  if (bucket !== 'hour') return period;
+  const d = new Date(`${period}:00Z`);
+  return Number.isNaN(d.getTime()) ? period : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
 function errText(e) {
@@ -36,7 +45,7 @@ function RealMoney({ data, days }) {
   const t = data.totals;
   const prev = data.previous;
   const deltaLabel = prev ? 'vs previous period' : undefined;
-  const series = (data.series || []).map((s) => ({ ...s, pounds: s.gross_minor / 100 }));
+  const series = (data.series || []).map((s) => ({ ...s, period: periodLabel(s.period, data.bucket), pounds: s.gross_minor / 100 }));
   const cats = (data.by_category || []).map((c) => ({ ...c, pounds: c.gross_minor / 100 }));
   return (
     <div className="space-y-4">
@@ -276,7 +285,7 @@ function Economy({ data, days }) {
 
 export default function AdminRevenue() {
   const [tab, setTab] = useState('money');
-  const [days, setDays] = useState(30);
+  const [days, setDays] = useState(1);
   const [state, setState] = useState({ loading: true, error: null, money: null, economy: null });
 
   const load = useCallback(async () => {
