@@ -158,7 +158,6 @@ function timeAgo(iso) {
 /** Shows `rows` items at a time and steps through the rest every few seconds. */
 export function LiveStreets({ items, rows = 3 }) {
   const [offset, setOffset] = useState(0);
-  const [open, setOpen] = useState(() => !(typeof window !== 'undefined' && window.matchMedia('(max-width: 520px)').matches));
 
   useEffect(() => {
     if (items.length <= rows) return undefined;
@@ -169,8 +168,7 @@ export function LiveStreets({ items, rows = 3 }) {
   if (!items.length) return null;
   const shown = Array.from({ length: Math.min(rows, items.length) }, (_, i) => items[(offset + i) % items.length]);
   return (
-    <details className="ln-live-box" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
-      <summary><span className="ln-dot" />Live on the streets</summary>
+    <div className="ln-live-box">
       <div className="ln-live" aria-live="polite">
         <h2><i />Live on the streets</h2>
         <ul>
@@ -183,7 +181,7 @@ export function LiveStreets({ items, rows = 3 }) {
           ))}
         </ul>
       </div>
-    </details>
+    </div>
   );
 }
 

@@ -9,8 +9,9 @@ import {
   formatFromEntertainerFund,
   fundedGameHref,
 } from '../../utils/entertainerFundedGameDisplay';
-import { Gift, Megaphone, Mic2, RefreshCw } from 'lucide-react';
+import { Gift, Megaphone, Mic2, Palette, PiggyBank, RefreshCw, Trophy, Wallet } from 'lucide-react';
 import styles from '../../styles/noir.module.css';
+import './entertainerHub.css';
 
 const BROADCAST_TEMPLATE_DEFAULTS = {
   new_e_games: {
@@ -135,24 +136,23 @@ export default function EntertainerHub() {
   // Only after first fetch — never blank the page while waiting.
   if (bootSettled && !dash?.username) {
     return (
-      <div className={`p-4 max-w-lg mx-auto space-y-3 ${styles.pageContent} mobile-page-root`}>
-        <p className="text-foreground font-heading">
-          {loadErr?.status === 403
-            ? 'You do not have Entertainer access.'
-            : 'Connection problem — the Entertainer dashboard could not be loaded.'}
-        </p>
-        {loadErr?.msg && loadErr?.status !== 403 ? (
-          <p className="text-xs text-mutedForeground">{loadErr.msg}</p>
-        ) : null}
-        <div className="flex flex-wrap gap-3 items-center">
-          <button
-            type="button"
-            onClick={() => load()}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-heading font-bold uppercase rounded bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30"
-          >
-            <RefreshCw size={14} /> Retry
-          </button>
-          <Link to="/account/dashboard" className="text-primary underline text-sm font-heading">Back to dashboard</Link>
+      <div className={`ent-hub p-4 ${styles.pageContent} mobile-page-root`}>
+        <div className="ent-error ent-card">
+          <div className="ent-card-body">
+            <span className="ent-hero-icon mx-auto"><Mic2 size={22} /></span>
+            <p className="text-base font-bold">
+              {loadErr?.status === 403
+                ? 'You do not have Entertainer access.'
+                : 'Connection problem — the Entertainer dashboard could not be loaded.'}
+            </p>
+            {loadErr?.msg && loadErr?.status !== 403 ? <p className="ent-note">{loadErr.msg}</p> : null}
+            <div className="flex flex-wrap gap-3 items-center justify-center">
+              <button type="button" onClick={() => load()} className="ent-btn ent-btn-primary inline-flex items-center gap-2">
+                <RefreshCw size={14} /> Retry
+              </button>
+              <Link to="/account/dashboard" className="ent-btn ent-btn-ghost inline-flex items-center">Back to dashboard</Link>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -282,290 +282,242 @@ export default function EntertainerHub() {
   };
 
   return (
-    <div className={`p-3 md:p-6 max-w-3xl mx-auto space-y-6 ${styles.pageContent} mobile-page-root`}>
-      <div className="flex items-center gap-2 border-b border-primary/20 pb-3 flex-wrap">
-        <Mic2 className="text-primary shrink-0" size={22} />
-        <h1 className="text-lg md:text-xl font-heading font-bold text-primary tracking-wide uppercase">Entertainer Hub</h1>
-        <button type="button" onClick={() => load()} className="ml-auto flex items-center gap-1 text-[11px] font-heading text-mutedForeground hover:text-primary min-h-[44px]">
-          <RefreshCw size={14} /> Refresh
-        </button>
-      </div>
-
-      <section className="rounded-lg border border-primary/20 bg-zinc-900/40 p-4 space-y-3">
-        <h2 className="text-[11px] font-heading uppercase tracking-widest text-mutedForeground">Users Online colour</h2>
-        <p className="text-[11px] text-mutedForeground font-heading">Pick how your name appears on Users Online (same idea as moderators).</p>
-        <div className="flex flex-wrap items-center gap-3">
-          <input type="color" value={entColor} onChange={(e) => setEntColor(e.target.value)} className="h-9 w-12 rounded border border-input bg-transparent cursor-pointer" aria-label="Entertainer colour" />
-          <input type="text" value={entColor} onChange={(e) => setEntColor(e.target.value)} className="w-28 bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1.5 text-xs font-mono text-foreground" />
-          <button type="button" onClick={saveColor} disabled={colorSaving} className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-heading font-bold disabled:opacity-50">
-            {colorSaving ? 'Saving…' : 'Save colour'}
-          </button>
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-violet-500/25 bg-violet-950/15 p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <Megaphone className="text-violet-300 shrink-0" size={18} />
-          <h2 className="text-[11px] font-heading uppercase tracking-widest text-violet-200/90">Game-wide announce</h2>
-        </div>
-        <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-          Send an inbox message to every player about E-Games or the Entertainer Forum. Players who turned off E-Games notifications in Profile will not receive it. Link goes to the Entertainer Forum tab.
-        </p>
-        <div className="text-[11px] font-heading text-foreground">
-          <span className="text-mutedForeground">Broadcasts left today (UTC):</span>{' '}
-          <strong>{broadcastsRemaining}</strong> / {broadcastDailyCap}
-        </div>
-        <div className="flex flex-col gap-2">
-          <label className="flex flex-col gap-1">
-            <span className="text-[10px] text-mutedForeground font-heading uppercase">Template</span>
-            <select
-              value={broadcastTemplate}
-              onChange={(e) => applyBroadcastTemplate(e.target.value)}
-              className="bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1.5 text-xs font-heading text-foreground"
-              disabled={broadcastsRemaining <= 0}
-            >
-              {broadcastTemplates.map((t) => (
-                <option key={t.id} value={t.id}>{t.label || t.id}</option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[10px] text-mutedForeground font-heading uppercase">Title</span>
-            <input
-              type="text"
-              value={broadcastTitle}
-              onChange={(e) => setBroadcastTitle(e.target.value)}
-              maxLength={120}
-              placeholder="Inbox title"
-              className="bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1.5 text-xs font-heading text-foreground"
-              disabled={broadcastsRemaining <= 0}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[10px] text-mutedForeground font-heading uppercase">Message</span>
-            <textarea
-              value={broadcastMessage}
-              onChange={(e) => setBroadcastMessage(e.target.value)}
-              maxLength={500}
-              rows={4}
-              placeholder="What players will see in their inbox"
-              className="bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1.5 text-xs font-heading text-foreground resize-y min-h-[88px]"
-              disabled={broadcastsRemaining <= 0}
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => submitBroadcast()}
-            disabled={broadcastSubmitting || broadcastsRemaining <= 0}
-            className="w-full sm:w-auto px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-heading font-bold uppercase tracking-wide disabled:opacity-50"
-          >
-            {broadcastSubmitting ? 'Sending…' : 'Send game-wide message'}
-          </button>
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-primary/20 bg-zinc-900/40 p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <Gift className="text-primary shrink-0" size={18} />
-          <h2 className="text-[11px] font-heading uppercase tracking-widest text-mutedForeground">Reward perks</h2>
-        </div>
-        <p className="text-[10px] text-mutedForeground font-heading leading-snug">
-          Grant armoury skill tokens to any player (UTC daily limits). Game Pass is not included — staff-only elsewhere.
-          {' '}When you fund forum dice/gbox/hangman or MDG/MP Poker games, each <strong className="text-foreground">completed</strong> sponsored game pays <strong className="text-emerald-400">+100 main-wallet points</strong> (collect in Hub — stacks if you skip days).
-        </p>
-        <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px] font-heading text-foreground">
-          <span>
-            <span className="text-mutedForeground">Tokens left today:</span>{' '}
-            <strong>{remTotal}</strong> / 10
-          </span>
-          <span>
-            <span className="text-mutedForeground">Auto Rank (2h) left:</span>{' '}
-            <strong>{remAuto}</strong> / 2
-          </span>
-        </div>
-        <div className="flex flex-col sm:flex-row flex-wrap gap-2 items-stretch sm:items-end">
-          <label className="flex flex-col gap-1 min-w-[140px] flex-1">
-            <span className="text-[10px] text-mutedForeground font-heading uppercase">Player username</span>
-            <input
-              type="text"
-              value={perkTarget}
-              onChange={(e) => setPerkTarget(e.target.value)}
-              placeholder="Exact username"
-              className="bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1.5 text-xs font-heading text-foreground"
-              disabled={remTotal <= 0}
-            />
-          </label>
-          <label className="flex flex-col gap-1 min-w-[160px]">
-            <span className="text-[10px] text-mutedForeground font-heading uppercase">Perk type</span>
-            <select
-              value={perkType}
-              onChange={(e) => setPerkType(e.target.value)}
-              className="bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1.5 text-xs font-heading text-foreground"
-              disabled={remTotal <= 0}
-            >
-              {perkTypes.map((k) => (
-                <option key={k} value={k}>
-                  {PERK_LABELS[k] || k}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 w-24">
-            <span className="text-[10px] text-mutedForeground font-heading uppercase">Amount</span>
-            <input
-              type="number"
-              min={1}
-              max={maxPerkAmt || 1}
-              value={perkAmt}
-              onChange={(e) => setPerkAmt(Number(e.target.value))}
-              className="bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1.5 text-xs font-heading text-foreground"
-              disabled={remTotal <= 0 || maxPerkAmt <= 0}
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => submitPerk()}
-            disabled={perkSubmitting || remTotal <= 0 || maxPerkAmt <= 0}
-            className="px-4 py-2 rounded bg-primary text-primary-foreground text-xs font-heading font-bold disabled:opacity-50 sm:self-end"
-          >
-            {perkSubmitting ? 'Sending…' : 'Grant perk'}
-          </button>
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-amber-500/25 bg-amber-950/15 p-4 space-y-3">
-        <h2 className="text-[11px] font-heading uppercase tracking-widest text-amber-200/90">Pending pay (collect)</h2>
-        <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-          Each UTC day the server credits your daily allowance here first. Completion bonuses from sponsored games also land here. Use <strong className="text-foreground">Collect</strong> to move allowance into your spendable fund (respecting fund caps) and bonuses into your main wallet. Leave it pending to stack across days.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="rounded-lg border border-amber-500/20 bg-zinc-950/50 p-3">
-            <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Pending cash</div>
-            <div className="text-lg font-heading font-bold text-amber-300">${Math.trunc(Number(dash?.entertainer_pending_fund_cash || 0)).toLocaleString()}</div>
+    <div className={`ent-hub p-3 md:p-6 max-w-6xl mx-auto ${styles.pageContent} mobile-page-root`}>
+      <header className="ent-hero">
+        <div className="ent-hero-top">
+          <span className="ent-hero-icon"><Mic2 size={22} /></span>
+          <div className="min-w-0">
+            <h1>Entertainer Hub</h1>
+            <p>Run games, rally the streets and reward players{dash?.username ? `, ${dash.username}` : ''}.</p>
           </div>
-          <div className="rounded-lg border border-amber-500/20 bg-zinc-950/50 p-3">
-            <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Pending fund points</div>
-            <div className="text-lg font-heading font-bold text-amber-200/90">{Number(dash?.entertainer_pending_fund_points || 0).toLocaleString()}</div>
-          </div>
-          <div className="rounded-lg border border-emerald-500/25 bg-zinc-950/50 p-3">
-            <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Pending completion bonus</div>
-            <div className="text-lg font-heading font-bold text-emerald-300">{Number(dash?.entertainer_pending_completion_bonus_points || 0).toLocaleString()}</div>
-            <div className="text-[9px] text-mutedForeground mt-1">
-              Today: {Number(dash?.completion_bonus_points_today || 0).toLocaleString()} pts from {Number(dash?.funded_completions_today || 0).toLocaleString()} completed games
+          <button type="button" onClick={() => load()} className="ent-ghost-btn ml-auto" aria-label="Refresh">
+            <RefreshCw size={14} /> <span className="hidden sm:inline">Refresh</span>
+          </button>
+        </div>
+        <div className="ent-stats">
+          <Stat label="Fund cash" value={`$${fmt(dash?.entertainer_fund_cash)}`} tone="emerald" />
+          <Stat label="Fund points" value={fmt(dash?.entertainer_fund_points)} tone="sky" />
+          <Stat label="Broadcasts left" value={`${broadcastsRemaining}/${broadcastDailyCap}`} tone="violet" />
+          <Stat label="Perk tokens left" value={`${remTotal}/10`} tone="amber" />
+        </div>
+      </header>
+
+      <div className="ent-grid">
+        <div className="ent-col">
+          <Card icon={Wallet} title="Pay day" tone="amber" subtitle="Daily allowance and completion bonuses wait here until you collect. Leave it to stack across days.">
+            <div className="ent-tiles ent-tiles-3">
+              <Tile label="Pending cash" value={`$${fmt(dash?.entertainer_pending_fund_cash)}`} tone="amber" />
+              <Tile label="Pending fund points" value={fmt(dash?.entertainer_pending_fund_points)} tone="amber" />
+              <Tile
+                label="Completion bonus"
+                value={fmt(dash?.entertainer_pending_completion_bonus_points)}
+                tone="emerald"
+                hint={`Today: ${fmt(dash?.completion_bonus_points_today)} pts from ${fmt(dash?.funded_completions_today)} games`}
+              />
             </div>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={collectPending}
-          disabled={collecting}
-          className="w-full sm:w-auto px-4 py-2 rounded-lg bg-amber-500/90 hover:bg-amber-500 text-zinc-950 text-xs font-heading font-black uppercase tracking-wide disabled:opacity-50"
-        >
-          {collecting ? 'Collecting…' : 'Collect pay'}
-        </button>
-      </section>
+            <button type="button" onClick={collectPending} disabled={collecting} className="ent-btn ent-btn-amber w-full">
+              {collecting ? 'Collecting…' : 'Collect pay'}
+            </button>
+            <p className="ent-note">Allowance moves into your spendable fund (up to its cap). Bonuses go straight to your main wallet.</p>
+          </Card>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="rounded-lg border border-primary/20 bg-zinc-900/50 p-4">
-          <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Fund cash (spendable)</div>
-          <div className="text-xl font-heading font-bold text-emerald-400">${Number(dash?.entertainer_fund_cash || 0).toLocaleString()}</div>
+          <Card icon={PiggyBank} title="Your fund" tone="emerald" subtitle="Spent when you create MDG games or MP Poker tables as an Entertainer. Your own wallet isn't touched.">
+            <div className="ent-tiles ent-tiles-2">
+              <Tile label="Spendable cash" value={`$${fmt(dash?.entertainer_fund_cash)}`} tone="emerald" big />
+              <Tile label="Spendable points" value={fmt(dash?.entertainer_fund_points)} tone="sky" big />
+            </div>
+            <dl className="ent-rows">
+              <Row label="Funded games today" value={fmt(dash?.funded_games_today_count)} />
+              <Row label="Lifetime bonus points paid" value={fmt(dash?.lifetime_bonus_points_paid)} />
+              <Row label="Lifetime fund cash granted" value={`$${fmt(dash?.lifetime_fund_cash_granted)}`} />
+              <Row label="Lifetime fund points granted" value={fmt(dash?.lifetime_fund_points_granted)} />
+            </dl>
+          </Card>
+
+          <Card icon={Trophy} title="Sponsored games" subtitle="MDG and MP Poker games you funded. Each completed one pays +100 main-wallet points.">
+            <div className="ent-tiles ent-tiles-4">
+              <Tile label="Open" value={fmt(dash?.funded_ledger_open_count)} tone="amber" />
+              <Tile label="Completed" value={fmt(dash?.funded_ledger_completed_count)} tone="emerald" />
+              <Tile label="Paid out pts" value={fmtShort(dash?.funded_ledger_paid_out_points_total)} full={fmt(dash?.funded_ledger_paid_out_points_total)} tone="sky" />
+              <Tile label="Paid out cash" value={`$${fmtShort(dash?.funded_ledger_paid_out_cash_total)}`} full={`$${fmt(dash?.funded_ledger_paid_out_cash_total)}`} tone="emerald" />
+            </div>
+            {recent.length === 0 ? (
+              <p className="ent-empty">No funded games yet. Create an MDG or MP Poker game using your Entertainer fund.</p>
+            ) : (
+              <ul className="ent-games">
+                {recent.map((row) => {
+                  const href = fundedGameHref(row);
+                  const kind = fundedGameKindLabel(row);
+                  const done = !!row.completed_at;
+                  return (
+                    <li key={row.id}>
+                      <div className="ent-game-head">
+                        {href ? <Link to={href} className="ent-game-kind">{kind}</Link> : <span className="ent-game-kind">{kind}</span>}
+                        <span className={`ent-chip ${done ? 'ent-chip-done' : 'ent-chip-open'}`}>{done ? 'Completed' : 'Open'}</span>
+                        <span className="ent-game-day">{row.utc_day}</span>
+                      </div>
+                      {done && (
+                        <div className="ent-game-meta">
+                          <span>Winner <b>{(row.winner_username || '').trim() || '—'}</b></span>
+                          <span>Paid out <b className="text-sky-300">{formatTotalWinnings(row)}</b></span>
+                          <span>From your fund <b className="text-violet-300">{formatFromEntertainerFund(row)}</b></span>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
         </div>
-        <div className="rounded-lg border border-primary/20 bg-zinc-900/50 p-4">
-          <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Fund points (spendable)</div>
-          <div className="text-xl font-heading font-bold text-sky-400">{Number(dash?.entertainer_fund_points || 0).toLocaleString()}</div>
+
+        <div className="ent-col">
+          <Card icon={Megaphone} title="Announce to everyone" tone="violet" subtitle="Sends an inbox message to every player, linking to the Entertainer Forum. Players who switched off E-Games notifications won't get it.">
+            <div className="ent-chips" role="radiogroup" aria-label="Template">
+              {broadcastTemplates.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={broadcastTemplate === t.id}
+                  className={`ent-pick ${broadcastTemplate === t.id ? 'is-on' : ''}`}
+                  onClick={() => applyBroadcastTemplate(t.id)}
+                  disabled={broadcastsRemaining <= 0}
+                >
+                  {t.label || t.id}
+                </button>
+              ))}
+            </div>
+            <label className="ent-field">
+              <span>Title</span>
+              <input type="text" value={broadcastTitle} onChange={(e) => setBroadcastTitle(e.target.value)} maxLength={120} placeholder="Inbox title" disabled={broadcastsRemaining <= 0} />
+            </label>
+            <label className="ent-field">
+              <span>Message <em>{broadcastMessage.length}/500</em></span>
+              <textarea value={broadcastMessage} onChange={(e) => setBroadcastMessage(e.target.value)} maxLength={500} rows={3} placeholder="What players will see in their inbox" disabled={broadcastsRemaining <= 0} />
+            </label>
+            {(broadcastTitle.trim() || broadcastMessage.trim()) && (
+              <div className="ent-preview" aria-label="Inbox preview">
+                <span className="ent-preview-tag">Inbox preview</span>
+                <b>{broadcastTitle.trim() || 'Untitled'}</b>
+                <p>{broadcastMessage.trim() || '…'}</p>
+              </div>
+            )}
+            <button type="button" onClick={() => submitBroadcast()} disabled={broadcastSubmitting || broadcastsRemaining <= 0} className="ent-btn ent-btn-violet w-full">
+              {broadcastSubmitting ? 'Sending…' : broadcastsRemaining <= 0 ? 'No broadcasts left today' : `Send to everyone · ${broadcastsRemaining} left today`}
+            </button>
+          </Card>
+
+          <Card icon={Gift} title="Reward a player" subtitle="Grant armoury skill tokens. Daily limits reset at midnight UTC. Game Pass isn't included.">
+            <label className="ent-field">
+              <span>Player username</span>
+              <input type="text" value={perkTarget} onChange={(e) => setPerkTarget(e.target.value)} placeholder="Exact username" autoCapitalize="none" spellCheck={false} disabled={remTotal <= 0} />
+            </label>
+            <div className="ent-field">
+              <span>Perk</span>
+              <div className="ent-chips ent-chips-grid" role="radiogroup" aria-label="Perk type">
+                {perkTypes.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    role="radio"
+                    aria-checked={perkType === k}
+                    className={`ent-pick ${perkType === k ? 'is-on' : ''}`}
+                    onClick={() => setPerkType(k)}
+                    disabled={remTotal <= 0}
+                  >
+                    {PERK_LABELS[k] || k}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="ent-perk-foot">
+              <div className="ent-field">
+                <span>Amount</span>
+                <div className="ent-stepper">
+                  <button type="button" onClick={() => setPerkAmt((a) => Math.max(1, (parseInt(a, 10) || 1) - 1))} disabled={remTotal <= 0 || perkAmt <= 1} aria-label="Less">−</button>
+                  <input type="number" min={1} max={maxPerkAmt || 1} value={perkAmt} onChange={(e) => setPerkAmt(Number(e.target.value))} disabled={remTotal <= 0 || maxPerkAmt <= 0} />
+                  <button type="button" onClick={() => setPerkAmt((a) => Math.min(maxPerkAmt || 1, (parseInt(a, 10) || 1) + 1))} disabled={remTotal <= 0 || perkAmt >= maxPerkAmt} aria-label="More">+</button>
+                </div>
+              </div>
+              <div className="ent-limits">
+                <span><b>{remTotal}</b>/10 tokens left</span>
+                <span><b>{remAuto}</b>/2 Auto Rank left</span>
+              </div>
+            </div>
+            <button type="button" onClick={() => submitPerk()} disabled={perkSubmitting || remTotal <= 0 || maxPerkAmt <= 0} className="ent-btn ent-btn-primary w-full">
+              {perkSubmitting ? 'Sending…' : `Grant ${perkAmt}× ${PERK_LABELS[perkType] || perkType}${perkTarget.trim() ? ` to ${perkTarget.trim()}` : ''}`}
+            </button>
+          </Card>
+
+          <Card icon={Palette} title="Your name colour" subtitle="How your name shows on Users Online, like moderators have.">
+            <div className="ent-color">
+              <input type="color" value={/^#[0-9A-Fa-f]{6}$/.test(entColor) ? entColor : '#7c3aed'} onChange={(e) => setEntColor(e.target.value)} aria-label="Entertainer colour" />
+              <input type="text" value={entColor} onChange={(e) => setEntColor(e.target.value)} className="ent-hex" aria-label="Hex colour" />
+              <span className="ent-name-preview" style={{ color: entColor }}>{dash?.username || 'Your name'}</span>
+            </div>
+            <button type="button" onClick={saveColor} disabled={colorSaving} className="ent-btn ent-btn-ghost w-full">
+              {colorSaving ? 'Saving…' : 'Save colour'}
+            </button>
+          </Card>
         </div>
       </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm font-heading">
-        <div className="rounded border border-zinc-700/50 p-3 bg-zinc-900/30">
-          <span className="text-mutedForeground text-[10px] uppercase block mb-1">Funded games today</span>
-          <span className="text-foreground text-lg font-bold">{dash?.funded_games_today_count ?? 0}</span>
-        </div>
-        <div className="rounded border border-zinc-700/50 p-3 bg-zinc-900/30">
-          <span className="text-mutedForeground text-[10px] uppercase block mb-1">Lifetime bonus points paid</span>
-          <span className="text-foreground text-lg font-bold">{(dash?.lifetime_bonus_points_paid ?? 0).toLocaleString()}</span>
-        </div>
-        <div className="rounded border border-zinc-700/50 p-3 bg-zinc-900/30">
-          <span className="text-mutedForeground text-[10px] uppercase block mb-1">Lifetime fund cash granted</span>
-          <span className="text-foreground">${(dash?.lifetime_fund_cash_granted ?? 0).toLocaleString()}</span>
-        </div>
-        <div className="rounded border border-zinc-700/50 p-3 bg-zinc-900/30">
-          <span className="text-mutedForeground text-[10px] uppercase block mb-1">Lifetime fund points granted</span>
-          <span className="text-foreground">{(dash?.lifetime_fund_points_granted ?? 0).toLocaleString()}</span>
-        </div>
-      </div>
-
-      <section className="space-y-2">
-        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest">Sponsored games (MDG / MP Poker)</h2>
-        <p className="text-[10px] text-mutedForeground font-heading leading-snug">
-          <strong className="text-zinc-400">Open</strong> = game not finished yet. <strong className="text-zinc-400">Completed</strong> = done. Paid totals are from the ledger (games finished before payout tracking may show 0).
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-heading">
-          <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/30 text-center">
-            <div className="text-[9px] text-mutedForeground uppercase">Open</div>
-            <div className="text-lg font-bold text-amber-400 tabular-nums">{dash?.funded_ledger_open_count ?? 0}</div>
-          </div>
-          <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/30 text-center">
-            <div className="text-[9px] text-mutedForeground uppercase">Completed</div>
-            <div className="text-lg font-bold text-emerald-400 tabular-nums">{dash?.funded_ledger_completed_count ?? 0}</div>
-          </div>
-          <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/30 text-center">
-            <div className="text-[9px] text-mutedForeground uppercase">Paid pts</div>
-            <div className="text-lg font-bold text-sky-400/90 tabular-nums">{(dash?.funded_ledger_paid_out_points_total ?? 0).toLocaleString()}</div>
-          </div>
-          <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/30 text-center">
-            <div className="text-[9px] text-mutedForeground uppercase">Paid cash</div>
-            <div className="text-lg font-bold text-emerald-400 tabular-nums">${Math.trunc(Number(dash?.funded_ledger_paid_out_cash_total ?? 0)).toLocaleString()}</div>
-          </div>
-        </div>
-        <h3 className="text-[11px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Recent funded games</h3>
-        {recent.length === 0 ? (
-          <p className="text-[11px] text-mutedForeground font-heading">No entries yet. Create an MDG or MP Poker game using your entertainer fund.</p>
-        ) : (
-          <ul className="space-y-2 max-h-[28rem] overflow-y-auto">
-            {recent.map((row) => {
-              const href = fundedGameHref(row);
-              const kind = fundedGameKindLabel(row);
-              const winner = (row.winner_username || '').trim() || '—';
-              const total = formatTotalWinnings(row);
-              const fromFund = formatFromEntertainerFund(row);
-              return (
-                <li key={row.id} className="text-[11px] font-heading py-2 px-2 rounded bg-zinc-800/50 border border-zinc-700/40 space-y-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    {href ? (
-                      <Link to={href} className="text-primary hover:underline">{kind}</Link>
-                    ) : (
-                      <span className="text-primary">{kind}</span>
-                    )}
-                    <span className="text-mutedForeground">{row.utc_day}</span>
-                    <span className={row.completed_at ? 'text-emerald-400' : 'text-amber-400'}>{row.completed_at ? 'Completed' : 'Open'}</span>
-                  </div>
-                  {row.completed_at ? (
-                    <div className="text-[10px] text-mutedForeground space-y-0.5 leading-snug">
-                      <div>
-                        <span className="text-zinc-500">Winner: </span>
-                        <span className="text-zinc-200">{winner}</span>
-                      </div>
-                      <div>
-                        <span className="text-zinc-500">Total paid out: </span>
-                        <span className="text-sky-400/90">{total}</span>
-                      </div>
-                      <div>
-                        <span className="text-zinc-500">From your fund (seed): </span>
-                        <span className="text-violet-300/90">{fromFund}</span>
-                      </div>
-                    </div>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      <p className="text-[10px] text-mutedForeground font-heading">
-        Daily allowance accrues to pending automatically (UTC). Collect when you want it in your spendable fund. Use that fund when creating MDG games or MP Poker tables as an Entertainer — your normal wallet is not charged for those flows.
-      </p>
     </div>
+  );
+}
+
+function fmt(v) {
+  return Math.trunc(Number(v || 0)).toLocaleString();
+}
+
+function fmtShort(v) {
+  const n = Math.trunc(Number(v || 0));
+  if (Math.abs(n) >= 1e12) return `${+(n / 1e12).toFixed(1)}T`;
+  if (Math.abs(n) >= 1e9) return `${+(n / 1e9).toFixed(1)}B`;
+  if (Math.abs(n) >= 1e6) return `${+(n / 1e6).toFixed(1)}M`;
+  if (Math.abs(n) >= 1e5) return `${Math.round(n / 1e3)}K`;
+  return n.toLocaleString();
+}
+
+function Stat({ label, value, tone }) {
+  return (
+    <div className={`ent-stat ent-tone-${tone}`}>
+      <span>{label}</span>
+      <b>{value}</b>
+    </div>
+  );
+}
+
+function Tile({ label, value, full, tone = 'default', hint, big }) {
+  return (
+    <div className={`ent-tile ent-tone-${tone} ${big ? 'is-big' : ''}`}>
+      <span>{label}</span>
+      <b title={full || undefined}>{value}</b>
+      {hint && <small>{hint}</small>}
+    </div>
+  );
+}
+
+function Row({ label, value }) {
+  return (
+    <div className="ent-row">
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+function Card({ icon: Icon, title, subtitle, tone = 'default', children }) {
+  return (
+    <section className={`ent-card ent-card-${tone}`}>
+      <header>
+        {Icon && <span className="ent-card-icon"><Icon size={16} /></span>}
+        <div className="min-w-0">
+          <h2>{title}</h2>
+          {subtitle && <p>{subtitle}</p>}
+        </div>
+      </header>
+      <div className="ent-card-body">{children}</div>
+    </section>
   );
 }

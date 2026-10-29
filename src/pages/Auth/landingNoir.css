@@ -109,8 +109,6 @@
 
 /* Live on the streets */
 .ln-live-box { margin-top: 14px; }
-.ln-live-box > summary { list-style: none; display: none; }
-.ln-live-box > summary::-webkit-details-marker { display: none; }
 .ln-live { background: rgba(6, 9, 13, 0.66); border: 1px solid var(--ln-line); border-radius: 14px; padding: 12px 14px; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 .ln-live h2 { margin: 0 0 9px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ln-muted); display: flex; align-items: center; gap: 8px; }
 .ln-live h2 i { width: 7px; height: 7px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 10px #ef4444; animation: ln-pulse 1.4s infinite; }
@@ -135,8 +133,6 @@
   .ln-polaroid-cap b { font-size: 12px; }
   .ln-polaroid-cap small { font-size: 10px; }
   .ln-card { padding: 6px 16px 18px; }
-  .ln-live-box > summary { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; font-size: 13px; color: var(--ln-muted); cursor: pointer; }
-  .ln-live-box[open] > summary { margin-bottom: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ln-page *, .ln-page *::before, .ln-page *::after { animation: none !important; transition: none !important; }
