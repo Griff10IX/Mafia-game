@@ -160,6 +160,7 @@ def recompute_winner_payouts_from_round(round_doc: dict, tickets: list) -> dict[
         }
 
     payout = int(round_doc.get("payout") or 0)
+    points_payout = int(round_doc.get("points_payout") or 0)
     matches: list = []
     for t in tickets:
         norm = _normalize_ticket_numbers(t.get("numbers"))
@@ -167,19 +168,23 @@ def recompute_winner_payouts_from_round(round_doc: dict, tickets: list) -> dict[
             matches.append(t)
 
     amounts_by_user: dict[str, int] = defaultdict(int)
+    points_by_user: dict[str, int] = defaultdict(int)
     names_by_user: dict[str, str] = {}
     mcount = len(matches)
     if mcount > 0 and payout > 0:
         share = payout // mcount
         rem = payout % mcount
+        pts_share = points_payout // mcount
+        pts_rem = points_payout % mcount
         for i, t in enumerate(matches):
             amt = share + (1 if i < rem else 0)
             uid = str(t.get("user_id") or "")
             amounts_by_user[uid] += amt
+            points_by_user[uid] += pts_share + (1 if i < pts_rem else 0)
             names_by_user[uid] = (t.get("username") or "?").strip()
 
     rows = [
-        {"user_id": uid, "username": names_by_user.get(uid, "?"), "amount": amt}
+        {"user_id": uid, "username": names_by_user.get(uid, "?"), "amount": amt, "points": int(points_by_user.get(uid) or 0)}
         for uid, amt in sorted(amounts_by_user.items(), key=lambda x: (-x[1], x[0]))
     ]
     total = sum(amounts_by_user.values())

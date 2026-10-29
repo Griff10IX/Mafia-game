@@ -2841,6 +2841,12 @@ def register(router):
             {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}, "is_bodyguard": {"$ne": True}},
             {"$inc": {"money": amount}}
         )
+        await srv.log_activity(
+            current_user.get("id") or "admin",
+            current_user.get("username") or "?",
+            "admin_give_all_money",
+            {"amount_each": amount, "accounts_affected": result.modified_count, "total": amount * result.modified_count},
+        )
         return {"message": f"Gave ${amount:,} to {result.modified_count} accounts", "updated": result.modified_count}
 
     @router.post("/admin/adjust-money")
@@ -5454,6 +5460,12 @@ def register(router):
                 "exact_match_count": 1,
                 "winner_username": 1,
                 "rollover_to_next": 1,
+                "points_ticket_count": 1,
+                "points_gross_pot": 1,
+                "points_sink_amount": 1,
+                "points_payout": 1,
+                "points_rollover_to_next": 1,
+                "points_bonus_in": 1,
             },
         ).sort("_id", -1).limit(lim)
         rows = await cursor.to_list(lim)
@@ -5474,9 +5486,20 @@ def register(router):
                     "exact_match_count": r.get("exact_match_count"),
                     "winner_username": r.get("winner_username"),
                     "rollover_to_next": r.get("rollover_to_next"),
+                    "points_ticket_count": r.get("points_ticket_count"),
+                    "points_gross_pot": r.get("points_gross_pot"),
+                    "points_sink_amount": r.get("points_sink_amount"),
+                    "points_payout": r.get("points_payout"),
+                    "points_rollover_to_next": r.get("points_rollover_to_next"),
+                    "points_bonus_in": r.get("points_bonus_in"),
                 }
             )
-        return {"rounds": out, "ticket_price": lottery_audit_mod.TICKET_PRICE, "pot_tax_percent": lottery_audit_mod.POT_TAX_PERCENT}
+        return {
+            "rounds": out,
+            "ticket_price": lottery_audit_mod.TICKET_PRICE,
+            "points_ticket_price": lottery_audit_mod.POINTS_TICKET_PRICE,
+            "pot_tax_percent": lottery_audit_mod.POT_TAX_PERCENT,
+        }
 
     class AdminLotteryDrawRoundBody(BaseModel):
         round_id: str
@@ -6158,7 +6181,7 @@ def register(router):
         rid_str = str(oid)
         tickets = await db.lottery_tickets.find(
             {"round_id": oid},
-            {"_id": 0, "user_id": 1, "username": 1, "numbers": 1, "ticket_id": 1, "created_at": 1},
+            {"_id": 0, "user_id": 1, "username": 1, "numbers": 1, "ticket_id": 1, "created_at": 1, "paid_with": 1, "complimentary": 1},
         ).to_list(500_000)
         recomp = lottery_audit_mod.recompute_winner_payouts_from_round(rd, tickets)
 
@@ -6166,16 +6189,33 @@ def register(router):
         if not isinstance(stored_payouts, list):
             stored_payouts = []
 
-        stored_map = {str(x.get("user_id")): int(x.get("amount") or 0) for x in stored_payouts if isinstance(x, dict)}
-        recomp_map = {str(x.get("user_id")): int(x.get("amount") or 0) for x in recomp.get("recomputed_payouts") or []}
-        stored_vs_recompute_ok = stored_map == recomp_map if stored_map or recomp_map else True
+        def _payout_map(rows, key):
+            return {str(x.get("user_id")): int(x.get(key) or 0) for x in rows if isinstance(x, dict)}
+
+        recomputed_rows = recomp.get("recomputed_payouts") or []
+        stored_map = _payout_map(stored_payouts, "amount")
+        recomp_map = _payout_map(recomputed_rows, "amount")
+        stored_points_map = _payout_map(stored_payouts, "points")
+        recomp_points_map = _payout_map(recomputed_rows, "points")
+        stored_vs_recompute_ok = (
+            (stored_map == recomp_map if stored_map or recomp_map else True)
+            and (stored_points_map == recomp_points_map if any(stored_points_map.values()) or any(recomp_points_map.values()) else True)
+        )
+
+        tickets_points = sum(1 for t in tickets if t.get("paid_with") == "points")
+        tickets_free = sum(1 for t in tickets if t.get("complimentary"))
+        tickets_cash = len(tickets) - tickets_points - tickets_free
 
         buy_events = await db.economy_events.find(
             {"type": "lottery_buy", "round_id": rid_str},
-            {"_id": 0, "at": 1, "user_id": 1, "username": 1, "count": 1, "spent": 1},
+            {"_id": 0, "at": 1, "user_id": 1, "username": 1, "count": 1, "spent": 1, "cash_count": 1, "points_count": 1, "spent_points": 1},
         ).to_list(200_000)
         buy_ticket_sum = sum(int(e.get("count") or 0) for e in buy_events)
+        # Older buy rows have only count + spent (cash). Newer rows split cash_count / points_count.
+        buy_cash_tickets = sum(int(e["cash_count"]) if "cash_count" in e else int(e.get("count") or 0) for e in buy_events)
+        buy_points_tickets = sum(int(e.get("points_count") or 0) for e in buy_events)
         buy_cash_sum = sum(int(e.get("spent") or 0) for e in buy_events)
+        buy_points_sum = sum(int(e.get("spent_points") or 0) for e in buy_events)
 
         draw_ev = await db.economy_events.find_one(
             {"type": "lottery_draw", "round_id": rid_str},
@@ -6200,10 +6240,18 @@ def register(router):
             "ticket_count_stored": stored_ticket_count,
             "ticket_rows_in_db": ticket_row_count,
             "ticket_count_match": ticket_count_match,
+            "tickets_cash": tickets_cash,
+            "tickets_points": tickets_points,
+            "tickets_complimentary": tickets_free,
             "gross_pot": rd.get("gross_pot"),
             "sink_amount": rd.get("sink_amount"),
             "payout": rd.get("payout"),
             "rollover_to_next": rd.get("rollover_to_next"),
+            "points_gross_pot": rd.get("points_gross_pot"),
+            "points_sink_amount": rd.get("points_sink_amount"),
+            "points_payout": rd.get("points_payout"),
+            "points_rollover_to_next": rd.get("points_rollover_to_next"),
+            "points_bonus_in": rd.get("points_bonus_in"),
             "winning_numbers": rd.get("winning_numbers"),
             "exact_match_count_stored": rd.get("exact_match_count"),
             "winner_user_id": rd.get("winner_user_id"),
@@ -6219,8 +6267,12 @@ def register(router):
             "economy_lottery_buy": {
                 "event_rows": len(buy_events),
                 "sum_count": buy_ticket_sum,
+                "cash_tickets": buy_cash_tickets,
+                "points_tickets": buy_points_tickets,
                 "sum_spent": buy_cash_sum,
-                "expected_revenue_if_all_recorded": buy_ticket_sum * lottery_audit_mod.TICKET_PRICE,
+                "sum_spent_points": buy_points_sum,
+                "expected_revenue_if_all_recorded": buy_cash_tickets * lottery_audit_mod.TICKET_PRICE,
+                "expected_points_revenue_if_all_recorded": buy_points_tickets * lottery_audit_mod.POINTS_TICKET_PRICE,
             },
             "economy_lottery_draw": draw_ev,
             "activity_lottery_wins": act_wins,
@@ -13021,8 +13073,9 @@ def register(router):
         since = now - timedelta(days=int(days))
         since_iso = since.isoformat()
 
+        # created_at is a BSON Date on current rows; very old rows used ISO strings.
         cursor = db.gambling_log.find(
-            {"created_at": {"$gte": since_iso}},
+            {"$or": [{"created_at": {"$gte": since}}, {"created_at": {"$gte": since_iso}}]},
             {"_id": 0, "game_type": 1, "details": 1},
         )
         stats = {}
@@ -13427,7 +13480,7 @@ def register(router):
         since_iso = since.isoformat()
 
         cursor = db.economy_events.find(
-            {"at": {"$gte": since_iso}},
+            {"$or": [{"at": {"$gte": since}}, {"at": {"$gte": since_iso}}]},
             {"_id": 0},
         )
         by_type = {}
@@ -22562,22 +22615,54 @@ def register(router):
             raise HTTPException(status_code=400, detail="Provide 1-50 usernames")
         usernames_lower = [u.strip().lower() for u in req.usernames if u.strip()]
         user_filter = {"username": {"$in": [re.compile(f"^{re.escape(u)}$", re.IGNORECASE) for u in usernames_lower]}}
+        targets = await db.users.find(user_filter, {"_id": 0, "id": 1, "username": 1, "points": 1, "money": 1}).to_list(50)
+        target_ids = [t["id"] for t in targets]
+        admin_name = current_user.get("username") or "?"
         affected = 0
         if req.action == "give_points" and req.value:
-            r = await db.users.update_many(user_filter, {"$inc": {"points": req.value}})
-            affected = r.modified_count
+            for t in targets:
+                r = await db.users.update_one({"id": t["id"]}, {"$inc": {"points": req.value}})
+                if r.modified_count:
+                    affected += 1
+                    before = int(t.get("points") or 0)
+                    await log_points_event(
+                        db,
+                        user_id=t["id"],
+                        points=req.value,
+                        event_type="admin_bulk_give_points",
+                        event_ref="admin_bulk_action",
+                        meta={"admin_user_id": current_user.get("id"), "admin_username": admin_name},
+                        wallet_points_before=before,
+                        wallet_points_after=before + req.value,
+                    )
         elif req.action == "give_money" and req.value:
-            r = await db.users.update_many(user_filter, {"$inc": {"money": req.value}})
-            affected = r.modified_count
+            for t in targets:
+                r = await db.users.update_one({"id": t["id"]}, {"$inc": {"money": req.value}})
+                if r.modified_count:
+                    affected += 1
+                    await srv.log_activity(
+                        t["id"], t.get("username") or "?", "admin_bulk_give_money",
+                        {"amount": req.value, "admin_username": admin_name, "new_balance": int(t.get("money") or 0) + req.value},
+                    )
         elif req.action == "lock":
-            r = await db.users.update_many(user_filter, {"$set": {"locked": True, "locked_at": datetime.now(timezone.utc).isoformat(), "locked_reason": "Bulk lock by admin"}})
+            r = await db.users.update_many(
+                {"id": {"$in": target_ids}},
+                {"$set": {"account_locked": True, "account_locked_at": datetime.now(timezone.utc).isoformat()},
+                 "$unset": {"account_locked_comment": "", "account_locked_comment_at": ""}},
+            )
             affected = r.modified_count
         elif req.action == "unlock":
-            r = await db.users.update_many(user_filter, {"$set": {"locked": False}, "$unset": {"locked_at": "", "locked_reason": ""}})
+            r = await db.users.update_many(
+                {"id": {"$in": target_ids}},
+                {"$set": {"account_locked": False},
+                 "$unset": {"account_locked_at": "", "account_locked_comment": "", "account_locked_comment_at": "", "account_locked_until": "",
+                            "account_locked_admin_message": "", "account_locked_admin_message_at": "", "account_locked_user_reply": "",
+                            "account_locked_user_reply_at": ""}},
+            )
             affected = r.modified_count
         elif req.action == "reset_daily_rewards":
-            r = await db.users.update_many(user_filter, {"$set": {"rps_plays": []}})
-            ttt = await db.daily_rewards_ttt.delete_many({"user_id": {"$in": usernames_lower}})
+            r = await db.users.update_many({"id": {"$in": target_ids}}, {"$set": {"rps_plays": []}})
+            await db.daily_rewards_ttt.delete_many({"user_id": {"$in": target_ids}})
             affected = r.modified_count
         else:
             raise HTTPException(status_code=400, detail=f"Unknown action: {req.action}")

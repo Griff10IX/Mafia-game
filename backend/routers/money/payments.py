@@ -2548,6 +2548,42 @@ def register(router):
                                 except Exception:
                                     logger.exception("staff stuck pending notify from webhook failed")
 
+        elif event.type in ("charge.refunded", "charge.dispute.created", "charge.dispute.updated", "charge.dispute.closed"):
+            obj = event.data.object
+            payment_intent = getattr(obj, "payment_intent", None)
+            session_id = None
+            if payment_intent:
+                def _find_session():
+                    import stripe
+                    stripe.api_key = api_key
+                    found = stripe.checkout.Session.list(payment_intent=payment_intent, limit=1)
+                    return found.data[0].id if found.data else None
+
+                try:
+                    session_id = await asyncio.to_thread(_find_session)
+                except Exception:
+                    logger.exception("webhook %s: session lookup failed payment_intent=%s", event.type, payment_intent)
+            if not session_id:
+                logger.warning("webhook %s: no checkout session for payment_intent=%s", event.type, payment_intent)
+                return {"received": True}
+            now_iso = datetime.now(timezone.utc).isoformat()
+            if event.type == "charge.refunded":
+                refunded = int(getattr(obj, "amount_refunded", 0) or 0)
+                update = {
+                    "refunded_amount_minor": refunded,
+                    "refund_status": "full" if getattr(obj, "refunded", False) else "partial",
+                    "refunded_at": now_iso,
+                }
+            else:
+                update = {
+                    "dispute_status": getattr(obj, "status", None) or "open",
+                    "dispute_amount_minor": int(getattr(obj, "amount", 0) or 0),
+                    "dispute_reason": getattr(obj, "reason", None),
+                    "dispute_updated_at": now_iso,
+                }
+            res = await db.payment_transactions.update_one({"session_id": session_id}, {"$set": update})
+            logger.info("webhook %s: session=%s matched=%s %s", event.type, session_id, res.matched_count, update)
+
         return {"received": True}
 
     @router.get("/payments/my-transactions")

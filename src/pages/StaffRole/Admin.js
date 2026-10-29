@@ -15033,7 +15033,9 @@ export default function Admin() {
                         <li>Sink (tax): ${Number(tr.sink_amount || 0).toLocaleString()}</li>
                         <li>Net payout pool: ${Number(tr.payout || 0).toLocaleString()}</li>
                         <li>Rollover → next: ${Number(tr.rollover_to_next || 0).toLocaleString()}</li>
+                        <li>Points pot: {Number(tr.points_gross_pot || 0).toLocaleString()} pts · tax {Number(tr.points_sink_amount || 0).toLocaleString()} · net {Number(tr.points_payout || 0).toLocaleString()} · rollover {Number(tr.points_rollover_to_next || 0).toLocaleString()}{Number(tr.points_bonus_in || 0) > 0 ? ` · bonus ${Number(tr.points_bonus_in).toLocaleString()}` : ''}</li>
                         <li>Tickets (stored / rows): {tr.ticket_count_stored ?? '—'} / {tr.ticket_rows_in_db ?? '—'} {tr.ticket_count_match === false ? <span className="text-amber-400">(mismatch)</span> : null}</li>
+                        <li>Ticket split: {tr.tickets_cash ?? 0} cash · {tr.tickets_points ?? 0} points · {tr.tickets_complimentary ?? 0} free</li>
                         <li>Winning numbers: {Array.isArray(tr.winning_numbers) ? tr.winning_numbers.join(', ') : '—'}</li>
                         <li>Exact matches (stored): {tr.exact_match_count_stored ?? '—'}</li>
                       </ul>
@@ -15057,7 +15059,8 @@ export default function Admin() {
                           <tr className="text-left text-mutedForeground border-b border-zinc-700/50">
                             <th className="py-0.5 pr-2">User</th>
                             <th className="py-0.5 pr-2">ID</th>
-                            <th className="py-0.5">Amount</th>
+                            <th className="py-0.5 pr-2">Cash</th>
+                            <th className="py-0.5">Points</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -15065,7 +15068,8 @@ export default function Admin() {
                             <tr key={p.user_id} className="border-b border-zinc-800/80">
                               <td className="py-0.5 pr-2">{p.username || '?'}</td>
                               <td className="py-0.5 pr-2 truncate max-w-[8rem]">{p.user_id}</td>
-                              <td className="py-0.5 text-emerald-400">${Number(p.amount || 0).toLocaleString()}</td>
+                              <td className="py-0.5 pr-2 text-emerald-400">${Number(p.amount || 0).toLocaleString()}</td>
+                              <td className="py-0.5 text-amber-300">{Number(p.points || 0).toLocaleString()}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -15077,8 +15081,9 @@ export default function Admin() {
                       <span className="text-mutedForeground font-heading uppercase">economy_events lottery_buy</span>
                       <ul className="mt-1 space-y-0.5">
                         <li>Rows: {buys.event_rows ?? 0}</li>
-                        <li>Σ count: {buys.sum_count ?? 0} · Σ spent: ${Number(buys.sum_spent || 0).toLocaleString()}</li>
-                        <li>Expected if all buys logged: ${Number(buys.expected_revenue_if_all_recorded || 0).toLocaleString()}</li>
+                        <li>Σ count: {buys.sum_count ?? 0} ({buys.cash_tickets ?? buys.sum_count ?? 0} cash · {buys.points_tickets ?? 0} points)</li>
+                        <li>Σ spent: ${Number(buys.sum_spent || 0).toLocaleString()} · {Number(buys.sum_spent_points || 0).toLocaleString()} pts</li>
+                        <li>Expected if all buys logged: ${Number(buys.expected_revenue_if_all_recorded || 0).toLocaleString()} · {Number(buys.expected_points_revenue_if_all_recorded || 0).toLocaleString()} pts</li>
                       </ul>
                     </div>
                     <div>

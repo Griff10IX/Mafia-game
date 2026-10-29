@@ -1,5 +1,6 @@
 /** Deduped admin tool search index. routePath = navigate to standalone; else scroll/collapse in hub. */
 export const SEARCHABLE_TOOLS = [
+  { label: "Revenue", categoryId: "admin-analytics-monitoring", routePath: "/tjjeujr3wa/revenue", keywords: ["revenue","money","income","stripe","payments","sales","gbp","£","business","economy","profit","spenders"], adminOnly: true },
   { label: "Target Username", categoryId: "admin-operations", scrollToId: "admin-target-username", keywords: ["target","username","player","command"] },
   { label: "Search Users", categoryId: "admin-players", scrollToId: "admin-search-users", keywords: ["search","users","email","find"] },
   { label: "Change Rank", categoryId: "admin-players", collapseKey: "rank", keywords: ["rank","change","prestige","level"] },

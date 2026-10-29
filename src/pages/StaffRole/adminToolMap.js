@@ -27,6 +27,8 @@ import {
   Trophy,
   Wine,
   Bot,
+  LayoutDashboard,
+  PoundSterling,
 } from 'lucide-react';
 
 export const ADMIN_CATEGORIES = [
@@ -116,6 +118,7 @@ export const HUB_SECTION_IDS = {
 
 export const ADMIN_ROUTE_GROUPS = [
   { id: 'overview', label: 'Overview', categoryId: 'admin-operations', kind: 'overview', icon: Activity, description: 'Search tools and jump to any area.' },
+  { id: 'revenue', label: 'Revenue', categoryId: 'admin-analytics-monitoring', kind: 'standalone', icon: PoundSterling, description: 'Real-money income and in-game economy health.' },
   { id: 'players', label: 'Players', categoryId: 'admin-operations', kind: 'hub', hubSection: 'players', anchorId: 'admin-players', icon: Users, description: 'Player lookup, grants, adjustments.' },
   { id: 'moderation', label: 'Moderation', categoryId: 'admin-operations', kind: 'hub', hubSection: 'moderation', anchorId: 'admin-moderation', icon: Shield, description: 'Locks, sanctions, and interventions.' },
   { id: 'safety', label: 'Safety', categoryId: 'admin-operations', kind: 'hub', hubSection: 'safety', anchorId: 'admin-security', icon: Lock, description: 'Security summary, bans, and anti-abuse.' },
@@ -147,6 +150,63 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'ent-games', label: 'E-Games audit', categoryId: 'admin-analytics-monitoring', kind: 'standalone', icon: Dices, description: 'Entertainer Forum dice/gbox/hangman audit.' },
 ];
 
+/** Sidebar / mobile menu grouping. Separate from categoryId, which Admin.js still uses to gate its sections. */
+export const NAV_SECTIONS = [
+  { id: 'nav-home', label: 'Home', short: 'Home', icon: LayoutDashboard },
+  { id: 'nav-players', label: 'Players', short: 'Players', icon: Users },
+  { id: 'nav-safety', label: 'Safety', short: 'Safety', icon: Shield },
+  { id: 'nav-liveops', label: 'Live Ops', short: 'LiveOps', icon: Globe },
+  { id: 'nav-systems', label: 'Game systems', short: 'Systems', icon: Layers },
+  { id: 'nav-insights', label: 'Analytics & logs', short: 'Stats', icon: BarChart3 },
+  { id: 'nav-staff', label: 'Staff & engineering', short: 'Staff', icon: UserCog },
+];
+
+const ROUTE_NAV_SECTION = {
+  overview: 'nav-home',
+  revenue: 'nav-home',
+  players: 'nav-players',
+  moderation: 'nav-players',
+  locked: 'nav-players',
+  'dead-alive-log': 'nav-players',
+  'dead-estates': 'nav-players',
+  safety: 'nav-safety',
+  'users-online': 'nav-safety',
+  'ip-history': 'nav-safety',
+  'account-compare': 'nav-safety',
+  'attack-logs': 'nav-safety',
+  'bodyguard-hire-logs': 'nav-safety',
+  'system-ai-reports': 'nav-safety',
+  'witness-statements': 'nav-safety',
+  liveops: 'nav-liveops',
+  commerce: 'nav-liveops',
+  'last-man-standing': 'nav-liveops',
+  'ent-games': 'nav-liveops',
+  'exclusive-cars': 'nav-systems',
+  'vip-cars': 'nav-systems',
+  molotovs: 'nav-systems',
+  'property-transfer': 'nav-systems',
+  'crew-recovery': 'nav-systems',
+  'racket-progress': 'nav-systems',
+  'distillery-progress': 'nav-systems',
+  'weed-sell-audit': 'nav-systems',
+  analytics: 'nav-insights',
+  logs: 'nav-insights',
+  staff: 'nav-staff',
+  engineering: 'nav-staff',
+};
+
+export function navSectionFor(routeId) {
+  return ROUTE_NAV_SECTION[routeId] || 'nav-home';
+}
+
+export function routesByNavSection(groups = ADMIN_ROUTE_GROUPS) {
+  const map = Object.fromEntries(NAV_SECTIONS.map((s) => [s.id, []]));
+  for (const g of groups) {
+    map[navSectionFor(g.id)].push(g);
+  }
+  return map;
+}
+
 export const ADMIN_ROUTE_GROUP_MAP = ADMIN_ROUTE_GROUPS.reduce((acc, item) => {
   acc[item.id] = item;
   return acc;
@@ -163,6 +223,7 @@ export const HUB_ADMIN_SECTIONS = new Set(
 /** Short labels for mobile nav chips. */
 export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
   overview: 'Home',
+  revenue: 'Revenue',
   players: 'Players',
   moderation: 'Mod',
   commerce: 'Commerce',

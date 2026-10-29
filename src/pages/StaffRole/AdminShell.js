@@ -11,16 +11,16 @@ import {
   setStaffPortalToken,
 } from '../../utils/staffPortalSession';
 import {
-  ADMIN_CATEGORIES,
   ADMIN_ROUTE_GROUP_MAP,
   ADMIN_ROUTE_GROUPS,
   ADMIN_ROUTE_GROUP_MOBILE_SHORT,
-  ADMIN_CATEGORY_MOBILE_SHORT,
   HUB_ADMIN_SECTIONS,
   MOD_STAFF_ROUTE_IDS,
+  NAV_SECTIONS,
   STANDALONE_ADMIN_SECTIONS,
   modStaffRouteGroups,
-  routesByCategory,
+  navSectionFor,
+  routesByNavSection,
 } from './adminToolMap';
 import { StaffAccessVerifyContext } from './staffAccessVerifyContext';
 import ErrorBoundary from '../../components/ErrorBoundary';
@@ -48,6 +48,7 @@ const AdminPropertyTransfer = lazy(() => import('./AdminPropertyTransfer'));
 const AdminWitnessStatements = lazy(() => import('./AdminWitnessStatements'));
 const AdminLastManStanding = lazy(() => import('./AdminLastManStanding'));
 const AdminLocked = lazy(() => import('./AdminLocked'));
+const AdminRevenue = lazy(() => import('./AdminRevenue'));
 
 function routeFor(groupId) {
   return `/tjjeujr3wa/${groupId}`;
@@ -83,6 +84,7 @@ const STANDALONE_PAGE = {
   'last-man-standing': AdminLastManStanding,
   'system-ai-reports': AdminSystemAiReports,
   locked: AdminLocked,
+  revenue: AdminRevenue,
 };
 
 /** Relative time from ISO last_seen_at (re-renders periodically while the panel is open). */
@@ -451,20 +453,16 @@ export default function AdminShell() {
     return ADMIN_ROUTE_GROUP_MAP[hubSection] || ADMIN_ROUTE_GROUP_MAP.overview;
   }, [hubSection]);
 
-  const groupedRoutes = useMemo(() => routesByCategory(visibleRouteGroups), [visibleRouteGroups]);
+  const groupedRoutes = useMemo(() => routesByNavSection(visibleRouteGroups), [visibleRouteGroups]);
+  const activeNavSection = navSectionFor(routeGroup?.id);
 
-  const [openNavCategories, setOpenNavCategories] = useState(() => {
-    const id = ADMIN_ROUTE_GROUP_MAP[(section || 'overview').toLowerCase()]?.categoryId;
-    return new Set([id || 'admin-operations']);
-  });
-  const [mobileNavCategory, setMobileNavCategory] = useState('admin-operations');
+  const [openNavCategories, setOpenNavCategories] = useState(() => new Set([navSectionFor((section || 'overview').toLowerCase())]));
+  const [mobileNavCategory, setMobileNavCategory] = useState(activeNavSection);
 
   useEffect(() => {
-    if (routeGroup?.categoryId) {
-      setMobileNavCategory(routeGroup.categoryId);
-      setOpenNavCategories(new Set([routeGroup.categoryId]));
-    }
-  }, [routeGroup?.categoryId]);
+    setMobileNavCategory(activeNavSection);
+    setOpenNavCategories(new Set([activeNavSection]));
+  }, [activeNavSection]);
 
   const toggleNavCategory = (id) => {
     setOpenNavCategories((prev) => (prev.has(id) ? new Set() : new Set([id])));
@@ -659,32 +657,32 @@ export default function AdminShell() {
   return (
     <StaffAccessVerifyContext.Provider value={verifyStaffAccess}>
       <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:items-start">
-      <div className="hidden md:block w-[240px] shrink-0 sticky top-14 self-start z-10">
+      <div className="hidden md:block w-[232px] shrink-0 sticky top-14 self-start z-10">
         <aside
-          className="flex max-h-[calc(100dvh-4.5rem)] flex-col gap-1.5 overflow-y-auto overscroll-contain rounded-xl border border-primary/20 bg-zinc-950/85 p-2"
+          className="flex max-h-[calc(100dvh-4.5rem)] flex-col gap-0.5 overflow-y-auto overscroll-contain rounded-xl border border-zinc-800 bg-zinc-950 p-2"
           aria-label="Admin tool groups"
         >
-          {ADMIN_CATEGORIES.map((cat) => {
+          {NAV_SECTIONS.map((cat) => {
             const tools = groupedRoutes[cat.id] || [];
             if (!tools.length) return null;
             const open = openNavCategories.has(cat.id);
             const CatIcon = cat.icon;
-            const catActive = tools.some((g) => g.id === routeGroup?.id);
+            const catActive = cat.id === activeNavSection;
             return (
-              <div key={cat.id} className="rounded-lg border border-zinc-800/80 overflow-hidden">
+              <div key={cat.id}>
                 <button
                   type="button"
                   onClick={() => toggleNavCategory(cat.id)}
-                  className={`w-full flex items-center gap-2 px-2.5 py-2 text-left text-[10px] font-heading font-bold uppercase tracking-wide ${
-                    catActive ? 'bg-primary/15 text-primary' : 'bg-zinc-900/50 text-mutedForeground hover:text-foreground'
+                  className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium ${
+                    catActive ? 'text-zinc-50' : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900'
                   }`}
                 >
-                  {CatIcon ? <CatIcon size={13} className="shrink-0" /> : null}
+                  {CatIcon ? <CatIcon size={15} className="shrink-0" /> : null}
                   <span className="flex-1 truncate">{cat.label}</span>
-                  <ChevronRight size={12} className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
+                  <ChevronRight size={13} className={`shrink-0 text-zinc-500 transition-transform ${open ? 'rotate-90' : ''}`} />
                 </button>
                 {open && (
-                  <div className="flex flex-col gap-0.5 p-1 border-t border-zinc-800/80">
+                  <div className="ml-[18px] mb-1 flex flex-col gap-0.5 border-l border-zinc-800 pl-2">
                     {tools.map((group) => {
                       const active = group.id === routeGroup?.id;
                       const Icon = group.icon;
@@ -698,10 +696,10 @@ export default function AdminShell() {
                             void navigateVerified(routeFor(group.id));
                           }}
                           title={group.description}
-                          className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-heading ${
+                          className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] ${
                             active
-                              ? 'bg-primary/20 text-primary border border-primary/40'
-                              : 'text-mutedForeground hover:text-foreground hover:bg-zinc-800/60 border border-transparent'
+                              ? 'bg-zinc-800 text-zinc-50'
+                              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900'
                           }`}
                         >
                           {Icon ? <Icon size={12} className="shrink-0 opacity-90" /> : null}
@@ -717,15 +715,15 @@ export default function AdminShell() {
         </aside>
       </div>
       <div className="flex-1 min-w-0 w-full space-y-3 md:space-y-4">
-      <section className="rounded-xl border border-primary/25 bg-gradient-to-br from-zinc-900/85 via-zinc-900/65 to-zinc-800/55 p-3 md:p-4">
+      <section className="rounded-xl border border-zinc-800 bg-zinc-950 p-3 md:p-4">
         <div className="flex flex-col gap-2 md:gap-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h1 className="font-heading text-primary text-base sm:text-lg md:text-xl tracking-wide uppercase truncate">
-                Admin Command Center
+              <h1 className="text-base sm:text-lg font-semibold tracking-tight text-zinc-50 truncate">
+                Admin
               </h1>
-              <p className="text-[10px] sm:text-xs text-mutedForeground">
-                Route-based tooling with consolidated sections and legacy-compatible anchors. Timestamps use UK time (GMT / BST).
+              <p className="text-xs text-zinc-500">
+                Times shown in UK time (GMT / BST).
               </p>
               {staffPortalEnabled && staffPortalOk ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -1062,19 +1060,19 @@ export default function AdminShell() {
             </div>
           </div>
 
-          <div className="md:hidden rounded-lg border border-primary/20 bg-zinc-950/90 p-2 space-y-2" aria-label="Admin categories">
+          <div className="md:hidden rounded-lg border border-zinc-800 bg-zinc-950 p-2 space-y-2" aria-label="Admin categories">
             <div className="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {ADMIN_CATEGORIES.filter((c) => (groupedRoutes[c.id] || []).length > 0).map((cat) => {
+              {NAV_SECTIONS.filter((c) => (groupedRoutes[c.id] || []).length > 0).map((cat) => {
                 const active = mobileNavCategory === cat.id;
                 const Icon = cat.icon;
-                const short = ADMIN_CATEGORY_MOBILE_SHORT[cat.id] || cat.label;
+                const short = cat.short || cat.label;
                 return (
                   <button
                     key={cat.id}
                     type="button"
                     onClick={() => setMobileNavCategory(cat.id)}
-                    className={`snap-start shrink-0 flex items-center gap-1 min-h-[40px] px-2.5 rounded-lg border text-[10px] font-heading font-bold uppercase ${
-                      active ? 'border-primary/70 bg-primary/25 text-primary' : 'border-zinc-700/70 bg-zinc-900/55 text-mutedForeground'
+                    className={`snap-start shrink-0 flex items-center gap-1.5 min-h-[40px] px-3 rounded-lg border text-xs font-medium ${
+                      active ? 'border-zinc-600 bg-zinc-800 text-zinc-50' : 'border-zinc-800 bg-zinc-900 text-zinc-400'
                     }`}
                   >
                     {Icon ? <Icon size={14} /> : null}
@@ -1099,13 +1097,13 @@ export default function AdminShell() {
                     }}
                     className={`snap-start shrink-0 flex flex-col items-center justify-center gap-0.5 min-w-[4.25rem] max-w-[5.25rem] min-h-[48px] px-1.5 py-1 rounded-lg border text-center ${
                       active
-                        ? 'border-primary/70 bg-primary/25 text-primary'
-                        : 'border-zinc-700/70 bg-zinc-900/55 text-mutedForeground'
+                        ? 'border-zinc-600 bg-zinc-800 text-zinc-50'
+                        : 'border-zinc-800 bg-zinc-900 text-zinc-400'
                     }`}
                     title={group.description}
                   >
                     {Icon ? <Icon size={16} className="shrink-0" /> : null}
-                    <span className="text-[9px] font-heading font-bold uppercase leading-tight line-clamp-2">{short}</span>
+                    <span className="text-[10px] font-medium leading-tight line-clamp-2">{short}</span>
                   </Link>
                 );
               })}
