@@ -36,8 +36,8 @@
 
 /* Most wanted stack */
 .ln-wanted-label { text-align: center; font-family: 'Courier Prime', 'Courier New', monospace; font-size: 12px; letter-spacing: 0.3em; color: rgba(242, 237, 226, 0.78); margin-top: 18px; }
-.ln-wanted { position: relative; height: 122px; margin: 16px 0 -26px; display: flex; justify-content: center; }
-.ln-polaroid { --tilt: 0deg; position: relative; width: 120px; margin: 0 -18px; padding: 8px 8px 0; background: #f2ede2; border-radius: 3px; color: #241a10;
+.ln-wanted { position: relative; height: 172px; margin: 22px 0 -6px; display: flex; justify-content: center; }
+.ln-polaroid { --tilt: 0deg; position: relative; width: 120px; margin: 0 -7px; padding: 8px 8px 0; background: #f2ede2; border-radius: 3px; color: #241a10;
   transform: rotate(var(--tilt)); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.65), 0 2px 0 rgba(0, 0, 0, 0.2); transition: transform 0.25s ease; cursor: default; }
 .ln-polaroid:nth-child(2) { z-index: 2; margin-top: -10px; }
 .ln-polaroid:hover, .ln-polaroid:focus-visible { transform: rotate(0deg) translateY(-10px) scale(1.04); z-index: 5; outline: none; }
@@ -120,7 +120,7 @@
 .ln-live li .k.kill { background: #ef4444; } .ln-live li .k.war_started, .ln-live li .k.war_ended { background: #f59e0b; } .ln-live li .k.lottery_winner { background: #4ade80; } .ln-live li .k.badge_earned { background: #a78bfa; }
 .ln-live li .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ln-live li small { flex: none; color: var(--ln-muted); font-size: 11px; }
-@keyframes ln-in { from { opacity: 0; transform: translateY(-6px); } }
+@keyframes ln-in { from { transform: translateY(-6px); } }
 
 .ln-footer { margin-top: 18px; text-align: center; font-size: 11px; letter-spacing: 0.25em; color: rgba(214, 222, 230, 0.35); text-transform: uppercase; text-shadow: 0 1px 6px #000; }
 
@@ -129,8 +129,8 @@
   .ln-tag { letter-spacing: 0.2em; }
 }
 @media (max-width: 520px) {
-  .ln-wanted { height: 98px; margin-bottom: -22px; }
-  .ln-polaroid { width: 92px; padding: 6px 6px 0; margin: 0 -14px; }
+  .ln-wanted { height: 128px; margin-bottom: -6px; }
+  .ln-polaroid { width: 92px; padding: 6px 6px 0; margin: 0 -5px; }
   .ln-polaroid-cap { font-size: 9px; padding: 4px 2px 6px; }
   .ln-polaroid-cap b { font-size: 10px; }
   .ln-polaroid-cap small { display: none; }
