@@ -23,6 +23,7 @@ import {
   routesByNavSection,
 } from './adminToolMap';
 import { StaffAccessVerifyContext } from './staffAccessVerifyContext';
+import './adminSkin.css';
 import ErrorBoundary from '../../components/ErrorBoundary';
 // Eager: avoids stale webpack chunk id collision leaving this page blank after atomic deploys.
 import AdminSystemAiReports from './AdminSystemAiReports';
@@ -68,6 +69,9 @@ function AdminLazyFallback() {
     </div>
   );
 }
+
+/** Pages built on the AdminKit design; everything else gets the classic restyle (.admin-skin). */
+const KIT_PAGES = new Set(['revenue', 'player', 'safety-center', 'live-ops', 'log-explorer', 'site-settings']);
 
 const STANDALONE_PAGE = {
   'users-online': AdminUsersOnline,
@@ -1124,6 +1128,7 @@ export default function AdminShell() {
         </div>
       </section>
 
+      <div className={KIT_PAGES.has(hubSection) ? undefined : 'admin-skin'}>
       <Suspense fallback={<AdminLazyFallback />}>
         {hubSection === 'overview' && <AdminOverview isFullAdmin={!!isFullAdminShell} />}
         {STANDALONE_ADMIN_SECTIONS.has(hubSection) && (() => {
@@ -1143,6 +1148,7 @@ export default function AdminShell() {
         })()}
         {HUB_ADMIN_SECTIONS.has(hubSection) && <Admin />}
       </Suspense>
+      </div>
       </div>
       </div>
     </StaffAccessVerifyContext.Provider>

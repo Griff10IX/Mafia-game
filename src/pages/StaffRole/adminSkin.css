@@ -1,0 +1,106 @@
+/*
+ * Admin-wide restyle for the classic tool pages (not the new AdminKit pages).
+ * Selectors are scoped under .admin-skin (two classes) so they beat single Tailwind utilities without !important.
+ */
+.admin-skin {
+  --font-heading: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --as-line: rgba(255, 255, 255, 0.09);
+  --as-muted: rgba(205, 212, 222, 0.62);
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Readable type: the old pages lean on 8-11px text. */
+.admin-skin .text-\[7px\],
+.admin-skin .text-\[8px\] { font-size: 11px; }
+.admin-skin .text-\[9px\] { font-size: 11.5px; }
+.admin-skin .text-\[10px\] { font-size: 12.5px; }
+.admin-skin .text-\[11px\] { font-size: 13px; }
+.admin-skin .text-xs { font-size: 12.5px; }
+
+/* Calm the shouting: no all-caps, no wide tracking (table headers keep small caps below). */
+.admin-skin .uppercase { text-transform: none; }
+.admin-skin .tracking-wide,
+.admin-skin .tracking-wider,
+.admin-skin .tracking-widest,
+.admin-skin [class*='tracking-['] { letter-spacing: 0.01em; }
+
+/* Headings */
+.admin-skin h1 { font-size: 22px; font-weight: 800; letter-spacing: 0; }
+.admin-skin h2 { font-size: 16px; font-weight: 700; letter-spacing: 0; }
+.admin-skin h3 { font-size: 14px; font-weight: 700; letter-spacing: 0; }
+
+/* Cards / panels: neutral borders, softer radius. */
+.admin-skin [class*='border-primary'] { border-color: var(--as-line); }
+.admin-skin .rounded,
+.admin-skin .rounded-md { border-radius: 10px; }
+.admin-skin .rounded-lg,
+.admin-skin .rounded-xl { border-radius: 14px; }
+
+/* Form controls */
+.admin-skin input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+.admin-skin select,
+.admin-skin textarea {
+  min-height: 38px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background-color: rgba(0, 0, 0, 0.38);
+  color: #f1f5f9;
+  font-size: 14px;
+  padding-left: 11px;
+  padding-right: 11px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.admin-skin textarea { padding-top: 8px; padding-bottom: 8px; }
+.admin-skin input:focus,
+.admin-skin select:focus,
+.admin-skin textarea:focus {
+  border-color: var(--noir-primary, #0ea5e9);
+  box-shadow: 0 0 0 3px rgba(var(--noir-primary-rgb, 14, 165, 233), 0.18);
+}
+.admin-skin input::placeholder,
+.admin-skin textarea::placeholder { color: rgba(148, 163, 184, 0.55); }
+.admin-skin input[type='checkbox'],
+.admin-skin input[type='radio'] { width: 16px; height: 16px; accent-color: var(--noir-primary, #0ea5e9); }
+
+/* Buttons */
+.admin-skin button { border-radius: 10px; font-weight: 600; transition: background-color 0.15s, border-color 0.15s, opacity 0.15s, transform 0.1s; }
+.admin-skin button:not([role='tab']):not(:disabled):active { transform: translateY(1px); }
+.admin-skin button.px-2,
+.admin-skin button.px-2\.5,
+.admin-skin button.px-3,
+.admin-skin button.px-4 { min-height: 34px; }
+
+/* Tables */
+.admin-skin table { font-size: 13px; border-collapse: collapse; }
+.admin-skin th {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--as-muted);
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--as-line);
+  white-space: nowrap;
+}
+.admin-skin td { padding: 8px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); vertical-align: top; }
+.admin-skin tbody tr:hover { background: rgba(255, 255, 255, 0.025); }
+.admin-skin .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+/* Links */
+.admin-skin a:not([class*='bg-']) { text-underline-offset: 3px; }
+
+@media (max-width: 640px) {
+  .admin-skin input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+  .admin-skin select,
+  .admin-skin textarea { font-size: 16px; min-height: 44px; }
+  .admin-skin button.px-2,
+  .admin-skin button.px-2\.5,
+  .admin-skin button.px-3,
+  .admin-skin button.px-4 { min-height: 42px; }
+  .admin-skin td,
+  .admin-skin th { padding: 8px; }
+}
