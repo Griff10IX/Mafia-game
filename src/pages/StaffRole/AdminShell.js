@@ -54,6 +54,7 @@ const AdminSafety = lazy(() => import('./AdminSafety'));
 const AdminLiveOps = lazy(() => import('./AdminLiveOps'));
 const AdminLogs = lazy(() => import('./AdminLogs'));
 const AdminSettings = lazy(() => import('./AdminSettings'));
+const AdminSystems = lazy(() => import('./AdminSystems'));
 
 function routeFor(groupId) {
   return `/tjjeujr3wa/${groupId}`;
@@ -95,6 +96,7 @@ const STANDALONE_PAGE = {
   'live-ops': AdminLiveOps,
   'log-explorer': AdminLogs,
   'site-settings': AdminSettings,
+  systems: AdminSystems,
 };
 
 /** Relative time from ISO last_seen_at (re-renders periodically while the panel is open). */

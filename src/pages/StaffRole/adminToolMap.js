@@ -33,6 +33,7 @@ import {
   ShieldCheck,
   ScrollText,
   Settings2,
+  Boxes,
 } from 'lucide-react';
 
 export const ADMIN_CATEGORIES = [
@@ -140,6 +141,7 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'live-ops', label: 'Live Ops', categoryId: 'admin-world-systems', kind: 'standalone', icon: Radio, description: 'Events, casino limits and claim costs, banners and page locks.' },
   { id: 'liveops', label: 'LiveOps (classic)', categoryId: 'admin-world-systems', kind: 'hub', hubSection: 'liveops', anchorId: 'admin-gameworld', icon: Globe, description: 'Events, claims, and world toggles.' },
   { id: 'engineering', label: 'Engineering', categoryId: 'admin-world-systems', kind: 'hub', hubSection: 'engineering', anchorId: 'admin-testing', icon: Wrench, description: 'Testing, DB utilities, and diagnostics.' },
+  { id: 'systems', label: 'Game systems', categoryId: 'admin-world-systems', kind: 'standalone', icon: Boxes, description: 'Special cars, properties (incl. dead owners), families and crews, ammo.' },
   { id: 'exclusive-cars', label: 'Exclusive cars', categoryId: 'admin-world-systems', kind: 'standalone', icon: Car, description: 'Remove, transfer, or grant Al Capone / loot-exclusive cars.' },
   { id: 'vip-cars', label: 'VIP Pass cars', categoryId: 'admin-world-systems', kind: 'standalone', icon: Car, description: 'See every VIP Pass Car owner and remove cars from a player.' },
   { id: 'molotovs', label: 'Ammo', categoryId: 'admin-world-systems', kind: 'standalone', icon: Flame, description: 'Molotov and bullet circulation — totals and who holds what.' },
@@ -193,6 +195,7 @@ const ROUTE_NAV_SECTION = {
   commerce: 'nav-liveops',
   'last-man-standing': 'nav-liveops',
   'ent-games': 'nav-liveops',
+  systems: 'nav-systems',
   'exclusive-cars': 'nav-systems',
   'vip-cars': 'nav-systems',
   molotovs: 'nav-systems',
@@ -258,6 +261,7 @@ export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
   'ip-history': 'IPs',
   'dead-alive-log': 'D>A',
   'account-compare': 'Compare',
+  systems: 'Systems',
   'exclusive-cars': 'Cars',
   'vip-cars': 'VIP',
   molotovs: 'Ammo',
