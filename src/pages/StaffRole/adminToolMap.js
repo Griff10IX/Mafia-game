@@ -29,6 +29,7 @@ import {
   Bot,
   LayoutDashboard,
   PoundSterling,
+  UserRound,
 } from 'lucide-react';
 
 export const ADMIN_CATEGORIES = [
@@ -119,6 +120,7 @@ export const HUB_SECTION_IDS = {
 export const ADMIN_ROUTE_GROUPS = [
   { id: 'overview', label: 'Overview', categoryId: 'admin-operations', kind: 'overview', icon: Activity, description: 'Search tools and jump to any area.' },
   { id: 'revenue', label: 'Revenue', categoryId: 'admin-analytics-monitoring', kind: 'standalone', icon: PoundSterling, description: 'Real-money income and in-game economy health.' },
+  { id: 'player', label: 'Player profile', categoryId: 'admin-operations', kind: 'standalone', icon: UserRound, description: 'Everything about one player: wallet, stats, activity, sessions, and give/take with a reason.' },
   { id: 'players', label: 'Players', categoryId: 'admin-operations', kind: 'hub', hubSection: 'players', anchorId: 'admin-players', icon: Users, description: 'Player lookup, grants, adjustments.' },
   { id: 'moderation', label: 'Moderation', categoryId: 'admin-operations', kind: 'hub', hubSection: 'moderation', anchorId: 'admin-moderation', icon: Shield, description: 'Locks, sanctions, and interventions.' },
   { id: 'safety', label: 'Safety', categoryId: 'admin-operations', kind: 'hub', hubSection: 'safety', anchorId: 'admin-security', icon: Lock, description: 'Security summary, bans, and anti-abuse.' },
@@ -164,6 +166,7 @@ export const NAV_SECTIONS = [
 const ROUTE_NAV_SECTION = {
   overview: 'nav-home',
   revenue: 'nav-home',
+  player: 'nav-players',
   players: 'nav-players',
   moderation: 'nav-players',
   locked: 'nav-players',
@@ -224,6 +227,7 @@ export const HUB_ADMIN_SECTIONS = new Set(
 export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
   overview: 'Home',
   revenue: 'Revenue',
+  player: 'Player',
   players: 'Players',
   moderation: 'Mod',
   commerce: 'Commerce',

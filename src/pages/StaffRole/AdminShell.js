@@ -49,6 +49,7 @@ const AdminWitnessStatements = lazy(() => import('./AdminWitnessStatements'));
 const AdminLastManStanding = lazy(() => import('./AdminLastManStanding'));
 const AdminLocked = lazy(() => import('./AdminLocked'));
 const AdminRevenue = lazy(() => import('./AdminRevenue'));
+const AdminPlayer = lazy(() => import('./AdminPlayer'));
 
 function routeFor(groupId) {
   return `/tjjeujr3wa/${groupId}`;
@@ -85,6 +86,7 @@ const STANDALONE_PAGE = {
   'system-ai-reports': AdminSystemAiReports,
   locked: AdminLocked,
   revenue: AdminRevenue,
+  player: AdminPlayer,
 };
 
 /** Relative time from ISO last_seen_at (re-renders periodically while the panel is open). */

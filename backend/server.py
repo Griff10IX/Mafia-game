@@ -3733,7 +3733,7 @@ async def _user_owns_any_property(user_id: str):
 # Crime endpoints -> see routers/crime/crimes.py
 # Register modular routers (organized by subfolder)
 from routers.account import auth, profile, prestige, user_progress, users
-from routers.admin import admin, security_admin, airport, investigate, revenue
+from routers.admin import admin, security_admin, airport, investigate, revenue, players360
 from routers.cars import gta
 from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, horseracing, slots, keno, coin_flip, chicken_cross, crash, rr_pacman, video_poker, mdg, sports_betting, wheel_of_fortune
 from routers.crime import crimes, jail, organised_crime, oc
@@ -3822,6 +3822,7 @@ daily_contests.register(api_router)
 security_admin.register(api_router)
 investigate.register(api_router)
 revenue.register(api_router)
+players360.register(api_router)
 sports_betting.register(api_router)
 from routers.casinos import last_man_standing as last_man_standing_router
 last_man_standing_router.register(api_router)

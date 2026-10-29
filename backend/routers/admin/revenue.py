@@ -117,6 +117,32 @@ def _product_label(package_id: str, payment_kind: Optional[str], ai_packs: dict)
     return pid or "Unknown"
 
 
+def payment_amount_minor(txn: dict, point_packages: dict) -> Tuple[int, bool]:
+    """(amount in pence, is_estimate). Stripe total if stored, else expected custom pence, else catalogue price."""
+    from utils.ai_image_credits import PACKS as AI_PACKS
+
+    raw = txn.get("stripe_amount_total_minor")
+    if raw:
+        try:
+            return int(raw), False
+        except (TypeError, ValueError):
+            pass
+    exp = txn.get("expected_amount_minor")
+    if exp:
+        try:
+            return int(exp), False
+        except (TypeError, ValueError):
+            pass
+    pid = (txn.get("package_id") or "").strip()
+    ai = AI_PACKS.get(pid)
+    if ai and ai.get("amount_minor"):
+        return int(ai["amount_minor"]), True
+    price = (point_packages.get(pid) or {}).get("price_gbp")
+    if price is not None:
+        return int(round(float(price) * 100)), True
+    return 0, True
+
+
 def register(router):
     import server as srv
     from utils.ai_image_credits import PACKS as AI_PACKS
@@ -126,27 +152,7 @@ def register(router):
     point_packages = srv.POINT_PACKAGES
 
     def _amount_minor(txn: dict) -> Tuple[int, bool]:
-        """(amount in pence, is_estimate). Stripe total if stored, else expected custom pence, else catalogue price."""
-        raw = txn.get("stripe_amount_total_minor")
-        if raw:
-            try:
-                return int(raw), False
-            except (TypeError, ValueError):
-                pass
-        exp = txn.get("expected_amount_minor")
-        if exp:
-            try:
-                return int(exp), False
-            except (TypeError, ValueError):
-                pass
-        pid = (txn.get("package_id") or "").strip()
-        ai = AI_PACKS.get(pid)
-        if ai and ai.get("amount_minor"):
-            return int(ai["amount_minor"]), True
-        price = (point_packages.get(pid) or {}).get("price_gbp")
-        if price is not None:
-            return int(round(float(price) * 100)), True
-        return 0, True
+        return payment_amount_minor(txn, point_packages)
 
     async def _usernames(user_ids: List[str]) -> Dict[str, str]:
         if not user_ids:
