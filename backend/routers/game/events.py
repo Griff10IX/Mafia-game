@@ -87,8 +87,8 @@ async def get_active_event(current_user: dict = Depends(get_current_user)):
     }
 
 
-async def get_flash_news(current_user: dict = Depends(get_current_user)):
-    """Recent flash news: wars, booze price changes, etc. For the top-bar ticker."""
+async def build_flash_news_items() -> list:
+    """Recent flash news, newest first: wars, booze price changes, kills, hitlist, badges, lottery, tips."""
     now = datetime.now(timezone.utc)
     now_ts = now.timestamp()
     items = []
@@ -307,9 +307,91 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
             "at": now.date().isoformat() + f"T{12 + offset:02d}:00:00+00:00",
         })
     items.sort(key=lambda x: x["at"], reverse=True)
-    return {"items": items[:20]}
+    return items
+
+
+async def get_flash_news(current_user: dict = Depends(get_current_user)):
+    """Recent flash news for the top-bar ticker."""
+    return {"items": (await build_flash_news_items())[:20]}
+
+
+LANDING_FEED_TYPES = {"kill", "war_started", "war_ended", "badge_earned", "lottery_winner"}
+_LANDING_FEED_TTL_SEC = 30
+_landing_feed_cache: dict = {"at": 0.0, "data": None}
+
+
+async def _landing_most_wanted(limit: int = 3) -> list:
+    """Biggest open hitlist bounties on living players; topped up with the deadliest players if fewer."""
+    from server import effective_player_kill_count, get_rank_info, mongodb_effective_kill_count_expr
+
+    proj = {"_id": 0, "id": 1, "username": 1, "rank_points": 1, "prestige_rank_multiplier": 1, "avatar_url": 1,
+            "total_kills": 1, "hitlist_npc_kills": 1, "robot_bodyguard_kills": 1, "total_kills_excludes_npc_v1": 1}
+    alive = {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}, "is_bodyguard": {"$ne": True}, "admin_ghost_mode": {"$ne": True}}
+    bounties = await db.hitlist.aggregate([
+        {"$match": {"target_type": "user"}},
+        {"$group": {
+            "_id": "$target_id",
+            "cash": {"$sum": {"$cond": [{"$eq": ["$reward_type", "cash"]}, {"$ifNull": ["$reward_amount", 0]}, 0]}},
+            "points": {"$sum": {"$cond": [{"$eq": ["$reward_type", "points"]}, {"$ifNull": ["$reward_amount", 0]}, 0]}},
+        }},
+        {"$sort": {"cash": -1, "points": -1}},
+        {"$limit": limit * 3},
+    ]).to_list(limit * 3)
+    by_id = {b["_id"]: b for b in bounties if b.get("_id")}
+    users = await db.users.find({**alive, "id": {"$in": list(by_id)}}, proj).to_list(len(by_id) or 1) if by_id else []
+    users.sort(key=lambda u: (-(by_id[u["id"]]["cash"]), -(by_id[u["id"]]["points"])))
+    picked = users[:limit]
+    if len(picked) < limit:
+        skip = [u["id"] for u in picked]
+        killers = await db.users.aggregate([
+            {"$match": {**alive, "id": {"$nin": skip}, "total_kills": {"$gt": 0}}},
+            {"$project": {**proj, "_k": mongodb_effective_kill_count_expr()}},
+            {"$sort": {"_k": -1}},
+            {"$limit": limit},
+        ]).to_list(limit)
+        picked += killers[: limit - len(picked)]
+
+    out = []
+    for u in picked:
+        b = by_id.get(u["id"]) or {}
+        _, rank_name = get_rank_info(int(u.get("rank_points") or 0), float(u.get("prestige_rank_multiplier") or 1.0))
+        avatar = u.get("avatar_url")
+        out.append({
+            "username": u.get("username"),
+            "rank": rank_name,
+            "bounty_cash": int(b.get("cash") or 0),
+            "bounty_points": int(b.get("points") or 0),
+            "kills": int(effective_player_kill_count(u)),
+            "avatar_url": avatar if isinstance(avatar, str) and avatar.startswith("http") and len(avatar) < 1000 else None,
+        })
+    return out
+
+
+async def get_landing_feed():
+    """Public (no auth): Most Wanted and recent street events for the login page. Cached briefly."""
+    import time
+
+    now = time.monotonic()
+    if _landing_feed_cache["data"] is not None and now - _landing_feed_cache["at"] < _LANDING_FEED_TTL_SEC:
+        return _landing_feed_cache["data"]
+    try:
+        items = [
+            {"type": i["type"], "message": i["message"], "at": i["at"]}
+            for i in await build_flash_news_items()
+            if i.get("type") in LANDING_FEED_TYPES
+        ][:8]
+    except Exception:
+        items = []
+    try:
+        wanted = await _landing_most_wanted()
+    except Exception:
+        wanted = []
+    data = {"most_wanted": wanted, "live": items}
+    _landing_feed_cache.update(at=now, data=data)
+    return data
 
 
 def register(router):
     router.add_api_route("/events/active", get_active_event, methods=["GET"], dependencies=_events_rl_u)
     router.add_api_route("/news/flash", get_flash_news, methods=["GET"], dependencies=_events_rl_u)
+    router.add_api_route("/auth/landing-feed", get_landing_feed, methods=["GET"])
