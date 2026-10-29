@@ -295,8 +295,8 @@ export default function EntertainerHub() {
           </button>
         </div>
         <div className="ent-stats">
-          <Stat label="Fund cash" value={`$${fmt(dash?.entertainer_fund_cash)}`} tone="emerald" />
-          <Stat label="Fund points" value={fmt(dash?.entertainer_fund_points)} tone="sky" />
+          <Stat label="Fund cash" value={`$${fmtShort(dash?.entertainer_fund_cash)}`} full={`$${fmt(dash?.entertainer_fund_cash)}`} tone="emerald" />
+          <Stat label="Fund points" value={fmtShort(dash?.entertainer_fund_points)} full={fmt(dash?.entertainer_fund_points)} tone="sky" />
           <Stat label="Broadcasts left" value={`${broadcastsRemaining}/${broadcastDailyCap}`} tone="violet" />
           <Stat label="Perk tokens left" value={`${remTotal}/10`} tone="amber" />
         </div>
@@ -479,11 +479,11 @@ function fmtShort(v) {
   return n.toLocaleString();
 }
 
-function Stat({ label, value, tone }) {
+function Stat({ label, value, full, tone }) {
   return (
     <div className={`ent-stat ent-tone-${tone}`}>
       <span>{label}</span>
-      <b>{value}</b>
+      <b title={full || undefined}>{value}</b>
     </div>
   );
 }
