@@ -347,6 +347,7 @@ function AccessTab({ d, run }) {
         <div className="flex flex-wrap gap-2">
           <Link to={`/tjjeujr3wa/ip-history?user=${encodeURIComponent(name)}`}><Button size="sm" icon={ExternalLink}>Account access report (IPs, devices)</Button></Link>
           <Link to={`/tjjeujr3wa/account-compare?a=${encodeURIComponent(name)}`}><Button size="sm" icon={ExternalLink}>Compare with another account</Button></Link>
+          <Link to={`/tjjeujr3wa/safety-center?tab=multi&u=${encodeURIComponent(name)}`}><Button size="sm" icon={ExternalLink}>Linked accounts check</Button></Link>
         </div>
       </Card>
     </div>
@@ -374,7 +375,8 @@ function ActionsTab({ d, run }) {
       <Card title="Other tools" subtitle="Still in the classic tools while they are rebuilt">
         <div className="flex flex-wrap gap-2">
           <Link to={`/tjjeujr3wa/players?target=${encodeURIComponent(name)}`}><Button size="sm" icon={ExternalLink}>Grants, Game Pass, cars, tokens</Button></Link>
-          <Link to={`/tjjeujr3wa/moderation?target=${encodeURIComponent(name)}`}><Button size="sm" icon={ExternalLink}>Modkill, revive, bans</Button></Link>
+          <Link to={`/tjjeujr3wa/moderation?target=${encodeURIComponent(name)}`}><Button size="sm" icon={ExternalLink}>Modkill, revive</Button></Link>
+          <Link to="/tjjeujr3wa/safety-center?tab=bans"><Button size="sm" icon={ExternalLink}>Bans (Safety centre)</Button></Link>
           <Link to={`/profile/${encodeURIComponent(name)}`}><Button size="sm" icon={ExternalLink}>Player dossier</Button></Link>
         </div>
       </Card>

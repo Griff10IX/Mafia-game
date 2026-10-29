@@ -30,6 +30,7 @@ import {
   LayoutDashboard,
   PoundSterling,
   UserRound,
+  ShieldCheck,
 } from 'lucide-react';
 
 export const ADMIN_CATEGORIES = [
@@ -123,7 +124,8 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'player', label: 'Player profile', categoryId: 'admin-operations', kind: 'standalone', icon: UserRound, description: 'Everything about one player: wallet, stats, activity, sessions, and give/take with a reason.' },
   { id: 'players', label: 'Players', categoryId: 'admin-operations', kind: 'hub', hubSection: 'players', anchorId: 'admin-players', icon: Users, description: 'Player lookup, grants, adjustments.' },
   { id: 'moderation', label: 'Moderation', categoryId: 'admin-operations', kind: 'hub', hubSection: 'moderation', anchorId: 'admin-moderation', icon: Shield, description: 'Locks, sanctions, and interventions.' },
-  { id: 'safety', label: 'Safety', categoryId: 'admin-operations', kind: 'hub', hubSection: 'safety', anchorId: 'admin-security', icon: Lock, description: 'Security summary, bans, and anti-abuse.' },
+  { id: 'safety-center', label: 'Safety centre', categoryId: 'admin-operations', kind: 'standalone', icon: ShieldCheck, description: 'Multi-accounts, bans, IP lookup and suspicious logins in one place.' },
+  { id: 'safety', label: 'Security (classic)', categoryId: 'admin-operations', kind: 'hub', hubSection: 'safety', anchorId: 'admin-security', icon: Lock, description: 'Security summary, bans, and anti-abuse.' },
   { id: 'staff', label: 'Staff', categoryId: 'admin-operations', kind: 'hub', hubSection: 'staff', anchorId: 'admin-staff', icon: UserCog, description: 'Moderator visibility and staffing tools.' },
   { id: 'crew-recovery', label: 'Crew recovery', categoryId: 'admin-operations', kind: 'standalone', icon: Building2, description: 'Revive families and restore illegal businesses from kill snapshots.' },
   { id: 'witness-statements', label: 'Witness', categoryId: 'admin-operations', kind: 'standalone', icon: FileText, description: 'Witness statements review.' },
@@ -172,6 +174,7 @@ const ROUTE_NAV_SECTION = {
   locked: 'nav-players',
   'dead-alive-log': 'nav-players',
   'dead-estates': 'nav-players',
+  'safety-center': 'nav-safety',
   safety: 'nav-safety',
   'users-online': 'nav-safety',
   'ip-history': 'nav-safety',
@@ -232,7 +235,8 @@ export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
   moderation: 'Mod',
   commerce: 'Commerce',
   liveops: 'LiveOps',
-  safety: 'Safety',
+  'safety-center': 'Safety',
+  safety: 'Security',
   analytics: 'Stats',
   logs: 'Logs',
   staff: 'Staff',
