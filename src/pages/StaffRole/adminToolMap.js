@@ -299,7 +299,7 @@ export function buildLayoutStaffNavItems({ isAdmin, isModerator } = {}) {
       ? (isAdmin ? Settings : Shield)
       : (group?.icon || Shield);
     const label = id === 'overview'
-      ? (isAdmin ? 'Admin Tools' : 'Moderator tools')
+      ? (isAdmin ? 'Admin tools' : 'Moderator tools')
       : (group?.label || id);
     return { path: `/tjjeujr3wa/${id}`, icon: Icon, label };
   }).filter((item) => isAdmin || isModerator);

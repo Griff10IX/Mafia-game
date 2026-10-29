@@ -2359,6 +2359,8 @@ export default function Layout({ children }) {
     ? buildLayoutStaffNavItems({ isAdmin: true, isModerator: false })
     : [];
   const moderatorNavItems = isModerator && !isAdmin && staffToolsNavVisible ? buildModStaffNavItems() : [];
+  const staffNavIsAdmin = adminNavItems.length > 0;
+  const staffNavItems = staffNavIsAdmin ? adminNavItems : moderatorNavItems;
   const staffTopBarEntry = isAdmin && staffToolsNavVisible ? adminNavItems[0] : (isModerator && staffToolsNavVisible ? moderatorNavItems[0] : null);
   const StaffTopBarIcon = staffTopBarEntry?.icon;
 
@@ -3017,6 +3019,91 @@ export default function Layout({ children }) {
         .sidebar-inline-rule--plain::after {
           content: none;
         }
+        .staff-nav {
+          margin-top: 6px;
+          padding: 4px;
+          border-radius: 10px;
+          background: rgba(var(--staff-accent-rgb), 0.045);
+          border: 1px solid rgba(var(--staff-accent-rgb), 0.16);
+        }
+        .staff-nav__head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 6px;
+          padding: 6px 8px 4px;
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          line-height: 1;
+          color: rgba(var(--staff-accent-rgb), 0.85);
+        }
+        .staff-nav__role {
+          padding: 3px 6px;
+          border-radius: 999px;
+          font-size: 9px;
+          letter-spacing: 0.06em;
+          background: rgba(var(--staff-accent-rgb), 0.14);
+          color: rgb(var(--staff-accent-rgb));
+        }
+        .staff-nav__item {
+          position: relative;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          box-sizing: border-box;
+          width: 100%;
+          min-height: 44px;
+          padding: 6px 10px;
+          border: 0;
+          border-radius: 8px;
+          background: transparent;
+          color: var(--noir-foreground, #f4f4f5);
+          opacity: 0.86;
+          font-size: 13px;
+          font-weight: 500;
+          line-height: 1.25;
+          text-align: left;
+          text-decoration: none;
+          cursor: pointer;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
+          transition: background-color 0.15s ease, opacity 0.15s ease;
+        }
+        .staff-nav__item:hover { background: rgba(255, 255, 255, 0.06); opacity: 1; }
+        .staff-nav__item:active { background: rgba(255, 255, 255, 0.09); }
+        .staff-nav__item:focus-visible { outline: 2px solid rgba(var(--staff-accent-rgb), 0.65); outline-offset: 1px; opacity: 1; }
+        .staff-nav__item.is-active {
+          background: rgba(var(--staff-accent-rgb), 0.13);
+          opacity: 1;
+          font-weight: 600;
+        }
+        .staff-nav__item.is-active::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 9px;
+          bottom: 9px;
+          width: 3px;
+          border-radius: 0 3px 3px 0;
+          background: rgb(var(--staff-accent-rgb));
+        }
+        .staff-nav__icon {
+          display: flex;
+          flex-shrink: 0;
+          color: rgba(var(--staff-accent-rgb), 0.8);
+        }
+        .staff-nav__item.is-active .staff-nav__icon { color: rgb(var(--staff-accent-rgb)); }
+        .staff-nav__label { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+        .staff-nav__chevron { flex-shrink: 0; opacity: 0.45; }
+        .staff-nav__item--home { font-weight: 600; }
+        .staff-nav__sep { height: 1px; margin: 2px 8px; background: rgba(var(--staff-accent-rgb), 0.14); }
+        .staff-nav__item--amber { --staff-accent-rgb: 251, 191, 36; color: #fcd34d; }
+        @media (min-width: 768px) {
+          .staff-nav__item { min-height: 32px; padding: 5px 8px; gap: 8px; font-size: 12.5px; }
+          .staff-nav__item.is-active::before { top: 7px; bottom: 7px; }
+        }
       `}</style>
       {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
       <div
@@ -3099,51 +3186,50 @@ export default function Layout({ children }) {
                 </>
               )}
 
-              {/* Admin */}
-              {adminNavItems.length > 0 && (
+              {/* Staff (admin or moderator — mutually exclusive lists) */}
+              {staffNavItems.length > 0 && (
                 <>
                   {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
-                  {adminNavItems.map((item) => {
-                    const Icon = item.icon; const isActive = location.pathname === item.path;
-                    return (
-                      <SameRouteAwareLink key={item.path} to={item.path} data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
-                        className={`flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 ${isActive ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10'}`}
-                        onClick={() => setSidebarOpen(false)}>
-                        <Icon size={14} /><span className="uppercase tracking-widest text-xs font-heading">{item.label}</span>
-                      </SameRouteAwareLink>
-                    );
-                  })}
-                </>
-              )}
-              {/* Moderator */}
-              {moderatorNavItems.length > 0 && (
-                <>
-                  {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
-                  {moderatorNavItems.map((item) => {
-                    const Icon = item.icon; const isActive = location.pathname === item.path;
-                    return (
-                      <SameRouteAwareLink key={item.path} to={item.path} data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
-                        className={`flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 ${isActive ? 'bg-primary/20 border-l-2 border-primary text-primary' : 'text-primary hover:bg-primary/10'}`}
-                        onClick={() => setSidebarOpen(false)}>
-                        <Icon size={14} /><span className="uppercase tracking-widest text-xs font-heading">{item.label}</span>
-                      </SameRouteAwareLink>
-                    );
-                  })}
+                  <div className="staff-nav" data-testid="staff-nav" style={{ '--staff-accent-rgb': staffNavIsAdmin ? '251, 113, 133' : 'var(--noir-primary-rgb)' }}>
+                    <div className="staff-nav__head">
+                      <span>Staff</span>
+                      <span className="staff-nav__role">{staffNavIsAdmin ? 'Admin' : 'Mod'}</span>
+                    </div>
+                    {staffNavItems.map((item, idx) => {
+                      const Icon = item.icon; const isActive = location.pathname === item.path;
+                      const isHome = idx === 0;
+                      return (
+                        <Fragment key={item.path}>
+                          <SameRouteAwareLink to={item.path} data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+                            className={`staff-nav__item${isHome ? ' staff-nav__item--home' : ''}${isActive ? ' is-active' : ''}`}
+                            aria-current={isActive ? 'page' : undefined}
+                            onClick={() => setSidebarOpen(false)}>
+                            <span className="staff-nav__icon"><Icon size={16} strokeWidth={2} /></span>
+                            <span className="staff-nav__label">{item.label}</span>
+                            {isHome && <ChevronRight size={14} className="staff-nav__chevron" aria-hidden />}
+                          </SameRouteAwareLink>
+                          {isHome && staffNavItems.length > 1 && <div className="staff-nav__sep" aria-hidden="true" />}
+                        </Fragment>
+                      );
+                    })}
+                  </div>
                 </>
               )}
               {(isAdmin || isModerator) && !staffLoginSession && (
                 <>
                   {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
                   <SameRouteAwareLink to="/staff-entrance" data-testid="nav-staff-sign-in"
-                    className="flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 text-amber-400/90 hover:bg-amber-500/10"
+                    className="staff-nav__item staff-nav__item--amber mt-1"
                     onClick={() => setSidebarOpen(false)}>
-                    <Lock size={14} /><span className="uppercase tracking-widest text-xs font-heading">Staff sign-in</span>
+                    <span className="staff-nav__icon"><Lock size={16} strokeWidth={2} /></span>
+                    <span className="staff-nav__label">Staff sign-in</span>
                   </SameRouteAwareLink>
                 </>
               )}
               {hasAdminEmail && !isAdmin && !adminPreviewAsMod && (
-                <button type="button" onClick={() => { promoteToAdmin(); setSidebarOpen(false); }} className="flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 w-full text-left text-amber-400 hover:bg-amber-500/10 text-[10px]">
-                  <Shield size={14} /><span className="uppercase tracking-widest text-xs font-heading">Use admin powers</span>
+                <button type="button" onClick={() => { promoteToAdmin(); setSidebarOpen(false); }} className="staff-nav__item staff-nav__item--amber mt-1">
+                  <span className="staff-nav__icon"><Shield size={16} strokeWidth={2} /></span>
+                  <span className="staff-nav__label">Use admin powers</span>
                 </button>
               )}
             </div>

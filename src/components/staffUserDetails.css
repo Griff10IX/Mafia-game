@@ -1,0 +1,95 @@
+/* Staff user dossier (side sheet). */
+.sd { --sd-line: rgba(255, 255, 255, 0.08); --sd-muted: rgba(205, 212, 222, 0.6); --sd-card: rgba(255, 255, 255, 0.025);
+  --sd-prim: var(--noir-primary, #0ea5e9); --sd-prim-rgb: var(--noir-primary-rgb, 14, 165, 233); color: var(--noir-foreground, #e8edf2); }
+
+.sd-head { display: flex; align-items: center; gap: 12px; padding-right: 28px; }
+.sd-avatar { flex: none; width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; font-size: 22px; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, rgba(var(--sd-prim-rgb), 0.9), rgba(var(--sd-prim-rgb), 0.45)); box-shadow: 0 8px 22px rgba(var(--sd-prim-rgb), 0.3); overflow: hidden; }
+.sd-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.sd-kicker { display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; color: var(--sd-prim); }
+.sd-name { margin: 2px 0 0; font-size: 21px; font-weight: 800; line-height: 1.15; color: #fff; overflow-wrap: anywhere; }
+.sd-sub { margin-top: 2px; font-size: 12.5px; color: var(--sd-muted); }
+.sd-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.sd-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); color: rgba(230, 235, 240, 0.85); box-shadow: inset 0 0 0 1px var(--sd-line); }
+.sd-badge.good { background: rgba(16, 185, 129, 0.12); color: #6ee7b7; box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.35); }
+.sd-badge.bad { background: rgba(239, 68, 68, 0.12); color: #fca5a5; box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.4); }
+.sd-badge.warn { background: rgba(245, 158, 11, 0.12); color: #fcd34d; box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.38); }
+.sd-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.sd-link { display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 0 10px; border-radius: 9px; font-size: 12px; font-weight: 600; color: var(--sd-prim); background: rgba(var(--sd-prim-rgb), 0.1); text-decoration: none; }
+.sd-link:hover { background: rgba(var(--sd-prim-rgb), 0.18); }
+
+.sd-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.sd-kpi { border: 1px solid var(--sd-line); background: rgba(0, 0, 0, 0.3); border-radius: 12px; padding: 9px 11px; min-width: 0; }
+.sd-kpi span { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sd-muted); }
+.sd-kpi b { display: block; margin-top: 2px; font-size: 16px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.sd-tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; padding: 6px; border-radius: 12px; background: rgba(10, 11, 14, 0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: inset 0 0 0 1px var(--sd-line); overflow-x: auto; scrollbar-width: none; }
+.sd-tabs::-webkit-scrollbar { display: none; }
+.sd-tabs button { flex: 1 0 auto; min-height: 40px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--sd-muted); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.sd-tabs button[aria-selected='true'] { background: rgba(var(--sd-prim-rgb), 0.16); color: #fff; box-shadow: inset 0 0 0 1px rgba(var(--sd-prim-rgb), 0.5); }
+
+.sd-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.sd-card { border: 1px solid var(--sd-line); background: var(--sd-card); border-radius: 14px; padding: 14px; min-width: 0; }
+.sd-card.danger { border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.04); }
+.sd-card h3 { margin: 0 0 10px; display: flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--sd-prim); }
+.sd-card.danger h3 { color: #fca5a5; }
+.sd-card .sd-hint { margin: -4px 0 10px; font-size: 12px; color: var(--sd-muted); line-height: 1.45; }
+
+.sd-dl { margin: 0; display: grid; gap: 0; }
+.sd-dl > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); min-width: 0; }
+.sd-dl > div:last-child { border-bottom: 0; }
+.sd-dl dt { flex: none; font-size: 12.5px; color: var(--sd-muted); }
+.sd-dl dd { margin: 0; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #fff; text-align: right; }
+.sd-dl dd .v { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sd-dl dd.mono .v { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 500; }
+.sd-dl dd.hl .v { color: var(--sd-prim); }
+.sd-dl dd.bad .v { color: #fca5a5; }
+.sd-copy { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; border: 0; background: rgba(255, 255, 255, 0.05); color: var(--sd-muted); }
+.sd-copy:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+
+.sd-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.sd-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(var(--sd-prim-rgb), 0.4);
+  background: rgba(var(--sd-prim-rgb), 0.12); color: #fff; font-size: 13px; font-weight: 700; text-align: center; line-height: 1.2; transition: background 0.15s, transform 0.1s; touch-action: manipulation; text-decoration: none; }
+.sd-btn:hover:not(:disabled) { background: rgba(var(--sd-prim-rgb), 0.22); }
+.sd-btn:active:not(:disabled) { transform: translateY(1px); }
+.sd-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.sd-btn.danger { border-color: rgba(239, 68, 68, 0.45); background: rgba(239, 68, 68, 0.12); color: #fecaca; }
+.sd-btn.danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.22); }
+.sd-btn.good { border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.12); color: #a7f3d0; }
+.sd-btn svg { flex: none; }
+
+.sd-tools { display: grid; gap: 4px; }
+.sd-tool { display: grid; grid-template-columns: 140px minmax(0, 1fr); align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.sd-tool:last-child { border-bottom: 0; }
+.sd-tool > label { font-size: 12.5px; font-weight: 600; color: var(--sd-muted); }
+.sd-tool-ctrl { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.sd-input { flex: 1 1 120px; min-width: 0; min-height: 42px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(0, 0, 0, 0.4); color: #fff; padding: 8px 11px; font-size: 14px; outline: none; }
+.sd-input:focus { border-color: var(--sd-prim); box-shadow: 0 0 0 3px rgba(var(--sd-prim-rgb), 0.18); }
+.sd-input.narrow { flex: 0 1 90px; }
+.sd-tool-ctrl .sd-btn { flex: none; min-width: 84px; }
+
+.sd-sessions { display: grid; gap: 6px; margin-top: 8px; }
+.sd-session { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--sd-line); background: rgba(0, 0, 0, 0.25); font-size: 12px; }
+.sd-session span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(230, 235, 240, 0.85); }
+.sd-session button { flex: none; border: 0; background: none; color: #fca5a5; font-size: 12px; font-weight: 700; padding: 6px 4px; }
+.sd-reg { margin-top: 8px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--sd-line); background: rgba(0, 0, 0, 0.25); font-family: ui-monospace, monospace; font-size: 12px; display: grid; gap: 3px; overflow-wrap: anywhere; }
+.sd-state { display: flex; align-items: center; gap: 8px; padding: 30px 0; color: var(--sd-muted); font-size: 13px; }
+.sd-error { border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.08); padding: 12px 14px; font-size: 13px; color: #fca5a5; }
+.sd-error button { display: block; margin-top: 8px; border: 0; background: none; color: var(--sd-prim); font-weight: 700; padding: 0; }
+
+@media (max-width: 640px) {
+  /* Whole sheet scrolls on phones so the header doesn't eat the screen; tabs stay pinned. */
+  .sd.sd { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .sd .sd-scroll { flex: none; overflow: visible; }
+  .sd-avatar { width: 46px; height: 46px; font-size: 19px; }
+  .sd-name { font-size: 19px; }
+  .sd-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sd-kpi b { font-size: 15px; }
+  .sd-grid { grid-template-columns: minmax(0, 1fr); }
+  .sd-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sd-btn { min-height: 44px; }
+  .sd-tool { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .sd-input { font-size: 16px; min-height: 44px; }
+  .sd-tool-ctrl .sd-btn { min-height: 44px; }
+  .sd-tabs button { min-height: 44px; }
+}
