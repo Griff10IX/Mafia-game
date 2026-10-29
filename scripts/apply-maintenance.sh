@@ -67,7 +67,7 @@ else:
     line1 = f"Updating {what}." if what else "We're pushing a fresh update to the streets."
 
 line2 = "Hang tight, the game will be back shortly."
-estimate = "~ 30 seconds"
+estimate = "~ 10 seconds"
 title = "System AI is updating..." if by == "system_ai" else "Updating Game..."
 
 headline = os.environ.get("MAFIA_MAINT_HEADLINE") or headline
@@ -141,20 +141,33 @@ hide_page() {
   sudo systemctl reload nginx 2>/dev/null || true
 }
 
-wait_for_api() {
-  local up=0
-  local i
-  for i in $(seq 1 30); do
-    if curl -s -o /dev/null --max-time 2 http://127.0.0.1:8000/openapi.json 2>/dev/null; then
-      up=1
-      break
-    fi
-    echo "  > Waiting for API... (${i}/30)"
-    sleep 3
-  done
-  if [ "$up" -ne 1 ]; then
-    echo "  [!!] Backend did not answer on :8000 within 90s - restoring site anyway"
+install_fast_restart() {
+  local src=/opt/mafia-app/deploy/systemd/mafia-backend.service.d/fast-restart.conf
+  local dst=/etc/systemd/system/mafia-backend.service.d/fast-restart.conf
+  [ -f "$src" ] || return 0
+  if ! cmp -s "$src" "$dst" 2>/dev/null; then
+    sudo mkdir -p "$(dirname "$dst")"
+    sudo cp -f "$src" "$dst"
+    sudo systemctl daemon-reload
+    echo "  [OK] Installed fast-restart API settings"
   fi
+}
+
+wait_for_api() {
+  local started
+  started=$(date +%s)
+  local i
+  for i in $(seq 1 180); do
+    if curl -s -o /dev/null --max-time 1 http://127.0.0.1:8000/api/health 2>/dev/null; then
+      echo "  > API answered after $(( $(date +%s) - started ))s"
+      return 0
+    fi
+    if [ $(( i % 10 )) -eq 0 ]; then
+      echo "  > Waiting for API... ($(( $(date +%s) - started ))s)"
+    fi
+    sleep 0.5
+  done
+  echo "  [!!] Backend did not answer on :8000 within 90s - restoring site anyway"
 }
 
 case "$mode" in
@@ -167,6 +180,7 @@ case "$mode" in
     echo "  [OK] Maintenance page restored"
     ;;
   restart-backend)
+    install_fast_restart
     show_page
     echo "  [OK] Maintenance page shown"
     trap hide_page EXIT

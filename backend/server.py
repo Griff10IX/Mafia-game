@@ -3851,6 +3851,12 @@ daily_rewards.register(api_router)
 from routers.account import auto_rank as auto_rank_router
 auto_rank_router.register(api_router)
 
+@api_router.get("/health", include_in_schema=False)
+async def health():
+    """Cheap readiness probe for deploys (no DB, no auth)."""
+    return {"ok": True}
+
+
 app.include_router(api_router)
 
 # CORS: with credentials=True you must list explicit origins (not "*").

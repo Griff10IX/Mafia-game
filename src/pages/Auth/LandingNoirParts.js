@@ -92,9 +92,17 @@ export function useLandingFeed(enabled) {
   return feed;
 }
 
+function compact(n) {
+  const v = Number(n) || 0;
+  if (v >= 1e9) return `${+(v / 1e9).toFixed(1)}B`;
+  if (v >= 1e6) return `${+(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e4) return `${Math.round(v / 1e3)}K`;
+  return v.toLocaleString();
+}
+
 function bountyLine(p) {
-  if (p.bounty_cash > 0) return `Bounty $${Number(p.bounty_cash).toLocaleString()}`;
-  if (p.bounty_points > 0) return `Bounty ${Number(p.bounty_points).toLocaleString()} pts`;
+  if (p.bounty_cash > 0) return `Bounty $${compact(p.bounty_cash)}`;
+  if (p.bounty_points > 0) return `Bounty ${compact(p.bounty_points)} pts`;
   if (p.kills > 0) return `${Number(p.kills).toLocaleString()} kills`;
   return 'Armed & dangerous';
 }
