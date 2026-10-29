@@ -9,14 +9,6 @@ from pydantic import BaseModel, field_validator
 
 logger = logging.getLogger(__name__)
 
-CASINO_OWNERSHIP_COLLECTIONS = {
-    "dice": ("dice_ownership", "city"),
-    "roulette": ("roulette_ownership", "city"),
-    "blackjack": ("blackjack_ownership", "city"),
-    "horseracing": ("horseracing_ownership", "city"),
-    "videopoker": ("videopoker_ownership", "city"),
-    "slots": ("slots_ownership", "state"),
-}
 WALLET_FIELDS = {
     "cash": "money",
     "points": "points",
@@ -56,6 +48,7 @@ def _iso(v: Any) -> Optional[str]:
 
 def register(router):
     import server as srv
+    from routers.admin.admin import CASINO_OWNERSHIP_COLLS
     from routers.admin.revenue import payment_amount_minor
 
     db = srv.db
@@ -92,7 +85,7 @@ def register(router):
                 family = {**fam, "role": membership.get("role")}
 
         casinos = []
-        for game, (coll, loc_field) in CASINO_OWNERSHIP_COLLECTIONS.items():
+        for game, (coll, loc_field) in CASINO_OWNERSHIP_COLLS.items():
             async for row in db[coll].find({"owner_id": uid}, {"_id": 0, loc_field: 1, "profit": 1, "total_earnings": 1, "max_bet": 1}):
                 casinos.append({"game": game, "location": row.get(loc_field) or "?", "profit": row.get("profit"),
                                 "total_earnings": row.get("total_earnings"), "max_bet": row.get("max_bet")})

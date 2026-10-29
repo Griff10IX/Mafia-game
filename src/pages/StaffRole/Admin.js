@@ -25,6 +25,7 @@ import {
   SEARCHABLE_TOOLS,
   hubAllowsSection,
 } from './adminToolMap';
+import { CASINO_GAME_TYPES, CLAIM_COST_FIELDS, PAGE_LOCK_PATHS } from './adminLiveOpsConfig';
 import { useStaffAccessVerify } from './staffAccessVerifyContext';
 
 /** Match backend INACTIVITY_REMINDER_MIN_DAYS default (UI hint / disable). */
@@ -2578,6 +2579,7 @@ export default function Admin() {
       setStorePointsEventForceUntil(res.data?.store_points_event_force_until || '');
       setStoreItemFlags(res.data?.store_item_flags || {});
       setVipPassCarPurchaseLimit(String(res.data?.vip_pass_car_purchase_limit ?? 5));
+      setCasinoGlobalMaxBet(res.data?.casino_global_max_bet || 1000000000);
       setCasinoBuybackMaxPoints(res.data?.casino_buyback_max_points || 15000);
       setMpPokerMaxBlind(res.data?.mp_poker_max_blind || 2500000);
       if (Array.isArray(res.data?.mod_visible_category_ids)) {
@@ -3008,9 +3010,9 @@ export default function Admin() {
     setLaunchSettingsSaving(true);
     try {
       await api.patch('/admin/settings', {
-        login_lock_from: loginLockFrom || null,
-        login_lock_until: loginLockUntil || null,
-        login_lock_message: loginLockMessage || null,
+        login_lock_from: loginLockFrom || '',
+        login_lock_until: loginLockUntil || '',
+        login_lock_message: loginLockMessage || '',
       });
       toast.success('Login lock settings saved');
     } catch (e) {
@@ -3363,9 +3365,9 @@ export default function Admin() {
     setLaunchSettingsSaving(true);
     try {
       await api.patch('/admin/settings', {
-        login_lock_from: null,
-        login_lock_until: null,
-        login_lock_message: null,
+        login_lock_from: '',
+        login_lock_until: '',
+        login_lock_message: '',
       });
       setLoginLockFrom('');
       setLoginLockUntil('');
@@ -14619,16 +14621,7 @@ export default function Admin() {
               Cash (and dice points where used) to claim each property type. Values persist in <span className="font-mono text-[9px]">game_settings</span> until changed again.
             </p>
             <div className="space-y-2">
-              {[
-                { key: 'dice_cash', label: 'Dice (cash $)' },
-                { key: 'dice_points', label: 'Dice (points)' },
-                { key: 'roulette', label: 'Roulette ($)' },
-                { key: 'blackjack', label: 'Blackjack ($)' },
-                { key: 'horseracing', label: 'Horse racing ($)' },
-                { key: 'video_poker', label: 'Video poker ($)' },
-                { key: 'airport', label: 'Airport ($)' },
-                { key: 'armoury', label: 'Armoury / bullet factory ($)' },
-              ].map(({ key, label }) => (
+              {CLAIM_COST_FIELDS.map(({ key, label }) => (
                 <div key={key} className="flex items-center gap-2">
                   <span className="text-[10px] text-mutedForeground w-40 sm:w-44 shrink-0">{label}</span>
                   <input
@@ -15691,12 +15684,7 @@ export default function Admin() {
                   className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
                 >
                   <option value="all">All Types</option>
-                  <option value="dice">Dice</option>
-                  <option value="roulette">Roulette</option>
-                  <option value="blackjack">Blackjack</option>
-                  <option value="horseracing">Horse Racing</option>
-                  <option value="videopoker">Video Poker</option>
-                  <option value="slots">Slots</option>
+                  {CASINO_GAME_TYPES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
                 </select>
               </div>
               <div>
@@ -15888,67 +15876,7 @@ export default function Admin() {
               <p className="text-[9px] text-mutedForeground">Locks only the Points tab (buy pts with £). Upgrades, bullets, send pts remain available. Unlocks automatically when the time passes.</p>
             </div>
             <div className="space-y-2">
-              {[
-                '/dashboard',
-                '/game/users-online',
-                '/bank',
-                '/stock-market',
-                '/stats',
-                '/my-stats',
-                '/jail',
-                '/organised-crime',
-                '/objectives',
-                '/account/missions',
-                '/inventory',
-                '/loot-box',
-                '/ranking',
-                '/crimes',
-                '/gta',
-                '/view-car',
-                '/garage',
-                '/buy-cars',
-                '/sell-cars',
-                '/auto-rank',
-                '/attack',
-                '/attempts',
-                '/hitlist',
-                '/bodyguards',
-                '/families',
-                '/properties',
-                '/casino',
-                '/casino/dice',
-                '/casino/rlt',
-                '/casino/blackjack',
-                '/casino/horseracing',
-                '/casino/slots',
-                '/casino/videopoker',
-                '/casino/mdg',
-                '/casino/mp-blackjack',
-                '/casino/mp-poker',
-                '/sports-betting',
-                '/prestige',
-                '/crack-safe',
-                '/daily-rewards',
-                '/flappygangster',
-                '/boxing',
-                '/armour-weapons',
-                '/shooting-range',
-                '/leaderboard',
-                '/store',
-                '/store/points',
-                '/money/quick-trade',
-                '/travel',
-                '/states',
-                '/my-properties',
-                '/booze-run',
-                '/racket',
-                '/forum',
-                '/inbox',
-                '/help-desk',
-                '/dead-alive',
-                '/profile',
-                '/ip-rules',
-              ].map((path) => {
+              {PAGE_LOCK_PATHS.map((path) => {
                 const entry = pageLocks[path];
                 const isLocked = !!entry;
                 const msg = typeof entry === 'object' ? (entry?.message ?? '') : (entry || '');

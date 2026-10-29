@@ -1196,6 +1196,17 @@ def _economy_event_extract_spike(doc: Dict[str, Any]) -> Tuple[Optional[float], 
     return None, None
 
 
+# Casino game type -> (ownership collection, location field).
+CASINO_OWNERSHIP_COLLS = {
+    "dice": ("dice_ownership", "city"),
+    "roulette": ("roulette_ownership", "city"),
+    "blackjack": ("blackjack_ownership", "city"),
+    "horseracing": ("horseracing_ownership", "city"),
+    "videopoker": ("videopoker_ownership", "city"),
+    "slots": ("slots_ownership", "state"),
+}
+
+
 def register(router):
     """Register admin routes. Dependencies from server to avoid circular imports."""
     import server as srv
@@ -1215,6 +1226,9 @@ def register(router):
     from utils.attack_turnstile_gate import attack_turnstile_target_usernames_list_for_admin
 
     db = srv.db
+
+    def _casino_coll_map():
+        return {g: (db[c], loc) for g, (c, loc) in CASINO_OWNERSHIP_COLLS.items()}
     log_respect_delta = srv.log_respect_delta
     get_current_user = srv.get_current_user
     send_notification = srv.send_notification
@@ -9955,10 +9969,8 @@ def register(router):
             "code_default_interest_options": [dict(x) for x in fb_opts],
         }
 
-    @router.get("/admin/settings")
-    async def admin_get_settings(current_user: dict = Depends(get_current_user)):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
+    async def _admin_settings_payload() -> dict:
+        """Current admin settings, as returned by GET and after PATCH."""
         MOD_DEFAULT = "#1e3a5f"
         doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
         admin_online_color = (doc.get("value") or "#a78bfa") if doc else "#a78bfa"
@@ -10169,6 +10181,12 @@ def register(router):
             "mod_visible_category_ids": mod_visible_category_ids,
             **bank_payload,
         }
+
+    @router.get("/admin/settings")
+    async def admin_get_settings(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return await _admin_settings_payload()
 
     @router.patch("/admin/settings")
     async def admin_patch_settings(body: AdminSettingsUpdate, current_user: dict = Depends(get_current_user)):
@@ -10690,204 +10708,7 @@ def register(router):
                 {"$set": {"key": KEY_INTEREST_OPTIONS, "value": cleaned}},
                 upsert=True,
             )
-        MOD_DEFAULT = "#1e3a5f"
-        doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
-        admin_online_color = (doc.get("value") or "#a78bfa") if doc else "#a78bfa"
-        mod_doc = await db.game_settings.find_one({"key": "mod_default_online_color"}, {"_id": 0, "value": 1})
-        mod_default_online_color = (mod_doc.get("value") or MOD_DEFAULT) if mod_doc else MOD_DEFAULT
-        if not isinstance(mod_default_online_color, str) or not mod_default_online_color.strip():
-            mod_default_online_color = MOD_DEFAULT
-        req_doc = await db.game_settings.find_one({"key": "require_email_verification"}, {"_id": 0, "value": 1})
-        require_email_verification = bool(req_doc.get("value") if req_doc else True)  # default True when missing
-        sm_doc = await db.game_settings.find_one({"key": "stock_market_max_points"}, {"_id": 0, "value": 1})
-        stock_market_max_points = int(sm_doc["value"]) if sm_doc and sm_doc.get("value") is not None else 3000
-        stock_market_max_points = max(1, stock_market_max_points)
-        sb_cap_doc = await db.game_settings.find_one({"key": "sports_bet_max_total_open_stake"}, {"_id": 0, "value": 1})
-        sports_bet_max_total_open_stake = 1_000_000_000
-        if sb_cap_doc and sb_cap_doc.get("value") is not None:
-            try:
-                sports_bet_max_total_open_stake = max(1, min(int(sb_cap_doc["value"]), 10**15))
-            except (TypeError, ValueError):
-                sports_bet_max_total_open_stake = 1_000_000_000
-        banner_doc = await db.game_settings.find_one({"key": "landing_banner_enabled"}, {"_id": 0, "value": 1})
-        landing_banner_enabled = bool(banner_doc.get("value") if banner_doc else False)
-        msg_doc = await db.game_settings.find_one({"key": "landing_banner_message"}, {"_id": 0, "value": 1})
-        landing_banner_message = (msg_doc.get("value") or "") if msg_doc and msg_doc.get("value") is not None else ""
-        main_doc = await db.game_settings.find_one({"_id": "main"})
-        from utils.store_item_flags import normalize_store_item_flags
-        from utils.game_pass_vip_car import (
-            VIP_PASS_CAR_PURCHASE_LIMIT_DEFAULT,
-            normalize_vip_pass_car_purchase_limit,
-        )
-        login_lock_from = main_doc.get("login_lock_from") if main_doc else None
-        login_lock_until = main_doc.get("login_lock_until") if main_doc else None
-        login_lock_message = main_doc.get("login_lock_message") if main_doc else None
-        preregister_landing_banner_enabled = main_doc.get("preregister_landing_banner_enabled")
-        if preregister_landing_banner_enabled is None:
-            preregister_landing_banner_enabled = True
-        preregister_landing_banner_preview_open = bool(main_doc.get("preregister_landing_banner_preview_open")) if main_doc else False
-        block_proxy_vpn_login = True if not main_doc else bool(main_doc.get("block_proxy_vpn_login", True))
-        block_script_user_agent_login = True if not main_doc else bool(main_doc.get("block_script_user_agent_login", True))
-        block_script_user_agent_game_actions = True if not main_doc else bool(main_doc.get("block_script_user_agent_game_actions", True))
-        game_actions_client_strict = bool(main_doc.get("game_actions_client_strict")) if main_doc else False
-        game_actions_turnstile_enabled = bool(main_doc.get("game_actions_turnstile_enabled")) if main_doc else False
-        ent_join_turnstile_enabled = bool(main_doc.get("ent_join_turnstile_enabled")) if main_doc else False
-        attack_turnstile_enabled = bool(main_doc.get("attack_turnstile_enabled")) if main_doc else False
-        attack_turnstile_master_disabled = bool(main_doc.get("attack_turnstile_master_disabled")) if main_doc else False
-        attack_turnstile_mode = (main_doc.get("attack_turnstile_mode") or "execute_only") if main_doc else "execute_only"
-        if attack_turnstile_mode not in ("execute_only", "search_and_execute", "risk_based"):
-            attack_turnstile_mode = "execute_only"
-        attack_turnstile_enforce = (main_doc.get("attack_turnstile_enforce") or "off") if main_doc else "off"
-        if attack_turnstile_enforce not in ("off", "log_only", "enforce"):
-            attack_turnstile_enforce = "off"
-        attack_turnstile_target_usernames = attack_turnstile_target_usernames_list_for_admin(
-            main_doc.get("attack_turnstile_target_usernames") if main_doc else None
-        )
-        minigame_turnstile_enabled = bool(main_doc.get("minigame_turnstile_enabled")) if main_doc else False
-        minigame_turnstile_site_key = (main_doc.get("minigame_turnstile_site_key") or "") if main_doc else ""
-        login_turnstile_enabled = bool(main_doc.get("login_turnstile_enabled")) if main_doc else False
-        sustained_page_rl_jail_enabled = bool(main_doc.get("sustained_page_rl_jail_enabled")) if main_doc else False
-        sustained_page_rl_entertainer_enabled = bool(main_doc.get("sustained_page_rl_entertainer_enabled")) if main_doc else False
-        sustained_page_rl_forum_enabled = bool(main_doc.get("sustained_page_rl_forum_enabled")) if main_doc else False
-        sustained_page_rl_kill_enabled = (
-            _kill_sustain_setting_enabled(main_doc.get("sustained_page_rl_kill_enabled")) if main_doc else True
-        )
-        sustained_page_rl_kill_max_gap_ms = clamp_kill_rl_max_gap_ms(
-            main_doc.get("sustained_page_rl_kill_max_gap_ms") if main_doc else None
-        )
-        sustained_page_rl_kill_sustain_sec = clamp_kill_rl_sustain_sec(
-            main_doc.get("sustained_page_rl_kill_sustain_sec") if main_doc else None
-        )
-        sustained_page_rl_gta_enabled = bool(main_doc.get("sustained_page_rl_gta_enabled")) if main_doc else False
-        sustained_page_rl_crimes_enabled = bool(main_doc.get("sustained_page_rl_crimes_enabled")) if main_doc else False
-        sustained_page_rl_oc_enabled = bool(main_doc.get("sustained_page_rl_oc_enabled")) if main_doc else False
-        sustained_page_rl_booze_enabled = bool(main_doc.get("sustained_page_rl_booze_enabled")) if main_doc else False
-        sustained_page_rl_game_chat_enabled = bool(main_doc.get("sustained_page_rl_game_chat_enabled")) if main_doc else False
-        sustained_page_rl_store_enabled = bool(main_doc.get("sustained_page_rl_store_enabled")) if main_doc else False
-        sustained_page_rl_ranking_enabled = bool(main_doc.get("sustained_page_rl_ranking_enabled")) if main_doc else False
-        sustained_page_rl_notifications_enabled = bool(main_doc.get("sustained_page_rl_notifications_enabled")) if main_doc else False
-        sustained_page_rl_hitlist_enabled = bool(main_doc.get("sustained_page_rl_hitlist_enabled")) if main_doc else False
-        sustained_page_rl_bank_enabled = bool(main_doc.get("sustained_page_rl_bank_enabled")) if main_doc else False
-        sustained_page_rl_leaderboard_enabled = bool(main_doc.get("sustained_page_rl_leaderboard_enabled")) if main_doc else False
-        sustained_page_rl_families_enabled = bool(main_doc.get("sustained_page_rl_families_enabled")) if main_doc else False
-        sustained_page_rl_stock_market_enabled = bool(main_doc.get("sustained_page_rl_stock_market_enabled")) if main_doc else False
-        sustained_page_rl_quicktrade_enabled = bool(main_doc.get("sustained_page_rl_quicktrade_enabled")) if main_doc else False
-        sustained_page_rl_properties_enabled = bool(main_doc.get("sustained_page_rl_properties_enabled")) if main_doc else False
-        sustained_page_rl_armoury_enabled = bool(main_doc.get("sustained_page_rl_armoury_enabled")) if main_doc else False
-        sustained_page_rl_bodyguards_enabled = bool(main_doc.get("sustained_page_rl_bodyguards_enabled")) if main_doc else False
-        sustained_page_rl_missions_enabled = bool(main_doc.get("sustained_page_rl_missions_enabled")) if main_doc else False
-        sustained_page_rl_travel_enabled = bool(main_doc.get("sustained_page_rl_travel_enabled")) if main_doc else False
-        sustained_page_rl_events_enabled = bool(main_doc.get("sustained_page_rl_events_enabled")) if main_doc else False
-        sustained_page_rl_auto_rank_enabled = bool(main_doc.get("sustained_page_rl_auto_rank_enabled")) if main_doc else False
-        sustained_page_rl_presence_enabled = bool(main_doc.get("sustained_page_rl_presence_enabled")) if main_doc else False
-        sustained_page_rl_casino_property_enabled = bool(main_doc.get("sustained_page_rl_casino_property_enabled")) if main_doc else False
-        sustained_page_rl_states_enabled = bool(main_doc.get("sustained_page_rl_states_enabled")) if main_doc else False
-        sustained_page_rl_illegal_business_enabled = bool(main_doc.get("sustained_page_rl_illegal_business_enabled")) if main_doc else False
-        sustained_page_rl_loot_box_enabled = bool(main_doc.get("sustained_page_rl_loot_box_enabled")) if main_doc else False
-        sustained_page_rl_help_desk_enabled = bool(main_doc.get("sustained_page_rl_help_desk_enabled")) if main_doc else False
-        sustained_page_rl_sports_betting_enabled = bool(main_doc.get("sustained_page_rl_sports_betting_enabled")) if main_doc else False
-        sustained_page_rl_casinos_enabled = bool(main_doc.get("sustained_page_rl_casinos_enabled")) if main_doc else False
-        user_request_pace_enabled = bool(main_doc.get("user_request_pace_enabled")) if main_doc else False
-        try:
-            user_request_pace_limit = int(main_doc.get("user_request_pace_limit") or 15) if main_doc else 15
-        except (TypeError, ValueError):
-            user_request_pace_limit = 15
-        user_request_pace_limit = max(5, min(100, user_request_pace_limit))
-        spotify_feature_enabled = bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
-        game_help_chat_enabled = bool(main_doc.get("game_help_chat_enabled", True)) if main_doc else True
-        preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
-        store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
-        if store_points_auto_credit is None:
-            store_points_auto_credit = True
-        store_points_manual_credit_eta = main_doc.get("store_points_manual_credit_eta") if main_doc else None
-        store_points_event_enabled = main_doc.get("store_points_event_enabled") if main_doc else None
-        if store_points_event_enabled is None:
-            store_points_event_enabled = True
-        store_points_event_force_until = main_doc.get("store_points_event_force_until") if main_doc else None
-        casino_global_max_bet = int(main_doc.get("casino_global_max_bet") or 1_000_000_000) if main_doc else 1_000_000_000
-        casino_buyback_max_points = int(main_doc.get("casino_buyback_max_points") or 15_000) if main_doc else 15_000
-        mp_poker_max_blind = int(main_doc.get("mp_poker_max_blind") or 2_500_000) if main_doc else 2_500_000
-        bank_payload = await _bank_economy_admin_payload()
-        return {
-            "admin_online_color": admin_online_color,
-            "mod_default_online_color": mod_default_online_color.strip() if isinstance(mod_default_online_color, str) else MOD_DEFAULT,
-            "require_email_verification": require_email_verification,
-            "block_proxy_vpn_login": block_proxy_vpn_login,
-            "block_script_user_agent_login": block_script_user_agent_login,
-            "block_script_user_agent_game_actions": block_script_user_agent_game_actions,
-            "game_actions_client_strict": game_actions_client_strict,
-            "game_actions_turnstile_enabled": game_actions_turnstile_enabled,
-            "ent_join_turnstile_enabled": ent_join_turnstile_enabled,
-            "attack_turnstile_enabled": attack_turnstile_enabled,
-            "attack_turnstile_master_disabled": attack_turnstile_master_disabled,
-            "attack_turnstile_mode": attack_turnstile_mode,
-            "attack_turnstile_enforce": attack_turnstile_enforce,
-            "attack_turnstile_target_usernames": attack_turnstile_target_usernames,
-            "minigame_turnstile_enabled": minigame_turnstile_enabled,
-            "minigame_turnstile_site_key": (minigame_turnstile_site_key or "").strip(),
-            "login_turnstile_enabled": login_turnstile_enabled,
-            "sustained_page_rl_jail_enabled": sustained_page_rl_jail_enabled,
-            "sustained_page_rl_entertainer_enabled": sustained_page_rl_entertainer_enabled,
-            "sustained_page_rl_forum_enabled": sustained_page_rl_forum_enabled,
-            "sustained_page_rl_kill_enabled": sustained_page_rl_kill_enabled,
-            "sustained_page_rl_kill_max_gap_ms": sustained_page_rl_kill_max_gap_ms,
-            "sustained_page_rl_kill_sustain_sec": sustained_page_rl_kill_sustain_sec,
-            "sustained_page_rl_gta_enabled": sustained_page_rl_gta_enabled,
-            "sustained_page_rl_crimes_enabled": sustained_page_rl_crimes_enabled,
-            "sustained_page_rl_oc_enabled": sustained_page_rl_oc_enabled,
-            "sustained_page_rl_booze_enabled": sustained_page_rl_booze_enabled,
-            "sustained_page_rl_game_chat_enabled": sustained_page_rl_game_chat_enabled,
-            "sustained_page_rl_store_enabled": sustained_page_rl_store_enabled,
-            "sustained_page_rl_ranking_enabled": sustained_page_rl_ranking_enabled,
-            "sustained_page_rl_notifications_enabled": sustained_page_rl_notifications_enabled,
-            "sustained_page_rl_hitlist_enabled": sustained_page_rl_hitlist_enabled,
-            "sustained_page_rl_bank_enabled": sustained_page_rl_bank_enabled,
-            "sustained_page_rl_leaderboard_enabled": sustained_page_rl_leaderboard_enabled,
-            "sustained_page_rl_families_enabled": sustained_page_rl_families_enabled,
-            "sustained_page_rl_stock_market_enabled": sustained_page_rl_stock_market_enabled,
-            "sustained_page_rl_quicktrade_enabled": sustained_page_rl_quicktrade_enabled,
-            "sustained_page_rl_properties_enabled": sustained_page_rl_properties_enabled,
-            "sustained_page_rl_armoury_enabled": sustained_page_rl_armoury_enabled,
-            "sustained_page_rl_bodyguards_enabled": sustained_page_rl_bodyguards_enabled,
-            "sustained_page_rl_missions_enabled": sustained_page_rl_missions_enabled,
-            "sustained_page_rl_travel_enabled": sustained_page_rl_travel_enabled,
-            "sustained_page_rl_events_enabled": sustained_page_rl_events_enabled,
-            "sustained_page_rl_auto_rank_enabled": sustained_page_rl_auto_rank_enabled,
-            "sustained_page_rl_presence_enabled": sustained_page_rl_presence_enabled,
-            "sustained_page_rl_casino_property_enabled": sustained_page_rl_casino_property_enabled,
-            "sustained_page_rl_states_enabled": sustained_page_rl_states_enabled,
-            "sustained_page_rl_illegal_business_enabled": sustained_page_rl_illegal_business_enabled,
-            "sustained_page_rl_loot_box_enabled": sustained_page_rl_loot_box_enabled,
-            "sustained_page_rl_help_desk_enabled": sustained_page_rl_help_desk_enabled,
-            "sustained_page_rl_sports_betting_enabled": sustained_page_rl_sports_betting_enabled,
-            "sustained_page_rl_casinos_enabled": sustained_page_rl_casinos_enabled,
-            "user_request_pace_enabled": user_request_pace_enabled,
-            "user_request_pace_limit": user_request_pace_limit,
-            "spotify_feature_enabled": spotify_feature_enabled,
-            "game_help_chat_enabled": game_help_chat_enabled,
-            "stock_market_max_points": stock_market_max_points,
-            "sports_bet_max_total_open_stake": sports_bet_max_total_open_stake,
-            "landing_banner_enabled": landing_banner_enabled,
-            "landing_banner_message": landing_banner_message,
-            "login_lock_from": login_lock_from,
-            "login_lock_until": login_lock_until,
-            "login_lock_message": login_lock_message,
-            "preregister_landing_banner_enabled": bool(preregister_landing_banner_enabled),
-            "preregister_landing_banner_preview_open": preregister_landing_banner_preview_open,
-            "preorder_points_release_date": preorder_points_release_date,
-            "store_points_auto_credit": bool(store_points_auto_credit),
-            "store_points_manual_credit_eta": store_points_manual_credit_eta,
-            "store_points_event_enabled": bool(store_points_event_enabled),
-            "store_points_event_force_until": store_points_event_force_until,
-            "store_item_flags": normalize_store_item_flags((main_doc or {}).get("store_item_flags")) if main_doc else normalize_store_item_flags(None),
-            "vip_pass_car_purchase_limit": normalize_vip_pass_car_purchase_limit(
-                (main_doc or {}).get("vip_pass_car_purchase_limit")
-            ),
-            "casino_global_max_bet": casino_global_max_bet,
-            "casino_buyback_max_points": casino_buyback_max_points,
-            "mp_poker_max_blind": mp_poker_max_blind,
-            **bank_payload,
-        }
+        return await _admin_settings_payload()
 
     @router.post("/admin/bank/apply-swiss-default-to-all-users")
     async def admin_apply_swiss_default_to_all_users(current_user: dict = Depends(get_current_user)):
@@ -19658,14 +19479,7 @@ def register(router):
         elif asset_kind == "airport":
             coll, loc_key = db.airport_ownership, "state"
         else:
-            coll_map = {
-                "dice": (db.dice_ownership, "city"),
-                "roulette": (db.roulette_ownership, "city"),
-                "blackjack": (db.blackjack_ownership, "city"),
-                "horseracing": (db.horseracing_ownership, "city"),
-                "videopoker": (db.videopoker_ownership, "city"),
-                "slots": (db.slots_ownership, "state"),
-            }
+            coll_map = _casino_coll_map()
             coll, loc_key = coll_map[asset_kind]
 
         doc_q: Dict[str, Any] = {"owner_id": from_uid}
@@ -19788,14 +19602,7 @@ def register(router):
         user = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "username": 1})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        coll_map = {
-            "dice": (db.dice_ownership, "city"),
-            "roulette": (db.roulette_ownership, "city"),
-            "blackjack": (db.blackjack_ownership, "city"),
-            "horseracing": (db.horseracing_ownership, "city"),
-            "videopoker": (db.videopoker_ownership, "city"),
-            "slots": (db.slots_ownership, "state"),
-        }
+        coll_map = _casino_coll_map()
         if game_type not in coll_map:
             raise HTTPException(status_code=400, detail="Invalid game_type; use dice, roulette, blackjack, horseracing, videopoker, or slots")
         coll, loc_key = coll_map[game_type]
@@ -19825,14 +19632,7 @@ def register(router):
         if not from_uid:
             raise HTTPException(status_code=400, detail="user_id is required")
 
-        coll_map = {
-            "dice": (db.dice_ownership, "city"),
-            "roulette": (db.roulette_ownership, "city"),
-            "blackjack": (db.blackjack_ownership, "city"),
-            "horseracing": (db.horseracing_ownership, "city"),
-            "videopoker": (db.videopoker_ownership, "city"),
-            "slots": (db.slots_ownership, "state"),
-        }
+        coll_map = _casino_coll_map()
         qt_type_map = {
             "dice": "casino_dice",
             "roulette": "casino_rlt",
@@ -20014,14 +19814,7 @@ def register(router):
         max_bet = body.max_bet
         if max_bet < 1:
             raise HTTPException(status_code=400, detail="max_bet must be at least 1")
-        coll_map = {
-            "dice": (db.dice_ownership, "city"),
-            "roulette": (db.roulette_ownership, "city"),
-            "blackjack": (db.blackjack_ownership, "city"),
-            "horseracing": (db.horseracing_ownership, "city"),
-            "videopoker": (db.videopoker_ownership, "city"),
-            "slots": (db.slots_ownership, "state"),
-        }
+        coll_map = _casino_coll_map()
         results = {}
         
         async def upsert_all_locations(coll, loc_key, gtype):
@@ -20063,14 +19856,7 @@ def register(router):
         """Get current max bets for all casino types by location. Admin only."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        coll_map = {
-            "dice": (db.dice_ownership, "city"),
-            "roulette": (db.roulette_ownership, "city"),
-            "blackjack": (db.blackjack_ownership, "city"),
-            "horseracing": (db.horseracing_ownership, "city"),
-            "videopoker": (db.videopoker_ownership, "city"),
-            "slots": (db.slots_ownership, "state"),
-        }
+        coll_map = _casino_coll_map()
         result = {}
         for gtype, (coll, loc_key) in coll_map.items():
             docs = await coll.find({}, {"_id": 0, loc_key: 1, "max_bet": 1, "owner_username": 1}).to_list(100)

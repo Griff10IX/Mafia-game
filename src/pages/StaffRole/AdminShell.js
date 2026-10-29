@@ -51,6 +51,7 @@ const AdminLocked = lazy(() => import('./AdminLocked'));
 const AdminRevenue = lazy(() => import('./AdminRevenue'));
 const AdminPlayer = lazy(() => import('./AdminPlayer'));
 const AdminSafety = lazy(() => import('./AdminSafety'));
+const AdminLiveOps = lazy(() => import('./AdminLiveOps'));
 
 function routeFor(groupId) {
   return `/tjjeujr3wa/${groupId}`;
@@ -89,6 +90,7 @@ const STANDALONE_PAGE = {
   revenue: AdminRevenue,
   player: AdminPlayer,
   'safety-center': AdminSafety,
+  'live-ops': AdminLiveOps,
 };
 
 /** Relative time from ISO last_seen_at (re-renders periodically while the panel is open). */

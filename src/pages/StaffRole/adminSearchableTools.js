@@ -3,6 +3,7 @@ export const SEARCHABLE_TOOLS = [
   { label: "Revenue", categoryId: "admin-analytics-monitoring", routePath: "/tjjeujr3wa/revenue", keywords: ["revenue","money","income","stripe","payments","sales","gbp","£","business","economy","profit","spenders"], adminOnly: true },
   { label: "Player profile", categoryId: "admin-operations", routePath: "/tjjeujr3wa/player", keywords: ["player","profile","360","wallet","give","take","points","cash","respect","bullets","loot","sessions","lookup","user"] },
   { label: "Safety centre", categoryId: "admin-operations", routePath: "/tjjeujr3wa/safety-center", keywords: ["safety","dupe","duplicate","multi","account","alts","ban","unban","ip","lookup","vpn","proxy","subnet","fingerprint","device","login","suspicious","restore"] },
+  { label: "Live Ops", categoryId: "admin-world-systems", routePath: "/tjjeujr3wa/live-ops", keywords: ["live","ops","events","rotate","casino","max bet","caps","limits","buyback","poker","blind","claim","cost","banner","maintenance","login","lock","launch","page","lock","preregister"], adminOnly: true },
   { label: "Target Username", categoryId: "admin-operations", scrollToId: "admin-target-username", keywords: ["target","username","player","command"] },
   { label: "Search Users", categoryId: "admin-players", scrollToId: "admin-search-users", keywords: ["search","users","email","find"] },
   { label: "Change Rank", categoryId: "admin-players", collapseKey: "rank", keywords: ["rank","change","prestige","level"] },
