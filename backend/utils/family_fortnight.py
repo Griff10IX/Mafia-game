@@ -216,15 +216,17 @@ async def ensure_default_config(db) -> None:
             {
                 "$setOnInsert": {
                     "id": PAYOUT_CONFIG_ID,
-                    "payouts": DEFAULT_PAYOUTS,
+                    # BSON keys must be strings; readers try str(rank) first.
+                    "payouts": {str(k): v for k, v in DEFAULT_PAYOUTS.items()},
                     "last_run_period_id": None,
                 }
             },
             upsert=True,
         )
         # Member pots live on the stored config after first insert. Keep them on the code defaults.
+        # Only when a stored payouts table exists, so a partial {"member_pot"} entry never replaces the defaults.
         await db.game_config.update_one(
-            {"id": PAYOUT_CONFIG_ID},
+            {"id": PAYOUT_CONFIG_ID, "payouts": {"$exists": True}},
             {
                 "$set": {
                     "payouts.1.member_pot": DEFAULT_PAYOUTS[1]["member_pot"],
