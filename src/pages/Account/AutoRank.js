@@ -931,6 +931,14 @@ const SettingsCard = ({
               }}
             />
             <ToggleRow
+              icon={Trophy}
+              label="Auto prestige"
+              description="Prestiges you as soon as you can (Godfather with enough rank points). Your rank resets to Rat and Auto Rank keeps climbing. Stops at Prestige 5."
+              checked={p.auto_rank_enabled ? !!p.auto_rank_prestige : false}
+              disabled={taskDisabled}
+              onToggle={() => onUpdatePref('auto_rank_prestige', !p.auto_rank_prestige)}
+            />
+            <ToggleRow
               icon={Search}
               label="Robot bodyguard auto-search"
               description={
@@ -1985,6 +1993,7 @@ export default function AutoRank() {
     auto_rank_booze: false,
     auto_rank_melt: false,
     auto_rank_scrap: false,
+    auto_rank_prestige: false,
     passive_booze_paused: false,
     auto_rank_purchased: false,
     auto_rank_permanent: false,
@@ -2279,6 +2288,7 @@ export default function AutoRank() {
             auto_rank_gta_option_ids: meRes.data.auto_rank_gta_option_ids ?? [],
             auto_rank_melt: meRes.data.auto_rank_melt === true,
             auto_rank_scrap: meRes.data.auto_rank_scrap === true,
+            auto_rank_prestige: meRes.data.auto_rank_prestige === true,
             auto_rank_telegram_notify: meRes.data.auto_rank_telegram_notify !== false,
             auto_rank_use_skip_tokens: !!meRes.data.auto_rank_use_skip_tokens,
             auto_rank_melt_action_ids: meRes.data.auto_rank_melt_action_ids ?? [],
@@ -2487,6 +2497,7 @@ export default function AutoRank() {
         passive_booze_paused: res.data?.passive_booze_paused ?? p.passive_booze_paused,
         auto_rank_melt: res.data?.auto_rank_melt === true,
         auto_rank_scrap: res.data?.auto_rank_scrap === true,
+        auto_rank_prestige: res.data?.auto_rank_prestige === true,
         auto_rank_telegram_notify: res.data?.auto_rank_telegram_notify !== false,
         auto_rank_use_skip_tokens: !!res.data?.auto_rank_use_skip_tokens,
         auto_rank_events_unlocked: res.data?.auto_rank_events_unlocked ?? p?.auto_rank_events_unlocked,

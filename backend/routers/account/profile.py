@@ -120,8 +120,7 @@ async def ensure_profile_indexes(db):
     Idempotent: safe to run on every startup.
     """
     try:
-        # users: lookup by username (regex) and by id
-        await db.users.create_index("username")
+        # users: lookup by id (username unique index lives in ensure_indexes)
         await db.users.create_index("id", unique=True)
         # users: rank counts use filter is_dead, is_bodyguard + range on one field
         for field in ("total_kills", "total_crimes", "total_gta", "jail_busts", "rank_points", "lifetime_points_spent"):

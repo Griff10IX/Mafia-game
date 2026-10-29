@@ -831,7 +831,6 @@ async def settle_underperform_for_day(db, day: Optional[str] = None) -> None:
             ],
         },
         {"$set": {f"underperform_settled.{day}": True}},
-        upsert=True,
     )
     if claim.modified_count == 0 and claim.upserted_id is None:
         return
@@ -1009,7 +1008,6 @@ async def run_fortnight_settle(db, *, test_run: bool = False) -> Optional[Dict[s
                 ],
             },
             {"$set": {"last_run_period_id": period_id}},
-            upsert=True,
         )
         if claim.modified_count == 0 and claim.upserted_id is None:
             return None

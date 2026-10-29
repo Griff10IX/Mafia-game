@@ -9,4 +9,5 @@ AUTO_RANK_PAUSE_ON_DEATH: dict = {
     "auto_rank_booze": False,
     "auto_rank_melt": False,
     "auto_rank_scrap": False,
+    "auto_rank_prestige": False,
 }

@@ -6,6 +6,41 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-10-29[/color][/b] — [b]City lottery: points jackpot[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] The lottery now has a [b]points jackpot[/b] as well as the cash jackpot. Whoever wins the draw gets both.[/color]
+[*][color=#888888][b]Pay with points:[/b] Tickets cost [b]$500,000[/b] or [b]10 points[/b]. Pay with cash, points, or a mix of both in one purchase. Cash tickets grow the cash pot and points tickets grow the points pot. Every ticket has the same chance to win.[/color]
+[*][color=#888888][b]Bigger starting pot:[/b] Every round now starts with at least [b]$12.5 billion[/b] and [b]5,000 points[/b].[/color]
+[*][color=#888888][b]More tickets:[/b] Buy up to [b]10,000 tickets[/b] in one go (was 500).[/color]
+[*][color=#888888][b]Bonus:[/b] The [b]190,000 point[/b] Last Man Standing pot has been added to the current draw's points jackpot.[/color]
+[*][color=#888888][b]Same rules:[/b] Draws are still Wednesday and Sunday at 00:00 UTC, with 10% tax on both pots. If nobody wins, both pots roll over.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-10-29[/color][/b] — [b]Last Man Standing[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]No winner this season:[/b] The Premier League LMS season has been closed with no winner. The account that finished last was dead, so its win does not stand.[/color]
+[*][color=#888888][b]Pot:[/b] The 190,000 point pot has gone into the City lottery points jackpot instead.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-10-29[/color][/b] — [b]Auto Rank: auto prestige[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] Auto Rank → Settings has an [b]Auto prestige[/b] toggle. When it is on, Auto Rank prestiges you as soon as you can (Godfather with enough rank points for your next prestige).[/color]
+[*][color=#888888][b]Same as the button:[/b] You get the same prestige rewards and inbox message as prestiging yourself. Your rank resets to Rat and Auto Rank keeps ranking you up. It stops at Prestige 5.[/color]
+[*][color=#888888][b]Off by default:[/b] Like the other Auto Rank tasks, it only runs while Auto Rank is on, and it turns off when you switch Auto Rank off.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-10-10[/color][/b] — [b]Interest bank[/b][/size]
 [quote]
 [list]

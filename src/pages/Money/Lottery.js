@@ -216,6 +216,12 @@ function formatMoney(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
+function formatPoints(n) {
+  const num = Number(n ?? 0);
+  if (Number.isNaN(num)) return '0 pts';
+  return `${Math.trunc(num).toLocaleString()} pts`;
+}
+
 function apiErrorDetail(e, fallback) {
   const d = e.response?.data?.detail;
   if (typeof d === 'string') return d;
@@ -323,19 +329,21 @@ function CountdownTimer({ secondsLeft }) {
 }
 
 const CONFIRM_THRESHOLD = 10;
+const MAX_PER_BUY = 10000;
 
-function QuickPick({ onPick, ticketPrice }) {
-  const presets = [1, 5, 10, 25, 50, 100];
+function QuickPick({ onPick, ticketPrice, pointsPrice }) {
+  const presets = [1, 10, 50, 100, 500, 1000];
   return (
     <div className="grid grid-cols-6 sm:flex sm:flex-wrap gap-1.5">
       {presets.map((n) => {
         const cost = (ticketPrice || 500000) * n;
+        const pts = (pointsPrice || 10) * n;
         return (
           <button
             key={n}
             type="button"
             onClick={() => onPick(n)}
-            title={`${n} ticket${n !== 1 ? 's' : ''} — ${formatMoney(cost)}`}
+            title={`${n} ticket${n !== 1 ? 's' : ''} — ${formatMoney(cost)} or ${formatPoints(pts)}`}
             className="lot-quick-pick-btn rounded text-[10px] font-heading font-bold uppercase tracking-wider border transition-colors flex items-center justify-center px-2.5 py-2 sm:py-1 sm:min-h-0 min-h-[44px]"
             style={{
               background: 'rgba(var(--noir-primary-rgb), 0.08)',
@@ -427,7 +435,10 @@ function MyTicketsSection() {
 function Lottery() {
   const [state, setState] = useState(null);
   const [buying, setBuying] = useState(false);
+  const [payMode, setPayMode] = useState('cash');
   const [count, setCount] = useState(1);
+  const [cashCount, setCashCount] = useState(1);
+  const [pointsCount, setPointsCount] = useState(1);
   const [tick, setTick] = useState(0);
   const [confirmPending, setConfirmPending] = useState(false);
   const countRef = useRef(null);
@@ -459,12 +470,12 @@ function Lottery() {
     clearTimeout(confirmTimer.current);
   }, []);
 
-  const doBuy = async (n) => {
+  const doBuy = async (cashN, pointsN) => {
     setBuying(true);
     setConfirmPending(false);
     clearTimeout(confirmTimer.current);
     try {
-      const { data } = await api.post('/lottery/buy', { count: n });
+      const { data } = await api.post('/lottery/buy', { cash_count: cashN, points_count: pointsN });
       toast.success(data?.message || 'Tickets purchased!');
       await refreshUser();
       await load();
@@ -475,15 +486,28 @@ function Lottery() {
     }
   };
 
+  const clampCount = (v, min) => Math.min(MAX_PER_BUY, Math.max(min, parseInt(String(v), 10) || 0));
+  const single = clampCount(count, 1);
+  const buyCash = payMode === 'cash' ? single : payMode === 'both' ? clampCount(cashCount, 0) : 0;
+  const buyPoints = payMode === 'points' ? single : payMode === 'both' ? clampCount(pointsCount, 0) : 0;
+  const buyTotal = buyCash + buyPoints;
+
   const onBuy = () => {
-    const n = Math.min(500, Math.max(1, parseInt(String(count), 10) || 1));
-    if (n >= CONFIRM_THRESHOLD && !confirmPending) {
+    if (buyTotal < 1) {
+      toast.error('Pick at least 1 ticket.');
+      return;
+    }
+    if (buyTotal > MAX_PER_BUY) {
+      toast.error(`Up to ${MAX_PER_BUY.toLocaleString()} tickets per purchase.`);
+      return;
+    }
+    if (buyTotal >= CONFIRM_THRESHOLD && !confirmPending) {
       setConfirmPending(true);
       clearTimeout(confirmTimer.current);
       confirmTimer.current = setTimeout(() => setConfirmPending(false), 5000);
       return;
     }
-    doBuy(n);
+    doBuy(buyCash, buyPoints);
   };
 
   const last = state?.last_draw;
@@ -495,10 +519,18 @@ function Lottery() {
   const myTickets = state?.my_tickets ?? 0;
   const totalTickets = state?.ticket_count ?? 0;
   const oddsPercent = totalTickets > 0 ? Math.min(100, (myTickets / totalTickets) * 100) : 0;
-  const parsedCount = Math.min(500, Math.max(1, parseInt(String(count), 10) || 1));
   const ticketPrice = Number(state?.ticket_price) || 500000;
-  const totalCost = ticketPrice * parsedCount;
-  const needsConfirm = parsedCount >= CONFIRM_THRESHOLD;
+  const pointsPrice = Number(state?.points_ticket_price) || 10;
+  const cashCost = ticketPrice * buyCash;
+  const pointsCost = pointsPrice * buyPoints;
+  const costLabel = [cashCost > 0 ? formatMoney(cashCost) : null, pointsCost > 0 ? formatPoints(pointsCost) : null]
+    .filter(Boolean)
+    .join(' + ') || formatMoney(0);
+  const needsConfirm = buyTotal >= CONFIRM_THRESHOLD;
+  const pointsGross = Number(state?.points_gross_pot ?? 0);
+  const netPointsIfWon = Math.floor((pointsGross * (100 - taxPct)) / 100);
+  const pointsBonusIn = Number(state?.points_bonus_in ?? 0);
+  const pointsRolloverIn = Number(state?.points_rollover_in ?? 0);
   const recentWinners = Array.isArray(state?.recent_winners) ? state.recent_winners : [];
 
   return (
@@ -521,12 +553,27 @@ function Lottery() {
             <div className="lot-jackpot-text text-3xl sm:text-4xl font-heading font-black tracking-tight lot-glow">
               {formatMoney(netIfWon)}
             </div>
+            {netPointsIfWon > 0 && (
+              <div className="text-lg sm:text-xl font-heading font-black tabular-nums text-amber-300">
+                + {formatPoints(netPointsIfWon)}
+              </div>
+            )}
             <div className="text-[10px] text-zinc-500 font-heading">
-              Gross pot {formatMoney(grossPot)} &mdash; {taxPct}% tax at draw
+              Gross pot {formatMoney(grossPot)}{pointsGross > 0 ? ` + ${formatPoints(pointsGross)}` : ''} &mdash; {taxPct}% tax at draw
             </div>
             {startingPot > 0 && (
               <div className="text-[9px] text-emerald-400/90 font-heading">
-                Includes {formatMoney(startingPot)} starting jackpot ($1B minimum).
+                Includes {formatMoney(startingPot)} starting jackpot ($12.5B and 5,000 points minimum).
+              </div>
+            )}
+            {pointsBonusIn > 0 && (
+              <div className="text-[9px] text-amber-300/90 font-heading">
+                Includes {formatPoints(pointsBonusIn)} bonus added to this draw.
+              </div>
+            )}
+            {pointsRolloverIn > 0 && (
+              <div className="text-[9px] text-amber-400/90 font-heading">
+                Includes {formatPoints(pointsRolloverIn)} carried over from the last draw.
               </div>
             )}
             {rolloverIn > 0 && (
@@ -553,7 +600,7 @@ function Lottery() {
       {/* ── STATS ROW ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 lot-fade-in lot-delay-1">
         {[
-          { icon: Coins, label: 'Ticket Price', value: formatMoney(state?.ticket_price), color: 'text-primary' },
+          { icon: Coins, label: 'Ticket Price', value: `${formatMoney(ticketPrice)} or ${formatPoints(pointsPrice)}`, color: 'text-primary' },
           { icon: Ticket, label: 'Total Tickets', value: (totalTickets).toLocaleString(), color: 'text-zinc-300' },
           { icon: ShoppingCart, label: 'Your Tickets', value: myTickets.toLocaleString(), color: 'text-emerald-400' },
           { icon: TrendingUp, label: 'Your Odds', value: totalTickets > 0 ? `${oddsPercent < 0.01 && myTickets > 0 ? '<0.01' : oddsPercent.toFixed(2)}%` : '—', color: myTickets > 0 ? 'text-amber-400' : 'text-zinc-500' },
@@ -595,33 +642,90 @@ function Lottery() {
         </div>
         <div className="p-3 space-y-3">
           <div className="text-[10px] text-zinc-400 font-heading">
-            Pick your count or use a quick-pick. Each ticket is one chance to win the full jackpot.
+            Pay with cash ({formatMoney(ticketPrice)} each), points ({formatPoints(pointsPrice)} each), or both. Every ticket has the same chance to win the cash and points jackpots.
           </div>
 
-          <QuickPick ticketPrice={ticketPrice} onPick={(n) => { setCount(n); clearConfirm(); if (countRef.current) countRef.current.focus(); }} />
+          <div className="flex gap-1.5">
+            {[
+              { id: 'cash', label: 'Cash' },
+              { id: 'points', label: 'Points' },
+              { id: 'both', label: 'Both' },
+            ].map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => { setPayMode(m.id); clearConfirm(); }}
+                className="px-3 py-1.5 rounded text-[10px] font-heading font-bold uppercase tracking-wider border transition-colors"
+                style={payMode === m.id
+                  ? { background: 'rgba(var(--noir-primary-rgb), 0.22)', borderColor: 'rgba(var(--noir-primary-rgb), 0.55)', color: 'var(--noir-primary)' }
+                  : { background: 'rgba(0,0,0,0.25)', borderColor: 'rgba(var(--noir-primary-rgb), 0.15)', color: '#a1a1aa' }}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+
+          <QuickPick
+            ticketPrice={ticketPrice}
+            pointsPrice={pointsPrice}
+            onPick={(n) => {
+              if (payMode === 'both') setCashCount(n);
+              else setCount(n);
+              clearConfirm();
+              if (countRef.current) countRef.current.focus();
+            }}
+          />
 
           <div className="flex flex-col sm:flex-row sm:items-end gap-3">
             <div className="flex-1 space-y-1">
-              <label htmlFor="lottery-count" className="text-[8px] text-zinc-500 uppercase tracking-wider font-heading font-bold">
-                Ticket Count (1–500)
-              </label>
-              <input
-                ref={countRef}
-                id="lottery-count"
-                type="number"
-                min={1}
-                max={500}
-                value={count}
-                onChange={(e) => { setCount(e.target.value); clearConfirm(); }}
-                className="w-full max-w-[200px] px-2.5 py-2 rounded-md border text-sm font-heading tabular-nums"
-                style={{
-                  borderColor: 'rgba(var(--noir-primary-rgb), 0.25)',
-                  background: 'rgba(0,0,0,0.3)',
-                  color: 'var(--noir-foreground)',
-                }}
-              />
+              {payMode === 'both' ? (
+                <div className="flex flex-wrap gap-3">
+                  {[
+                    { id: 'lottery-cash-count', label: `Cash tickets (${formatMoney(ticketPrice)})`, value: cashCount, set: setCashCount, ref: countRef },
+                    { id: 'lottery-points-count', label: `Points tickets (${formatPoints(pointsPrice)})`, value: pointsCount, set: setPointsCount, ref: null },
+                  ].map((f) => (
+                    <div key={f.id} className="space-y-1">
+                      <label htmlFor={f.id} className="text-[8px] text-zinc-500 uppercase tracking-wider font-heading font-bold block">
+                        {f.label}
+                      </label>
+                      <input
+                        ref={f.ref}
+                        id={f.id}
+                        type="number"
+                        min={0}
+                        max={MAX_PER_BUY}
+                        value={f.value}
+                        onChange={(e) => { f.set(e.target.value); clearConfirm(); }}
+                        className="w-full max-w-[160px] px-2.5 py-2 rounded-md border text-sm font-heading tabular-nums"
+                        style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.25)', background: 'rgba(0,0,0,0.3)', color: 'var(--noir-foreground)' }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <label htmlFor="lottery-count" className="text-[8px] text-zinc-500 uppercase tracking-wider font-heading font-bold">
+                    Ticket Count (1–{MAX_PER_BUY.toLocaleString()})
+                  </label>
+                  <input
+                    ref={countRef}
+                    id="lottery-count"
+                    type="number"
+                    min={1}
+                    max={MAX_PER_BUY}
+                    value={count}
+                    onChange={(e) => { setCount(e.target.value); clearConfirm(); }}
+                    className="w-full max-w-[200px] px-2.5 py-2 rounded-md border text-sm font-heading tabular-nums"
+                    style={{
+                      borderColor: 'rgba(var(--noir-primary-rgb), 0.25)',
+                      background: 'rgba(0,0,0,0.3)',
+                      color: 'var(--noir-foreground)',
+                    }}
+                  />
+                </>
+              )}
               <div className="text-[11px] font-heading tabular-nums" style={{ color: 'var(--noir-primary)' }}>
-                Total cost: {formatMoney(totalCost)}
+                Total cost: {costLabel}
               </div>
             </div>
             <div className="flex flex-col items-start sm:items-end gap-1">
@@ -640,12 +744,12 @@ function Lottery() {
                 ) : confirmPending ? (
                   <span className="flex items-center gap-1.5">
                     <Ticket size={13} />
-                    Confirm {formatMoney(totalCost)}?
+                    Confirm {costLabel}?
                   </span>
                 ) : (
                   <span className="flex items-center gap-1.5">
                     <Ticket size={13} />
-                    Buy {parsedCount} Ticket{parsedCount !== 1 ? 's' : ''}
+                    Buy {buyTotal.toLocaleString()} Ticket{buyTotal !== 1 ? 's' : ''}
                   </span>
                 )}
               </button>
@@ -671,7 +775,8 @@ function Lottery() {
                 <TicketNumbersMini numbers={last.winning_numbers} />
                 {Number(last.rollover_to_next) > 0 ? (
                   <p className="text-[9px] text-amber-400/90 font-heading leading-snug">
-                    No jackpot paid — {formatMoney(last.rollover_to_next)} net rolled into the next round&apos;s jackpot.
+                    No jackpot paid — {formatMoney(last.rollover_to_next)}
+                    {Number(last.points_rollover_to_next) > 0 ? ` + ${formatPoints(last.points_rollover_to_next)}` : ''} net rolled into the next round&apos;s jackpot.
                   </p>
                 ) : Number(last.exact_match_count) > 0 ? (
                   <p className="text-[9px] text-zinc-500 font-heading leading-snug">
@@ -698,7 +803,10 @@ function Lottery() {
               </div>
               <div>
                 <div className="text-[8px] text-zinc-500 uppercase tracking-wider font-heading">Payout</div>
-                <div className="text-sm font-heading font-bold text-emerald-400 tabular-nums">{formatMoney(last.payout)}</div>
+                <div className="text-sm font-heading font-bold text-emerald-400 tabular-nums">
+                  {formatMoney(last.payout)}
+                  {Number(last.points_payout) > 0 && <span className="text-amber-300"> + {formatPoints(last.points_payout)}</span>}
+                </div>
               </div>
               <div>
                 <div className="text-[8px] text-zinc-500 uppercase tracking-wider font-heading">Tax Sink</div>
@@ -764,6 +872,9 @@ function Lottery() {
                   </div>
                   <div className="text-[11px] font-heading font-bold tabular-nums text-emerald-400 shrink-0 sm:text-right">
                     {payout > 0 ? formatMoney(payout) : '—'}
+                    {Number(draw?.points_payout) > 0 && (
+                      <div className="text-amber-300">+ {formatPoints(draw.points_payout)}</div>
+                    )}
                   </div>
                 </div>
               );
@@ -780,9 +891,9 @@ function Lottery() {
         </div>
         <div className="p-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
-            { step: '1', title: 'Buy Tickets', desc: `Each ticket costs ${formatMoney(state?.ticket_price)}. Buy up to 500 per transaction.` },
-            { step: '2', title: 'Wait for the Draw', desc: 'Draws happen Wednesday & Sunday at 00:00 UTC. Each round starts with at least a $1B house seed; the pot grows with every ticket sold.' },
-            { step: '3', title: 'Win the Jackpot', desc: `Six numbers are drawn at random. Tickets that match all six split ${100 - taxPct}% of the gross pot (seed, rollover, and ticket sales). If nobody matches, there is a 50% chance one eligible player ticket is picked at random (displayed numbers match that ticket); otherwise the net pot rolls to the next draw. ${taxPct}% is removed as tax.` },
+            { step: '1', title: 'Buy Tickets', desc: `Each ticket costs ${formatMoney(ticketPrice)} or ${formatPoints(pointsPrice)}. Pay with cash, points, or both, up to ${MAX_PER_BUY.toLocaleString()} tickets per purchase.` },
+            { step: '2', title: 'Wait for the Draw', desc: 'Draws happen Wednesday & Sunday at 00:00 UTC. Each round starts with at least $12.5B and 5,000 points; cash tickets grow the cash pot and points tickets grow the points pot.' },
+            { step: '3', title: 'Win the Jackpot', desc: `Six numbers are drawn at random. Tickets that match all six split ${100 - taxPct}% of both the cash pot and the points pot. If nobody matches, there is a 50% chance one eligible player ticket is picked at random (displayed numbers match that ticket); otherwise both net pots roll to the next draw. ${taxPct}% is removed as tax.` },
           ].map(({ step, title, desc }) => (
             <div key={step} className="flex gap-2.5">
               <div

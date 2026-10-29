@@ -16,12 +16,15 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, field_validator
 
 from server import db, get_current_user, log_activity, send_notification, _is_moderator, user_has_admin_list_email
+from utils.point_provenance import consume_points_fifo, log_points_event
 
 logger = logging.getLogger(__name__)
 
 TICKET_PRICE = 500_000
+POINTS_TICKET_PRICE = 10
 POT_TAX_PERCENT = 10
-STARTING_POT = 1_000_000_000
+STARTING_POT = 12_500_000_000
+STARTING_POINTS_POT = 5_000
 LOTTERY_RANDOM_FALLBACK_CHANCE = 0.5  # cron: if no exact match, chance to pick random ticket vs rollover
 _DRAW_WEEKDAYS = (2, 6)  # Wed, Sun — 00:00 UTC
 _LOTTERY_PICK_COUNT = 6
@@ -51,6 +54,39 @@ def _round_carry_in(rd: dict) -> int:
 
 def _round_gross_pot(rd: dict, ticket_count: int) -> int:
     return ticket_count * TICKET_PRICE + _round_carry_in(rd)
+
+
+def _starting_points_pot_to_meet_minimum(points_rollover_in: int) -> int:
+    ro = max(0, int(points_rollover_in or 0))
+    return 0 if ro >= STARTING_POINTS_POT else STARTING_POINTS_POT - ro
+
+
+def _round_points_carry_in(rd: dict) -> int:
+    """Points already in the pot before points-ticket sales (rollover + house seed + one-off bonuses)."""
+    return (
+        int(rd.get("points_rollover_in") or 0)
+        + int(rd.get("points_starting_pot") or 0)
+        + int(rd.get("points_bonus_in") or 0)
+    )
+
+
+def _round_points_gross_pot(rd: dict, points_ticket_count: int) -> int:
+    return points_ticket_count * POINTS_TICKET_PRICE + _round_points_carry_in(rd)
+
+
+_ROUND_POT_PROJECTION = {
+    "_id": 1,
+    "closes_at": 1,
+    "status": 1,
+    "created_at": 1,
+    "rollover_in": 1,
+    "starting_pot": 1,
+    "complimentary_count": 1,
+    "points_rollover_in": 1,
+    "points_starting_pot": 1,
+    "points_bonus_in": 1,
+    "points_ticket_count": 1,
+}
 
 
 def _random_lottery_numbers() -> list[int]:
@@ -179,10 +215,7 @@ def _next_draw_utc(after: datetime) -> datetime:
 
 async def _ensure_open_round() -> dict[str, Any]:
     now = datetime.now(timezone.utc)
-    open_rounds = await db.lottery_rounds.find(
-        {"status": "open"},
-        {"_id": 1, "closes_at": 1, "status": 1, "created_at": 1, "rollover_in": 1, "starting_pot": 1, "complimentary_count": 1},
-    ).to_list(500)
+    open_rounds = await db.lottery_rounds.find({"status": "open"}, _ROUND_POT_PROJECTION).to_list(500)
     future_rounds: list[tuple[int, datetime, dict[str, Any]]] = []
     for r in open_rounds:
         closes_at = _parse_iso(r.get("closes_at"))
@@ -201,6 +234,13 @@ async def _ensure_open_round() -> dict[str, Any]:
                 {"$set": {"starting_pot": seed}},
             )
             primary["starting_pot"] = seed
+        if "points_starting_pot" not in primary:
+            points_seed = _starting_points_pot_to_meet_minimum(int(primary.get("points_rollover_in") or 0))
+            await db.lottery_rounds.update_one(
+                {"_id": primary["_id"], "status": "open", "points_starting_pot": {"$exists": False}},
+                {"$set": {"points_starting_pot": points_seed}},
+            )
+            primary["points_starting_pot"] = points_seed
         return primary
     closes = _next_draw_utc(now)
     doc = {
@@ -209,6 +249,8 @@ async def _ensure_open_round() -> dict[str, Any]:
         "created_at": now.isoformat(),
         "rollover_in": 0,
         "starting_pot": STARTING_POT,
+        "points_rollover_in": 0,
+        "points_starting_pot": STARTING_POINTS_POT,
     }
     ins = await db.lottery_rounds.insert_one(doc)
     doc["_id"] = ins.inserted_id
@@ -241,15 +283,45 @@ async def grant_complimentary_lottery_tickets(user_id: str, username: str, count
     return count
 
 
-class LotteryBuyBody(BaseModel):
-    count: int = 1
+MAX_TICKETS_PER_PURCHASE = 10_000
 
-    @field_validator("count")
+
+class LotteryBuyBody(BaseModel):
+    """Either count + pay_with (cash|points), or cash_count and/or points_count to pay with both."""
+
+    count: Optional[int] = None
+    pay_with: str = "cash"
+    cash_count: Optional[int] = None
+    points_count: Optional[int] = None
+
+    @field_validator("count", "cash_count", "points_count")
     @classmethod
-    def count_ok(cls, v: int) -> int:
-        if v is None or v < 1 or v > 500:
-            raise ValueError("count must be 1–500")
+    def count_ok(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return v
+        if v < 0 or v > MAX_TICKETS_PER_PURCHASE:
+            raise ValueError(f"count must be 0–{MAX_TICKETS_PER_PURCHASE:,}")
         return v
+
+    @field_validator("pay_with")
+    @classmethod
+    def pay_with_ok(cls, v: str) -> str:
+        v = (v or "cash").strip().lower()
+        if v not in ("cash", "points"):
+            raise ValueError("pay_with must be cash or points")
+        return v
+
+    def split(self) -> tuple[int, int]:
+        if self.cash_count is not None or self.points_count is not None:
+            cash_n, points_n = int(self.cash_count or 0), int(self.points_count or 0)
+        else:
+            n = int(self.count if self.count is not None else 1)
+            cash_n, points_n = (0, n) if self.pay_with == "points" else (n, 0)
+        if cash_n + points_n < 1:
+            raise HTTPException(status_code=400, detail="Buy at least 1 ticket.")
+        if cash_n + points_n > MAX_TICKETS_PER_PURCHASE:
+            raise HTTPException(status_code=400, detail=f"Up to {MAX_TICKETS_PER_PURCHASE:,} tickets per purchase.")
+        return cash_n, points_n
 
 
 def _cron_verify():
@@ -287,7 +359,9 @@ async def get_lottery_state(current_user: dict = Depends(get_current_user)):
     rollover_in = int(rd.get("rollover_in") or 0)
     starting_pot = int(rd.get("starting_pot") or 0)
     complimentary = int(rd.get("complimentary_count") or 0)
-    gross = _round_gross_pot(rd, max(0, total - complimentary))
+    points_tickets = int(rd.get("points_ticket_count") or 0)
+    gross = _round_gross_pot(rd, max(0, total - complimentary - points_tickets))
+    points_gross = _round_points_gross_pot(rd, points_tickets)
     closed_projection = {
         "_id": 0,
         "drawn_at": 1,
@@ -301,6 +375,10 @@ async def get_lottery_state(current_user: dict = Depends(get_current_user)):
         "draw_fallback": 1,
         "exact_match_count": 1,
         "rollover_to_next": 1,
+        "points_gross_pot": 1,
+        "points_payout": 1,
+        "points_sink_amount": 1,
+        "points_rollover_to_next": 1,
     }
     recent_draws = await (
         db.lottery_rounds.find({"status": "closed"}, closed_projection)
@@ -340,6 +418,12 @@ async def get_lottery_state(current_user: dict = Depends(get_current_user)):
         "gross_pot": gross,
         "rollover_in": rollover_in,
         "starting_pot": starting_pot,
+        "points_ticket_price": POINTS_TICKET_PRICE,
+        "points_ticket_count": points_tickets,
+        "points_gross_pot": points_gross,
+        "points_rollover_in": int(rd.get("points_rollover_in") or 0),
+        "points_starting_pot": int(rd.get("points_starting_pot") or 0),
+        "points_bonus_in": int(rd.get("points_bonus_in") or 0),
         "my_tickets": mine,
         "last_draw": last,
         "recent_draws": recent_draws,
@@ -354,17 +438,46 @@ async def buy_lottery_tickets(body: LotteryBuyBody, current_user: dict = Depends
     closes_at = _parse_iso(rd.get("closes_at"))
     if closes_at and now >= closes_at:
         raise HTTPException(status_code=400, detail="This round just closed — wait for the next round.")
-    count = int(body.count)
-    total_cost = TICKET_PRICE * count
+    cash_n, points_n = body.split()
+    count = cash_n + points_n
+    cash_cost = TICKET_PRICE * cash_n
+    points_cost = POINTS_TICKET_PRICE * points_n
     uid = current_user["id"]
     uname = (current_user.get("username") or "?").strip()
-    result = await db.users.update_one(
-        {"id": uid, "money": {"$gte": total_cost}},
-        {"$inc": {"money": -total_cost}},
-    )
-    if result.modified_count == 0:
-        raise HTTPException(status_code=400, detail="Insufficient cash")
+    flt: dict[str, Any] = {"id": uid}
+    inc: dict[str, int] = {}
+    if cash_cost:
+        flt["money"] = {"$gte": cash_cost}
+        inc["money"] = -cash_cost
+    if points_cost:
+        flt["points"] = {"$gte": points_cost}
+        inc["points"] = -points_cost
+    before = await db.users.find_one_and_update(flt, {"$inc": inc}, projection={"_id": 0, "money": 1, "points": 1})
+    if not before:
+        wallet = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1, "points": 1}) or {}
+        short = []
+        if cash_cost and float(wallet.get("money") or 0) < cash_cost:
+            short.append("cash")
+        if points_cost and int(wallet.get("points") or 0) < points_cost:
+            short.append("points")
+        raise HTTPException(status_code=400, detail=f"Insufficient {' and '.join(short) or 'funds'}")
     now_iso = now.isoformat()
+    if points_cost:
+        try:
+            await consume_points_fifo(
+                db,
+                user_id=uid,
+                points=points_cost,
+                event_type="spend_lottery",
+                event_ref=f"lottery:{rid}",
+                meta={"source": "lottery", "round_id": str(rid), "count": points_n},
+                assume_balance_already_decremented_by=points_cost,
+                source="lottery",
+                wallet_points_before=int(before.get("points") or 0),
+                wallet_points_after=int(before.get("points") or 0) - points_cost,
+            )
+        except Exception:
+            logger.exception("lottery points provenance failed user_id=%s", uid)
     docs = [
         {
             "round_id": rid,
@@ -373,12 +486,15 @@ async def buy_lottery_tickets(body: LotteryBuyBody, current_user: dict = Depends
             "created_at": now_iso,
             "ticket_id": str(uuid.uuid4()),
             "numbers": _random_lottery_numbers(),
+            **({"paid_with": "points"} if i >= cash_n else {}),
         }
-        for _ in range(count)
+        for i in range(count)
     ]
-    if docs:
-        await db.lottery_tickets.insert_many(docs)
-    await log_activity(uid, uname, "lottery_buy", {"round_id": str(rid), "count": count, "spent": total_cost})
+    await db.lottery_tickets.insert_many(docs)
+    if points_n:
+        await db.lottery_rounds.update_one({"_id": rid}, {"$inc": {"points_ticket_count": points_n}})
+    spend = {"cash_count": cash_n, "points_count": points_n, "spent": cash_cost, "spent_points": points_cost}
+    await log_activity(uid, uname, "lottery_buy", {"round_id": str(rid), "count": count, **spend})
     try:
         await db.economy_events.insert_one(
             {
@@ -388,12 +504,18 @@ async def buy_lottery_tickets(body: LotteryBuyBody, current_user: dict = Depends
                 "username": uname,
                 "round_id": str(rid),
                 "count": count,
-                "spent": total_cost,
+                **spend,
             }
         )
     except Exception as e:
         logger.warning("economy_events lottery_buy: %s", e)
-    return {"message": f"Bought {count} ticket(s) for ${total_cost:,}.", "spent": total_cost, "count": count, "round_id": str(rid)}
+    cost_parts = ([f"${cash_cost:,}"] if cash_cost else []) + ([f"{points_cost:,} points"] if points_cost else [])
+    return {
+        "message": f"Bought {count:,} ticket(s) for {' + '.join(cost_parts)}.",
+        "count": count,
+        "round_id": str(rid),
+        **spend,
+    }
 
 
 async def get_my_lottery_tickets(current_user: dict = Depends(get_current_user)):
@@ -458,9 +580,11 @@ async def _apply_winning_numbers_and_pay(
     winning_numbers: list[int],
     payout: int,
     gross: int,
-) -> tuple[dict[str, int], dict[str, str], int, list[dict[str, Any]], set[str]]:
-    """Compute exact-match payouts for winning_numbers; credit wallets."""
+    points_payout: int = 0,
+) -> tuple[dict[str, int], dict[str, str], int, list[dict[str, Any]], set[str], dict[str, int]]:
+    """Compute exact-match payouts for winning_numbers; credit wallets (cash and points pots split the same way)."""
     amounts_by_user: dict[str, int] = defaultdict(int)
+    points_by_user: dict[str, int] = defaultdict(int)
     names_by_user: dict[str, str] = {}
     payout_errors: list[dict[str, Any]] = []
     paid_user_ids: set[str] = set()
@@ -517,15 +641,33 @@ async def _apply_winning_numbers_and_pay(
             mcount = len(valid_matches)
             share = payout // mcount
             rem = payout % mcount
+            pts_pool = max(0, int(points_payout or 0))
+            pts_share = pts_pool // mcount
+            pts_rem = pts_pool % mcount
             for i, (t, uid) in enumerate(valid_matches):
                 amt = share + (1 if i < rem else 0)
                 amounts_by_user[uid] += amt
+                points_by_user[uid] += pts_share + (1 if i < pts_rem else 0)
                 names_by_user[uid] = (t.get("username") or "?").strip()
 
             for uid, amt in list(amounts_by_user.items()):
                 if amt <= 0:
                     continue
-                pay_res = await db.users.update_one({"id": uid}, {"$inc": {"money": amt}})
+                pts = int(points_by_user.get(uid) or 0)
+                inc = {"money": amt, **({"points": pts} if pts > 0 else {})}
+                pay_res = await db.users.update_one({"id": uid}, {"$inc": inc})
+                if pay_res.modified_count == 1 and pts > 0:
+                    try:
+                        await log_points_event(
+                            db,
+                            user_id=uid,
+                            points=pts,
+                            event_type="lottery_win_points",
+                            event_ref=f"lottery:{rid}",
+                            meta={"round_id": str(rid), "winning_numbers": winning_numbers},
+                        )
+                    except Exception:
+                        logger.exception("lottery points win ledger failed user_id=%s", uid)
                 if pay_res.modified_count != 1:
                     payout_errors.append(
                         {
@@ -560,7 +702,7 @@ async def _apply_winning_numbers_and_pay(
                     len(paid_user_ids),
                 )
 
-    return amounts_by_user, names_by_user, exact_match_count, payout_errors, paid_user_ids
+    return amounts_by_user, names_by_user, exact_match_count, payout_errors, paid_user_ids, points_by_user
 
 
 async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -> dict[str, Any]:
@@ -578,10 +720,18 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
         complimentary = int(rd.get("complimentary_count") or 0)
     else:
         complimentary = await db.lottery_tickets.count_documents({"round_id": rid, "complimentary": True})
-    ticket_revenue = max(0, n - complimentary) * TICKET_PRICE
+    points_tickets = await db.lottery_tickets.count_documents({"round_id": rid, "paid_with": "points"})
+    ticket_revenue = max(0, n - complimentary - points_tickets) * TICKET_PRICE
     gross = ticket_revenue + rollover_start + starting_pot
     sink = (gross * POT_TAX_PERCENT) // 100 if gross > 0 else 0
     payout = gross - sink
+    full_rd = await db.lottery_rounds.find_one({"_id": rid}, _ROUND_POT_PROJECTION) or rd
+    points_rollover_start = int(full_rd.get("points_rollover_in") or 0)
+    points_starting_pot = int(full_rd.get("points_starting_pot") or 0)
+    points_bonus = int(full_rd.get("points_bonus_in") or 0)
+    points_gross = _round_points_gross_pot(full_rd, points_tickets)
+    points_sink = (points_gross * POT_TAX_PERCENT) // 100 if points_gross > 0 else 0
+    points_payout = points_gross - points_sink
     drawn_iso = datetime.now(timezone.utc).isoformat()
 
     draw_fallback = False
@@ -611,9 +761,10 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
     exact_match_count: int
     payout_errors: list[dict[str, Any]]
     paid_user_ids: set[str]
+    points_by_user: dict[str, int]
 
-    amounts_by_user, names_by_user, exact_match_count, payout_errors, paid_user_ids = await _apply_winning_numbers_and_pay(
-        rid, winning_numbers, payout, gross
+    amounts_by_user, names_by_user, exact_match_count, payout_errors, paid_user_ids, points_by_user = await _apply_winning_numbers_and_pay(
+        rid, winning_numbers, payout, gross, points_payout
     )
 
     if (
@@ -632,8 +783,8 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
                 winning_numbers = wn
                 draw_fallback = True
                 fallback_reason = "cron_random_ticket"
-                amounts_by_user, names_by_user, exact_match_count, payout_errors, paid_user_ids = await _apply_winning_numbers_and_pay(
-                    rid, winning_numbers, payout, gross
+                amounts_by_user, names_by_user, exact_match_count, payout_errors, paid_user_ids, points_by_user = await _apply_winning_numbers_and_pay(
+                    rid, winning_numbers, payout, gross, points_payout
                 )
 
     if payout > 0:
@@ -645,6 +796,7 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
             rollover_next = 0
     else:
         rollover_next = 0
+    points_rollover_next = points_payout if (points_payout > 0 and not paid_user_ids) else 0
 
     nums_txt = _format_numbers_line(winning_numbers)
     display_winner_user_id = None
@@ -659,7 +811,12 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
 
     winner_payouts = (
         [
-            {"user_id": uid, "username": names_by_user.get(uid, "?"), "amount": int(amt)}
+            {
+                "user_id": uid,
+                "username": names_by_user.get(uid, "?"),
+                "amount": int(amt),
+                "points": int(points_by_user.get(uid) or 0),
+            }
             for uid, amt in sorted(amounts_by_user.items(), key=lambda x: (-x[1], x[0]))
         ]
         if amounts_by_user
@@ -684,6 +841,14 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
         "starting_pot_at_draw": starting_pot,
         "winner_payouts": winner_payouts,
         "payout_errors": payout_errors,
+        "points_ticket_count": points_tickets,
+        "points_gross_pot": points_gross,
+        "points_sink_amount": points_sink,
+        "points_payout": points_payout,
+        "points_rollover_to_next": points_rollover_next,
+        "points_rollover_in_at_draw": points_rollover_start,
+        "points_starting_pot_at_draw": points_starting_pot,
+        "points_bonus_at_draw": points_bonus,
     }
     await db.lottery_rounds.update_one({"_id": rid}, {"$set": round_set})
 
@@ -706,6 +871,9 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
             "rollover_in": rollover_start,
             "starting_pot": starting_pot,
             "winners_paid_count": len(paid_user_ids),
+            "points_gross_pot": points_gross,
+            "points_payout": points_payout,
+            "points_rollover_to_next": points_rollover_next,
         }
         if payout_errors:
             ev_draw["payout_errors"] = payout_errors
@@ -715,17 +883,18 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
 
     if paid_user_ids:
         win_body_exact = (
-            "Winning numbers: {nums}. Your ticket matched! You received ${amt:,} "
-            "(share of the net pot). Gross pot ${gross:,} ({n:,} tickets); {tax}% tax removed."
+            "Winning numbers: {nums}. Your ticket matched! You received ${amt:,}{pts_txt} "
+            "(share of the net pot). Gross pot ${gross:,}{pts_gross_txt} ({n:,} tickets); {tax}% tax removed."
         )
         win_body_fallback = (
-            "Winning numbers: {nums}. Your ticket was selected as this round's winner! You received ${amt:,} "
-            "(share of the net pot). Gross pot ${gross:,} ({n:,} tickets); {tax}% tax removed."
+            "Winning numbers: {nums}. Your ticket was selected as this round's winner! You received ${amt:,}{pts_txt} "
+            "(share of the net pot). Gross pot ${gross:,}{pts_gross_txt} ({n:,} tickets); {tax}% tax removed."
         )
         for uid in paid_user_ids:
             amt = int(amounts_by_user.get(uid) or 0)
             if amt <= 0:
                 continue
+            pts = int(points_by_user.get(uid) or 0)
             uname = names_by_user.get(uid, "?")
             await log_activity(
                 uid,
@@ -734,6 +903,7 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
                 {
                     "round_id": str(rid),
                     "payout": amt,
+                    "points_payout": pts,
                     "gross_pot": gross,
                     "winning_numbers": winning_numbers,
                     "draw_fallback": draw_fallback,
@@ -744,7 +914,9 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
                 body = tmpl.format(
                     nums=nums_txt,
                     amt=amt,
+                    pts_txt=f" and {pts:,} points" if pts > 0 else "",
                     gross=gross,
+                    pts_gross_txt=f" + {points_gross:,} points" if points_gross > 0 else "",
                     n=n,
                     tax=POT_TAX_PERCENT,
                 )
@@ -801,6 +973,8 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
             "created_at": now2.isoformat(),
             "rollover_in": next_rollover,
             "starting_pot": next_starting_pot,
+            "points_rollover_in": points_rollover_next,
+            "points_starting_pot": _starting_points_pot_to_meet_minimum(points_rollover_next),
         }
     )
 
@@ -816,6 +990,8 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
         "winner_user_id": display_winner_user_id,
         "winner_username": display_winner_username,
         "rollover_to_next": rollover_next,
+        "points_payout": points_payout,
+        "points_rollover_to_next": points_rollover_next,
         "paid_user_ids": sorted(paid_user_ids),
     }
 
@@ -913,10 +1089,7 @@ async def lottery_repair_stuck_rounds(_: bool = Depends(_cron_verify())):
 
     draw_res = await lottery_draw_cron(True)
     now2 = datetime.now(timezone.utc)
-    open_rounds_after = await db.lottery_rounds.find(
-        {"status": "open"},
-        {"_id": 1, "closes_at": 1, "rollover_in": 1, "starting_pot": 1, "created_at": 1},
-    ).to_list(500)
+    open_rounds_after = await db.lottery_rounds.find({"status": "open"}, _ROUND_POT_PROJECTION).to_list(500)
     future: list[tuple[int, datetime, dict[str, Any]]] = []
     for rd in open_rounds_after:
         dt = _parse_iso(rd.get("closes_at"))
@@ -930,6 +1103,7 @@ async def lottery_repair_stuck_rounds(_: bool = Depends(_cron_verify())):
         primary = future[0][2]
         primary_id = primary["_id"]
         move_total = 0
+        move_points = 0
         for _, _, rd in future[1:]:
             rid = rd["_id"]
             ticket_count = await db.lottery_tickets.count_documents({"round_id": rid}, limit=1)
@@ -952,10 +1126,11 @@ async def lottery_repair_stuck_rounds(_: bool = Depends(_cron_verify())):
                 merged_open_rounds += 1
                 merged_rollover += carry
                 move_total += carry
-        if move_total > 0:
+                move_points += int(rd.get("points_rollover_in") or 0) + int(rd.get("points_bonus_in") or 0)
+        if move_total > 0 or move_points > 0:
             await db.lottery_rounds.update_one(
                 {"_id": primary_id},
-                {"$inc": {"rollover_in": move_total}},
+                {"$inc": {"rollover_in": move_total, "points_rollover_in": move_points}},
             )
     return {
         "ok": True,

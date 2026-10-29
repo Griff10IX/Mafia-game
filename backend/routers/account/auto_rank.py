@@ -275,6 +275,7 @@ async def _expire_auto_rank_trials(db, *, force: bool = False):
         "auto_rank_booze": False,
         "auto_rank_melt": False,
         "auto_rank_scrap": False,
+        "auto_rank_prestige": False,
     }
     # Equality on auto_rank_trial first so partial index (trial:true, until) can be used.
     # Never expire permanent unlocks (store / email / admin) — including broken docs that have
@@ -681,7 +682,7 @@ def _is_user_idle(user: dict, now: datetime) -> bool:
     return elapsed > AUTO_RANK_IDLE_TIMEOUT_SECONDS
 
 
-_IDLE_SAVE_FIELDS = ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze", "auto_rank_melt", "auto_rank_scrap"]
+_IDLE_SAVE_FIELDS = ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze", "auto_rank_melt", "auto_rank_scrap", "auto_rank_prestige"]
 
 
 async def _set_user_idle(db, user_id: str, username: str = "?"):
@@ -1881,6 +1882,19 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     user = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
     user = await _auto_disable_skip_tokens_if_empty(db, user_id, user)
 
+    if _auto_rank_task_enabled(user, "auto_rank_prestige"):
+        try:
+            from routers.account.prestige import activate_prestige, prestige_eligibility
+
+            if prestige_eligibility(user)["can_prestige"]:
+                out = await activate_prestige(user_id, auto_rank=True)
+                has_success = True
+                lines.append(f"**Prestige** — {out['message']}")
+        except HTTPException as he:
+            logger.info("Auto rank prestige for %s: %s", user_id, he.detail)
+        except Exception as e:
+            logger.exception("Auto rank prestige for %s: %s", user_id, e)
+
     if has_success and chat_id and _auto_rank_telegram_notify(user):
         user_after = await db.users.find_one({"id": user_id}, {"_id": 0, "respect_points": 1})
         respect_after = int((user_after or {}).get("respect_points") or 0)
@@ -2280,6 +2294,7 @@ _PREFERENCE_FIELDS = [
     "auto_rank_booze",
     "auto_rank_melt",
     "auto_rank_scrap",
+    "auto_rank_prestige",
     "auto_rank_telegram_notify",
     "auto_rank_use_skip_tokens",
 ]
@@ -2292,6 +2307,7 @@ _PREFERENCE_DEFAULTS = {
     "auto_rank_booze": False,
     "auto_rank_melt": False,
     "auto_rank_scrap": False,
+    "auto_rank_prestige": False,
     "auto_rank_telegram_notify": True,
     "auto_rank_use_skip_tokens": False,
 }
@@ -3099,6 +3115,7 @@ def register(router):
         auto_rank_booze: Optional[bool] = None
         auto_rank_melt: Optional[bool] = None
         auto_rank_scrap: Optional[bool] = None
+        auto_rank_prestige: Optional[bool] = None
         auto_rank_telegram_notify: Optional[bool] = None
         auto_rank_use_skip_tokens: Optional[bool] = None
         passive_booze_paused: Optional[bool] = None
@@ -3628,7 +3645,7 @@ def register(router):
                 # in DB made crimes/GTA run again when the user re-enabled Auto Rank.
                 for f in _IDLE_SAVE_FIELDS:
                     updates[f] = False
-        for field in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze", "auto_rank_melt", "auto_rank_scrap"]:
+        for field in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze", "auto_rank_melt", "auto_rank_scrap", "auto_rank_prestige"]:
             val = getattr(body, field, None)
             if val is not None:
                 master_will_be_on = (

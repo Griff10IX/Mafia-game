@@ -40,6 +40,144 @@ def _format_prestige_unlock_benefits(cfg: dict, unlocked_prestige_level: int) ->
     return out[0].upper() + out[1:] if out else out
 
 
+def prestige_eligibility(user: dict) -> dict:
+    """Whether this user can prestige right now, with the numbers the UI and Auto Rank need."""
+    import server as srv
+
+    level = int(user.get("prestige_level") or 0)
+    rank_points = int(user.get("rank_points") or 0)
+    mult = float(user.get("prestige_rank_multiplier") or 1.0)
+    rank_id, rank_name = srv.get_rank_info(rank_points, mult)
+    at_max = level >= 5
+    godfather_req = srv.get_prestige_requirement(level) if not at_max else None
+    can_prestige = (
+        not at_max
+        and rank_id >= srv.GODFATHER_RANK_ID
+        and godfather_req is not None
+        and godfather_req > 0
+        and rank_points >= godfather_req
+    )
+    return {
+        "level": level,
+        "rank_points": rank_points,
+        "mult": mult,
+        "rank_id": rank_id,
+        "rank_name": rank_name,
+        "at_max": at_max,
+        "godfather_req": godfather_req,
+        "can_prestige": can_prestige,
+    }
+
+
+async def activate_prestige(user_id: str, *, auto_rank: bool = False) -> dict:
+    """Prestige the user: must be at Godfather. Resets rank_points to 0, increments prestige_level.
+    Mission progress and Game Pass tier cursors / carry RP are preserved (rank XP is banked into
+    rank_xp_pass_prestige_carry_rp for everyone so pass UI and VIP math stay consistent)."""
+    import server as srv
+
+    db = srv.db
+    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    elig = prestige_eligibility(user)
+    level = elig["level"]
+    if elig["at_max"]:
+        raise HTTPException(status_code=400, detail="Already at maximum prestige (level 5)")
+    if elig["rank_id"] < srv.GODFATHER_RANK_ID:
+        raise HTTPException(status_code=400, detail="You must reach Godfather rank before prestiging")
+    godfather_req = elig["godfather_req"]
+    rank_points = elig["rank_points"]
+    if not elig["can_prestige"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You need {godfather_req:,} effective rank points to prestige (you have {rank_points:,})",
+        )
+
+    new_level = level + 1
+    new_cfg = srv.PRESTIGE_CONFIGS[new_level]
+    new_mult = srv.get_rank_threshold_mult(new_level)
+    prev_carry = int(user.get("rank_xp_pass_prestige_carry_rp") or 0)
+
+    prestige_set = {
+        "prestige_level": new_level,
+        "prestige_rank_multiplier": new_mult,
+        "rank_points": 0,
+        "rank": 1,
+        # Rank-up bullets/respect use rank_up_rewarded_to_rank as idempotency; without reset, old
+        # Godfather-tier value makes every re-climb fire false "ranked up" notifications (e.g. Capo).
+        "rank_up_rewarded_to_rank": 1,
+        # Bank RP into carry for all players (not only active VIP). Previously non-VIP prestiging
+        # zeroed carry + tier cursors, which looked like Game Pass reset and could break expired-VIP UI.
+        "rank_xp_pass_prestige_carry_rp": prev_carry + rank_points,
+    }
+
+    # Conditional on the level we checked so a manual click and Auto Rank can never prestige twice.
+    level_match = {"prestige_level": level} if level > 0 else {"prestige_level": {"$in": [0, None]}}
+    res = await db.users.update_one(
+        {"id": user_id, **level_match, "rank_points": {"$gte": godfather_req}},
+        {"$set": prestige_set},
+    )
+    if res.modified_count == 0:
+        raise HTTPException(status_code=409, detail="Prestige already applied — refresh the page.")
+
+    points_reward = 0
+    try:
+        from utils.prestige_points_rewards import (
+            grant_pending_prestige_points_rewards,
+            points_reward_for_prestige_level,
+        )
+
+        points_reward = points_reward_for_prestige_level(new_level)
+        grant_out = await grant_pending_prestige_points_rewards(
+            db,
+            {"id": user_id, "prestige_level": new_level, "is_dead": False},
+            reason="prestige",
+        )
+        if int(grant_out.get("points") or 0) > 0:
+            points_reward = int(grant_out["points"])
+    except Exception:
+        points_reward = 0
+
+    try:
+        from routers.game.leaderboard import invalidate_leaderboard_cache
+
+        invalidate_leaderboard_cache()
+    except Exception:
+        pass
+
+    benefits_line = _format_prestige_unlock_benefits(new_cfg, new_level)
+    points_line = (
+        f"\n\nReward: +{points_reward:,} points."
+        if points_reward > 0
+        else ""
+    )
+    how = "Auto Rank prestiged you" if auto_rank else "You have prestiged"
+    await srv.send_notification(
+        user_id,
+        f"Prestige {new_level} — {new_cfg['name']}!",
+        f"{how} to level {new_level} ({new_cfg['name']}). Your rank has reset to Rat.\n\n"
+        f"Benefits at this level: {benefits_line}.{points_line}",
+        "system",
+        category="system",
+    )
+
+    await srv.log_activity(
+        user_id,
+        user.get("username", "?"),
+        "account_prestige",
+        {"new_level": new_level, "name": new_cfg["name"], "points_reward": points_reward, "auto_rank": auto_rank},
+    )
+    msg = f"Prestiged to level {new_level} — {new_cfg['name']}!"
+    if points_reward > 0:
+        msg += f" (+{points_reward:,} points)"
+    return {
+        "message": msg,
+        "prestige_level": new_level,
+        "prestige_name": new_cfg["name"],
+        "points_reward": points_reward,
+    }
+
+
 def register(router):
     import server as srv
 
@@ -121,107 +259,4 @@ def register(router):
 
     @router.post("/prestige/activate")
     async def prestige_activate(current_user: dict = Depends(get_current_user)):
-        """Prestige the user: must be at Godfather. Resets rank_points to 0, increments prestige_level.
-        Mission progress and Game Pass tier cursors / carry RP are preserved (rank XP is banked into
-        rank_xp_pass_prestige_carry_rp for everyone so pass UI and VIP math stay consistent)."""
-        level = int(current_user.get("prestige_level") or 0)
-        if level >= 5:
-            raise HTTPException(status_code=400, detail="Already at maximum prestige (level 5)")
-
-        rank_points = int(current_user.get("rank_points") or 0)
-        effective_rp = rank_points
-        godfather_req = get_prestige_requirement(level)
-        mult = float(current_user.get("prestige_rank_multiplier") or 1.0)
-
-        rank_id, _ = get_rank_info(rank_points, mult)
-        if rank_id < GODFATHER_RANK_ID:
-            raise HTTPException(status_code=400, detail="You must reach Godfather rank before prestiging")
-        if godfather_req is None or godfather_req <= 0 or effective_rp < godfather_req:
-            raise HTTPException(
-                status_code=400,
-                detail=f"You need {godfather_req:,} effective rank points to prestige (you have {effective_rp:,})",
-            )
-
-        new_level = level + 1
-        new_cfg = PRESTIGE_CONFIGS[new_level]
-        new_mult = srv.get_rank_threshold_mult(new_level)
-
-        gp_row = await db.users.find_one(
-            {"id": current_user["id"]},
-            {"_id": 0, "rank_xp_pass_prestige_carry_rp": 1},
-        )
-        prev_carry = int((gp_row or {}).get("rank_xp_pass_prestige_carry_rp") or 0)
-
-        prestige_set = {
-            "prestige_level": new_level,
-            "prestige_rank_multiplier": new_mult,
-            "rank_points": 0,
-            "rank": 1,
-            # Rank-up bullets/respect use rank_up_rewarded_to_rank as idempotency; without reset, old
-            # Godfather-tier value makes every re-climb fire false "ranked up" notifications (e.g. Capo).
-            "rank_up_rewarded_to_rank": 1,
-            # Bank RP into carry for all players (not only active VIP). Previously non-VIP prestiging
-            # zeroed carry + tier cursors, which looked like Game Pass reset and could break expired-VIP UI.
-            "rank_xp_pass_prestige_carry_rp": prev_carry + rank_points,
-        }
-
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$set": prestige_set},
-        )
-
-        points_reward = 0
-        try:
-            from utils.prestige_points_rewards import (
-                grant_pending_prestige_points_rewards,
-                points_reward_for_prestige_level,
-            )
-
-            points_reward = points_reward_for_prestige_level(new_level)
-            grant_out = await grant_pending_prestige_points_rewards(
-                db,
-                {"id": current_user["id"], "prestige_level": new_level, "is_dead": False},
-                reason="prestige",
-            )
-            if int(grant_out.get("points") or 0) > 0:
-                points_reward = int(grant_out["points"])
-        except Exception:
-            points_reward = 0
-
-        try:
-            from routers.game.leaderboard import invalidate_leaderboard_cache
-
-            invalidate_leaderboard_cache()
-        except Exception:
-            pass
-
-        benefits_line = _format_prestige_unlock_benefits(new_cfg, new_level)
-        points_line = (
-            f"\n\nReward: +{points_reward:,} points."
-            if points_reward > 0
-            else ""
-        )
-        await srv.send_notification(
-            current_user["id"],
-            f"Prestige {new_level} — {new_cfg['name']}!",
-            f"You have prestiged to level {new_level} ({new_cfg['name']}). Your rank has reset to Rat.\n\n"
-            f"Benefits at this level: {benefits_line}.{points_line}",
-            "system",
-            category="system",
-        )
-
-        await srv.log_activity(
-            current_user["id"],
-            current_user.get("username", "?"),
-            "account_prestige",
-            {"new_level": new_level, "name": new_cfg["name"], "points_reward": points_reward},
-        )
-        msg = f"Prestiged to level {new_level} — {new_cfg['name']}!"
-        if points_reward > 0:
-            msg += f" (+{points_reward:,} points)"
-        return {
-            "message": msg,
-            "prestige_level": new_level,
-            "prestige_name": new_cfg["name"],
-            "points_reward": points_reward,
-        }
+        return await activate_prestige(current_user["id"])

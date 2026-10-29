@@ -14,6 +14,34 @@ TOAST_EVENTS_TTL_DAYS = 30
 GAME_CHAT_RETENTION_DAYS = 7
 
 
+class _IndexErrorsLoggedCollection:
+    def __init__(self, coll):
+        self._coll = coll
+
+    async def create_index(self, keys, **kwargs):
+        try:
+            return await self._coll.create_index(keys, **kwargs)
+        except Exception as e:
+            logger.warning("index %s %s: %s", self._coll.name, keys, e)
+            return None
+
+    def __getattr__(self, item):
+        return getattr(self._coll, item)
+
+
+class _IndexErrorsLoggedDB:
+    """One failing create_index logs a warning instead of skipping every index after it."""
+
+    def __init__(self, db):
+        self._db = db
+
+    def __getattr__(self, name):
+        return _IndexErrorsLoggedCollection(getattr(self._db, name))
+
+    def __getitem__(self, name):
+        return _IndexErrorsLoggedCollection(self._db[name])
+
+
 async def _ensure_event_log_ttl(
     db,
     coll_name: str,
@@ -25,14 +53,20 @@ async def _ensure_event_log_ttl(
     """TTL index + startup prune on a date field. Idempotent compound indexes for queries."""
     coll = getattr(db, coll_name)
     idx_name = f"{date_field}_1"
+    ttl_seconds = ttl_days * 24 * 3600
     try:
-        await coll.drop_index(idx_name)
+        existing = (await coll.index_information()).get(idx_name) or {}
     except Exception:
-        pass
-    try:
-        await coll.create_index([(date_field, 1)], expireAfterSeconds=ttl_days * 24 * 3600)
-    except Exception as e:
-        logger.warning("%s TTL on %s: %s", coll_name, date_field, e)
+        existing = {}
+    if existing.get("expireAfterSeconds") != ttl_seconds:
+        try:
+            await coll.drop_index(idx_name)
+        except Exception:
+            pass
+        try:
+            await coll.create_index([(date_field, 1)], expireAfterSeconds=ttl_seconds)
+        except Exception as e:
+            logger.warning("%s TTL on %s: %s", coll_name, date_field, e)
     if compound_indexes:
         for spec in compound_indexes:
             try:
@@ -105,6 +139,7 @@ async def _migrate_economy_booze_at_strings_to_date(db):
 
 async def ensure_all_indexes(db):
     """Create indexes for bank, attack, families, GTA, airport, OC, jail, forum, etc."""
+    db = _IndexErrorsLoggedDB(db)
     try:
         # --- Bank ---
         await db.bank_deposits.create_index([("user_id", 1), ("created_at", -1)])
@@ -194,12 +229,8 @@ async def ensure_all_indexes(db):
         await db.families.create_index("tag")
         await db.families.create_index([("wiped", 1), ("id", 1)])
         await db.families.create_index([("wiped", 1), ("tag", 1), ("created_at", -1)])
-        active_family_partial = {
-            "$or": [
-                {"wiped": {"$exists": False}},
-                {"wiped": False},
-            ],
-        }
+        # MongoDB 8 rejects $exists: false in partial filters; $in with null matches missing or false.
+        active_family_partial = {"wiped": {"$in": [False, None]}}
         await db.families.create_index(
             "name",
             name="uniq_active_family_name",
@@ -226,10 +257,7 @@ async def ensure_all_indexes(db):
             unique=True,
             partialFilterExpression={
                 "emblem_key": {"$exists": True, "$type": "string"},
-                "$or": [
-                    {"wiped": {"$exists": False}},
-                    {"wiped": False},
-                ],
+                **active_family_partial,
             },
         )
 
@@ -442,7 +470,6 @@ async def ensure_all_indexes(db):
         # Normalize legacy ISO-string timestamps before TTL/compound indexes (range $match needs BSON Date).
         await _migrate_iso_string_dates_to_bson(db, "melt_events", "at")
         await _migrate_iso_string_dates_to_bson(db, "respect_events", "at")
-        await _migrate_iso_string_dates_to_bson(db, "stock_transactions", "created_at")
         await _ensure_event_log_ttl(
             db,
             "crime_events",
@@ -925,13 +952,8 @@ async def ensure_all_indexes(db):
                 [("direction", 1), ("at", -1)],
             ],
         )
-        await _ensure_event_log_ttl(
-            db,
-            "war_kill_feed",
-            "created_at",
-            ttl_days=EVENT_LOG_TTL_DAYS,
-            compound_indexes=[[("war_id", 1), ("created_at", -1)]],
-        )
+        # No TTL: the war kill feed is public to players for finished wars too.
+        await db.war_kill_feed.create_index([("war_id", 1), ("created_at", -1)])
         await _ensure_event_log_ttl(
             db,
             "captcha_turnstile_failures",
@@ -950,17 +972,10 @@ async def ensure_all_indexes(db):
                 [("username", 1), ("created_at", -1)],
             ],
         )
-        await _ensure_event_log_ttl(
-            db,
-            "gambling_log",
-            "created_at",
-            ttl_days=AUDIT_LOG_TTL_DAYS,
-            compound_indexes=[
-                [("user_id", 1), ("created_at", -1)],
-                [("username", 1), ("created_at", -1)],
-                [("game_type", 1), ("created_at", -1)],
-            ],
-        )
+        # No TTL: lifetime gambling stats (My Stats, Coin Flip, Chicken Cross) read every row.
+        await db.gambling_log.create_index([("user_id", 1), ("created_at", -1)])
+        await db.gambling_log.create_index([("username", 1), ("created_at", -1)])
+        await db.gambling_log.create_index([("game_type", 1), ("created_at", -1)])
         await _ensure_event_log_ttl(
             db,
             "minigame_play_payouts",

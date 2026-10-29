@@ -73,19 +73,6 @@ def _weekly_agg_candidate_limit(limit: int) -> int:
     return min(500, max(80, limit * 8))
 
 
-def _weekly_agg_hint(collection: str, extra_match: dict = None) -> Optional[list]:
-    """Prefer compound indexes that match weekly $match order (success+at / type+at / at)."""
-    em = extra_match or {}
-    if collection in ("bust_events", "gta_events", "crime_events") and "success" in em:
-        return [("success", 1), ("at", 1), ("user_id", 1)]
-    if collection == "economy_events" and "type" in em:
-        return [("type", 1), ("at", -1)]
-    if collection in ("melt_events", "respect_events", "stock_transactions"):
-        time_key = "created_at" if collection == "stock_transactions" else "at"
-        return [(time_key, 1), ("user_id", 1)]
-    return None
-
-
 def _expand_user_ids_for_lookup(ids: List) -> List:
     """Event logs may store user_id as str or int; users.id may differ — widen $in for the batch lookup."""
     out: List = []
@@ -280,12 +267,7 @@ async def _top_by_field_weekly(
             {"$limit": cap},
         ]
     coll = getattr(db, collection)
-    hint = None if time_is_iso else _weekly_agg_hint(collection, extra_match)
-    try:
-        cursor = coll.aggregate(pipeline, hint=hint) if hint else coll.aggregate(pipeline)
-        docs = await cursor.to_list(cap)
-    except Exception:
-        docs = await coll.aggregate(pipeline).to_list(cap)
+    docs = await coll.aggregate(pipeline).to_list(cap)
     if not docs:
         return []
     user_ids = [d["_id"] for d in docs if d.get("_id")]
@@ -367,12 +349,7 @@ async def _top_by_field_weekly_sum(
             {"$limit": cap},
         ]
     coll = getattr(db, collection)
-    hint = None if time_is_iso else _weekly_agg_hint(collection, extra_match)
-    try:
-        cursor = coll.aggregate(pipeline, hint=hint) if hint else coll.aggregate(pipeline)
-        docs = await cursor.to_list(cap)
-    except Exception:
-        docs = await coll.aggregate(pipeline).to_list(cap)
+    docs = await coll.aggregate(pipeline).to_list(cap)
     if not docs:
         return []
     user_ids = [d["_id"] for d in docs if d.get("_id")]
